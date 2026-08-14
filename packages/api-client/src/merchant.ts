@@ -6,6 +6,7 @@ import {
   PromotionSchema,
   PromotionStatusSchema,
   RateDescriptionSchema,
+  SettlementFundingMethodSchema,
   SettlementSchema,
   TransactionSchema,
   WalletSchema,
@@ -15,8 +16,19 @@ import {
 /**
  * Typed contracts for the merchant surface: outstanding by age bucket, the
  * settlement builder and lifecycle, the wallet, manual credits (Phase 1),
- * and the promotion builder (Phase 3). All amounts sent and received are
- * integer laari.
+ * the promotion builder (Phase 3), and the settings module (profile, bank
+ * account, branches, staff, preferences, customer lookup). All amounts sent
+ * and received are integer laari.
+ *
+ * Settings routes are OWNER-only (403 code `owner_required` for staff) —
+ * except the customer lookup, which stays staff-accessible because posting
+ * credits is staff work.
+ *
+ * Every settlement now carries `payment_instructions` — the platform's
+ * active primary bank account embedded as `bank_account` (or null with
+ * `needs_configuration: true` when the platform has not configured one),
+ * plus the exact amount and reference to quote on the transfer. See
+ * SettlementPaymentInstructionsSchema in resources.ts.
  */
 
 interface RequestOptions {
@@ -255,8 +267,13 @@ export function listMerchantPromotions(
 }
 
 export const CreatePromotionRequestSchema = z.object({
-  /** Integer basis points, 50–1000, and must exceed the standing rate. */
-  rate_bp: z.number().int().min(50).max(1000),
+  /**
+   * Integer basis points, 50–2000 (§4 structural cap), and must exceed the
+   * standing rate. Rates the ACTIVE fee tier schedule does not price are
+   * refused server-side with a 422 `code: rate_not_priced` — structurally
+   * legal but unsellable until the admin publishes a wider schedule.
+   */
+  rate_bp: z.number().int().min(50).max(2000),
   /** ISO 8601 with an explicit UTC offset, e.g. "2026-09-01T00:00:00+05:00". */
   starts_at: z.string(),
   ends_at: z.string(),
@@ -313,5 +330,395 @@ export function cancelMerchantPromotion(
     `/api/merchant/promotions/${id}/cancel`,
     MerchantPromotionResponseSchema,
     { method: 'POST', signal: options.signal },
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Settings — profile (owner only)
+// ---------------------------------------------------------------------------
+
+/**
+ * The owner-editable merchant profile. `name`, `slug` and `status` are
+ * read-only display — renaming the business is an identity change and stays
+ * admin-only (a PATCHed `name` is dropped server-side). `eligibility_basis`
+ * is the §11 free-text mirror of the agreement, displayed to customers,
+ * never used in computation.
+ */
+export const MerchantProfileSchema = z.object({
+  id: z.number().int(),
+  name: z.string(),
+  slug: z.string(),
+  status: z.enum(['active', 'suspended', 'closed']),
+  category: z.string().nullable(),
+  is_online: z.boolean(),
+  eligibility_basis: z.string().nullable(),
+  contact_email: z.string().nullable(),
+  contact_phone: z.string().nullable(),
+});
+export type MerchantProfile = z.infer<typeof MerchantProfileSchema>;
+
+export const MerchantProfileResponseSchema = dataWrapped(MerchantProfileSchema);
+export type MerchantProfileResponse = z.infer<
+  typeof MerchantProfileResponseSchema
+>;
+
+export const UpdateMerchantProfileRequestSchema = z.object({
+  category: z.string().max(100).nullable().optional(),
+  is_online: z.boolean().optional(),
+  eligibility_basis: z.string().max(2000).nullable().optional(),
+  contact_email: z.email().max(255).nullable().optional(),
+  contact_phone: z.string().max(32).nullable().optional(),
+});
+export type UpdateMerchantProfileRequest = z.infer<
+  typeof UpdateMerchantProfileRequestSchema
+>;
+
+/** GET /api/merchant/profile — owner only. */
+export function getMerchantProfile(
+  options: RequestOptions = {},
+): Promise<MerchantProfileResponse> {
+  return apiFetch('/api/merchant/profile', MerchantProfileResponseSchema, {
+    signal: options.signal,
+  });
+}
+
+/** PATCH /api/merchant/profile — partial update; omitted keys are untouched. */
+export function updateMerchantProfile(
+  body: UpdateMerchantProfileRequest,
+  options: RequestOptions = {},
+): Promise<MerchantProfileResponse> {
+  return apiFetch('/api/merchant/profile', MerchantProfileResponseSchema, {
+    method: 'PATCH',
+    body,
+    signal: options.signal,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Settings — bank account (owner only)
+// ---------------------------------------------------------------------------
+
+/**
+ * The merchant's own bank identity, used for matching INBOUND settlement
+ * payments (and future wallet withdrawals) — never a payout destination:
+ * money flows merchant → platform.
+ */
+export const MerchantBankAccountSchema = z.object({
+  bank_name: z.string(),
+  bank_account: z.string(),
+  bank_account_name: z.string(),
+});
+export type MerchantBankAccount = z.infer<typeof MerchantBankAccountSchema>;
+
+export const MerchantBankAccountResponseSchema = dataWrapped(
+  MerchantBankAccountSchema,
+);
+export type MerchantBankAccountResponse = z.infer<
+  typeof MerchantBankAccountResponseSchema
+>;
+
+/**
+ * The bank identity is one atomic triple — a half-updated identity
+ * mismatches every payment — so all three fields are required together.
+ */
+export const UpdateMerchantBankAccountRequestSchema = z.object({
+  bank_name: z.string().min(1).max(255),
+  bank_account: z.string().min(1).max(64),
+  bank_account_name: z.string().min(1).max(255),
+});
+export type UpdateMerchantBankAccountRequest = z.infer<
+  typeof UpdateMerchantBankAccountRequestSchema
+>;
+
+/** PATCH /api/merchant/bank-account — owner only; all three fields together. */
+export function updateMerchantBankAccount(
+  body: UpdateMerchantBankAccountRequest,
+  options: RequestOptions = {},
+): Promise<MerchantBankAccountResponse> {
+  return apiFetch(
+    '/api/merchant/bank-account',
+    MerchantBankAccountResponseSchema,
+    { method: 'PATCH', body, signal: options.signal },
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Settings — branches (owner only)
+// ---------------------------------------------------------------------------
+
+/** Coordinates are floats deliberately — geography, not money. */
+export const MerchantBranchSchema = z.object({
+  id: z.number().int(),
+  name: z.string(),
+  address: z.string().nullable(),
+  lat: z.number().nullable(),
+  lng: z.number().nullable(),
+});
+export type MerchantBranch = z.infer<typeof MerchantBranchSchema>;
+
+export const MerchantBranchListResponseSchema = z.object({
+  data: z.array(MerchantBranchSchema),
+});
+export type MerchantBranchListResponse = z.infer<
+  typeof MerchantBranchListResponseSchema
+>;
+
+export const MerchantBranchResponseSchema = dataWrapped(MerchantBranchSchema);
+export type MerchantBranchResponse = z.infer<
+  typeof MerchantBranchResponseSchema
+>;
+
+/**
+ * lat/lng are a nullable PAIR: both set or both null, never one — the
+ * server 422s a lone coordinate (on update, after merging with the stored
+ * branch).
+ */
+export const CreateMerchantBranchRequestSchema = z.object({
+  name: z.string().min(1).max(255),
+  address: z.string().max(1000).nullable().optional(),
+  lat: z.number().min(-90).max(90).nullable().optional(),
+  lng: z.number().min(-180).max(180).nullable().optional(),
+});
+export type CreateMerchantBranchRequest = z.infer<
+  typeof CreateMerchantBranchRequestSchema
+>;
+
+export const UpdateMerchantBranchRequestSchema =
+  CreateMerchantBranchRequestSchema.partial();
+export type UpdateMerchantBranchRequest = z.infer<
+  typeof UpdateMerchantBranchRequestSchema
+>;
+
+/** GET /api/merchant/branches — all branches, id order. */
+export function listMerchantBranches(
+  options: RequestOptions = {},
+): Promise<MerchantBranchListResponse> {
+  return apiFetch('/api/merchant/branches', MerchantBranchListResponseSchema, {
+    signal: options.signal,
+  });
+}
+
+/** POST /api/merchant/branches — creates a branch (201). */
+export function createMerchantBranch(
+  body: CreateMerchantBranchRequest,
+  options: RequestOptions = {},
+): Promise<MerchantBranchResponse> {
+  return apiFetch('/api/merchant/branches', MerchantBranchResponseSchema, {
+    method: 'POST',
+    body,
+    signal: options.signal,
+  });
+}
+
+/** PATCH /api/merchant/branches/{id} — partial update. */
+export function updateMerchantBranch(
+  id: number,
+  body: UpdateMerchantBranchRequest,
+  options: RequestOptions = {},
+): Promise<MerchantBranchResponse> {
+  return apiFetch(
+    `/api/merchant/branches/${id}`,
+    MerchantBranchResponseSchema,
+    { method: 'PATCH', body, signal: options.signal },
+  );
+}
+
+/**
+ * DELETE /api/merchant/branches/{id} — 204 on success. A branch referenced
+ * by transactions or branch-scoped promotions is history that must keep
+ * resolving: the server answers 409 with code `branch_referenced` (thrown
+ * here as ApiError) and the soft alternative is simply to stop using it.
+ */
+export async function deleteMerchantBranch(
+  id: number,
+  options: RequestOptions = {},
+): Promise<void> {
+  await apiFetch(`/api/merchant/branches/${id}`, z.undefined(), {
+    method: 'DELETE',
+    signal: options.signal,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Settings — staff (owner only)
+// ---------------------------------------------------------------------------
+
+export const MerchantStaffRoleSchema = z.enum(['owner', 'staff']);
+export type MerchantStaffRole = z.infer<typeof MerchantStaffRoleSchema>;
+
+export const MerchantStaffSchema = z.object({
+  id: z.number().int(),
+  name: z.string(),
+  email: z.string(),
+  role: MerchantStaffRoleSchema,
+  is_active: z.boolean(),
+  created_at: z.string().nullable(),
+});
+export type MerchantStaff = z.infer<typeof MerchantStaffSchema>;
+
+export const MerchantStaffListResponseSchema = z.object({
+  data: z.array(MerchantStaffSchema),
+});
+export type MerchantStaffListResponse = z.infer<
+  typeof MerchantStaffListResponseSchema
+>;
+
+export const MerchantStaffResponseSchema = dataWrapped(MerchantStaffSchema);
+export type MerchantStaffResponse = z.infer<typeof MerchantStaffResponseSchema>;
+
+export const CreateMerchantStaffRequestSchema = z.object({
+  name: z.string().min(1).max(255),
+  /** Must be unique across all merchant panel accounts (422 otherwise). */
+  email: z.email().max(255),
+});
+export type CreateMerchantStaffRequest = z.infer<
+  typeof CreateMerchantStaffRequestSchema
+>;
+
+export const CreateMerchantStaffResponseSchema = z.object({
+  data: MerchantStaffSchema,
+  /**
+   * The generated temporary password — returned exactly ONCE, on creation,
+   * and never retrievable again (only the hash survives). The panel must
+   * display it immediately for handover.
+   */
+  temp_password: z.string(),
+});
+export type CreateMerchantStaffResponse = z.infer<
+  typeof CreateMerchantStaffResponseSchema
+>;
+
+export const UpdateMerchantStaffRequestSchema = z.object({
+  role: MerchantStaffRoleSchema.optional(),
+  is_active: z.boolean().optional(),
+});
+export type UpdateMerchantStaffRequest = z.infer<
+  typeof UpdateMerchantStaffRequestSchema
+>;
+
+/** GET /api/merchant/staff — every panel account, id order. */
+export function listMerchantStaff(
+  options: RequestOptions = {},
+): Promise<MerchantStaffListResponse> {
+  return apiFetch('/api/merchant/staff', MerchantStaffListResponseSchema, {
+    signal: options.signal,
+  });
+}
+
+/** POST /api/merchant/staff — creates a staff account (201) + one-time temp password. */
+export function createMerchantStaff(
+  body: CreateMerchantStaffRequest,
+  options: RequestOptions = {},
+): Promise<CreateMerchantStaffResponse> {
+  return apiFetch('/api/merchant/staff', CreateMerchantStaffResponseSchema, {
+    method: 'POST',
+    body,
+    signal: options.signal,
+  });
+}
+
+/**
+ * PATCH /api/merchant/staff/{id} — role and/or activation. There is
+ * deliberately no DELETE: deactivation is the only removal. Demoting or
+ * deactivating the last active owner answers 422.
+ */
+export function updateMerchantStaff(
+  id: number,
+  body: UpdateMerchantStaffRequest,
+  options: RequestOptions = {},
+): Promise<MerchantStaffResponse> {
+  return apiFetch(`/api/merchant/staff/${id}`, MerchantStaffResponseSchema, {
+    method: 'PATCH',
+    body,
+    signal: options.signal,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Settings — preferences (owner only)
+// ---------------------------------------------------------------------------
+
+/**
+ * Operational preferences: how settlements are funded (§7 — wallet is a
+ * funding method, not pre-funding) and the two per-merchant earning knobs.
+ * Both knobs apply to FUTURE credits only — terms freeze onto each
+ * transaction at occurred_at (§4), so history never moves.
+ */
+export const MerchantPreferencesSchema = z.object({
+  settlement_method: SettlementFundingMethodSchema,
+  /** Integer laari. */
+  min_eligible_laari: z.number().int(),
+  validation_window_days: z.number().int(),
+  /**
+   * Admin-governed ceiling for validation_window_days (the platform's
+   * default_validation_window_days setting). The §11 stale-review window
+   * is not merchant-raisable — render THIS as the form bound.
+   */
+  validation_window_max_days: z.number().int(),
+});
+export type MerchantPreferences = z.infer<typeof MerchantPreferencesSchema>;
+
+export const MerchantPreferencesResponseSchema = dataWrapped(
+  MerchantPreferencesSchema,
+);
+export type MerchantPreferencesResponse = z.infer<
+  typeof MerchantPreferencesResponseSchema
+>;
+
+export const UpdateMerchantPreferencesRequestSchema = z.object({
+  settlement_method: SettlementFundingMethodSchema.optional(),
+  /** Integer laari; platform bounds 0–100000 (MVR 0–1,000). */
+  min_eligible_laari: z.number().int().min(0).max(100000).optional(),
+  /**
+   * Days. The server enforces the platform ceiling (the response's
+   * validation_window_max_days); 30 is only the absolute platform range.
+   */
+  validation_window_days: z.number().int().min(0).max(30).optional(),
+});
+export type UpdateMerchantPreferencesRequest = z.infer<
+  typeof UpdateMerchantPreferencesRequestSchema
+>;
+
+/** PATCH /api/merchant/preferences — partial update; owner only. */
+export function updateMerchantPreferences(
+  body: UpdateMerchantPreferencesRequest,
+  options: RequestOptions = {},
+): Promise<MerchantPreferencesResponse> {
+  return apiFetch(
+    '/api/merchant/preferences',
+    MerchantPreferencesResponseSchema,
+    { method: 'PATCH', body, signal: options.signal },
+  );
+}
+
+// ---------------------------------------------------------------------------
+// GET /api/merchant/customers/lookup — staff-accessible
+// ---------------------------------------------------------------------------
+
+/**
+ * The credit screen's cashier confirmation (§11 phone-recycling control):
+ * resolves a 6-digit customer code to a MASKED name (e.g. "Ais*** Moh***")
+ * so the right person is credited before a manual credit is posted.
+ *
+ * An unknown code and a known-but-blocked customer answer identically —
+ * a plain 200 `{valid: false}` — so the endpoint is no existence oracle.
+ * Throttled 30/min per user, matching the credit POST.
+ */
+export const CustomerLookupResponseSchema = z.discriminatedUnion('valid', [
+  z.object({ valid: z.literal(true), masked_name: z.string() }),
+  z.object({ valid: z.literal(false) }),
+]);
+export type CustomerLookupResponse = z.infer<
+  typeof CustomerLookupResponseSchema
+>;
+
+export function lookupMerchantCustomer(
+  code: string,
+  options: RequestOptions = {},
+): Promise<CustomerLookupResponse> {
+  return apiFetch(
+    `/api/merchant/customers/lookup?code=${encodeURIComponent(code)}`,
+    CustomerLookupResponseSchema,
+    { signal: options.signal },
   );
 }

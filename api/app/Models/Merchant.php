@@ -24,6 +24,7 @@ class Merchant extends Model
         return [
             'validation_window_days' => 'integer',
             'min_eligible_laari' => 'integer',
+            'is_online' => 'boolean',
         ];
     }
 

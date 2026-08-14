@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Merchant;
 
-use App\Domain\Money\FeeTier;
+use App\Domain\Platform\FeeTierScheduleResolver;
+use App\Domain\Platform\RateNotPricedException;
+use App\Domain\Platform\TierScheduleService;
 use App\Domain\Webhooks\WebhookDispatcher;
 use App\Domain\Webhooks\WebhookEvents;
 use App\Http\Controllers\Controller;
@@ -56,7 +58,7 @@ class RateController extends Controller
         ]);
     }
 
-    public function store(Request $request, WebhookDispatcher $webhooks): JsonResponse
+    public function store(Request $request, WebhookDispatcher $webhooks, FeeTierScheduleResolver $feeTiers, TierScheduleService $schedules): JsonResponse
     {
         $merchant = $this->merchant($request);
         $user = $request->user();
@@ -66,83 +68,125 @@ class RateController extends Controller
             abort(403, 'Only the merchant owner can change the cashback rate.');
         }
 
-        // §4: integer basis points 50–1000, or 4.995% falls into no tier.
+        // §4: integer basis points 50–2000 (the structural cap), or 4.995%
+        // falls into no tier.
         $validated = $request->validate([
-            'rate_bp' => ['required', 'integer', 'min:50', 'max:1000'],
+            'rate_bp' => ['required', 'integer', 'min:50', 'max:2000'],
         ]);
 
         $rateBp = (int) $validated['rate_bp'];
+
         $now = CarbonImmutable::now('UTC');
 
-        $change = DB::transaction(function () use ($merchant, $user, $rateBp, $now): array {
-            // Serialise concurrent changes on this merchant's history.
-            $rows = MerchantRate::query()
-                ->where('merchant_id', $merchant->id)
-                ->lockForUpdate()
-                ->orderByDesc('effective_from')
-                ->get();
+        try {
+            $change = DB::transaction(function () use ($merchant, $user, $rateBp, $now, $schedules): array {
+                // Coverage lock first (see TierScheduleService): a schedule
+                // created concurrently must either be visible to the check
+                // below or refuse itself against this committed rate row.
+                TierScheduleService::lockCoverage();
 
-            // Any scheduled-but-unapplied row is replaced by this change.
-            $pendingReplaced = false;
+                // A rate no current-or-future fee tier schedule prices is
+                // unsellable — the fee must be priced before the rate can be
+                // sold. Checked from NOW onward because the new standing rate
+                // is open-ended: the active schedule (conservative — a wider
+                // schedule published but not yet effective unlocks nothing
+                // early) AND every schedule already scheduled to take effect
+                // later. Validating only the active one would let a rate
+                // strand the moment an already-published narrower schedule
+                // takes effect, and 500 every credit from then on.
+                $schedules->assertPricedThrough($rateBp, $now);
 
-            foreach ($rows->filter(fn (MerchantRate $row) => $row->effective_from->isAfter($now)) as $pending) {
-                $pending->delete();
-                $pendingReplaced = true;
-            }
+                // Serialise concurrent changes on this merchant's history.
+                $rows = MerchantRate::query()
+                    ->where('merchant_id', $merchant->id)
+                    ->lockForUpdate()
+                    ->orderByDesc('effective_from')
+                    ->get();
 
-            $current = $rows->first(fn (MerchantRate $row) => $row->effective_from->lessThanOrEqualTo($now)
-                && ($row->effective_to === null || $row->effective_to->isAfter($now)));
+                // Any scheduled-but-unapplied row is replaced by this change.
+                $pendingReplaced = false;
 
-            // Reopen the current row if it was closed toward a boundary the
-            // deleted pending row owned.
-            if ($current !== null && $current->effective_to !== null && $current->effective_to->isAfter($now)) {
-                $current->update(['effective_to' => null]);
-            }
+                foreach ($rows->filter(fn (MerchantRate $row) => $row->effective_from->isAfter($now)) as $pending) {
+                    $pending->delete();
+                    $pendingReplaced = true;
+                }
 
-            $previousRateBp = $current?->rate_bp;
+                $current = $rows->first(fn (MerchantRate $row) => $row->effective_from->lessThanOrEqualTo($now)
+                    && ($row->effective_to === null || $row->effective_to->isAfter($now)));
 
-            if ($current === null || $rateBp > $current->rate_bp) {
-                // First rate ever, or an increase: effective immediately.
-                $effectiveAt = $now;
-                $current?->update(['effective_to' => $now]);
-                $this->insertRate($merchant, $user, $rateBp, $effectiveAt);
-            } elseif ($rateBp < $current->rate_bp) {
-                // Decrease: effective at the next business-day midnight.
-                $effectiveAt = $this->nextBusinessMidnight($now);
-                $current->update(['effective_to' => $effectiveAt]);
-                $this->insertRate($merchant, $user, $rateBp, $effectiveAt);
-            } else {
-                // Same rate as current: nothing to apply. If a pending row
-                // was cancelled, that alone changed the future — report it.
-                $effectiveAt = $now;
-            }
+                // Reopen the current row if it was closed toward a boundary the
+                // deleted pending row owned.
+                if ($current !== null && $current->effective_to !== null && $current->effective_to->isAfter($now)) {
+                    $current->update(['effective_to' => null]);
+                }
 
-            return [
-                'previous_rate_bp' => $previousRateBp,
-                'effective_at' => $effectiveAt,
-                'applied' => $current === null || $rateBp !== $current->rate_bp,
-                'pending_replaced' => $pendingReplaced,
-            ];
-        });
+                $previousRateBp = $current?->rate_bp;
+
+                if ($current === null || $rateBp > $current->rate_bp) {
+                    // First rate ever, or an increase: effective immediately.
+                    $effectiveAt = $now;
+                    $current?->update(['effective_to' => $now]);
+                    $this->insertRate($merchant, $user, $rateBp, $effectiveAt);
+                } elseif ($rateBp < $current->rate_bp) {
+                    // Decrease: effective at the next business-day midnight.
+                    $effectiveAt = $this->nextBusinessMidnight($now);
+                    $current->update(['effective_to' => $effectiveAt]);
+                    $this->insertRate($merchant, $user, $rateBp, $effectiveAt);
+                } else {
+                    // Same rate as current: nothing to apply. If a pending row
+                    // was cancelled, that alone changed the future — report it.
+                    $effectiveAt = $now;
+                }
+
+                return [
+                    'previous_rate_bp' => $previousRateBp,
+                    'effective_at' => $effectiveAt,
+                    'applied' => $current === null || $rateBp !== $current->rate_bp,
+                    'pending_replaced' => $pendingReplaced,
+                ];
+            });
+        } catch (RateNotPricedException $e) {
+            // Thrown inside the transaction, so NOTHING was committed — the
+            // refusal must never leave a half-applied change behind.
+            return new JsonResponse([
+                'message' => $e->getMessage(),
+                'code' => RateNotPricedException::CODE,
+            ], 422);
+        }
+
+        // Fees resolve from the admin-managed schedule AT the instant the
+        // change takes effect — the same source billing prices from. The
+        // static §4 map would lie the moment a published schedule diverges.
+        // Resolved BEFORE anything is returned but AFTER commit; the NEW
+        // rate is guaranteed priced (validated through every schedule
+        // above), while the PREVIOUS rate may be a legacy stranded one with
+        // no fee under the schedule at effective_at — this very change is
+        // the merchant's self-rescue, so it must survive that (null fee),
+        // never 500 after committing and never skip the webhook tills rely
+        // on for the §7 pending-decrease display.
+        $effectiveAt = $change['effective_at'];
+        $previousRateBp = $change['previous_rate_bp'] ?? $rateBp;
+        $newFeeBp = $feeTiers->feeBpAt($rateBp, $effectiveAt);
+        $previousFeeBp = $feeTiers->tryFeeBpAt($previousRateBp, $effectiveAt);
 
         // Emit AFTER commit — the queued job reads the delivery row, which
         // must be visible to the queue worker. A same-rate no-op still
         // notifies when it cancelled a scheduled change (tills hold a
-        // pending_decrease that is no longer real).
+        // pending_decrease that is no longer real). previous_fee_bp is null
+        // when the outgoing rate was never priced by the schedule at
+        // effective_at (legacy stranded rate being rescued).
         if ($change['applied'] || $change['pending_replaced']) {
             $webhooks->dispatch(WebhookEvents::MERCHANT_RATE_CHANGED, [
                 'merchant_id' => $merchant->id,
                 'rate_bp' => $rateBp,
-                'fee_bp' => FeeTier::feeBpFor($rateBp),
-                'previous_rate_bp' => $change['previous_rate_bp'] ?? $rateBp,
-                'previous_fee_bp' => FeeTier::feeBpFor($change['previous_rate_bp'] ?? $rateBp),
-                'effective_at' => $change['effective_at']
+                'fee_bp' => $newFeeBp,
+                'previous_rate_bp' => $previousRateBp,
+                'previous_fee_bp' => $previousFeeBp,
+                'effective_at' => $effectiveAt
                     ->setTimezone($this->businessTimezone())
                     ->toIso8601String(),
             ]);
         }
-
-        $previousRateBp = $change['previous_rate_bp'] ?? $rateBp;
 
         return new JsonResponse([
             'data' => [
@@ -151,15 +195,18 @@ class RateController extends Controller
             ],
             // §4 tier-cliff data: fee before/after and all-in cost, so the
             // panel can warn (e.g. 499 → 500: +0.01pp cashback, +0.26pp
-            // all-in).
+            // all-in). Both sides priced under the schedule at effective_at,
+            // so the warning fires on the ACTUAL fee boundaries in force.
+            // previous carries null fee fields when the outgoing rate was
+            // unpriced (stranded) at effective_at.
             'change' => [
-                'previous' => RateResource::describeBp($previousRateBp),
-                'new' => RateResource::describeBp($rateBp),
-                'effective_at' => $change['effective_at']->setTimezone($this->businessTimezone())->toIso8601String(),
-                'applies' => $change['effective_at']->isAfter(CarbonImmutable::now('UTC'))
+                'previous' => RateResource::tryDescribeBp($previousRateBp, $effectiveAt),
+                'new' => RateResource::describeBp($rateBp, $effectiveAt),
+                'effective_at' => $effectiveAt->setTimezone($this->businessTimezone())->toIso8601String(),
+                'applies' => $effectiveAt->isAfter(CarbonImmutable::now('UTC'))
                     ? 'next_business_midnight'
                     : 'immediately',
-                'tier_changed' => FeeTier::feeBpFor($previousRateBp) !== FeeTier::feeBpFor($rateBp),
+                'tier_changed' => $previousFeeBp !== $newFeeBp,
             ],
         ]);
     }

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Domain\Promotions;
 
 use App\Domain\Money\Rate;
+use App\Domain\Platform\TierScheduleService;
 use App\Models\Merchant;
 use App\Models\MerchantBranch;
 use App\Models\MerchantRate;
@@ -39,9 +40,23 @@ use InvalidArgumentException;
  * The platform fee is not stored on the promotion: it follows the promo
  * rate's §4 tier automatically wherever the rate is applied
  * (CashbackCalculator resolves fee_bp from rate_bp at credit time).
+ *
+ * SCHEDULE CEILING: a promo rate that any fee tier schedule GOVERNING THE
+ * WINDOW does not price — the active one (conservative: a wider schedule
+ * published but not yet effective unlocks nothing early) or any schedule
+ * already published to take effect inside [starts_at, ends_at) — is
+ * refused with `rate_not_priced` at draft time AND re-checked at publish
+ * under the coverage lock (TierScheduleService::assertPricedThrough): the
+ * fee must be priced for every instant the promotion will run, or its
+ * credits would fail mid-window with no cancel path. With the seeded
+ * 50-1000 schedule active, no promotion above 10% can exist until the
+ * admin publishes a wider table; the static map's 2000 bp fallback ceiling
+ * applies only when no schedule row exists at all.
  */
 final readonly class PromotionService
 {
+    public function __construct(private TierScheduleService $schedules) {}
+
     public function createDraft(
         Merchant $merchant,
         MerchantUser $creator,
@@ -52,7 +67,8 @@ final readonly class PromotionService
         ?int $maxCashbackPerCustomerLaari = null,
         ?int $branchId = null,
     ): Promotion {
-        // §4: integer basis points 50–1000 or no fee tier exists.
+        // §4: integer basis points 50–2000 (structural) or no fee tier can
+        // ever exist.
         Rate::cashback($rateBp);
 
         $startsAt = $startsAt->utc();
@@ -61,6 +77,15 @@ final readonly class PromotionService
         if (! $endsAt->isAfter($startsAt)) {
             throw InvalidPromotionWindowException::endsBeforeStarts($startsAt, $endsAt);
         }
+
+        // The rate must be priced across the WHOLE window it will run —
+        // the active schedule alone is not enough: a narrower schedule
+        // already published to take effect inside [starts_at, ends_at)
+        // would strand the promotion (every credit in the window fails,
+        // and PLAN §7 offers no cancel for a published promo). Early
+        // feedback here; publish() re-checks authoritatively under the
+        // coverage lock.
+        $this->schedules->assertPricedThrough($rateBp, $startsAt, $endsAt);
 
         if ($minPurchaseLaari !== null && $minPurchaseLaari < 0) {
             throw new InvalidArgumentException('Minimum purchase must not be negative.');
@@ -110,8 +135,14 @@ final readonly class PromotionService
                 throw InvalidPromotionWindowException::startsInPast($locked->starts_at, $now);
             }
 
-            // Authoritative boost check against the standing rate that will
-            // actually be in force when the window opens.
+            // Authoritative re-checks: the fee schedule and the standing
+            // history may both have moved since the draft. Under the
+            // coverage lock (serialised against schedule creation, which
+            // in turn refuses ceilings below published promos), the rate
+            // must be priced by every schedule governing the window, and
+            // must still boost the standing rate in force when it opens.
+            TierScheduleService::lockCoverage();
+            $this->schedules->assertPricedThrough($locked->rate_bp, $locked->starts_at, $locked->ends_at);
             $this->assertBoost($locked->merchant, $locked->rate_bp, $locked->starts_at);
 
             $locked->update(['status' => 'published', 'published_at' => $now]);

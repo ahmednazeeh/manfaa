@@ -66,7 +66,10 @@ it('refuses staff and rejects out-of-tier rates', function () {
         ->postJson('/api/merchant/rate', ['rate_bp' => 300])
         ->assertForbidden();
 
-    foreach ([49, 1001, 0, -100] as $bad) {
+    // Structural bounds are now 50–2000 (cap widening); 1001–2000 fail
+    // later as rate_not_priced against the active schedule, covered in
+    // tests/Feature/Platform/CapWideningTest.php.
+    foreach ([49, 2001, 0, -100] as $bad) {
         $this->actingAs($this->owner, 'merchant')
             ->postJson('/api/merchant/rate', ['rate_bp' => $bad])
             ->assertStatus(422)

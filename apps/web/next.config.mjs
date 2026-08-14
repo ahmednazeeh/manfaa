@@ -8,6 +8,19 @@ const nextConfig = {
 
   // Workspace packages shipped as TypeScript source
   transpilePackages: ['@manfaa/ui', '@manfaa/api-client'],
+
+  // The old /stores directory merged into /discover. Config-level redirects
+  // preserve the query string (q/category/page) by default, so old bookmarks
+  // and shared filter links keep working. 308 = permanent.
+  async redirects() {
+    return [
+      {
+        source: '/stores',
+        destination: '/discover',
+        permanent: true,
+      },
+    ];
+  },
 };
 
 export default nextConfig;

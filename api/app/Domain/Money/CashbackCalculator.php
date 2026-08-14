@@ -14,14 +14,21 @@ use InvalidArgumentException;
  */
 final class CashbackCalculator
 {
-    public function calculate(Laari $eligible, Rate $cashbackRate): CashbackResult
+    /**
+     * $feeBpOverride carries a fee resolved from an effective-dated
+     * fee_tier_schedules row (TermsResolver's path); when null, the static
+     * §4 FeeTier map answers — identical behaviour for every existing caller.
+     */
+    public function calculate(Laari $eligible, Rate $cashbackRate, ?int $feeBpOverride = null): CashbackResult
     {
         if ($eligible->isNegative()) {
             throw new InvalidArgumentException('Eligible amount must not be negative.');
         }
 
         $rateBp = $cashbackRate->basisPoints();
-        $feeBp = FeeTier::feeBpFor($rateBp);
+        $feeBp = $feeBpOverride === null
+            ? FeeTier::feeBpFor($rateBp)
+            : Rate::fee($feeBpOverride)->basisPoints();
 
         return new CashbackResult(
             cashbackLaari: intdiv($eligible->value() * $rateBp + 9999, 10000),
@@ -37,13 +44,13 @@ final class CashbackCalculator
      * intdiv(cashback * fee_bp + rate_bp - 1, rate_bp). When the cap does not
      * clip, the normal per-line result stands untouched.
      */
-    public function calculateCapped(Laari $eligible, Rate $cashbackRate, Laari $capRemaining): CashbackResult
+    public function calculateCapped(Laari $eligible, Rate $cashbackRate, Laari $capRemaining, ?int $feeBpOverride = null): CashbackResult
     {
         if ($capRemaining->isNegative()) {
             throw new InvalidArgumentException('Cap remaining must not be negative.');
         }
 
-        $normal = $this->calculate($eligible, $cashbackRate);
+        $normal = $this->calculate($eligible, $cashbackRate, $feeBpOverride);
 
         if ($normal->cashbackLaari <= $capRemaining->value()) {
             return $normal;

@@ -125,8 +125,16 @@ export type RateDescription = z.infer<typeof RateDescriptionSchema>;
  * One promotion as the merchant and admin panels see it. The fee fields are
  * resolved from the promo rate's §4 tier exactly as they will be at credit
  * time. Timestamps are ISO 8601 in the business timezone (UTC+5).
+ *
+ * fee_bp/all_in_bp are null in exactly one degenerate case: a stale DRAFT
+ * whose rate the fee schedule now governing its window no longer prices
+ * (drafts never block an admin schedule change; publish would refuse this
+ * draft). The listing must still render so the merchant can see and cancel
+ * it.
  */
 export const PromotionSchema = RateDescriptionSchema.extend({
+  fee_bp: z.number().int().nullable(),
+  all_in_bp: z.number().int().nullable(),
   id: z.number().int(),
   merchant_id: z.number().int(),
   branch_id: z.number().int().nullable(),
@@ -213,6 +221,30 @@ export const SettlementPaymentSchema = z.object({
 });
 export type SettlementPayment = z.infer<typeof SettlementPaymentSchema>;
 
+/**
+ * Where to actually send the transfer: the platform's active primary bank
+ * account alongside the amount and the reference to quote. When no platform
+ * account is configured, `bank_account` is null and `needs_configuration`
+ * is true — details are never invented.
+ */
+export const SettlementPaymentInstructionsSchema = z.object({
+  /** The settlement reference the merchant must quote on the transfer. */
+  reference: z.string(),
+  amount_due_laari: z.number().int(),
+  amount_due_mvr: z.string(),
+  bank_account: z
+    .object({
+      bank_name: z.string(),
+      account_no: z.string(),
+      account_name: z.string(),
+    })
+    .nullable(),
+  needs_configuration: z.boolean(),
+});
+export type SettlementPaymentInstructions = z.infer<
+  typeof SettlementPaymentInstructionsSchema
+>;
+
 export const SettlementSchema = z.object({
   id: z.number().int(),
   reference: z.string(),
@@ -231,6 +263,7 @@ export const SettlementSchema = z.object({
   amount_received_mvr: z.string(),
   due_at: z.string().nullable(),
   created_at: z.string(),
+  payment_instructions: SettlementPaymentInstructionsSchema,
   // Present only on endpoints that eager-load the relations.
   lines: z.array(SettlementLineSchema).optional(),
   payments: z.array(SettlementPaymentSchema).optional(),

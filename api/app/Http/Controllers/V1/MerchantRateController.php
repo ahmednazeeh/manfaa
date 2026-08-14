@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\V1;
 
-use App\Domain\Money\FeeTier;
+use App\Domain\Platform\FeeTierScheduleResolver;
 use App\Domain\Promotions\PromotionResolver;
 use App\Models\Merchant;
 use App\Models\MerchantRate;
@@ -29,7 +29,7 @@ use Illuminate\Http\Request;
  */
 class MerchantRateController extends V1Controller
 {
-    public function __invoke(Request $request, PromotionResolver $promotions): JsonResponse
+    public function __invoke(Request $request, PromotionResolver $promotions, FeeTierScheduleResolver $feeTiers): JsonResponse
     {
         /** @var Merchant $merchant */
         $merchant = $request->user();
@@ -57,10 +57,14 @@ class MerchantRateController extends V1Controller
 
         $pendingDecrease = null;
 
+        // Every fee below resolves from the admin-managed schedule — the
+        // same source billing (TermsResolver) prices from — at the instant
+        // each rate is or becomes effective. The static §4 map would quote a
+        // stale fee the moment a published schedule diverges.
         if ($pending !== null && $pending->rate_bp < $current->rate_bp) {
             $pendingDecrease = [
                 'rate_bp' => $pending->rate_bp,
-                'fee_bp' => FeeTier::feeBpFor($pending->rate_bp),
+                'fee_bp' => $feeTiers->feeBpAt($pending->rate_bp, $pending->effective_from->utc()),
                 'effective_at' => $pending->effective_from
                     ->setTimezone((string) config('app.business_timezone', 'Indian/Maldives'))
                     ->toIso8601String(),
@@ -69,7 +73,7 @@ class MerchantRateController extends V1Controller
 
         $response = [
             'rate_bp' => $current->rate_bp,
-            'fee_bp' => FeeTier::feeBpFor($current->rate_bp),
+            'fee_bp' => $feeTiers->feeBpAt($current->rate_bp, $now),
             'currency' => 'MVR',
             'min_eligible_laari' => $merchant->min_eligible_laari,
             'pending_decrease' => $pendingDecrease,
@@ -80,7 +84,7 @@ class MerchantRateController extends V1Controller
         if ($promotion !== null && $promotion->rate_bp > $current->rate_bp) {
             $response['active_promotion'] = [
                 'rate_bp' => $promotion->rate_bp,
-                'fee_bp' => FeeTier::feeBpFor($promotion->rate_bp),
+                'fee_bp' => $feeTiers->feeBpAt($promotion->rate_bp, $now),
                 'branch_id' => $promotion->branch_id,
                 'min_purchase_laari' => (int) ($promotion->min_purchase_laari ?? 0),
                 'ends_at' => $promotion->ends_at

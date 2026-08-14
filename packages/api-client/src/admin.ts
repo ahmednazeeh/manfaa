@@ -16,8 +16,11 @@ import {
 /**
  * Typed contracts for the admin surface: the settlement matching queue,
  * merchant standing and notices, reconciliation runs, the payout batch
- * lifecycle (Phase 1), and the claims queue and promotions read model
- * (Phase 3). All amounts sent and received are integer laari.
+ * lifecycle (Phase 1), the claims queue and promotions read model (Phase 3),
+ * and the platform settings domain — platform bank accounts, the §4 fee tier
+ * schedule, typed platform settings, and superadmin-only admin account
+ * management. All amounts sent and received are integer laari; all rates are
+ * integer basis points.
  */
 
 interface RequestOptions {
@@ -507,4 +510,351 @@ export function listAdminPromotions(
     AdminPromotionListResponseSchema,
     { signal: options.signal },
   );
+}
+
+// ---------------------------------------------------------------------------
+// Platform bank accounts
+// ---------------------------------------------------------------------------
+
+/**
+ * One of the platform's own bank accounts — where merchants send settlement
+ * transfers. There is no DELETE: accounts deactivate, so old settlement
+ * instructions stay explicable. Exactly one active primary exists at a time;
+ * promoting another demotes the incumbent server-side.
+ */
+export const PlatformBankAccountSchema = z.object({
+  id: z.number().int(),
+  bank_name: z.string(),
+  account_no: z.string(),
+  account_name: z.string(),
+  currency: z.string(),
+  is_primary: z.boolean(),
+  active: z.boolean(),
+  created_at: z.string(),
+  updated_at: z.string(),
+});
+export type PlatformBankAccount = z.infer<typeof PlatformBankAccountSchema>;
+
+export const PlatformBankAccountListResponseSchema = z.object({
+  data: z.array(PlatformBankAccountSchema),
+});
+export type PlatformBankAccountListResponse = z.infer<
+  typeof PlatformBankAccountListResponseSchema
+>;
+
+export const PlatformBankAccountResponseSchema = dataWrapped(
+  PlatformBankAccountSchema,
+);
+export type PlatformBankAccountResponse = z.infer<
+  typeof PlatformBankAccountResponseSchema
+>;
+
+/** GET /api/admin/platform/bank-accounts — primary first, then by id. */
+export function listAdminPlatformBankAccounts(
+  options: RequestOptions = {},
+): Promise<PlatformBankAccountListResponse> {
+  return apiFetch(
+    '/api/admin/platform/bank-accounts',
+    PlatformBankAccountListResponseSchema,
+    { signal: options.signal },
+  );
+}
+
+export const CreatePlatformBankAccountRequestSchema = z.object({
+  bank_name: z.string().min(1).max(255),
+  account_no: z.string().min(1).max(255),
+  account_name: z.string().min(1).max(255),
+  /** MVR only in v1; defaults to MVR when omitted. */
+  currency: z.literal('MVR').optional(),
+  is_primary: z.boolean().optional(),
+  active: z.boolean().optional(),
+});
+export type CreatePlatformBankAccountRequest = z.infer<
+  typeof CreatePlatformBankAccountRequestSchema
+>;
+
+/** POST /api/admin/platform/bank-accounts — creates an account (201). */
+export function createAdminPlatformBankAccount(
+  body: CreatePlatformBankAccountRequest,
+  options: RequestOptions = {},
+): Promise<PlatformBankAccountResponse> {
+  return apiFetch(
+    '/api/admin/platform/bank-accounts',
+    PlatformBankAccountResponseSchema,
+    { method: 'POST', body, signal: options.signal },
+  );
+}
+
+export const UpdatePlatformBankAccountRequestSchema = z.object({
+  bank_name: z.string().min(1).max(255).optional(),
+  account_no: z.string().min(1).max(255).optional(),
+  account_name: z.string().min(1).max(255).optional(),
+  currency: z.literal('MVR').optional(),
+  is_primary: z.boolean().optional(),
+  active: z.boolean().optional(),
+});
+export type UpdatePlatformBankAccountRequest = z.infer<
+  typeof UpdatePlatformBankAccountRequestSchema
+>;
+
+/** PATCH /api/admin/platform/bank-accounts/{id} — partial update. */
+export function updateAdminPlatformBankAccount(
+  id: number,
+  body: UpdatePlatformBankAccountRequest,
+  options: RequestOptions = {},
+): Promise<PlatformBankAccountResponse> {
+  return apiFetch(
+    `/api/admin/platform/bank-accounts/${id}`,
+    PlatformBankAccountResponseSchema,
+    { method: 'PATCH', body, signal: options.signal },
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Fee tier schedules (§4, admin-manageable, append-only)
+// ---------------------------------------------------------------------------
+
+/** One {from_bp, to_bp, fee_bp} band — all integer basis points. */
+export const FeeTierBandSchema = z.object({
+  from_bp: z.number().int(),
+  to_bp: z.number().int(),
+  fee_bp: z.number().int(),
+});
+export type FeeTierBand = z.infer<typeof FeeTierBandSchema>;
+
+/**
+ * One effective-dated §4 tier table. Rows are append-only — never updated
+ * or deleted — so every historical instant keeps resolving to the terms it
+ * was priced under.
+ */
+export const FeeTierScheduleSchema = z.object({
+  id: z.number().int(),
+  effective_from: z.string(),
+  tiers: z.array(FeeTierBandSchema),
+  created_by: z.number().int().nullable(),
+  created_at: z.string(),
+});
+export type FeeTierSchedule = z.infer<typeof FeeTierScheduleSchema>;
+
+export const FeeTierScheduleIndexResponseSchema = z.object({
+  data: z.object({
+    /** The schedule active right now; null only before the seed row exists. */
+    current: FeeTierScheduleSchema.nullable(),
+    /** Full history, newest effective date first (includes future-dated rows). */
+    history: z.array(FeeTierScheduleSchema),
+  }),
+});
+export type FeeTierScheduleIndexResponse = z.infer<
+  typeof FeeTierScheduleIndexResponseSchema
+>;
+
+export const FeeTierScheduleResponseSchema = dataWrapped(FeeTierScheduleSchema);
+export type FeeTierScheduleResponse = z.infer<
+  typeof FeeTierScheduleResponseSchema
+>;
+
+/** GET /api/admin/platform/fee-tiers — the current schedule plus full history. */
+export function getAdminFeeTierSchedules(
+  options: RequestOptions = {},
+): Promise<FeeTierScheduleIndexResponse> {
+  return apiFetch(
+    '/api/admin/platform/fee-tiers',
+    FeeTierScheduleIndexResponseSchema,
+    { signal: options.signal },
+  );
+}
+
+export const CreateFeeTierScheduleRequestSchema = z.object({
+  /** ISO 8601 with an explicit UTC offset; must be >= 1 hour in the future. */
+  effective_from: z.string(),
+  /**
+   * Must be ascending, contiguous, cover exactly 50–1000 bp, with every
+   * band's fee_bp a positive integer no greater than its from_bp.
+   */
+  tiers: z.array(FeeTierBandSchema).min(1),
+});
+export type CreateFeeTierScheduleRequest = z.infer<
+  typeof CreateFeeTierScheduleRequestSchema
+>;
+
+/**
+ * POST /api/admin/platform/fee-tiers — publishes a new future-dated schedule
+ * (201). 422 when the tier table is invalid or effective_from is less than
+ * an hour out.
+ */
+export function createAdminFeeTierSchedule(
+  body: CreateFeeTierScheduleRequest,
+  options: RequestOptions = {},
+): Promise<FeeTierScheduleResponse> {
+  return apiFetch(
+    '/api/admin/platform/fee-tiers',
+    FeeTierScheduleResponseSchema,
+    { method: 'POST', body, signal: options.signal },
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Platform settings
+// ---------------------------------------------------------------------------
+
+/**
+ * One typed platform setting: the effective integer value, the hardcoded
+ * default it falls back to, and the allowed range. All monetary values are
+ * integer laari.
+ */
+export const PlatformSettingSchema = z.object({
+  value: z.number().int(),
+  default: z.number().int(),
+  min: z.number().int(),
+  max: z.number().int(),
+  overridden: z.boolean(),
+});
+export type PlatformSetting = z.infer<typeof PlatformSettingSchema>;
+
+/** The known setting keys; the server is authoritative and may add more. */
+export const PlatformSettingKeySchema = z.enum([
+  'min_payout_laari',
+  'settlement_due_days',
+  'write_off_days',
+  'default_validation_window_days',
+  'default_min_eligible_laari',
+]);
+export type PlatformSettingKey = z.infer<typeof PlatformSettingKeySchema>;
+
+export const PlatformSettingsResponseSchema = z.object({
+  data: z.record(z.string(), PlatformSettingSchema),
+});
+export type PlatformSettingsResponse = z.infer<
+  typeof PlatformSettingsResponseSchema
+>;
+
+/** GET /api/admin/platform/settings — every key with value, default and range. */
+export function getAdminPlatformSettings(
+  options: RequestOptions = {},
+): Promise<PlatformSettingsResponse> {
+  return apiFetch(
+    '/api/admin/platform/settings',
+    PlatformSettingsResponseSchema,
+    { signal: options.signal },
+  );
+}
+
+export const UpdatePlatformSettingRequestSchema = z.object({
+  /** Integer; validated server-side against the key's allowed range (422). */
+  value: z.number().int(),
+});
+export type UpdatePlatformSettingRequest = z.infer<
+  typeof UpdatePlatformSettingRequestSchema
+>;
+
+/**
+ * PATCH /api/admin/platform/settings/{key} — writes one key. Returns just
+ * that key's refreshed entry. 404 on an unknown key, 422 out of range.
+ */
+export function updateAdminPlatformSetting(
+  key: PlatformSettingKey,
+  body: UpdatePlatformSettingRequest,
+  options: RequestOptions = {},
+): Promise<PlatformSettingsResponse> {
+  return apiFetch(
+    `/api/admin/platform/settings/${encodeURIComponent(key)}`,
+    PlatformSettingsResponseSchema,
+    { method: 'PATCH', body, signal: options.signal },
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Admin users (superadmin only)
+// ---------------------------------------------------------------------------
+
+export const AdminRoleSchema = z.enum(['admin', 'superadmin']);
+export type AdminRole = z.infer<typeof AdminRoleSchema>;
+
+/**
+ * An admin account as the superadmin management screen sees it. No DELETE
+ * exists — deactivation is the only removal, so audit columns referencing an
+ * admin keep resolving.
+ */
+export const AdminUserAccountSchema = z.object({
+  id: z.number().int(),
+  name: z.string(),
+  email: z.string(),
+  role: AdminRoleSchema,
+  is_active: z.boolean(),
+  created_at: z.string().nullable(),
+});
+export type AdminUserAccount = z.infer<typeof AdminUserAccountSchema>;
+
+export const AdminUserListResponseSchema = z.object({
+  data: z.array(AdminUserAccountSchema),
+});
+export type AdminUserListResponse = z.infer<typeof AdminUserListResponseSchema>;
+
+export const AdminUserResponseSchema = dataWrapped(AdminUserAccountSchema);
+export type AdminUserResponse = z.infer<typeof AdminUserResponseSchema>;
+
+/** GET /api/admin/admins — all admin accounts, by id. Superadmin only (403). */
+export function listAdminUsers(
+  options: RequestOptions = {},
+): Promise<AdminUserListResponse> {
+  return apiFetch('/api/admin/admins', AdminUserListResponseSchema, {
+    signal: options.signal,
+  });
+}
+
+export const CreateAdminUserRequestSchema = z.object({
+  name: z.string().min(1).max(255),
+  email: z.string().min(1).max(255),
+  /** Defaults to 'admin' when omitted. */
+  role: AdminRoleSchema.optional(),
+});
+export type CreateAdminUserRequest = z.infer<
+  typeof CreateAdminUserRequestSchema
+>;
+
+/** Creation response: the account plus the one-time temporary password. */
+export const CreateAdminUserResponseSchema = z.object({
+  data: AdminUserAccountSchema,
+  /** Shown exactly once, on creation — only the hash survives server-side. */
+  temp_password: z.string(),
+});
+export type CreateAdminUserResponse = z.infer<
+  typeof CreateAdminUserResponseSchema
+>;
+
+/** POST /api/admin/admins — creates an admin account (201). Superadmin only. */
+export function createAdminUser(
+  body: CreateAdminUserRequest,
+  options: RequestOptions = {},
+): Promise<CreateAdminUserResponse> {
+  return apiFetch('/api/admin/admins', CreateAdminUserResponseSchema, {
+    method: 'POST',
+    body,
+    signal: options.signal,
+  });
+}
+
+export const UpdateAdminUserRequestSchema = z.object({
+  role: AdminRoleSchema.optional(),
+  is_active: z.boolean().optional(),
+});
+export type UpdateAdminUserRequest = z.infer<
+  typeof UpdateAdminUserRequestSchema
+>;
+
+/**
+ * PATCH /api/admin/admins/{id} — changes role and/or active flag. Superadmin
+ * only. 422 when the change would demote or deactivate the last active
+ * superadmin (or yourself).
+ */
+export function updateAdminUser(
+  id: number,
+  body: UpdateAdminUserRequest,
+  options: RequestOptions = {},
+): Promise<AdminUserResponse> {
+  return apiFetch(`/api/admin/admins/${id}`, AdminUserResponseSchema, {
+    method: 'PATCH',
+    body,
+    signal: options.signal,
+  });
 }

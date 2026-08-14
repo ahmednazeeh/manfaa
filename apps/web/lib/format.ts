@@ -33,6 +33,12 @@ export function formatDate(value: string): string {
   return format(parseISO(value), 'd MMM yyyy');
 }
 
+/** Machine month "2026-03" -> "March 2026" (same date-fns styling as
+ *  formatDate; the surrounding sentence is composed via i18n). */
+export function formatMonthYear(value: string): string {
+  return format(parseISO(`${value}-01`), 'MMMM yyyy');
+}
+
 /** Metres -> { km: "1.2" } or { m: 450 } for the distance strings. */
 export function splitDistance(
   meters: number,

@@ -25,10 +25,23 @@ class MerchantAuthController extends Controller
             ]);
         }
 
-        $request->session()->regenerate();
-
-        /** @var MerchantUser $user */
+        // A deactivated merchant user fails exactly like a wrong password —
+        // no account-state oracle. The Authenticated-event listener
+        // (MerchantSettingsServiceProvider) may already have logged the
+        // session out, leaving a null user here; both read as a plain
+        // failed login. Strict === false so a not-yet-migrated is_active
+        // column (null) never locks anyone out.
         $user = Auth::guard('merchant')->user();
+
+        if (! $user instanceof MerchantUser || $user->is_active === false) {
+            Auth::guard('merchant')->logout();
+
+            throw ValidationException::withMessages([
+                'email' => __('auth.failed'),
+            ]);
+        }
+
+        $request->session()->regenerate();
 
         return new MerchantUserResource($user->loadMissing('merchant'));
     }

@@ -10,16 +10,21 @@ use App\Models\MerchantRate;
 use App\Models\Promotion;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Storage;
 
 /**
  * The public merchant discovery read model (§10 apps/web): featured /
  * increased / nearby / online sections over ACTIVE merchants with a live
- * standing rate.
+ * standing rate, plus the Rakuten-style storefront reads — the paginated
+ * directory and the per-slug store page.
  *
- * Privacy contract: entries expose merchant name, slug, category, the rate
- * now, the "usually" standing rate, the promo end, and a branch distance.
+ * Privacy contract: entries expose merchant name, slug, category, logo URL,
+ * the rate now, the "usually" standing rate, the promo end, and a branch
+ * distance.
  * Nothing else — no internal ids, no customer data, no commercial terms
- * (fees, bank details) ever appear here.
+ * (fees, bank details) ever appear here. The store page adds featured,
+ * the customer-facing eligibility text, branch addresses and a join label —
+ * still nothing internal.
  *
  * The merchant/rate/promo/branch dataset is cached for 60 seconds; only the
  * per-request distance maths runs outside the cache (caching per-coordinate
@@ -34,7 +39,20 @@ final class DiscoveryService
 {
     public const int CACHE_SECONDS = 60;
 
-    public const string CACHE_KEY = 'discovery:entries:v1';
+    public const string CACHE_KEY = 'discovery:entries:v2';
+
+    public const string STORE_CACHE_PREFIX = 'discovery:store:v2:';
+
+    public const int DIRECTORY_DEFAULT_PER_PAGE = 12;
+
+    public const int DIRECTORY_MAX_PER_PAGE = 24;
+
+    /**
+     * Page ceiling for the directory. Far beyond any real catalogue, yet
+     * small enough that (page-1)*per_page can never overflow the int offset
+     * handed to array_slice (PHP_INT_MAX-sized pages used to 500).
+     */
+    public const int DIRECTORY_MAX_PAGE = 100000;
 
     /** Nearby cut-off: 10 km. */
     public const int NEARBY_RADIUS_M = 10000;
@@ -55,8 +73,7 @@ final class DiscoveryService
      */
     public function sections(?float $lat, ?float $lng): array
     {
-        /** @var list<array<string, mixed>> $entries */
-        $entries = Cache::remember(self::CACHE_KEY, self::CACHE_SECONDS, fn (): array => $this->buildEntries());
+        $entries = $this->cachedEntries();
 
         $hasCoords = $lat !== null && $lng !== null;
 
@@ -115,6 +132,115 @@ final class DiscoveryService
     }
 
     /**
+     * The public merchant directory (storefront index): alphabetical, filterable
+     * by name substring and exact category, paginated in memory over the full
+     * (small, bounded) matching set so `total` is exact.
+     *
+     * Cache discipline: the UNFILTERED dataset is the same 60-second cached
+     * read model the sections use. Filtered lookups run straight SQL every
+     * time instead — a cache keyed on caller-supplied `q` would let any
+     * anonymous IP flood the store with junk keys and poison what other
+     * callers read, and merchants is one small table.
+     *
+     * @return array{merchants: list<array<string, mixed>>, total: int, page: int, per_page: int, categories: list<string>}
+     */
+    public function directory(?string $q, ?string $category, int $perPage, int $page): array
+    {
+        $entries = $q === null && $category === null
+            ? $this->cachedEntries()
+            : $this->buildEntries($q, $category);
+
+        return [
+            'merchants' => array_values(array_map(
+                $this->presentDirectoryEntry(...),
+                array_slice($entries, ($page - 1) * $perPage, $perPage),
+            )),
+            'total' => count($entries),
+            'page' => $page,
+            'per_page' => $perPage,
+            'categories' => $this->categories(),
+        ];
+    }
+
+    /**
+     * The public store page for one slug, cached 60s per slug. Returns null —
+     * indistinguishably — for a slug that does not exist, is not active, or
+     * has no live standing rate: the 404 must never reveal that a merchant
+     * exists but is suspended. Misses are deliberately never written to the
+     * cache, so junk slugs cannot flood the store with keys; the miss cost is
+     * one indexed lookup behind the IP throttle.
+     *
+     * @return array<string, mixed>|null
+     */
+    public function store(string $slug): ?array
+    {
+        $key = self::STORE_CACHE_PREFIX.$slug;
+
+        /** @var array<string, mixed>|null $cached */
+        $cached = Cache::get($key);
+
+        if ($cached !== null) {
+            return $cached;
+        }
+
+        $store = $this->buildStore($slug);
+
+        if ($store !== null) {
+            Cache::put($key, $store, self::CACHE_SECONDS);
+        }
+
+        return $store;
+    }
+
+    /**
+     * Distinct categories across the (cached, unfiltered) listed merchants,
+     * for the directory filter UI.
+     *
+     * @return list<string>
+     */
+    private function categories(): array
+    {
+        $categories = array_values(array_unique(array_filter(
+            array_column($this->cachedEntries(), 'category'),
+            fn (?string $category): bool => $category !== null && $category !== '',
+        )));
+
+        sort($categories);
+
+        return $categories;
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function cachedEntries(): array
+    {
+        /** @var list<array<string, mixed>> */
+        return Cache::remember(self::CACHE_KEY, self::CACHE_SECONDS, fn (): array => $this->buildEntries());
+    }
+
+    /**
+     * The public contract of a DIRECTORY entry — the discovery entry shape
+     * minus distance (the directory is not geographic) plus is_online.
+     *
+     * @param  array<string, mixed>  $entry
+     * @return array<string, mixed>
+     */
+    private function presentDirectoryEntry(array $entry): array
+    {
+        return [
+            'name' => $entry['name'],
+            'slug' => $entry['slug'],
+            'category' => $entry['category'],
+            'logo_url' => $entry['logo_url'],
+            'is_online' => $entry['is_online'],
+            'rate_bp' => $entry['rate_bp'],
+            'standing_rate_bp' => $entry['standing_rate_bp'],
+            'promo_ends_at' => $entry['promo_ends_at'],
+        ];
+    }
+
+    /**
      * Strips the internal working keys — what remains is the full public
      * contract of a discovery entry.
      *
@@ -127,6 +253,7 @@ final class DiscoveryService
             'name' => $entry['name'],
             'slug' => $entry['slug'],
             'category' => $entry['category'],
+            'logo_url' => $entry['logo_url'],
             'rate_bp' => $entry['rate_bp'],
             'standing_rate_bp' => $entry['standing_rate_bp'],
             'promo_ends_at' => $entry['promo_ends_at'],
@@ -135,16 +262,25 @@ final class DiscoveryService
     }
 
     /**
+     * Filters apply in SQL (name ILIKE / exact category); LIKE wildcards in
+     * the caller-supplied needle are escaped so `%` or `_` never widen it.
+     *
      * @return list<array<string, mixed>>
      */
-    private function buildEntries(): array
+    private function buildEntries(?string $q = null, ?string $category = null): array
     {
         $now = CarbonImmutable::now('UTC');
 
         $merchants = Merchant::query()
             ->where('status', 'active')
+            ->when($q !== null, fn ($query) => $query->where(
+                'name',
+                'ilike',
+                '%'.addcslashes((string) $q, '\\%_').'%',
+            ))
+            ->when($category !== null, fn ($query) => $query->where('category', $category))
             ->orderBy('name')
-            ->get(['id', 'name', 'slug', 'category', 'featured', 'is_online']);
+            ->get(['id', 'name', 'slug', 'category', 'logo_path', 'featured', 'is_online']);
 
         if ($merchants->isEmpty()) {
             return [];
@@ -163,10 +299,15 @@ final class DiscoveryService
             ->get(['merchant_id', 'rate_bp'])
             ->keyBy('merchant_id');
 
-        // Best live PUBLISHED promotion per merchant. Promotions are
-        // immutable once published (§5), so rate and end are safe to show.
+        // Best live PUBLISHED merchant-wide promotion per merchant.
+        // Promotions are immutable once published (§5), so rate and end are
+        // safe to show. Branch-scoped promos are excluded: sale-time
+        // resolution honours them only at their own branch, so advertising
+        // them here would over-promise every other branch — the displayed
+        // rate may only under-promise (§9.2).
         $promotions = Promotion::query()
             ->whereIn('merchant_id', $merchants->pluck('id'))
+            ->whereNull('branch_id')
             ->where('status', 'published')
             ->where('starts_at', '<=', $now)
             ->where('ends_at', '>', $now)
@@ -197,6 +338,7 @@ final class DiscoveryService
                 'name' => $merchant->name,
                 'slug' => $merchant->slug,
                 'category' => $merchant->category,
+                'logo_url' => $this->logoUrl($merchant->logo_path),
                 // The rate the customer gets NOW; "usually" is the standing rate.
                 'rate_bp' => $boosted ? $promo->rate_bp : $standing->rate_bp,
                 'standing_rate_bp' => $standing->rate_bp,
@@ -210,5 +352,103 @@ final class DiscoveryService
         }
 
         return $entries;
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function buildStore(string $slug): ?array
+    {
+        $now = CarbonImmutable::now('UTC');
+
+        $merchant = Merchant::query()
+            ->where('status', 'active')
+            ->where('slug', $slug)
+            ->first(['id', 'name', 'slug', 'category', 'logo_path', 'featured', 'is_online', 'eligibility_basis', 'created_at']);
+
+        if ($merchant === null) {
+            return null;
+        }
+
+        // Same listing rule as the sections: no live standing rate means no
+        // live offer, and the store page has nothing truthful to quote.
+        $standing = MerchantRate::query()
+            ->where('merchant_id', $merchant->id)
+            ->where('effective_from', '<=', $now)
+            ->where(function ($query) use ($now) {
+                $query->whereNull('effective_to')->orWhere('effective_to', '>', $now);
+            })
+            ->orderByDesc('effective_from')
+            ->first(['rate_bp']);
+
+        if ($standing === null) {
+            return null;
+        }
+
+        // Only a live published MERCHANT-WIDE promotion that BEATS the
+        // standing rate is surfaced — consistent with the sections'
+        // "increased" rule. Branch-scoped promos never show: they earn only
+        // at their own branch, and the hero must not over-promise the rest.
+        $promo = Promotion::query()
+            ->where('merchant_id', $merchant->id)
+            ->whereNull('branch_id')
+            ->where('status', 'published')
+            ->where('starts_at', '<=', $now)
+            ->where('ends_at', '>', $now)
+            ->where('rate_bp', '>', $standing->rate_bp)
+            ->orderByDesc('rate_bp')
+            ->first(['rate_bp', 'ends_at', 'min_purchase_laari']);
+
+        $branches = MerchantBranch::query()
+            ->where('merchant_id', $merchant->id)
+            ->orderBy('name')
+            ->get(['name', 'address', 'lat', 'lng']);
+
+        return [
+            'name' => $merchant->name,
+            'slug' => $merchant->slug,
+            'category' => $merchant->category,
+            'logo_url' => $this->logoUrl($merchant->logo_path),
+            'is_online' => (bool) $merchant->is_online,
+            'featured' => (bool) $merchant->featured,
+            'rate_bp' => $promo?->rate_bp ?? $standing->rate_bp,
+            'standing_rate_bp' => $standing->rate_bp,
+            'promotion' => $promo === null ? null : [
+                'rate_bp' => $promo->rate_bp,
+                'ends_at' => $promo->ends_at->toIso8601String(),
+                'min_purchase_laari' => $promo->min_purchase_laari,
+            ],
+            // The merchant's own eligibility wording, verbatim (§11: shown to
+            // customers, never used in computation). Null when unset.
+            'cashback_basis' => $merchant->eligibility_basis,
+            'branches' => $branches
+                ->map(fn (MerchantBranch $b): array => [
+                    'name' => $b->name,
+                    'address' => $b->address,
+                    'lat' => $b->lat === null ? null : (float) $b->lat,
+                    'lng' => $b->lng === null ? null : (float) $b->lng,
+                ])
+                ->all(),
+            // Month granularity only — business-facing, UTC+5 (§13). A
+            // machine "YYYY-MM", never pre-composed prose: the client owns
+            // the wording so the label localises (en+dv) like every other
+            // storefront string.
+            'joined' => $merchant->created_at === null
+                ? null
+                : $merchant->created_at->copy()->timezone('Indian/Maldives')->format('Y-m'),
+        ];
+    }
+
+    /**
+     * Absolute URL for a merchant logo stored on the public disk; null when
+     * no logo is set. The raw storage path never leaves the API.
+     */
+    private function logoUrl(?string $logoPath): ?string
+    {
+        if ($logoPath === null || $logoPath === '') {
+            return null;
+        }
+
+        return Storage::disk('public')->url($logoPath);
     }
 }

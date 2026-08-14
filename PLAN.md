@@ -25,6 +25,9 @@ Settled. Treat as constraints, not proposals.
 | Customer promise | Nothing promised before Confirmed. Pending is always shown as conditional. |
 | Payout rails | Domestic bank transfer, free at any amount. |
 | Frontend | **Three Next.js apps** from day one — merchant, admin, customer web — plus shared packages. |
+| Missing-transaction claims | **Merchant-mediated, not self-serve** (decision 2026-08-14): the customer contacts the store, which credits the missed sale via the manual path. No public claim form — the merchant holds the sales records and funds the reward, and the platform carries no claim-spam surface. Claims domain stays dormant behind `FEATURE_CUSTOMER_CLAIMS` for a future formal disputes channel. |
+| Backdated credits | **No admin approval, immediately payable, merchant-irreversible** (decision 2026-08-14 late): a credit older than the validation window skips on_hold entirely — it goes straight to payable_unfunded with the 15-day clock starting NOW, and the merchant/vendor CANNOT reverse it (admin adjustment only). The entry form warns before submit: "older than the validation window — once credited it cannot be reversed and becomes payable immediately". Applies to the manual path AND /v1 (one rule in CreditRecorder). on_hold remains for fraud/velocity only. |
+| Settlement flow | **Receipt-first, merchant-driven** (decision 2026-08-14 late): no settlement exists without a payment receipt. Merchant flow: select transactions → see amount due + platform bank account (copy button) + reference → transfer at their bank → upload slip + enter bank ref → SUBMIT creates the settlement directly in payment_review. Admin reviews the slip: Match (allocate/confirm) or Reject → rejected settlement cancels, lines release, merchant simply creates a new one. Admin-side recording remains as a fallback. No more merchant dead-end at awaiting_payment. |
 | Customer surface | Full customer web app ships in v1. Flutter consumes the same API later. |
 | Vendor auth | Per-merchant **Sanctum tokens** with abilities now; OAuth consent flow deferred to a later phase. |
 
@@ -125,9 +128,11 @@ and 1 laari of fee.
 | 0.50 – 0.99% | 50 – 99 | 0.25% | 25 | 0.75 – 1.24% |
 | 1.00 – 1.99% | 100 – 199 | 0.50% | 50 | 1.50 – 2.49% |
 | 2.00 – 4.99% | 200 – 499 | 0.75% | 75 | 2.75 – 5.74% |
-| 5.00 – 10.00% | 500 – 1000 | 1.00% | 100 | 6.00 – 11.00% |
+| 5.00 – 20.00% | 500 – 2000 | 1.00% | 100 | 6.00 – 21.00% |
 
-Reject any `rate_bp` below 50, above 1000, or non-integer — otherwise 4.995% falls into no tier. Warn in the rate-change UI about the 499 → 500 cliff: +0.01pp cashback costs the merchant +0.26pp all-in.
+Reject any `rate_bp` below 50, above 2000, or non-integer — otherwise 4.995% falls into no tier. Warn in the rate-change UI about the 499 → 500 cliff: +0.01pp cashback costs the merchant +0.26pp all-in.
+
+**Note — schedule ceiling governs sellability:** the table above is the *structural* range and the static fallback map. The rates a merchant can actually set are bounded by the **active fee tier schedule's own ceiling** (its last band's `to_bp`): a rate above it has no priced fee and is refused with error code `rate_not_priced` until the admin publishes a wider schedule and it takes effect. The seeded 50–1000 schedule row is never rewritten (append-only law), so widening the structural cap to 20% does not by itself make rates above 10% sellable.
 
 ### Caps
 
@@ -492,6 +497,60 @@ No integrations. The riskiest logic, built first and in isolation.
 - **Light-first with dark mode.** Tokens defined on `:root`; dark mode redefines tokens only.
 
 ---
+
+## 13b. Build queue (live status — updated 2026-08-14 end of session)
+
+Phases 0–3 plus seven post-launch rounds are BUILT, DEPLOYED and LIVE at
+manfaa.app / merchant. / admin. / api. — 574 tests green through seven
+adversarial review rounds (30+ serious findings confirmed and fixed).
+DONE beyond the phases: merchant module (Credit Customer screen, settings,
+staff roles), platform settings (bank accounts, effective-dated fee tiers,
+params, admin mgmt), public storefront (search, /store/{slug} pages, public
+merged /discover with landing search, logo slots + initials avatars,
+marketplace teaser), 20% cap with schedule-driven sellability + percent
+inputs everywhere, MsgOwl SMS live, claims feature-flagged off
+(merchant-mediated), theme toggles, light-first defaults.
+
+Everything below is the remaining backlog, in execution order. Workflows must
+not overlap on the same app directory.
+
+### Queued (in order)
+1. **Task #23 — receipt-first settlement flow + backdated policy + QR scan**
+   (decisions already in §1 log): merchant settlement wizard ends with slip
+   upload + bank ref, submit lands in payment_review (no settlement without
+   receipt); admin match/REJECT with slip preview; backdated credits skip
+   on_hold — immediately payable + merchant-irreversible with warning;
+   QR scan on /credit via BarcodeDetector.
+2. **Task #22 — admin hold-review queue + human reason labels** (on_hold now
+   fraud/velocity only): one-method Release with atomic clock stamping,
+   Reject with mirrored ledger; i18n label maps for every reason code —
+   no raw snake_case anywhere.
+3. **Task #21 — merchant branding + self-serve API wizard** (after above;
+   touches apps/merchant + api + public store page): logo upload (media
+   storage; shown on store page + discovery cards), business NAME change
+   (merchant-editable per user decision), Terms & Exclusions fields (terms
+   text + structured exclusions list) surfaced on /store/{slug}; API create
+   wizard in merchant panel — owner self-serve credential issuance reusing
+   CredentialService (pick partner + abilities, token shown once, list/
+   revoke own credentials, integration-guide links, issuance rate-limited
+   and audited).
+4. **Task #17 — Phase 3 minors**: customer-code range excluding 7xxxxx/9xxxxx
+   (truncated-phone collision), OTP register/verify races, LogSmsSender
+   masking (MsgOwl now primary in prod — log driver is dev-only), claims-
+   against-inactive-merchant validation (dormant flow), write-off path-back
+   policy decision.
+
+### Operational to-dos (not code)
+- Change admin + test-merchant passwords (both in chat transcript).
+- Rotate Cloudflare token + origin key; confirm SSL mode Full (strict).
+- Replace MsgOwl sender id (currently IsleBooks') with a Manfaa id.
+- Native review of the Dhivehi machine-draft locale.
+- SPF/DKIM/DMARC before any outbound email.
+- Bank bulk payout file format (§14) — blocks real payout runs.
+- Commit + push the current round (landing, MsgOwl, claims flag, settings
+  module, storefront) once the running workflows land green.
+- Config caches stay OFF on this box (tests + production share the checkout;
+  TestCase hard-fails if a config cache exists). Re-evaluate at scale.
 
 ## 14. Open items
 

@@ -9,7 +9,9 @@ import {
   getCustomerBalance,
   getCustomerMe,
   getCustomerPayoutAccount,
+  getDirectory,
   getDiscovery,
+  getStore,
   listCustomerClaims,
   listCustomerTransactions,
   registerCustomer,
@@ -19,11 +21,18 @@ import {
   type CreateClaimRequest,
   type Customer,
   type CustomerLoginRequest,
+  type DirectoryParams,
   type RegisterCustomerRequest,
   type SavePayoutAccountRequest,
+  type StoreDetail,
   type VerifyOtpRequest,
 } from '@manfaa/api-client';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query';
 
 /**
  * react-query bindings for the customer app. Every response is zod-parsed by
@@ -39,10 +48,26 @@ export const queryKeys = {
   claims: (page: number) => ['customer', 'claims', page] as const,
   discovery: (coords: { lat: number; lng: number } | null) =>
     ['discover', coords?.lat ?? null, coords?.lng ?? null] as const,
+  directory: (params: DirectoryParams) =>
+    [
+      'directory',
+      params.q ?? null,
+      params.category ?? null,
+      params.page ?? 1,
+    ] as const,
+  store: (slug: string) => ['store', slug] as const,
 };
 
 export function isUnauthorized(error: unknown): boolean {
   return error instanceof ApiError && error.status === 401;
+}
+
+export function isNotFound(error: unknown): boolean {
+  return error instanceof ApiError && error.status === 404;
+}
+
+export function isUnprocessable(error: unknown): boolean {
+  return error instanceof ApiError && error.status === 422;
 }
 
 /**
@@ -215,5 +240,44 @@ export function useDiscovery(coords: { lat: number; lng: number } | null) {
     queryFn: ({ signal }) => getDiscovery(coords ?? {}, { signal }),
     select: (response) => response.data,
     staleTime: 60_000,
+    // Granting location flips the query key (coords join it), which would
+    // otherwise blank `data` and unmount every already-loaded section while
+    // the coord-scoped refetch is in flight. Keep the previous sections on
+    // screen instead; callers can read isPlaceholderData for the interim.
+    placeholderData: keepPreviousData,
+  });
+}
+
+/**
+ * The public store directory (the "All stores" grid on /discover). Filter or
+ * page changes flip the query key; keepPreviousData holds the current grid
+ * on screen while the next page loads, so the list never blanks between
+ * filter keystrokes.
+ */
+export function useDirectory(params: DirectoryParams) {
+  return useQuery({
+    queryKey: queryKeys.directory(params),
+    queryFn: ({ signal }) => getDirectory(params, { signal }),
+    staleTime: 60_000,
+    placeholderData: keepPreviousData,
+  });
+}
+
+/**
+ * One public store page. A 404 is a real answer (unknown or unlisted slug),
+ * not a transient failure — never retried; callers branch on isNotFound.
+ * `initialStore` seeds the cache with the server-rendered payload (fresh for
+ * the same 60s the API caches it), so hydration paints instantly without an
+ * immediate duplicate fetch.
+ */
+export function useStore(slug: string, initialStore?: StoreDetail) {
+  return useQuery({
+    queryKey: queryKeys.store(slug),
+    queryFn: ({ signal }) => getStore(slug, { signal }),
+    select: (response) => response.data,
+    staleTime: 60_000,
+    retry: (failureCount, error) => !isNotFound(error) && failureCount < 2,
+    initialData:
+      initialStore === undefined ? undefined : { data: initialStore },
   });
 }

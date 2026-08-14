@@ -125,6 +125,33 @@ it('builds the featured, increased and online sections without auth', function (
     expect($everySlug)->not->toContain('norate-epsilon');
 });
 
+it('keeps branch-scoped promotions off the increased shelf and off the cards', function () {
+    // A branch-scoped promo earns only at its own branch at sale time
+    // (PromotionResolver), so the sections must not advertise it
+    // merchant-wide — the displayed rate may only under-promise.
+    $merchant = discoveryMerchant(
+        ['name' => 'Cafe Alpha', 'slug' => 'cafe-alpha', 'featured' => true],
+        200,
+    );
+    $branch = MerchantBranch::factory()->for($merchant)->create(['name' => 'Hulhumalé Branch']);
+    Promotion::query()->create([
+        'merchant_id' => $merchant->id,
+        'branch_id' => $branch->id,
+        'rate_bp' => 500,
+        'starts_at' => now()->subDay(),
+        'ends_at' => now()->addDays(2),
+        'status' => 'published',
+    ]);
+
+    $data = $this->getJson('/api/discover')->assertOk()->json('data');
+
+    expect($data['increased'])->toBe([]);
+
+    $card = collect($data['featured'])->firstWhere('slug', 'cafe-alpha');
+    expect($card['rate_bp'])->toBe(200);
+    expect($card['promo_ends_at'])->toBeNull();
+});
+
 it('orders nearby by haversine distance within 10 km', function () {
     discoveryFixture();
 
@@ -165,7 +192,7 @@ it('leaks nothing: no internal ids, no PII, no commercial terms', function () {
     foreach ($data as $section) {
         foreach ($section as $entry) {
             expect(array_keys($entry))->toBe([
-                'name', 'slug', 'category', 'rate_bp', 'standing_rate_bp', 'promo_ends_at', 'distance_m',
+                'name', 'slug', 'category', 'logo_url', 'rate_bp', 'standing_rate_bp', 'promo_ends_at', 'distance_m',
             ]);
         }
     }

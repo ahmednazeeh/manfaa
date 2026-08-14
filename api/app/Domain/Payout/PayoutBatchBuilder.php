@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Domain\Payout;
 
+use App\Domain\Platform\PlatformConfig;
 use App\Models\AdminUser;
 use App\Models\Customer;
 use App\Models\PayoutBatch;
@@ -28,7 +29,10 @@ final readonly class PayoutBatchBuilder
 {
     private const int CUTOFF_DAY = 24;
 
-    public function __construct(private EligibilityQuery $eligibility) {}
+    public function __construct(
+        private EligibilityQuery $eligibility,
+        private PlatformConfig $config,
+    ) {}
 
     public function buildDraft(int $periodYear, int $periodMonth, AdminUser $creator): PayoutBatch
     {
@@ -68,7 +72,9 @@ final readonly class PayoutBatchBuilder
             $excludedLaari = 0;
             $excludedCount = 0;
 
-            foreach ($this->eligibility->eligibleAt($cutoff) as $eligible) {
+            // The per-customer minimum is the admin-managed min_payout_laari
+            // setting (default MVR 100, §13).
+            foreach ($this->eligibility->eligibleAt($cutoff, $this->config->minPayoutLaari()) as $eligible) {
                 $customer = Customer::query()->findOrFail($eligible->customerId);
 
                 // A payout needs somewhere to go: a customer over the minimum

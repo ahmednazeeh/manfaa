@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Domain\Cashback;
 
+use App\Domain\Platform\PlatformConfig;
 use App\Models\Transaction;
 use App\Models\TransactionEvent;
 use Carbon\CarbonImmutable;
@@ -16,7 +17,11 @@ use Illuminate\Support\Facades\DB;
  */
 final class TransitionService
 {
-    private const int SETTLEMENT_CLOCK_DAYS = 15;
+    /**
+     * Optional so `new TransitionService` keeps working; PlatformConfig is
+     * dependency-free, so a null simply means "instantiate one on demand".
+     */
+    public function __construct(private readonly ?PlatformConfig $platformConfig = null) {}
 
     /**
      * Allowed transitions, keyed by from-state. paid, reversed and
@@ -108,15 +113,17 @@ final class TransitionService
     }
 
     /**
-     * Starts the 15-day settlement clock: due_at is evaluated in the business
-     * timezone, stored UTC, and echoed into the event meta as evidence.
+     * Starts the settlement clock (§7, 15 days unless the admin-managed
+     * settlement_due_days setting says otherwise): due_at is evaluated in
+     * the business timezone, stored UTC, and echoed into the event meta as
+     * evidence.
      */
     public function makePayable(Transaction $transaction, Actor $actor): TransactionEvent
     {
         $clockStart = CarbonImmutable::now('UTC');
         $dueAt = $clockStart
             ->setTimezone($this->businessTimezone())
-            ->addDays(self::SETTLEMENT_CLOCK_DAYS)
+            ->addDays(($this->platformConfig ?? new PlatformConfig)->settlementDueDays())
             ->setTimezone('UTC');
 
         return $this->transition(

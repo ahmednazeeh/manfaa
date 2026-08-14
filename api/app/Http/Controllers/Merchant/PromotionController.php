@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Merchant;
 
+use App\Domain\Platform\RateNotPricedException;
 use App\Domain\Promotions\BranchNotOwnedException;
 use App\Domain\Promotions\InvalidPromotionWindowException;
 use App\Domain\Promotions\NoStandingRateException;
@@ -56,10 +57,12 @@ class PromotionController extends Controller
         $merchant = $this->merchant($request);
         $user = $this->ownerOnly($request);
 
-        // §4: integer basis points 50–1000, or 4.995% falls into no tier.
+        // §4: integer basis points 50–2000 (structural cap), or 4.995%
+        // falls into no tier. The domain additionally refuses any rate the
+        // ACTIVE fee tier schedule does not price (rate_not_priced below).
         // occurred_at-style timestamps must carry an explicit UTC offset.
         $validated = $request->validate([
-            'rate_bp' => ['required', 'integer', 'min:50', 'max:1000'],
+            'rate_bp' => ['required', 'integer', 'min:50', 'max:2000'],
             'starts_at' => ['required', 'date_format:Y-m-d\TH:i:sP,Y-m-d\TH:i:sp,Y-m-d\TH:i:sO'],
             'ends_at' => ['required', 'date_format:Y-m-d\TH:i:sP,Y-m-d\TH:i:sp,Y-m-d\TH:i:sO'],
             'min_purchase_laari' => ['nullable', 'integer', 'min:0'],
@@ -78,6 +81,8 @@ class PromotionController extends Controller
                 maxCashbackPerCustomerLaari: isset($validated['max_cashback_per_customer_laari']) ? (int) $validated['max_cashback_per_customer_laari'] : null,
                 branchId: isset($validated['branch_id']) ? (int) $validated['branch_id'] : null,
             );
+        } catch (RateNotPricedException $e) {
+            return $this->rateNotPriced($e);
         } catch (BranchNotOwnedException|InvalidPromotionWindowException|NoStandingRateException|PromotionRateNotBoostException $e) {
             abort(422, $e->getMessage());
         }
@@ -97,6 +102,8 @@ class PromotionController extends Controller
             $promotion = $this->promotions->publish($promotion);
         } catch (PromotionNotDraftException $e) {
             abort(409, $e->getMessage());
+        } catch (RateNotPricedException $e) {
+            return $this->rateNotPriced($e);
         } catch (InvalidPromotionWindowException|NoStandingRateException|PromotionRateNotBoostException $e) {
             abort(422, $e->getMessage());
         }
@@ -135,8 +142,14 @@ class PromotionController extends Controller
     {
         $standingBp = $this->promotions->standingRateBpAt($merchant, $promotion->starts_at);
 
-        $promo = RateResource::describeBp($promotion->rate_bp);
-        $standing = $standingBp === null ? null : RateResource::describeBp($standingBp);
+        // Fees priced under the admin-managed schedule in force when the
+        // window runs (its start if still future, now once started) — the
+        // same source credit-time billing resolves from.
+        $now = CarbonImmutable::now('UTC');
+        $feeInstant = $promotion->starts_at->utc()->isAfter($now) ? $promotion->starts_at->utc() : $now;
+
+        $promo = RateResource::describeBp($promotion->rate_bp, $feeInstant);
+        $standing = $standingBp === null ? null : RateResource::describeBp($standingBp, $feeInstant);
 
         return [
             'promo' => $promo,
@@ -144,6 +157,19 @@ class PromotionController extends Controller
             'all_in_delta_bp' => $standing === null ? null : $promo['all_in_bp'] - $standing['all_in_bp'],
             'tier_changed' => $standing !== null && $promo['fee_bp'] !== $standing['fee_bp'],
         ];
+    }
+
+    /**
+     * 422 with machine-readable `code: rate_not_priced` — the promo rate is
+     * structurally legal but the active fee tier schedule does not price it
+     * (unsellable until the admin publishes a wider table).
+     */
+    private function rateNotPriced(RateNotPricedException $e): JsonResponse
+    {
+        return new JsonResponse([
+            'message' => $e->getMessage(),
+            'code' => RateNotPricedException::CODE,
+        ], 422);
     }
 
     private function find(Request $request, int $id): Promotion

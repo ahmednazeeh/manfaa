@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  type PromotionStatus,
   type SettlementState,
   type TransactionState,
 } from '@manfaa/api-client';
@@ -58,4 +59,37 @@ export function SettlementStateBadge({ state }: { state: SettlementState }) {
 
 export function settlementStateLabel(state: SettlementState): string {
   return SETTLEMENT_STATES[state].label;
+}
+
+const PROMOTION_STATUSES: Record<
+  PromotionStatus,
+  { label: string; variant: BadgeProps['variant'] }
+> = {
+  draft: { label: 'Draft', variant: 'secondary' },
+  published: { label: 'Published', variant: 'info' },
+  ended: { label: 'Ended', variant: 'secondary' },
+  cancelled: { label: 'Cancelled', variant: 'destructive' },
+};
+
+/** `live` = published AND the window covers now (the API's is_live flag). */
+export function PromotionStatusBadge({
+  status,
+  live = false,
+}: {
+  status: PromotionStatus;
+  live?: boolean;
+}) {
+  if (live) {
+    return (
+      <Badge variant="success" appearance="light" size="sm">
+        Live
+      </Badge>
+    );
+  }
+  const meta = PROMOTION_STATUSES[status];
+  return (
+    <Badge variant={meta.variant} appearance="light" size="sm">
+      {meta.label}
+    </Badge>
+  );
 }

@@ -8,6 +8,7 @@ use App\Domain\Money\CashbackCalculator;
 use App\Domain\Money\CashbackResult;
 use App\Domain\Money\Laari;
 use App\Domain\Money\Rate;
+use App\Domain\Platform\FeeTierScheduleResolver;
 use App\Domain\Promotions\PromotionResolver;
 use App\Models\Transaction;
 use Carbon\CarbonImmutable;
@@ -53,6 +54,7 @@ final readonly class TermsResolver
     public function __construct(
         private CashbackCalculator $calculator,
         private PromotionResolver $promotions,
+        private FeeTierScheduleResolver $feeTiers,
     ) {}
 
     /**
@@ -66,7 +68,13 @@ final readonly class TermsResolver
         int $customerId,
         CarbonImmutable $occurredAt,
     ): array {
-        $standing = $this->calculator->calculate($eligible, Rate::cashback($standingBp));
+        // The fee tier schedule effective at occurred_at (admin-managed,
+        // append-only) prices every candidate below; a null schedule falls
+        // back to the static §4 FeeTier map inside the calculator, which is
+        // the same table the migration seeds.
+        $schedule = $this->feeTiers->at($occurredAt);
+
+        $standing = $this->calculator->calculate($eligible, Rate::cashback($standingBp), $schedule?->feeBpFor($standingBp));
 
         foreach ($this->promotions->candidatesAt($merchantId, $branchId, $eligible->value(), $occurredAt) as $promotion) {
             if ($promotion->rate_bp <= $standingBp) {
@@ -74,9 +82,10 @@ final readonly class TermsResolver
             }
 
             $promoRate = Rate::cashback($promotion->rate_bp);
+            $promoFeeBp = $schedule?->feeBpFor($promotion->rate_bp);
 
             if ($promotion->max_cashback_per_customer_laari === null) {
-                return [$this->calculator->calculate($eligible, $promoRate), $promotion->id];
+                return [$this->calculator->calculate($eligible, $promoRate, $promoFeeBp), $promotion->id];
             }
 
             // Two int4 keys (classid, objid); modulo keeps huge ids in range —
@@ -101,7 +110,7 @@ final readonly class TermsResolver
                 continue; // exhausted for this customer — the next candidate may still pay
             }
 
-            $clipped = $this->calculator->calculateCapped($eligible, $promoRate, Laari::of($remaining));
+            $clipped = $this->calculator->calculateCapped($eligible, $promoRate, Laari::of($remaining), $promoFeeBp);
 
             if ($clipped->cashbackLaari < $standing->cashbackLaari) {
                 continue; // the FLOOR: this clip pays less than no promotion — never grant it

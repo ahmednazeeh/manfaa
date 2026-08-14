@@ -9,6 +9,7 @@ use App\Domain\Cashback\InvalidTransitionException;
 use App\Domain\Cashback\TransactionState;
 use App\Domain\Cashback\TransitionService;
 use App\Domain\Ledger\Postings;
+use App\Domain\Platform\PlatformConfig;
 use App\Domain\Settlement\SettlementState;
 use App\Models\Transaction;
 use Carbon\CarbonImmutable;
@@ -33,12 +34,11 @@ use Illuminate\Support\Facades\DB;
  */
 final readonly class WriteOffService
 {
-    private const int WRITE_OFF_DAYS_PAST_DUE = 90;
-
     public function __construct(
         private TransitionService $transitions,
         private Postings $postings,
         private NoticeRecorder $notices,
+        private PlatformConfig $config,
     ) {}
 
     /**
@@ -46,8 +46,10 @@ final readonly class WriteOffService
      */
     public function run(): int
     {
+        // 90 days past due unless the admin-managed write_off_days setting
+        // says otherwise.
         $now = CarbonImmutable::now('UTC');
-        $cutoff = $now->subDays(self::WRITE_OFF_DAYS_PAST_DUE);
+        $cutoff = $now->subDays($this->config->writeOffDays());
 
         $ids = DB::table('transactions')
             ->where('state', TransactionState::PayableUnfunded->value)

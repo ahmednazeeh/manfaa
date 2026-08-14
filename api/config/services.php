@@ -35,4 +35,19 @@ return [
         ],
     ],
 
+    'discovery' => [
+        // Shared secret the Next SSR origin presents (X-Discovery-Internal
+        // header) to bypass the public per-IP discovery throttle — every SSR
+        // render leaves one server IP, so without this the whole storefront
+        // shares a single 60/min bucket. Empty disables the bypass entirely.
+        'internal_token' => env('DISCOVERY_INTERNAL_TOKEN', ''),
+    ],
+
+    'msgowl' => [
+        'key' => env('MSGOWL_API_KEY', ''),
+        'sender_id' => env('MSGOWL_SENDER_ID', ''),
+        'base_url' => env('MSGOWL_BASE_URL', 'https://rest.msgowl.com'),
+        'timeout' => env('MSGOWL_TIMEOUT_SECONDS', 15),
+    ],
+
 ];

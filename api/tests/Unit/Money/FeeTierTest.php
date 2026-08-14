@@ -16,13 +16,16 @@ it('resolves the fee tier at every boundary', function (int $cashbackBp, int $fe
     [499, 75],
     [500, 100],
     [1000, 100],
+    [1500, 100],
+    [2000, 100],
 ]);
 
-it('throws outside the 50-1000 bp tier table', function (int $cashbackBp) {
+it('throws outside the 50-2000 bp tier table', function (int $cashbackBp) {
     FeeTier::feeBpFor($cashbackBp);
-})->throws(OutOfRangeException::class)->with([49, 1001, 0, -50]);
+})->throws(OutOfRangeException::class)->with([49, 2001, 0, -50]);
 
 it('resolves a fee Rate from a cashback Rate', function () {
     expect(FeeTier::feeFor(Rate::cashback(200))->basisPoints())->toBe(75)
-        ->and(FeeTier::feeFor(Rate::cashback(1000))->basisPoints())->toBe(100);
+        ->and(FeeTier::feeFor(Rate::cashback(1000))->basisPoints())->toBe(100)
+        ->and(FeeTier::feeFor(Rate::cashback(2000))->basisPoints())->toBe(100);
 });

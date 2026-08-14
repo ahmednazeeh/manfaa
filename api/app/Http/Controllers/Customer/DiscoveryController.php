@@ -29,4 +29,65 @@ class DiscoveryController extends Controller
             'data' => $discovery->sections($lat, $lng),
         ]);
     }
+
+    /**
+     * Public storefront directory: paginated, alphabetical, filterable by
+     * name search and category. `q` arrives trimmed (TrimStrings) and empty
+     * strings arrive as null (ConvertEmptyStringsToNull), so the 2..40 length
+     * rule applies to the trimmed needle.
+     */
+    public function directory(Request $request, DiscoveryService $discovery): JsonResponse
+    {
+        // Laravel's `string` rule accepts byte strings that are not valid
+        // UTF-8 (e.g. a raw %C3%28 in the query string); passed through to
+        // the ILIKE binding, Postgres aborts with SQLSTATE 22021 and the
+        // public endpoint answers 500. Reject the encoding here instead.
+        $validUtf8 = static function (string $attribute, mixed $value, \Closure $fail): void {
+            if (is_string($value) && ! mb_check_encoding($value, 'UTF-8')) {
+                $fail('validation.regex')->translate();
+            }
+        };
+
+        $validated = $request->validate([
+            'q' => ['sometimes', 'nullable', 'string', $validUtf8, 'min:2', 'max:40'],
+            'category' => ['sometimes', 'nullable', 'string', $validUtf8, 'max:80'],
+            'per_page' => ['sometimes', 'integer', 'min:1', 'max:'.DiscoveryService::DIRECTORY_MAX_PER_PAGE],
+            // The page ceiling keeps (page-1)*per_page inside int range —
+            // unbounded pages overflowed to float and crashed array_slice.
+            'page' => ['sometimes', 'integer', 'min:1', 'max:'.DiscoveryService::DIRECTORY_MAX_PAGE],
+        ]);
+
+        $result = $discovery->directory(
+            $validated['q'] ?? null,
+            $validated['category'] ?? null,
+            (int) ($validated['per_page'] ?? DiscoveryService::DIRECTORY_DEFAULT_PER_PAGE),
+            (int) ($validated['page'] ?? 1),
+        );
+
+        return response()->json([
+            'data' => $result['merchants'],
+            'meta' => [
+                'total' => $result['total'],
+                'page' => $result['page'],
+                'per_page' => $result['per_page'],
+                'categories' => $result['categories'],
+            ],
+        ]);
+    }
+
+    /**
+     * Public store page. Unknown, suspended, closed and offer-less slugs all
+     * take the identical abort(404) path — the response must never reveal
+     * that a merchant exists but is not active.
+     */
+    public function show(string $slug, DiscoveryService $discovery): JsonResponse
+    {
+        $store = $discovery->store($slug);
+
+        if ($store === null) {
+            abort(404);
+        }
+
+        return response()->json(['data' => $store]);
+    }
 }

@@ -7,10 +7,12 @@ import {
   AccordionMenuClassNames,
   AccordionMenuGroup,
   AccordionMenuItem,
+  AccordionMenuLabel,
 } from '@/components/ui/accordion-menu';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
+import { useLayout } from './context';
 import { APP_MENU } from './menu';
 
 const classNames: AccordionMenuClassNames = {
@@ -22,11 +24,18 @@ const classNames: AccordionMenuClassNames = {
 
 export function SidebarMenu({ className }: { className?: string }) {
   const pathname = usePathname();
+  const { me } = useLayout();
 
   const matchPath = useCallback(
     (path: string): boolean =>
       path === pathname || (path.length > 1 && pathname.startsWith(path)),
     [pathname],
+  );
+
+  // Owner-only sections are hidden from staff. Navigation cosmetics only —
+  // the API's owner gate (403 owner_required) is the actual enforcement.
+  const sections = APP_MENU.filter(
+    (section) => !section.ownerOnly || me.role === 'owner',
   );
 
   return (
@@ -40,23 +49,28 @@ export function SidebarMenu({ className }: { className?: string }) {
         collapsible
         classNames={classNames}
       >
-        <AccordionMenuGroup>
-          {APP_MENU.map((item) => (
-            <AccordionMenuItem
-              key={item.path}
-              value={item.path}
-              className="text-sm font-medium"
-            >
-              <Link
-                href={item.path}
-                className="flex items-center grow gap-2"
+        {sections.map((section, index) => (
+          <AccordionMenuGroup key={section.label ?? index}>
+            {section.label && (
+              <AccordionMenuLabel>{section.label}</AccordionMenuLabel>
+            )}
+            {section.items.map((item) => (
+              <AccordionMenuItem
+                key={item.path}
+                value={item.path}
+                className="text-sm font-medium"
               >
-                <item.icon data-slot="accordion-menu-icon" />
-                <span data-slot="accordion-menu-title">{item.title}</span>
-              </Link>
-            </AccordionMenuItem>
-          ))}
-        </AccordionMenuGroup>
+                <Link
+                  href={item.path}
+                  className="flex items-center grow gap-2"
+                >
+                  <item.icon data-slot="accordion-menu-icon" />
+                  <span data-slot="accordion-menu-title">{item.title}</span>
+                </Link>
+              </AccordionMenuItem>
+            ))}
+          </AccordionMenuGroup>
+        ))}
       </AccordionMenu>
     </ScrollArea>
   );

@@ -1,0 +1,920 @@
+<title>Maldives Cashback Design Review</title>
+<style>
+  :root {
+    --ground:      #F4F6F5;
+    --surface:     #FFFFFF;
+    --surface-alt: #EDF1EF;
+    --border:      #D6DEDB;
+    --border-firm: #B9C6C2;
+    --ink:         #121E1C;
+    --ink-soft:    #3D4E4A;
+    --ink-mute:    #6A7C77;
+    --accent:      #0B6A5F;
+    --accent-soft: #E2EFEC;
+    --critical:    #A93B2C;
+    --critical-bg: #F6E7E3;
+    --important:   #8A6410;
+    --important-bg:#F6EEDC;
+    --rule:        #C9D5D1;
+
+    --serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
+    --sans:  ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+    --mono:  ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground:      #0C1615;
+      --surface:     #121F1D;
+      --surface-alt: #172725;
+      --border:      #24352F;
+      --border-firm: #354A44;
+      --ink:         #E7EEEB;
+      --ink-soft:    #B8C7C2;
+      --ink-mute:    #849791;
+      --accent:      #4FC2AF;
+      --accent-soft: #14312C;
+      --critical:    #E5907F;
+      --critical-bg: #38201B;
+      --important:   #DDB25F;
+      --important-bg:#33290F;
+      --rule:        #2B3D38;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --ground:      #0C1615;
+    --surface:     #121F1D;
+    --surface-alt: #172725;
+    --border:      #24352F;
+    --border-firm: #354A44;
+    --ink:         #E7EEEB;
+    --ink-soft:    #B8C7C2;
+    --ink-mute:    #849791;
+    --accent:      #4FC2AF;
+    --accent-soft: #14312C;
+    --critical:    #E5907F;
+    --critical-bg: #38201B;
+    --important:   #DDB25F;
+    --important-bg:#33290F;
+    --rule:        #2B3D38;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--serif);
+    font-size: 17px;
+    line-height: 1.62;
+    margin: 0;
+    padding: 0 24px 100px;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap { max-width: 760px; margin: 0 auto; }
+
+  .masthead {
+    padding: 64px 0 34px;
+    border-bottom: 2px solid var(--ink);
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+  }
+  .eyebrow {
+    font-family: var(--sans);
+    font-size: 11.5px;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin: 0;
+  }
+  h1 {
+    font-family: var(--serif);
+    font-size: clamp(34px, 6vw, 50px);
+    line-height: 1.08;
+    font-weight: 600;
+    letter-spacing: -0.015em;
+    margin: 0;
+    text-wrap: balance;
+  }
+  .standfirst {
+    font-size: 19px;
+    line-height: 1.55;
+    color: var(--ink-soft);
+    margin: 0;
+    max-width: 62ch;
+  }
+  .meta-row {
+    font-family: var(--sans);
+    font-size: 12.5px;
+    color: var(--ink-mute);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 18px;
+    margin: 0;
+  }
+  .meta-row b { font-weight: 600; color: var(--ink-soft); }
+
+  section {
+    padding: 46px 0 0;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+  }
+
+  h2 {
+    font-family: var(--serif);
+    font-size: 27px;
+    line-height: 1.2;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    margin: 0;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--rule);
+    text-wrap: balance;
+  }
+
+  h3 {
+    font-family: var(--sans);
+    font-size: 16.5px;
+    font-weight: 650;
+    line-height: 1.35;
+    letter-spacing: -0.005em;
+    margin: 0;
+    text-wrap: balance;
+  }
+
+  h4 {
+    font-family: var(--sans);
+    font-size: 12px;
+    font-weight: 650;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: var(--ink-mute);
+    margin: 0;
+  }
+
+  p { margin: 0; max-width: 68ch; }
+
+  ul, ol { margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 7px; max-width: 66ch; }
+  li { padding-left: 2px; }
+
+  a { color: var(--accent); }
+  code {
+    font-family: var(--mono);
+    font-size: 0.87em;
+    background: var(--surface-alt);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 1px 5px;
+  }
+  strong { font-weight: 650; }
+
+  pre {
+    font-family: var(--mono);
+    font-size: 13.5px;
+    line-height: 1.7;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+    padding: 16px 18px;
+    margin: 0;
+    overflow-x: auto;
+    color: var(--ink);
+  }
+  pre code { background: none; border: none; padding: 0; font-size: inherit; }
+  pre .cm { color: var(--ink-mute); }
+
+  .finding {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--border-firm);
+    padding: 20px 22px;
+    display: flex;
+    flex-direction: column;
+    gap: 11px;
+  }
+  .finding.sev-critical { border-left-color: var(--critical); }
+  .finding.sev-important { border-left-color: var(--important); }
+  .finding.sev-strategic { border-left-color: var(--accent); }
+
+  .finding-head {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .num {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--ink-mute);
+    font-variant-numeric: tabular-nums;
+    flex: none;
+  }
+  .chip {
+    font-family: var(--sans);
+    font-size: 10.5px;
+    font-weight: 650;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 3px 8px;
+    border-radius: 2px;
+    white-space: nowrap;
+    flex: none;
+  }
+  .chip.critical  { background: var(--critical-bg);  color: var(--critical); }
+  .chip.important { background: var(--important-bg); color: var(--important); }
+  .chip.strategic { background: var(--accent-soft);  color: var(--accent); }
+
+  .finding p, .finding ul, .finding ol { font-size: 16px; }
+
+  .fix {
+    font-family: var(--sans);
+    font-size: 14.5px;
+    line-height: 1.55;
+    color: var(--ink-soft);
+    background: var(--surface-alt);
+    border-top: 1px solid var(--border);
+    margin: 3px -22px -20px;
+    padding: 13px 22px 15px;
+    max-width: none;
+  }
+  .fix b {
+    font-weight: 650;
+    color: var(--ink);
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    font-size: 11.5px;
+    margin-right: 7px;
+  }
+
+  .table-scroll { overflow-x: auto; border: 1px solid var(--border); background: var(--surface); }
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    font-family: var(--sans);
+    font-size: 14px;
+    min-width: 480px;
+  }
+  th, td {
+    text-align: left;
+    padding: 9px 14px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  th {
+    font-weight: 650;
+    font-size: 11.5px;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: var(--ink-mute);
+    background: var(--surface-alt);
+    white-space: nowrap;
+  }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr.total-row td { background: var(--surface-alt); font-weight: 650; border-top: 2px solid var(--border-firm); }
+  td.num-cell, th.num-cell { text-align: right; font-variant-numeric: tabular-nums; font-family: var(--mono); font-size: 13px; }
+  caption {
+    caption-side: bottom;
+    font-family: var(--sans);
+    font-size: 12.5px;
+    color: var(--ink-mute);
+    text-align: left;
+    padding: 9px 14px;
+    border-top: 1px solid var(--border);
+    background: var(--surface-alt);
+  }
+
+  .callout {
+    background: var(--accent-soft);
+    border: 1px solid var(--accent);
+    padding: 18px 22px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .callout h3 { color: var(--accent); }
+  .callout p { font-size: 16px; }
+
+  .decisions { display: flex; flex-direction: column; gap: 0; border-top: 1px solid var(--rule); }
+  .decision {
+    display: grid;
+    grid-template-columns: 128px 1fr;
+    gap: 6px 20px;
+    padding: 15px 0;
+    border-bottom: 1px solid var(--rule);
+    align-items: start;
+  }
+  .decision dt {
+    font-family: var(--sans);
+    font-size: 11.5px;
+    font-weight: 650;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: var(--accent);
+    padding-top: 4px;
+  }
+  .decision dd { margin: 0; font-size: 16px; }
+  .decision dd em { color: var(--ink-mute); font-style: italic; }
+
+  .phase {
+    display: grid;
+    grid-template-columns: 88px 1fr;
+    gap: 4px 20px;
+    padding: 16px 0;
+    border-bottom: 1px solid var(--rule);
+    align-items: start;
+  }
+  .phase:first-of-type { border-top: 1px solid var(--rule); }
+  .phase-label {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--accent);
+    padding-top: 3px;
+  }
+  .phase-body { display: flex; flex-direction: column; gap: 7px; }
+  .phase-body p { font-size: 16px; }
+  .phase-body ul { font-size: 15.5px; }
+
+  .question {
+    padding: 15px 0;
+    border-bottom: 1px solid var(--rule);
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+  .question:first-of-type { border-top: 1px solid var(--rule); }
+  .question p.q { font-family: var(--sans); font-size: 15.5px; font-weight: 600; }
+  .question p.why { font-size: 15.5px; color: var(--ink-soft); }
+
+  .spec {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 20px 0 4px;
+    border-top: 1px solid var(--rule);
+  }
+
+  footer {
+    margin-top: 56px;
+    padding-top: 20px;
+    border-top: 2px solid var(--ink);
+    font-family: var(--sans);
+    font-size: 13px;
+    color: var(--ink-mute);
+  }
+
+  @media (max-width: 560px) {
+    body { font-size: 16px; padding: 0 18px 70px; }
+    .decision, .phase { grid-template-columns: 1fr; gap: 4px; }
+    .fix { margin-left: -18px; margin-right: -18px; padding-left: 18px; padding-right: 18px; }
+    .finding { padding: 17px 18px; }
+    pre { font-size: 12.5px; }
+  }
+</style>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <p class="eyebrow">Design review · revision 3</p>
+    <h1>Maldives Cashback Design Review</h1>
+    <p class="standfirst">POS systems post to your API, exposure is bounded by time rather than credit limits, and cashback computes post-tax. What remains open: the API contract itself, the settlement rules, and how long a reward stays Pending before it ends.</p>
+    <p class="meta-row">
+      <span><b>Scope</b> Cashback marketplace, physical + online</span>
+      <span><b>Integration</b> Inbound POST from POS and web</span>
+      <span><b>Open findings</b> 15</span>
+    </p>
+  </header>
+
+  <section>
+    <h2>Your calls, recorded</h2>
+    <p>Ten decisions are settled. Recording them so they stop being questions and start being constraints.</p>
+    <dl class="decisions">
+      <div class="decision">
+        <dt>Integration</dt>
+        <dd><strong>POS systems POST to your API.</strong> Polling is not available — on-premise tills sit behind NAT and vendors will not expose an inbound endpoint. You publish the API; they integrate against it.</dd>
+      </div>
+      <div class="decision">
+        <dt>Delivery failures</dt>
+        <dd>A POST that never arrives is the vendor's problem, not yours. No platform-side reconciliation obligation.</dd>
+      </div>
+      <div class="decision">
+        <dt>Store onboarding</dt>
+        <dd>You perform the integration work for physical stores yourself, free.</dd>
+      </div>
+      <div class="decision">
+        <dt>Eligible amount</dt>
+        <dd><strong>The merchant supplies it.</strong> They POST an eligible invoice total and an invoice number; how they derive it is their policy, not something the API models. <em>Collapses the whole tax and service-charge question — finding 02.</em></dd>
+      </div>
+      <div class="decision">
+        <dt>Credit limits</dt>
+        <dd>None. Exposure is bounded instead by the 15-day clock and automatic suspension. <em>Removes any synchronous limit check from the API — finding 08.</em></dd>
+      </div>
+      <div class="decision">
+        <dt>Merchant wallet</dt>
+        <dd>A settlement <em>method</em> a merchant may choose instead of bank transfer — not a risk product, not pre-funding.</dd>
+      </div>
+      <div class="decision">
+        <dt>Non-payment</dt>
+        <dd>Customers are told the reward is unpaid because the merchant has not settled, and that action was taken. <em>Wording carries legal risk — finding 12.</em></dd>
+      </div>
+      <div class="decision">
+        <dt>Regulatory</dt>
+        <dd>Out of scope; licences obtained if and when required.</dd>
+      </div>
+      <div class="decision">
+        <dt>Customer promise</dt>
+        <dd>Nothing promised before Confirmed. Reduced to a copy-and-layout fix (finding 09).</dd>
+      </div>
+      <div class="decision">
+        <dt>Payout rails</dt>
+        <dd>Domestic transfers are free at any amount. Cost argument withdrawn; execution mechanism still open (finding 10).</dd>
+      </div>
+    </dl>
+  </section>
+
+  <section>
+    <h2>The API contract, specified</h2>
+    <p>Since third parties implement against your API rather than you integrating with each of them, every weakness in the contract multiplies across every vendor who adopts it, and you lose the ability to fix anything unilaterally. A breaking change becomes a coordination exercise with companies shipping on their own timelines. This is the largest piece of unbuilt design in the plan.</p>
+
+    <div class="spec">
+      <h4>1 · Versioning and idempotency, from the first endpoint</h4>
+      <p><code>/v1/</code> in the path and a written deprecation policy. You will get some part of the schema wrong; the only question is whether you can move afterwards.</p>
+      <p><strong>Idempotency keys as a required header on every write</strong>, not an optional nicety. Vendor retry logic is the single largest source of duplicate cashback, and you cannot audit it. A repeated key returns the original result rather than creating a second reward.</p>
+      <pre><code>POST /v1/transactions
+Idempotency-Key: 9f2c-...            <span class="cm">// required</span>
+Authorization: Bearer &lt;merchant-scoped token&gt;
+
+{ "invoice_no": "INV-1001",
+  "customer_ref": "482917",
+  "sale_amount": 125000,             <span class="cm">// laari, post-tax</span>
+  "eligible_amount": 125000,
+  "occurred_at": "2026-08-14T11:04:22+05:00",
+  "branch_id": "..." }</code></pre>
+      <p>Back this with <code>(merchant_id, invoice_no)</code> uniqueness as a second line of defence — idempotency keys protect against retries of the <em>same</em> request, invoice uniqueness protects against the same sale arriving as two different requests.</p>
+    </div>
+
+    <div class="spec">
+      <h4>2 · Reversals are a first-class endpoint, not an afterthought</h4>
+      <p>The plan covers sales arriving. It does not cover a sale from three days ago being voided or refunded at the till. If vendors have no defined way to tell you, you will keep paying cashback on returned goods and your Reversed status will only ever be triggered manually.</p>
+      <pre><code>POST /v1/transactions/{id}/reverse
+{ "reason": "customer_refund", "occurred_at": "..." }</code></pre>
+      <p>Make it a contractual obligation in the integration agreement, not just an available endpoint — a vendor who implements sales but not reversals is worse than one who implements neither, because the errors all run in the merchant's favour and nobody notices.</p>
+    </div>
+
+    <div class="spec">
+      <h4>3 · Resolve the rate at the sale timestamp, never at receipt</h4>
+      <p>A retried POST can arrive hours after the sale. If a merchant changed their rate in between, receipt-time resolution applies the wrong one — silently, and unrecoverably once it's in the ledger. Use the POS-reported <code>occurred_at</code> and freeze <code>rate_bp</code> and <code>fee_bp</code> onto the transaction row.</p>
+      <p>Which makes till clocks part of your trust boundary. Bound them: reject future-dated sales outright, and route anything older than a few days to review rather than accepting it straight into a live settlement batch.</p>
+    </div>
+
+    <div class="spec">
+      <h4>4 · The till displays a rate it doesn't own</h4>
+      <p>Your §7 flow has the POS showing <em>"Customer cashback: MVR 25.00"</em> before the sale completes, which means the POS needs the current rate — but your server is what actually computes the reward. A stale cached rate at the till shows the customer one number and credits them another.</p>
+      <ul>
+        <li>Expose <code>GET /v1/merchants/{id}/rate</code> for the till to read at transaction time, and push changes by webhook so caches don't drift.</li>
+        <li>The POS figure is advisory. Your server recomputes authoritatively at <code>occurred_at</code> and that value wins.</li>
+        <li>This is a second reason for finding 07's rule that rate <em>decreases</em> only take effect at 00:00 the following day — it guarantees a stale till cache can only ever under-promise, never over-promise.</li>
+      </ul>
+    </div>
+
+    <div class="spec">
+      <h4>5 · Outbound webhooks</h4>
+      <p>Vendors need to know when a merchant's rate changes, when a merchant is suspended, and when you reverse something on your side. Without this they cache indefinitely and their tills quote offers you won't honour. Sign the payloads and publish the verification method.</p>
+    </div>
+
+    <div class="spec">
+      <h4>6 · Credentials, errors, sandbox</h4>
+      <ul>
+        <li><strong>Per-merchant tokens, scoped and independently revocable.</strong> A merchant leaving a POS vendor must not require key rotation across every other merchant on that vendor.</li>
+        <li><strong>Published error semantics</strong> — which failures are retryable, which are terminal, what a duplicate invoice returns, what an unknown customer reference returns. Vendors will code against whatever you return on day one and never revisit it.</li>
+        <li><strong>A sandbox with test merchants and fixture data</strong>, or every vendor debugs against production and mints real cashback while doing it.</li>
+        <li><strong>Suspended merchants still POST.</strong> A suspended merchant's till keeps sending. Accept and record the transaction as ineligible with a distinct response code so the POS can display something truthful, rather than erroring in a way a cashier can't interpret.</li>
+      </ul>
+    </div>
+
+    <div class="spec">
+      <h4>7 · Write the spec before the implementation</h4>
+      <p>Publish an OpenAPI document and treat it as the design artefact. Also decide how a merchant "connects their account" from inside a POS — an OAuth-style consent flow is the right shape, and retrofitting one over a shared-secret scheme later is unpleasant for you and for every vendor already integrated.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>Money specification</h2>
+
+    <div class="spec">
+      <h4>Representation</h4>
+      <p>Every monetary value is an <strong>integer count of laari</strong> in a <code>BIGINT</code>. No floats, no decimal-backed-by-float. Column names carry the unit: <code>eligible_laari</code>, <code>cashback_laari</code>, <code>fee_laari</code>. One MVR is 100 laari.</p>
+      <p>Every rate is an <strong>integer count of basis points</strong>. 2% is <code>200</code>; 0.75% is <code>75</code>. Never decimals, never percentages.</p>
+      <p>Every monetary row carries a <code>currency</code> column even while MVR-only. One column now saves a migration if resort or tourism merchants ever transact in USD.</p>
+    </div>
+
+    <div class="spec">
+      <h4>The core computation</h4>
+      <p>Integer arithmetic throughout. Adding half the divisor before integer division gives round-half-up without touching a float:</p>
+      <pre><code>cashback_laari = (eligible_laari * rate_bp + 5000) / 10000
+fee_laari      = (eligible_laari * fee_bp  + 5000) / 10000
+
+<span class="cm">// integer division, truncating — round half up for positive values
+// max magnitude: MVR 1,000,000 = 1e8 laari * 1000 bp = 1e11, inside BIGINT</span></code></pre>
+      <p><strong>Round at the line, then sum. Never recompute on a batch aggregate.</strong> A batch total is the sum of already-rounded lines. Recomputing the fee against the combined sale gives a different number, and merchants reconciling by hand will find it.</p>
+    </div>
+
+    <div class="spec">
+      <h4>Verification against your own worked example</h4>
+      <div class="table-scroll">
+        <table>
+          <caption>Your §2 batch in integer laari. Reconciles exactly — keep as a test fixture.</caption>
+          <thead>
+            <tr>
+              <th>Invoice</th>
+              <th class="num-cell">Eligible</th>
+              <th class="num-cell">Cashback @200bp</th>
+              <th class="num-cell">Fee @75bp</th>
+              <th class="num-cell">Due</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>INV-1001</td><td class="num-cell">100,000</td><td class="num-cell">2,000</td><td class="num-cell">750</td><td class="num-cell">2,750</td></tr>
+            <tr><td>INV-1002</td><td class="num-cell">50,000</td><td class="num-cell">1,000</td><td class="num-cell">375</td><td class="num-cell">1,375</td></tr>
+            <tr><td>INV-1003</td><td class="num-cell">200,000</td><td class="num-cell">4,000</td><td class="num-cell">1,500</td><td class="num-cell">5,500</td></tr>
+            <tr><td>INV-1004</td><td class="num-cell">80,000</td><td class="num-cell">1,600</td><td class="num-cell">600</td><td class="num-cell">2,200</td></tr>
+            <tr class="total-row"><td>Batch</td><td class="num-cell">430,000</td><td class="num-cell">8,600</td><td class="num-cell">3,225</td><td class="num-cell">11,825</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>MVR 4,300.00 / 86.00 / 32.25 / 118.25 — matching your figures to the laari.</p>
+    </div>
+
+    <div class="spec">
+      <h4>No rounding residue, by construction</h4>
+      <p>The merchant pays the sum of the rounded lines; the customer receives exactly the rounded <code>cashback_laari</code>; the platform receives exactly the rounded <code>fee_laari</code>. Nothing is left over. <strong>You do not need a rounding-difference ledger account.</strong></p>
+      <p>This holds only while rounding happens at the line and never at an aggregate, and while partial settlements allocate oldest-first rather than pro-rata. Pro-rata would reintroduce residue immediately — a second, independent reason to prefer oldest-first.</p>
+    </div>
+
+    <div class="spec">
+      <h4>Tier boundaries in basis points</h4>
+      <div class="table-scroll">
+        <table>
+          <caption>Exact and gap-free — but only if rates are constrained to whole basis points.</caption>
+          <thead>
+            <tr><th>Customer cashback</th><th class="num-cell">rate_bp</th><th>Platform fee</th><th class="num-cell">fee_bp</th><th class="num-cell">Merchant all-in</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>0.50 – 0.99%</td><td class="num-cell">50 – 99</td><td>0.25%</td><td class="num-cell">25</td><td class="num-cell">0.75 – 1.24%</td></tr>
+            <tr><td>1.00 – 1.99%</td><td class="num-cell">100 – 199</td><td>0.50%</td><td class="num-cell">50</td><td class="num-cell">1.50 – 2.49%</td></tr>
+            <tr><td>2.00 – 4.99%</td><td class="num-cell">200 – 499</td><td>0.75%</td><td class="num-cell">75</td><td class="num-cell">2.75 – 5.74%</td></tr>
+            <tr><td>5.00 – 10.00%</td><td class="num-cell">500 – 1000</td><td>1.00%</td><td class="num-cell">100</td><td class="num-cell">6.00 – 11.00%</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>Reject any <code>rate_bp</code> below 50, above 1000, or non-integer. Without that constraint a merchant setting 4.995% falls into no tier at all. Note the cliff at 499 → 500: a 0.01pp increase in cashback raises the merchant's all-in cost by 0.26pp. Surface that in the rate-change UI rather than letting them find it on an invoice.</p>
+    </div>
+
+    <div class="spec">
+      <h4>The eligible amount is an input, not a computation</h4>
+      <p><code>eligible_laari</code> arrives from the merchant and is used exactly as given. Nothing in this specification recomputes it, adjusts it for tax, or validates it against a sale total. That is what keeps the required payload to two fields and removes any possibility of two POS vendors disagreeing about the same bill.</p>
+      <p>Where the optional <code>sale_amount</code> is present, store it — reference only, never an input to any formula. It is what lets you answer a customer's question about the basis, report honest averages to merchants, and watch the eligible-to-sale ratio for outliers.</p>
+    </div>
+
+    <div class="spec">
+      <h4>Caps, and the fee question your plan doesn't answer</h4>
+      <p>Your §9 promotions cap cashback per customer. When that cap clips a reward, does the merchant still pay the fee on the full sale? As written, yes — which is punitive, and noticeable the first time a large sale gets capped.</p>
+      <pre><code><span class="cm">// normal path</span>
+cashback_laari = (eligible_laari * rate_bp + 5000) / 10000
+fee_laari      = (eligible_laari * fee_bp  + 5000) / 10000
+
+<span class="cm">// capped path — fee follows the reward actually granted</span>
+cashback_laari = min(cashback_laari, cap_remaining_laari)
+fee_laari      = (cashback_laari * fee_bp + rate_bp/2) / rate_bp</code></pre>
+      <p>The tier relationship holds exactly either way: at 200bp cashback and 75bp fee, the fee is always 0.375 × the cashback. Caps still missing beyond the promotional one: a per-transaction maximum and a per-customer-per-day maximum on the <em>standing</em> rate.</p>
+    </div>
+
+    <div class="spec">
+      <h4>Minimum eligible transaction</h4>
+      <p>A MVR 20 sale at 1% yields 20 laari of cashback and 10 laari of revenue — less than the cost of the row it occupies. Set a floor; MVR 50 (<code>5000</code> laari) is a reasonable start.</p>
+      <p>Below the floor, still write the transaction with <code>cashback_laari = 0</code> and a <code>below_minimum</code> reason code rather than rejecting the POST. Merchant analytics stay complete, the POS gets a clean success response, and the customer gets a real answer to "why didn't I earn on this one?"</p>
+    </div>
+
+    <div class="spec">
+      <h4>One rule that prevents silent corruption</h4>
+      <p><strong>Reversals reverse stored integers; they never recompute.</strong> If a reversal recalculates from the rate and the merchant has since changed it, the reversal won't match the original and the ledger drifts by exactly the rate delta. Reverse precisely what was written.</p>
+    </div>
+
+    <div class="spec">
+      <h4>Tax column</h4>
+      <p>Setting aside whether and when it applies: if your platform fee is ever GST-bearing you need <code>fee_gst_laari</code> as its own column from the first migration, and the settlement summary must break it out separately from <code>fee_laari</code>. Merchants will need a tax invoice showing the split, and deriving it retroactively from a blended figure is guesswork once rates change.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>Tier one — settle before you write code</h2>
+
+    <article class="finding sev-critical">
+      <div class="finding-head">
+        <span class="num">01</span>
+        <span class="chip critical">Blocks launch</span>
+        <h3>The API contract is the product</h3>
+      </div>
+      <p>Specified in full above; kept here as a finding because it is the single largest piece of unbuilt design. The short version: versioning, required idempotency keys, a reversal endpoint contractually obliged rather than merely available, sale-time rate resolution, outbound webhooks, scoped revocable credentials, published error semantics and a sandbox. All cheap now, all structural once vendors have shipped against them.</p>
+      <p class="fix"><b>Do</b> Write the OpenAPI document before the implementation and treat it as the design artefact. Decide the merchant account-connection flow at the same time — OAuth-style consent is the right shape and is painful to retrofit over shared secrets.</p>
+    </article>
+
+    <article class="finding sev-critical">
+      <div class="finding-head">
+        <span class="num">02</span>
+        <span class="chip important">Monitoring</span>
+        <h3>Merchant-defined eligibility closes the spec gap and opens a smaller one</h3>
+      </div>
+      <p>Resolved, and better than what this review originally proposed. Taking a single merchant-supplied <code>eligible_amount</code> means tax, service charge and category exclusions are all the merchant's own policy — there is nothing for the API to model and no way for two POS vendors to derive different numbers from the same bill. The required payload is two fields.</p>
+      <p>One residual, and it is a monitoring problem rather than a specification one. Because the merchant defines the basis, a merchant can advertise 5% cashback while sending an eligible total that is a fraction of each bill. The customer earns MVR 12 on a MVR 1,250 purchase, sees "5% at Store A" in the app, and your brand carries the disappointment rather than theirs.</p>
+      <p class="fix"><b>Do</b> Accept <code>sale_amount</code> as an optional field — never used in computation, but it answers "why was my cashback based on a smaller figure?", keeps merchant analytics honest, and lets you track the eligible-to-sale ratio per merchant and alert on outliers. Record the merchant's stated eligibility basis at onboarding, show it to customers, and always display the amount the cashback was computed on.</p>
+    </article>
+  </section>
+
+  <section>
+    <h2>Tier two — design now, build in the first release</h2>
+
+    <article class="finding sev-important">
+      <div class="finding-head">
+        <span class="num">03</span>
+        <span class="chip important">Bites in week one</span>
+        <h3>Settlement allocation rules are undefined</h3>
+      </div>
+      <p>You have a <em>Partially Settled</em> status but no rule for what it does. If a merchant owes MVR 118.25 across four orders and transfers MVR 60, which rewards become Confirmed?</p>
+      <ul>
+        <li><strong>Allocation order</strong> — oldest-first, fully, leaving the remainder Pending. Pro-rata is defensible in accounting terms but produces four half-confirmed rewards, which is unexplainable to a customer and reintroduces rounding residue.</li>
+        <li><strong>Overpayment</strong> — becomes a merchant credit applied to the next batch, never an automatic refund.</li>
+        <li><strong>Tolerance band</strong> — auto-match within ±MVR 1 so a rounded transfer doesn't strand a batch in manual review.</li>
+        <li><strong>Locked batches</strong> — once a settlement is Awaiting Payment its lines are frozen. A reversal POSTed against a line inside a locked batch cannot reverse it; it becomes a credit adjustment on the next batch. Return a specific error code for this so vendors can distinguish it from a failure.</li>
+        <li><strong>Batch due date</strong> — the earliest line's due date, not the batch creation date, or merchants extend their own credit simply by batching late.</li>
+        <li><strong>Wallet settlement</strong> — when a merchant settles from wallet rather than bank, run it through the same batch path and debit the wallet as the funding source. Same code, same statuses, same ledger entries; only the source account differs. Resist making it a second path.</li>
+      </ul>
+      <p class="fix"><b>Do</b> Also settle the bank-matching mechanism. Transfers arrive needing reconciliation against a reference — design that admin queue as a first-class screen with search, partial-match suggestions and an audit trail, because someone works it daily. Wallet settlements bypass it entirely, which is a genuine selling point for the wallet.</p>
+    </article>
+
+    <article class="finding sev-important">
+      <div class="finding-head">
+        <span class="num">04</span>
+        <span class="chip important">Bites in week one</span>
+        <h3>The status model needs internal sub-states and one more terminal</h3>
+      </div>
+      <p>Collapsing "Funded" into Confirmed is right for the customer but costs an operational distinction: cashback inside the refund window and cashback that is payable-but-unfunded are both "Pending", yet only the second is overdue. Your own "one change I would make" is reaching for exactly this — make it explicit, because the aging buckets depend on it.</p>
+      <div class="table-scroll">
+        <table>
+          <caption>Customer-facing status stays simple; internal state carries the operational truth.</caption>
+          <thead>
+            <tr><th>Customer sees</th><th>Internal state</th><th>Meaning</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Pending</td><td><code>tracked</code></td><td>POST received, not yet validated</td></tr>
+            <tr><td>Pending</td><td><code>awaiting_validation</code></td><td>In refund window — 15-day clock not started</td></tr>
+            <tr><td>Pending</td><td><code>payable_unfunded</code></td><td>Settlement clock running</td></tr>
+            <tr><td>Pending</td><td><code>on_hold</code></td><td>Fraud or dispute review</td></tr>
+            <tr><td>Confirmed</td><td><code>confirmed</code></td><td>Settlement received and allocated</td></tr>
+            <tr><td>Paid</td><td><code>paid</code></td><td>Included in a completed payout</td></tr>
+            <tr><td>Reversed</td><td><code>reversed</code></td><td>Voided at the till, duplicated, or invalidated pre-confirmation</td></tr>
+            <tr><td>Unpaid</td><td><code>written_off</code></td><td>Merchant never settled — the terminal you still need</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>Payout batches need their own lifecycle, including approval: <code>draft → approved → processing → sent → completed</code>, with a <code>partially_failed</code> branch. Require two people to release one — money leaving on a single click is how internal fraud happens.</p>
+      <p class="fix"><b>Do</b> Make every transition an append-only event carrying actor, reason code and timestamp. Never mutate a status column in place.</p>
+    </article>
+
+    <article class="finding sev-important">
+      <div class="finding-head">
+        <span class="num">05</span>
+        <span class="chip important">Bites at scale</span>
+        <h3>Fraud controls are largely absent</h3>
+      </div>
+      <p>Credit risk is covered well; fraud barely appears. Cheap to build in, near-impossible to retrofit:</p>
+      <ul>
+        <li><strong>Invoice deduplication</strong> — <code>(merchant_id, invoice_no)</code> unique, independent of idempotency keys. Under inbound POST this is your only defence against a vendor's retry loop double-crediting.</li>
+        <li><strong>Velocity rules</strong> — one customer earning twenty times at one merchant in a day, or a MVR 200,000 sale at a corner shop, routes to <code>on_hold</code>.</li>
+        <li><strong>Manual-entry merchants are the exposed surface.</strong> Stores on §8's manual credit path have no POS and no invoice to verify against, so the cashier is the only control. Rate-limit manual credits, require an invoice number, flag repeat credits to the same customer.</li>
+        <li><strong>Phone-number recycling</strong> — your third model keys on phone number. Numbers get reassigned and a typo credits a stranger. Confirm against a masked name at the till and let the customer reject a transaction they don't recognise.</li>
+        <li><strong>Negative balances</strong> — a reversal POSTed after payout means a clawback. Offset against future earnings, never pursue the customer for cash, cap how long a negative balance persists.</li>
+      </ul>
+    </article>
+
+    <article class="finding sev-important">
+      <div class="finding-head">
+        <span class="num">06</span>
+        <span class="chip important">Bites in week one</span>
+        <h3>No missing-transaction claim flow</h3>
+      </div>
+      <p>Delivery is the vendor's obligation, but the customer still turns up in <em>your</em> app asking where their cashback went — a till that was offline, an integration bug, a cashier who didn't record the customer ID, or an online checkout that lost the click. From the customer's side these are all identical, and all yours to answer.</p>
+      <p class="fix"><b>Do</b> Build it in v1: customer submits merchant, date, amount and receipt number into an admin queue with a stated SLA and a published window — 90 days from purchase is standard. Tag approved claims by origin, because the pattern tells you which vendor's integration is dropping transactions. That's your only visibility into delivery quality, and it doubles as the evidence if you ever need to hold a vendor to their obligation.</p>
+    </article>
+
+    <article class="finding sev-important">
+      <div class="finding-head">
+        <span class="num">07</span>
+        <span class="chip important">Bites at scale</span>
+        <h3>Nothing stops a merchant lowering the rate after acquiring the customer</h3>
+      </div>
+      <p>Merchants set their own rate and can change it. As written, a merchant can advertise 5% all morning, take the traffic, and drop to 0.5% at noon — a bait-and-switch your brand absorbs, not theirs.</p>
+      <p class="fix"><b>Do</b> Increases take effect immediately; decreases at 00:00 the following day. Published promotions are immutable for their stated duration. The delayed-decrease rule does double duty: it also guarantees a stale rate cached at a till can only ever under-promise, never over-promise, which matters because the POS displays a figure your server recomputes.</p>
+    </article>
+
+    <article class="finding sev-important">
+      <div class="finding-head">
+        <span class="num">08</span>
+        <span class="chip important">Bites at scale</span>
+        <h3>Your credit limit is now denominated in time, so the clock must be automatic</h3>
+      </div>
+      <p>Worth naming what the no-limit decision actually produces, because it is more defensible than it first sounds. With a hard 15-day clock and suspension at day 16, maximum exposure to any merchant is approximately <strong>15 days of that merchant's cashback volume</strong>. That is a real bound, it scales automatically with merchant size, it needs no tier administration, and it keeps the ingestion path free of limit checks.</p>
+      <p>The trade is that the bound is only as good as its enforcement, and it is now your <em>only</em> credit control:</p>
+      <ul>
+        <li>Day-16 suspension must fire automatically, not as a task someone remembers. If suspension is manual, the bound is fictional.</li>
+        <li>Suspension stops cashback <em>creation</em>, not ingestion. The till keeps POSTing; each transaction must land as ineligible with a reason code and a distinct response, rather than as a new liability or an error the cashier can't interpret.</li>
+        <li>The residual risk is concentration: a large merchant during a peak trading period accumulates 15 days of unusually high volume. Worth a simple alert when one merchant's unsettled balance exceeds some share of total outstanding — not a limit, just visibility.</li>
+      </ul>
+      <p class="fix"><b>Do</b> Keep the §15 escalation ladder — day 10 reminder, day 13 urgent, day 15 due, day 16 suspend — and make every step a scheduled job with a recorded outcome, so you can prove notice was given if you pursue the debt or explain the suspension to customers.</p>
+    </article>
+
+    <article class="finding sev-important">
+      <div class="finding-head">
+        <span class="num">09</span>
+        <span class="chip important">Copy fix</span>
+        <h3>The customer UI still sums Pending into the headline figure</h3>
+      </div>
+      <p>Your point stands that Pending is visibly conditional. Two details in the plan contradict that positioning, both cheap to fix:</p>
+      <ul>
+        <li>§7's notification reads <em>"🎉 You earned MVR 25.00"</em> — past tense, unconditional. "You'll earn MVR 25.00 once Store A confirms" carries the same excitement without the claim.</li>
+        <li>§14 shows <em>"Your Rewards MVR 532.40"</em> with Confirmed 412.40 and Pending 120.00 beneath. Summing them makes the big number the one people remember. Lead with Confirmed; show Pending as a separate, clearly conditional line.</li>
+      </ul>
+      <p class="fix"><b>Do</b> Show <em>why</em> something is pending ("Store A settles within 15 days"). It turns an unexplained delay into a visible process — the difference between patience and a support ticket — and sets up the non-payment message in finding 12, because the customer already understands there was a step that could fail.</p>
+    </article>
+
+    <article class="finding sev-important">
+      <div class="finding-head">
+        <span class="num">10</span>
+        <span class="chip important">Bites at scale</span>
+        <h3>Payout execution, not payout cost</h3>
+      </div>
+      <p>The fee argument is withdrawn. What remains is mechanical: at ten thousand customers, a monthly payout run is ten thousand transfers. If your bank's corporate channel supports a bulk upload file, the payout batch must generate exactly that format and ingest the result file back. If it doesn't, someone is doing them by hand and your payout window becomes a week of manual work.</p>
+      <p class="fix"><b>Do</b> Find out what bulk mechanism your bank actually offers before designing the payout batch — its file format is a hard constraint on the batch schema. Then handle the failure path: closed accounts, digit typos and name mismatches need a returned-funds state that re-queues, rather than silently marking a reward Paid.</p>
+    </article>
+
+    <article class="finding sev-important">
+      <div class="finding-head">
+        <span class="num">11</span>
+        <span class="chip important">Bites in week one</span>
+        <h3>Ledger accounts and time rules need pinning down</h3>
+      </div>
+      <div class="table-scroll">
+        <table>
+          <caption>Minimum chart of accounts. Every transition posts a balanced entry; corrections are reversing entries, never edits. No rounding account needed.</caption>
+          <thead>
+            <tr><th>Account</th><th>Type</th><th>Moves when</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Merchant receivable</td><td>Asset</td><td>Cashback becomes Pending</td></tr>
+            <tr><td>Customer cashback liability</td><td>Liability</td><td>Reward accrues / is paid</td></tr>
+            <tr><td>Platform fee revenue</td><td>Income</td><td>Settlement allocated</td></tr>
+            <tr><td>Fee tax payable</td><td>Liability</td><td>Fee revenue recognised, if applicable</td></tr>
+            <tr><td>Settlement cash</td><td>Asset</td><td>Bank settlement received</td></tr>
+            <tr><td>Merchant wallet balance</td><td>Liability</td><td>Wallet topped up / drawn at settlement</td></tr>
+            <tr><td>Platform-funded rewards</td><td>Expense</td><td>Referral and promotional bonuses — finding 15</td></tr>
+            <tr><td>Bad debt expense</td><td>Expense</td><td>Merchant non-payment written off</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>One genuine judgement call: <strong>should Pending cashback post to the financial ledger at all?</strong> Accruing at purchase makes your position visible — "customers are owed X, merchants owe us X" — but non-payment then requires both a write-off and extinguishing a liability. I'd accrue; the alternative is a balance sheet that understates exposure.</p>
+      <p class="fix"><b>Do</b> Store all timestamps UTC, evaluate all business rules in UTC+5. Freeze reversals against Confirmed rewards after the 24th cutoff, or a late-arriving reversal POST lands mid-payout-run. Run a daily reconciliation across ledger balances, derived balances and the bank statement, and page someone on divergence.</p>
+    </article>
+
+    <article class="finding sev-important">
+      <div class="finding-head">
+        <span class="num">12</span>
+        <span class="chip important">Wording</span>
+        <h3>"Refused to pay" asserts intent you may not be able to evidence</h3>
+      </div>
+      <p>Telling customers why a reward is unpaid is the right instinct — it moves blame where it belongs and protects trust in the Pending figure. The exposure is in the phrasing. "Refused" asserts a state of mind, and a merchant claiming a bona fide dispute, a bank error or an invoice discrepancy has a defamation angle you don't want to test in a market this small.</p>
+      <p>Stick to what your own records evidence:</p>
+      <ul>
+        <li>✅ "Store A has not settled this transaction. Their cashback offers are suspended and we are pursuing the amount."</li>
+        <li>❌ "Store A refused to pay your cashback."</li>
+      </ul>
+      <p>Same information, same allocation of blame, nothing asserted a merchant can dispute. The escalation ladder in finding 08 is what makes it evidenced — recorded notices at day 10, 13 and 15 are the proof they were asked.</p>
+      <p class="fix"><b>Do</b> Decide the terminal too. "Not yet paid" cannot be true for three years — a reward needs an end state. Pick a horizon (60 or 90 days past due is reasonable), move it to <code>written_off</code>, and tell the customer plainly at that point. An honest ending beats an indefinite Pending.</p>
+    </article>
+  </section>
+
+  <section>
+    <h2>Tier three — strategic, decide before launch</h2>
+
+    <article class="finding sev-strategic">
+      <div class="finding-head">
+        <span class="num">13</span>
+        <span class="chip strategic">Strategy</span>
+        <h3>The cold-start problem isn't addressed</h3>
+      </div>
+      <p>§10's discovery home screen — Featured, Increased, Nearby, Online — is the right vision and worthless with eleven merchants. "Nearby Cashback" returning two results actively signals a dead app.</p>
+      <p>Your decision to do store integrations yourself makes this sharper, because integration effort is a real per-merchant cost you absorb. That cost is near-zero when a POS vendor integrates once and you inherit their whole base, and high when you wire up a single independent store.</p>
+      <p class="fix"><b>Do</b> Win density before breadth, and let the integration economics choose the wedge: find the POS vendor with the deepest penetration in Malé and Hulhumalé F&amp;B and groceries, get them integrated, and launch into their merchant base. Frequency drives habit, and habit is what makes the app worth opening.</p>
+    </article>
+
+    <article class="finding sev-strategic">
+      <div class="finding-head">
+        <span class="num">14</span>
+        <span class="chip strategic">Strategy</span>
+        <h3>Dhivehi and Thaana are a v1 requirement, not a later feature</h3>
+      </div>
+      <p>Thaana is right-to-left. Retrofitting RTL into a finished interface is a rewrite of the layout layer, not a translation task, and it touches every number, currency string and table alignment in the merchant dashboard.</p>
+      <p class="fix"><b>Do</b> Build with logical CSS properties and bidirectional layout from the first component, even shipping English-only.</p>
+    </article>
+
+    <article class="finding sev-strategic">
+      <div class="finding-head">
+        <span class="num">15</span>
+        <span class="chip strategic">Strategy</span>
+        <h3>Referrals have no funding source</h3>
+      </div>
+      <p>Customer-to-customer referral is the growth engine for this category and it's absent from the plan. It also breaks a core assumption: referral bonuses are <strong>platform-funded</strong>, so they can't flow through merchant receivable, and they have no settlement to wait for — they need a path to Confirmed that bypasses the merchant entirely.</p>
+      <p class="fix"><b>Do</b> Give platform-funded rewards their own ledger account and origin type from the outset, so marketing spend never contaminates merchant settlement and your unit economics stay readable.</p>
+    </article>
+
+    <div class="callout">
+      <h3>Two options worth knowing about, not acting on yet</h3>
+      <p><strong>Card-linked offers.</strong> Every friction point in the physical flow — cashier training, the customer remembering to say "I have Rewards", the customer ID never being recorded — disappears if a linked debit card makes earning automatic. It needs a bank or switch relationship and a long conversation. Design the schema so <code>origin</code> can be <code>pos</code>, <code>manual</code>, <code>online_link</code>, <code>api_phone</code> or <code>card_linked</code> without a migration.</p>
+      <p><strong>Tourist spend.</strong> Tourism dwarfs resident retail here, but the product differs: no local bank account, a trip measured in days rather than a monthly cycle, so instant discount is the only workable form. Fine to call out of scope — just don't hard-code MVR-only, local-account-required, monthly-cycle assumptions that make it impossible to add.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>Suggested build sequence</h2>
+    <p>Each phase is independently useful, and each defers the external surface area until the ledger is proven.</p>
+
+    <div class="phase">
+      <div class="phase-label">Phase 0</div>
+      <div class="phase-body">
+        <p><strong>The ledger and the manual loop.</strong> No integrations at all.</p>
+        <ul>
+          <li>Double-entry ledger, integer laari, basis-point rates, immutable event log</li>
+          <li>Merchant and customer accounts; the 15-day clock and automated suspension ladder</li>
+          <li>Merchant-entered credit (§8) as the only earning path</li>
+          <li>Settlement batches with full allocation rules, bank matching queue, wallet as an alternate funding source on the same path</li>
+          <li>Manual payout runs with dual approval</li>
+        </ul>
+        <p>If this reconciles to the laari across a few hundred real transactions, everything after is comparatively safe.</p>
+      </div>
+    </div>
+
+    <div class="phase">
+      <div class="phase-label">Phase 1</div>
+      <div class="phase-body">
+        <p><strong>The public API.</strong> OpenAPI spec first, then <code>/v1/</code> with required idempotency keys, the reversal endpoint, merchant connect flow, outbound webhooks, sandbox and published error semantics. Plus the promotions engine with server-resolved rates, the claim queue, and the §13 merchant performance dashboard — which is your entire sales pitch and shouldn't be deferred.</p>
+      </div>
+    </div>
+
+    <div class="phase">
+      <div class="phase-label">Phase 2</div>
+      <div class="phase-body">
+        <p><strong>Online and discovery.</strong> Click-ID attribution by server-side postback, the §10 discovery screen once merchant density supports it, referrals.</p>
+      </div>
+    </div>
+
+    <div class="phase">
+      <div class="phase-label">Phase 3</div>
+      <div class="phase-body">
+        <p><strong>Scale.</strong> Card-linked offers, multi-vendor marketplace, tourist product.</p>
+      </div>
+    </div>
+
+    <div class="callout">
+      <h3>One technical note on online attribution</h3>
+      <p>Don't build a cookie or pixel-based affiliate network. Third-party cookies are effectively gone and Safari caps script-set first-party cookies at seven days. Append a click ID to the outbound URL (<code>?rw_click=…</code>), require the merchant to persist it on the order, and have them post it back server-side on completion — the same inbound POST contract as the POS path, with the click ID replacing the customer reference. Fewer moving parts for you, and easier for a small local merchant to implement than a tracking pixel.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>Still open</h2>
+
+    <div class="question">
+      <p class="q">How long does a reward stay Pending before it terminates?</p>
+      <p class="why">Your non-payment answer covers what customers are told, but not when the telling stops. Pick a horizon past due, move to <code>written_off</code>, and say so plainly.</p>
+    </div>
+    <div class="question">
+      <p class="q">Is sending reversals a contractual obligation on vendors, or best-effort?</p>
+      <p class="why">If best-effort, refunded sales quietly keep their cashback and every error runs in the merchant's favour. Belongs in the integration agreement, not just the API docs.</p>
+    </div>
+    <div class="question">
+      <p class="q">MVR only, or MVR and USD?</p>
+      <p class="why">Answering "USD too" later means a ledger migration. Answering now costs one column.</p>
+    </div>
+  </section>
+
+  <footer>
+    Design review of the cashback platform plan · Revision 3 · 14 August 2026
+  </footer>
+
+</div>

@@ -23,14 +23,19 @@
     "codeLine": "Code {{code}}",
     "logOut": "Log out",
     "showPassword": "Show password",
-    "hidePassword": "Hide password"
+    "hidePassword": "Hide password",
+    "search": "Search"
   },
   "nav": {
-    "dashboard": "Home",
+    "home": "Home",
+    "dashboard": "Dashboard",
     "transactions": "Transactions",
     "claims": "Claims",
     "discover": "Discover",
-    "payoutAccount": "Payout account"
+    "stores": "Stores",
+    "searchStores": "Search stores",
+    "payoutAccount": "Payout account",
+    "publicNav": "Main menu"
   },
   "auth": {
     "loginTitle": "Welcome back",
@@ -69,7 +74,7 @@
     "sessionCheckFailed": "Could not reach the server. Refresh to try again."
   },
   "dashboard": {
-    "title": "Home",
+    "title": "Dashboard",
     "greeting": "Hi {{name}}",
     "confirmedBalance": "Available cashback",
     "confirmedHint": "Confirmed cashback, ready for your next payout.",
@@ -94,7 +99,8 @@
     "spent": "Spent {{amount}}",
     "cashback": "Cashback",
     "willEarn": "You'll earn {{amount}} once {{merchant}} confirms.",
-    "invoice": "Receipt {{invoiceNo}}"
+    "invoice": "Receipt {{invoiceNo}}",
+    "missingHint": "Missing cashback for a purchase? Show the store your receipt and Manfaa code — they can add it for you."
   },
   "status": {
     "pending": "Pending",
@@ -175,6 +181,9 @@
     "online": "Online",
     "rate": "{{rate}} cashback",
     "rateUsually": "{{rate}} — usually {{usual}}",
+    "usuallyRate": "usually {{rate}}",
+    "endsChip": "Ends {{date}}",
+    "cashbackLabel": "cashback",
     "promoUntil": "Until {{date}}",
     "distanceMeters": "{{meters}} m away",
     "distanceKm": "{{km}} km away",
@@ -185,6 +194,77 @@
     "nearbyEmpty": "No participating stores within 10 km yet.",
     "nearbyAskLocation": "Share your location to see stores near you.",
     "sectionEmpty": "Nothing here right now — check back soon.",
-    "empty": "No stores are live yet — check back soon."
+    "empty": "No stores are live yet — check back soon.",
+    "viewAll": "View all"
+  },
+  "stores": {
+    "title": "All stores",
+    "description": "Every store where your Manfaa code earns cashback",
+    "searchPlaceholder": "Search stores by name",
+    "searchMin": "Type at least {{min}} characters to search.",
+    "allCategories": "All",
+    "noResults": "No stores match your search.",
+    "noResultsHint": "Try a different name, or remove the filters.",
+    "clearFilters": "Clear filters",
+    "resultsCount": "{{count}} stores found",
+    "resultsCount_one": "{{count}} store found",
+    "resultsCount_other": "{{count}} stores found"
+  },
+  "store": {
+    "backToDiscover": "Back to Discover",
+    "featuredBadge": "Featured",
+    "onlineBadge": "Online store",
+    "joinedLabel": "Joined {{date}}",
+    "minPurchase": "On purchases of {{amount}} or more",
+    "howToEarnTitle": "How to earn here",
+    "stepShowTillTitle": "Show your Manfaa code at the till",
+    "stepShowTillBody": "Pay as usual and show your code (or its QR) before the sale is rung up.",
+    "stepShowOnlineTitle": "Shop online with your Manfaa code",
+    "stepShowOnlineBody": "Enter your code at checkout so the store can match the purchase to you.",
+    "stepShowBothTitle": "Show your Manfaa code when you pay",
+    "stepShowBothBody": "At the till, show your code or its QR — online, enter it at checkout.",
+    "stepConfirmTitle": "The store confirms your purchase",
+    "stepConfirmBody": "Your cashback shows as pending until the store confirms and settles the purchase.",
+    "stepPaidTitle": "You'll earn once it's confirmed",
+    "stepPaidBody": "You'll earn {{rate}} back in MVR once the store confirms. Confirmed cashback is paid to your bank account monthly.",
+    "detailsTitle": "Cashback details",
+    "standingRateLabel": "Standard rate",
+    "promoRateLabel": "Promo rate until {{date}}",
+    "minPurchaseLabel": "Minimum purchase",
+    "termsTitle": "Terms & what earns cashback",
+    "termsFallback": "Standard cashback terms apply — the store confirms each purchase.",
+    "branchesTitle": "Branches",
+    "locationDenied": "Location is off, so distances can't be shown.",
+    "locationUnavailable": "We couldn't get your location, so distances can't be shown.",
+    "notFoundTitle": "This store isn't on Manfaa",
+    "notFoundBody": "The link may be old, or the store may no longer offer cashback here. Browse every live store instead.",
+    "browseStores": "Browse all stores",
+    "ctaBody": "Join free and you'll earn {{rate}} back at {{name}} once the store confirms each purchase.",
+    "ctaSignedInBody": "You're all set — show your Manfaa code when you pay at {{name}}."
+  },
+  "landing": {
+    "dashboard": "Dashboard",
+    "createAccount": "Create account",
+    "heroTitle": "Real cashback in MVR at Maldivian stores",
+    "heroSubtitle": "Join free with your phone number. When a store confirms your purchase, you'll earn a percentage back in MVR — paid to your bank account monthly.",
+    "heroSearchPlaceholder": "Search stores…",
+    "increasedTitle": "Increased cashback",
+    "emptyTitle": "First merchants arriving soon",
+    "emptyBody": "We're onboarding the first stores now. Create an account today and your Manfaa code will be ready the moment they go live.",
+    "howTitle": "How it works",
+    "step1Title": "Join free with your phone",
+    "step1Body": "Sign up with your Maldivian mobile number. No card, no fees.",
+    "step2Title": "Show your Manfaa code when you pay",
+    "step2Body": "Give your code at the till, or shop at a participating online store.",
+    "step3Title": "Paid to your bank monthly",
+    "step3Body": "You'll earn the cashback once the store confirms your purchase. Confirmed cashback is paid to your bank account every month.",
+    "forMerchants": "For merchants",
+    "forPartners": "For integration partners — docs coming soon",
+    "marketplaceTitle": "Manfaa Marketplace",
+    "marketplaceComingSoon": "Coming soon",
+    "marketplaceBody": "Shop products from Maldivian sellers with cashback built in — one basket, many sellers, the same Manfaa account.",
+    "marketplaceCta": "Get notified",
+    "marketplaceCtaHint": "Create a free account and we'll let you know when it opens.",
+    "marketplaceFooter": "Marketplace (coming soon)"
   }
 }

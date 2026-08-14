@@ -32,7 +32,7 @@ export default async function RootLayout({
       >
         <ThemeProvider
           attribute="class"
-          defaultTheme="system"
+          defaultTheme="light"
           storageKey="nextjs-theme"
           enableSystem
           disableTransitionOnChange

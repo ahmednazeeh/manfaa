@@ -1,4 +1,4 @@
-import { ReactNode, Suspense } from 'react';
+import { ReactNode } from 'react';
 import { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import { ThemeProvider } from 'next-themes';
@@ -38,7 +38,7 @@ export default async function RootLayout({
       >
         <ThemeProvider
           attribute="class"
-          defaultTheme="system"
+          defaultTheme="light"
           storageKey="nextjs-theme"
           enableSystem
           disableTransitionOnChange
@@ -46,8 +46,11 @@ export default async function RootLayout({
         >
           <I18nProvider>
             <QueryProvider>
+              {/* No Suspense here: nothing in this app calls useSearchParams,
+                  and a root-level boundary makes dynamic routes stream — the
+                  200 commits before /store/[slug]'s notFound() can 404. */}
               <TooltipProvider delayDuration={0}>
-                <Suspense>{children}</Suspense>
+                {children}
                 <Toaster />
               </TooltipProvider>
             </QueryProvider>

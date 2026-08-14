@@ -66,12 +66,15 @@ it('creates a draft with the §4 all-in cost preview (fee follows the promo tier
     expect(Promotion::query()->sole()->status)->toBe('draft');
 });
 
-it('rejects a rate outside 50–1000 bp', function () {
+it('rejects a rate outside the structural 50–2000 bp bounds', function () {
     $this->postJson('/api/merchant/promotions', promotionPayload(['rate_bp' => 49]))
         ->assertUnprocessable()
         ->assertJsonValidationErrors('rate_bp');
 
-    $this->postJson('/api/merchant/promotions', promotionPayload(['rate_bp' => 1001]))
+    // 2001 breaches the structural cap; 1001–2000 are structurally legal
+    // but refused as rate_not_priced while the seeded 50–1000 schedule is
+    // active (tests/Feature/Platform/CapWideningTest.php).
+    $this->postJson('/api/merchant/promotions', promotionPayload(['rate_bp' => 2001]))
         ->assertUnprocessable()
         ->assertJsonValidationErrors('rate_bp');
 

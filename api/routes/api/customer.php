@@ -29,15 +29,31 @@ Route::prefix('customer')->middleware('auth:customer')->group(function () {
     Route::get('payout-account', [PayoutAccountController::class, 'show']);
     Route::post('payout-account', [PayoutAccountController::class, 'store']);
 
-    Route::get('claims', [ClaimsController::class, 'index']);
-    Route::post('claims', [ClaimsController::class, 'store'])->middleware('throttle:10,1');
+    // Self-serve claims are feature-flagged OFF (config/features.php):
+    // customers contact the merchant, who credits the missed sale manually.
+    if (config('features.customer_claims')) {
+        Route::get('claims', [ClaimsController::class, 'index']);
+        Route::post('claims', [ClaimsController::class, 'store'])->middleware('throttle:10,1');
+    }
 });
 
-Route::prefix('admin')->middleware('auth:admin')->group(function () {
-    Route::get('claims', [AdminClaimsController::class, 'index']);
-    Route::post('claims/{id}/approve', [AdminClaimsController::class, 'approve'])->whereNumber('id');
-    Route::post('claims/{id}/reject', [AdminClaimsController::class, 'reject'])->whereNumber('id');
-});
+if (config('features.customer_claims')) {
+    Route::prefix('admin')->middleware('auth:admin')->group(function () {
+        Route::get('claims', [AdminClaimsController::class, 'index']);
+        Route::post('claims/{id}/approve', [AdminClaimsController::class, 'approve'])->whereNumber('id');
+        Route::post('claims/{id}/reject', [AdminClaimsController::class, 'reject'])->whereNumber('id');
+    });
+}
 
-// PUBLIC — no auth, throttled per IP, dataset cached 60s in the service.
-Route::get('discover', [DiscoveryController::class, 'index'])->middleware('throttle:60,1');
+// PUBLIC — no auth, throttled per IP (named `discovery` limiter: 60/min,
+// with an internal-token exemption for the Next SSR origin — see
+// AppServiceProvider), dataset cached 60s in the service.
+Route::get('discover', [DiscoveryController::class, 'index'])->middleware('throttle:discovery');
+
+// Storefront: paginated directory + per-slug store page. Same cache and
+// throttle discipline; the slug pattern is constrained so junk never reaches
+// the handler as a route match.
+Route::get('discover/merchants', [DiscoveryController::class, 'directory'])->middleware('throttle:discovery');
+Route::get('discover/merchants/{slug}', [DiscoveryController::class, 'show'])
+    ->where('slug', '[a-z0-9-]{1,80}')
+    ->middleware('throttle:discovery');

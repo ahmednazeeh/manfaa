@@ -3,6 +3,7 @@
 import { use } from 'react';
 import { type Settlement, type SettlementState } from '@manfaa/api-client';
 import { MoneyText } from '@manfaa/ui';
+import { format } from 'date-fns';
 import {
   Check,
   Copy,
@@ -11,8 +12,7 @@ import {
   Send,
   Wallet as WalletIcon,
 } from 'lucide-react';
-import { cn } from '@/lib/utils';
-import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
+import { toast } from 'sonner';
 import {
   apiErrorMessage,
   useSettlement,
@@ -20,6 +20,8 @@ import {
   useWallet,
   useWalletSettle,
 } from '@/lib/queries';
+import { cn } from '@/lib/utils';
+import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -37,8 +39,6 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { format } from 'date-fns';
-import { toast } from 'sonner';
 import {
   Toolbar,
   ToolbarActions,
@@ -107,7 +107,10 @@ function StatusTimeline({ settlement }: { settlement: Settlement }) {
               {state === 'draft' && (
                 <div className="text-xs text-muted-foreground">
                   Created{' '}
-                  {format(new Date(settlement.created_at), 'dd MMM yyyy, HH:mm')}
+                  {format(
+                    new Date(settlement.created_at),
+                    'dd MMM yyyy, HH:mm',
+                  )}
                 </div>
               )}
               {state === 'awaiting_payment' && settlement.due_at && (
@@ -129,8 +132,28 @@ function StatusTimeline({ settlement }: { settlement: Settlement }) {
   );
 }
 
-function BankInstructions({ settlement }: { settlement: Settlement }) {
+/** Icon button that copies `value` and flashes a check for a moment. */
+function CopyButton({ value, label }: { value: string; label: string }) {
   const { isCopied, copyToClipboard } = useCopyToClipboard();
+
+  return (
+    <Button
+      variant="outline"
+      size="sm"
+      mode="icon"
+      aria-label={label}
+      onClick={() => copyToClipboard(value)}
+    >
+      {isCopied ? <Check className="text-green-500" /> : <Copy />}
+    </Button>
+  );
+}
+
+function BankInstructions({ settlement }: { settlement: Settlement }) {
+  const instructions = settlement.payment_instructions;
+  const account = instructions.needs_configuration
+    ? null
+    : instructions.bank_account;
 
   return (
     <Card>
@@ -141,38 +164,82 @@ function BankInstructions({ settlement }: { settlement: Settlement }) {
         </CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
-        <div className="flex flex-col gap-1">
-          <span className="text-xs uppercase text-muted-foreground">
-            Amount to transfer
-          </span>
-          <MoneyText
-            laari={settlement.amount_due_laari}
-            className="text-2xl font-semibold text-mono"
-          />
-        </div>
-        <div className="flex flex-col gap-1">
-          <span className="text-xs uppercase text-muted-foreground">
-            Transfer reference — include it word for word
-          </span>
-          <div className="flex items-center gap-2">
-            <code className="text-sm font-semibold bg-muted rounded-md px-2.5 py-1.5 text-mono">
-              {settlement.reference}
-            </code>
-            <Button
-              variant="outline"
-              size="sm"
-              mode="icon"
-              aria-label="Copy reference"
-              onClick={() => copyToClipboard(settlement.reference)}
-            >
-              {isCopied ? <Check className="text-green-500" /> : <Copy />}
-            </Button>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="flex flex-col gap-1">
+            <span className="text-xs uppercase text-muted-foreground">
+              Amount to transfer
+            </span>
+            <MoneyText
+              laari={settlement.amount_due_laari}
+              className="text-2xl font-semibold text-mono"
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <span className="text-xs uppercase text-muted-foreground">
+              Transfer reference — include it word for word
+            </span>
+            <div className="flex items-center gap-2">
+              <code className="text-sm font-semibold bg-muted rounded-md px-2.5 py-1.5 text-mono">
+                {instructions.reference}
+              </code>
+              <CopyButton
+                value={instructions.reference}
+                label="Copy reference"
+              />
+            </div>
           </div>
         </div>
+
+        {account ? (
+          <div className="rounded-md border border-border p-4">
+            <div className="text-xs uppercase text-muted-foreground mb-3">
+              Transfer to
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="flex flex-col gap-1">
+                <span className="text-xs text-muted-foreground">Bank</span>
+                <span className="text-sm font-medium text-mono">
+                  {account.bank_name}
+                </span>
+              </div>
+              <div className="flex flex-col gap-1">
+                <span className="text-xs text-muted-foreground">
+                  Account number
+                </span>
+                <div className="flex items-center gap-2">
+                  <code
+                    dir="ltr"
+                    className="text-sm font-semibold bg-muted rounded-md px-2.5 py-1.5 text-mono"
+                  >
+                    {account.account_no}
+                  </code>
+                  <CopyButton
+                    value={account.account_no}
+                    label="Copy account number"
+                  />
+                </div>
+              </div>
+              <div className="flex flex-col gap-1">
+                <span className="text-xs text-muted-foreground">
+                  Account name
+                </span>
+                <span className="text-sm font-medium text-mono">
+                  {account.account_name}
+                </span>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="rounded-md border border-border bg-muted/50 p-4 text-sm text-secondary-foreground">
+            Transfer details are being finalised — contact Manfaa for the
+            account to pay into. Your settlement and its reference are
+            unaffected.
+          </div>
+        )}
+
         <p className="text-sm text-muted-foreground">
-          Transfer the exact amount by domestic bank transfer. We match
-          incoming payments by reference; your batch settles once the payment
-          is matched.
+          Transfer the exact amount by domestic bank transfer. We match incoming
+          payments by reference; your batch settles once the payment is matched.
         </p>
       </CardContent>
     </Card>
@@ -217,7 +284,8 @@ export default function SettlementDetailPage({
 
   const handleSubmit = () => {
     submitMutation.mutate(undefined, {
-      onSuccess: () => toast.success('Settlement submitted — see the payment instructions.'),
+      onSuccess: () =>
+        toast.success('Settlement submitted — see the payment instructions.'),
       onError: (error) =>
         toast.error(apiErrorMessage(error, 'Could not submit the settlement.')),
     });
@@ -309,9 +377,7 @@ export default function SettlementDetailPage({
 
           <Card>
             <CardHeader>
-              <CardTitle>
-                Lines ({settlement.lines?.length ?? 0})
-              </CardTitle>
+              <CardTitle>Lines ({settlement.lines?.length ?? 0})</CardTitle>
             </CardHeader>
             <CardTable>
               <div className="overflow-x-auto">

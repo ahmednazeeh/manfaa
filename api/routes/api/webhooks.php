@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Admin\WebhookEndpointController;
 use App\Http\Controllers\Merchant\RateController;
+use App\Http\Middleware\EnsureMerchantOwner;
 use Illuminate\Support\Facades\Route;
 
 // §9.3 outbound webhooks + the §7 rate-change rules.
@@ -18,5 +19,5 @@ Route::prefix('admin')->middleware('auth:admin')->group(function () {
 // (owner only — enforced in the controller, §7 increase/decrease semantics).
 Route::prefix('merchant')->middleware('auth:merchant')->group(function () {
     Route::get('rate', [RateController::class, 'show']);
-    Route::post('rate', [RateController::class, 'store']);
+    Route::post('rate', [RateController::class, 'store'])->middleware(EnsureMerchantOwner::class);
 });

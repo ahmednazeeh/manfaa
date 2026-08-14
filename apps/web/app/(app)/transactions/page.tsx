@@ -124,6 +124,12 @@ export default function TransactionsPage() {
             </>
           )}
         </Card>
+
+        {/* Missing-cashback guidance: merchant-mediated by design — the store
+            verifies the receipt and credits it manually (no self-serve claims). */}
+        <p className="text-xs text-muted-foreground">
+          {t('transactions.missingHint')}
+        </p>
       </div>
     </div>
   );

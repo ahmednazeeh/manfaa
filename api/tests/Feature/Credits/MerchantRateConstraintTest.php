@@ -11,8 +11,10 @@ use Tests\TestCase;
 uses(TestCase::class, RefreshDatabase::class);
 
 it('rejects a rate_bp outside the tier range through the check constraint', function (int $rateBp) {
-    // §4: 50–1000bp spans the fee tiers exactly — 49 or 1001 falls into no
-    // tier, so the schema refuses it before any resolution logic can run.
+    // §4: 50–2000bp spans the structural range exactly — 49 or 2001 falls
+    // into no tier, so the schema refuses it before any resolution logic
+    // can run. (Sellability above the active schedule's ceiling is a
+    // domain rule, not a schema rule — see CapWideningTest.)
     $merchant = Merchant::factory()->create();
 
     expect(fn () => DB::table('merchant_rates')->insert([
@@ -22,9 +24,9 @@ it('rejects a rate_bp outside the tier range through the check constraint', func
         'created_at' => now(),
         'updated_at' => now(),
     ]))->toThrow(QueryException::class);
-})->with([49, 0, -200, 1001, 10000]);
+})->with([49, 0, -200, 2001, 10000]);
 
-it('accepts the 50bp and 1000bp tier boundaries', function () {
+it('accepts the 50bp and 2000bp structural boundaries', function () {
     $merchant = Merchant::factory()->create();
 
     DB::table('merchant_rates')->insert([
@@ -38,7 +40,7 @@ it('accepts the 50bp and 1000bp tier boundaries', function () {
         ],
         [
             'merchant_id' => $merchant->id,
-            'rate_bp' => 1000,
+            'rate_bp' => 2000,
             'effective_from' => now(),
             'effective_to' => null,
             'created_at' => now(),

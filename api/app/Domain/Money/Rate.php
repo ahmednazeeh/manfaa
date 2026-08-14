@@ -16,13 +16,21 @@ final readonly class Rate
     private function __construct(private int $basisPoints) {}
 
     /**
-     * Customer cashback rates: 50–1000 bp inclusive, per the §4 tier table.
+     * The structural cashback ceiling (§4): 20%. NOTE — a rate is only
+     * SELLABLE up to the active fee tier schedule's own ceiling
+     * (TierScheduleService::activeCeiling()); this bound is the absolute
+     * limit no schedule may ever price beyond.
+     */
+    public const int MAX_CASHBACK_BP = 2000;
+
+    /**
+     * Customer cashback rates: 50–2000 bp inclusive, per the §4 tier table.
      */
     public static function cashback(int $basisPoints): self
     {
-        if ($basisPoints < 50 || $basisPoints > 1000) {
+        if ($basisPoints < 50 || $basisPoints > self::MAX_CASHBACK_BP) {
             throw new OutOfRangeException(
-                sprintf('Cashback rate must be 50-1000 basis points, got %d.', $basisPoints)
+                sprintf('Cashback rate must be 50-%d basis points, got %d.', self::MAX_CASHBACK_BP, $basisPoints)
             );
         }
 
@@ -30,13 +38,17 @@ final readonly class Rate
     }
 
     /**
-     * Platform fee rates: exactly one of the four tier values.
+     * Platform fee rates: any positive integer up to 2000 bp. Historically
+     * exactly {25, 50, 75, 100} (the static §4 tier map); admin-managed fee
+     * tier schedules make arbitrary integer fees legal — bounded above by
+     * the cashback ceiling, since a schedule never lets fee_bp exceed the
+     * cashback rate it applies to.
      */
     public static function fee(int $basisPoints): self
     {
-        if (! in_array($basisPoints, [25, 50, 75, 100], true)) {
+        if ($basisPoints < 1 || $basisPoints > self::MAX_CASHBACK_BP) {
             throw new InvalidArgumentException(
-                sprintf('Fee rate must be one of 25, 50, 75, 100 basis points, got %d.', $basisPoints)
+                sprintf('Fee rate must be 1-%d basis points, got %d.', self::MAX_CASHBACK_BP, $basisPoints)
             );
         }
 

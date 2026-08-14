@@ -3,6 +3,7 @@ import {
   bootstrapCsrf,
   dataWrapped,
   paginated,
+  RateDescriptionSchema,
   TransactionSchema,
   type TransactionState,
 } from '@manfaa/api-client';
@@ -52,6 +53,95 @@ export async function fetchMe(signal?: AbortSignal): Promise<MerchantMe> {
     signal,
   });
   return response.data;
+}
+
+// ---------------------------------------------------------------------------
+// GET /api/merchant/rate
+// ---------------------------------------------------------------------------
+
+/**
+ * One merchant_rates window with its §4 cost picture (integer basis
+ * points). The fee fields are null in exactly one degenerate case: a legacy
+ * "stranded" rate the fee schedule in force does not price — the panel must
+ * still render (it is the merchant's self-rescue path), showing the fee as
+ * unknown.
+ */
+export const RateWindowSchema = RateDescriptionSchema.extend({
+  fee_bp: z.number().int().nullable(),
+  all_in_bp: z.number().int().nullable(),
+  effective_from: z.string(),
+  effective_to: z.string().nullable(),
+});
+export type RateWindow = z.infer<typeof RateWindowSchema>;
+
+/**
+ * The standing rate as the panel sees it: the currently effective window
+ * plus any scheduled (not-yet-applied) change. Either side is null when no
+ * such window exists.
+ */
+export const MerchantRateSchema = z.object({
+  current: RateWindowSchema.nullable(),
+  pending: RateWindowSchema.nullable(),
+});
+export type MerchantRate = z.infer<typeof MerchantRateSchema>;
+
+const RateResponseSchema = dataWrapped(MerchantRateSchema);
+
+/** GET /api/merchant/rate — readable by any merchant user (owner or staff). */
+export async function fetchRate(signal?: AbortSignal): Promise<MerchantRate> {
+  const response = await apiFetch('/api/merchant/rate', RateResponseSchema, {
+    signal,
+  });
+  return response.data;
+}
+
+// ---------------------------------------------------------------------------
+// POST /api/merchant/rate (owner only)
+// ---------------------------------------------------------------------------
+
+/**
+ * The §7 change summary returned alongside the refreshed rate state: both
+ * sides priced under the fee tier schedule in force at effective_at, so the
+ * tier-cliff warning fires on the ACTUAL fee boundaries. `previous` echoes
+ * the new rate when the merchant had no standing rate before.
+ */
+export const RateChangeSummarySchema = z.object({
+  /**
+   * The outgoing side carries null fee fields when that rate was never
+   * priced by the schedule at effective_at (a stranded rate being rescued
+   * by this very change).
+   */
+  previous: RateDescriptionSchema.extend({
+    fee_bp: z.number().int().nullable(),
+    all_in_bp: z.number().int().nullable(),
+  }),
+  new: RateDescriptionSchema,
+  /** ISO 8601 in the business timezone. */
+  effective_at: z.string(),
+  /** §7: increases apply immediately, decreases at next business midnight. */
+  applies: z.enum(['immediately', 'next_business_midnight']),
+  tier_changed: z.boolean(),
+});
+export type RateChangeSummary = z.infer<typeof RateChangeSummarySchema>;
+
+export const ChangeRateResponseSchema = z.object({
+  data: MerchantRateSchema,
+  change: RateChangeSummarySchema,
+});
+export type ChangeRateResponse = z.infer<typeof ChangeRateResponseSchema>;
+
+/**
+ * POST /api/merchant/rate — owner only (403 otherwise). The rate is sent as
+ * integer basis points; the panel converts the merchant's exact-2dp percent
+ * input with the shared parsePercentToBp helper (string decomposition, no
+ * floats). A structurally legal rate the ACTIVE fee tier schedule does not
+ * price answers 422 `code: rate_not_priced`.
+ */
+export function changeRate(rateBp: number): Promise<ChangeRateResponse> {
+  return apiFetch('/api/merchant/rate', ChangeRateResponseSchema, {
+    method: 'POST',
+    body: { rate_bp: rateBp },
+  });
 }
 
 // ---------------------------------------------------------------------------

@@ -27,7 +27,15 @@ class PromotionResource extends JsonResource
         $timezone = (string) config('app.business_timezone', 'Indian/Maldives');
         $now = CarbonImmutable::now('UTC');
 
-        return RateResource::describeBp($this->rate_bp) + [
+        // Fee priced under the schedule in force when the promotion runs: at
+        // its start for a future window, at now once it has started. Lenient
+        // (null fee fields) so a stale DRAFT whose rate that schedule no
+        // longer prices — drafts never block an admin schedule change —
+        // cannot 500 the whole listing; the merchant must still be able to
+        // see and cancel it. Publish refuses such a draft outright.
+        $feeInstant = $this->starts_at->utc()->isAfter($now) ? $this->starts_at->utc() : $now;
+
+        return RateResource::tryDescribeBp($this->rate_bp, $feeInstant) + [
             'id' => $this->id,
             'merchant_id' => $this->merchant_id,
             'branch_id' => $this->branch_id,

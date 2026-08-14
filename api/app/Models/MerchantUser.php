@@ -11,7 +11,7 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 
-#[Fillable(['merchant_id', 'name', 'email', 'password', 'role'])]
+#[Fillable(['merchant_id', 'name', 'email', 'password', 'role', 'is_active'])]
 #[Hidden(['password', 'remember_token'])]
 class MerchantUser extends Authenticatable
 {
@@ -26,6 +26,7 @@ class MerchantUser extends Authenticatable
         return [
             'merchant_id' => 'integer',
             'password' => 'hashed',
+            'is_active' => 'boolean',
         ];
     }
 

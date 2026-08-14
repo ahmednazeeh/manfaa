@@ -22,14 +22,19 @@ use Illuminate\Support\Facades\DB;
  */
 final class EligibilityQuery
 {
-    /** MVR 100 (§13). */
+    /** MVR 100 (§13) — the default when no explicit minimum is passed. */
     public const int MINIMUM_PAYOUT_LAARI = 10000;
 
     /**
+     * $minimumLaari lets PayoutBatchBuilder pass the admin-managed
+     * min_payout_laari setting; null keeps the §13 default.
+     *
      * @return list<EligibleCustomer>
      */
-    public function eligibleAt(CarbonImmutable $cutoff): array
+    public function eligibleAt(CarbonImmutable $cutoff, ?int $minimumLaari = null): array
     {
+        $minimumLaari ??= self::MINIMUM_PAYOUT_LAARI;
+
         $rows = DB::table('transactions')
             ->select('id', 'customer_id', 'cashback_laari')
             ->where('state', TransactionState::Confirmed->value)
@@ -56,7 +61,7 @@ final class EligibilityQuery
         $eligible = [];
 
         foreach ($amounts as $customerId => $amountLaari) {
-            if ($amountLaari >= self::MINIMUM_PAYOUT_LAARI) {
+            if ($amountLaari >= $minimumLaari) {
                 $eligible[] = new EligibleCustomer($customerId, $amountLaari, $transactionIds[$customerId]);
             }
         }
