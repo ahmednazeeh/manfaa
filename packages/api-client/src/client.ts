@@ -39,7 +39,7 @@ export async function bootstrapCsrf(): Promise<void> {
 
 export interface ApiFetchOptions {
   method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
-  /** JSON-serialised into the request body. */
+  /** JSON-serialised into the request body; FormData is sent as-is. */
   body?: unknown;
   headers?: Record<string, string>;
   signal?: AbortSignal;
@@ -56,6 +56,7 @@ export async function apiFetch<Schema extends z.ZodType>(
 ): Promise<z.output<Schema>> {
   const { method = 'GET', body, headers = {}, signal } = options;
   const xsrfToken = readCookie('XSRF-TOKEN');
+  const isFormData = typeof FormData !== 'undefined' && body instanceof FormData;
 
   const response = await fetch(`${apiBaseUrl()}${path}`, {
     method,
@@ -63,11 +64,15 @@ export async function apiFetch<Schema extends z.ZodType>(
     signal,
     headers: {
       Accept: 'application/json',
-      ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+      // FormData sets its own multipart boundary Content-Type.
+      ...(body !== undefined && !isFormData
+        ? { 'Content-Type': 'application/json' }
+        : {}),
       ...(xsrfToken !== null ? { 'X-XSRF-TOKEN': xsrfToken } : {}),
       ...headers,
     },
-    body: body !== undefined ? JSON.stringify(body) : undefined,
+    body:
+      body === undefined ? undefined : isFormData ? body : JSON.stringify(body),
   });
 
   const payload =
@@ -79,4 +84,34 @@ export async function apiFetch<Schema extends z.ZodType>(
     throw new ApiError(response.status, payload);
   }
   return schema.parse(payload);
+}
+
+/**
+ * Like apiFetch but for endpoints returning a non-JSON body (e.g. a CSV
+ * attachment): performs the credentialed request — echoing the Sanctum CSRF
+ * token so state-mutating methods pass verification — and returns the raw
+ * response text. Errors still arrive as JSON and are thrown as ApiError.
+ */
+export async function apiFetchText(
+  path: string,
+  options: Omit<ApiFetchOptions, 'body'> = {},
+): Promise<string> {
+  const { method = 'GET', headers = {}, signal } = options;
+  const xsrfToken = readCookie('XSRF-TOKEN');
+
+  const response = await fetch(`${apiBaseUrl()}${path}`, {
+    method,
+    credentials: 'include',
+    signal,
+    headers: {
+      ...(xsrfToken !== null ? { 'X-XSRF-TOKEN': xsrfToken } : {}),
+      ...headers,
+    },
+  });
+
+  if (!response.ok) {
+    const payload = await response.json().catch(() => undefined);
+    throw new ApiError(response.status, payload);
+  }
+  return response.text();
 }

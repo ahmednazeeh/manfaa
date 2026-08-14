@@ -38,6 +38,7 @@ class Transaction extends Model
             'received_at' => 'immutable_datetime',
             'clock_start_at' => 'immutable_datetime',
             'due_at' => 'immutable_datetime',
+            'confirmed_at' => 'immutable_datetime',
         ];
     }
 

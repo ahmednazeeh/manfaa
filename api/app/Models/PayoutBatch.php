@@ -23,14 +23,23 @@ class PayoutBatch extends Model
             'state' => PayoutBatchState::class,
             'total_laari' => 'integer',
             'customer_count' => 'integer',
+            'created_by' => 'integer',
             'approved_by_first' => 'integer',
             'approved_by_second' => 'integer',
+            'first_approved_at' => 'immutable_datetime',
+            'second_approved_at' => 'immutable_datetime',
+            'exported_at' => 'immutable_datetime',
         ];
     }
 
     public function items(): HasMany
     {
         return $this->hasMany(PayoutItem::class, 'batch_id');
+    }
+
+    public function creator(): BelongsTo
+    {
+        return $this->belongsTo(AdminUser::class, 'created_by');
     }
 
     public function firstApprover(): BelongsTo

@@ -154,6 +154,25 @@ final readonly class Postings
     }
 
     /**
+     * §7 forgiveness rule: when the remaining unpaid balance on a settlement
+     * batch is under MVR 1 (< 100 laari), the platform absorbs it — the
+     * shortfall reduces the receivable directly (DR Platform-Funded Rewards
+     * Expense / CR Merchant Receivable) so the batch nets to zero and every
+     * customer's cashback confirms in full. Never bad debt: that account is
+     * reserved for the 90-day merchant-default write-off.
+     */
+    public function forgiveSettlementShortfall(
+        int $shortfallLaari,
+        string $referenceType = 'settlement',
+        int $referenceId = 0,
+    ): int {
+        return $this->poster->post($referenceType, $referenceId, 'Settlement shortfall forgiven', [
+            $this->dr(AccountCode::PlatformFundedRewards, $shortfallLaari),
+            $this->cr(AccountCode::MerchantReceivable, $shortfallLaari),
+        ]);
+    }
+
+    /**
      * Referral and other platform-funded rewards bypass the merchant
      * receivable entirely.
      */

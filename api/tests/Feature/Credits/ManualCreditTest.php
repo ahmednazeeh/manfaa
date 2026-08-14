@@ -53,8 +53,8 @@ function manualCreditPayload(array $overrides = []): array
 
 it('credits MVR 1,250 at 200bp: cashback 2500, fee 938, awaiting validation, balanced accrual', function () {
     // The true integers, from the §4 rule itself.
-    expect(intdiv(125000 * 200 + 5000, 10000))->toBe(2500)
-        ->and(intdiv(125000 * 75 + 5000, 10000))->toBe(938);
+    expect(intdiv(125000 * 200 + 9999, 10000))->toBe(2500)
+        ->and(intdiv(125000 * 75 + 9999, 10000))->toBe(938);
 
     $this->postJson('/api/merchant/credits', manualCreditPayload())
         ->assertCreated()
@@ -112,9 +112,10 @@ it('records a below-minimum credit with zero cashback and no journal', function 
         ->and(Transaction::query()->sole()->events()->count())->toBe(1);
 });
 
-it('credits a row whose fee rounds to zero without a zero-amount journal line', function () {
-    // At 200bp/75bp an eligible of 66 rounds to cashback 1, fee 0 (§4) —
-    // legal once the merchant's minimum allows it, and it must still accrue.
+it('ceils tiny credits to at least one laari of cashback and fee', function () {
+    // Ceiling rule: 66 @ 200bp -> cashback ceil(1.32) = 2, fee ceil(0.495) = 1.
+    // No nonzero eligible ever rounds to a zero reward, so every accrual above
+    // the minimum posts a full journal.
     $this->merchant->update(['min_eligible_laari' => 50]);
 
     $this->postJson('/api/merchant/credits', manualCreditPayload([
@@ -123,16 +124,17 @@ it('credits a row whose fee rounds to zero without a zero-amount journal line', 
     ]))
         ->assertCreated()
         ->assertJsonPath('data.state', 'awaiting_validation')
-        ->assertJsonPath('data.cashback_laari', 1)
-        ->assertJsonPath('data.fee_laari', 0);
+        ->assertJsonPath('data.cashback_laari', 2)
+        ->assertJsonPath('data.fee_laari', 1);
 
     expect(DB::table('ledger_journals')->count())->toBe(1)
-        ->and(DB::table('ledger_entries')->count())->toBe(2)
+        ->and(DB::table('ledger_entries')->count())->toBe(3)
         ->and((new Balances)->journalsAllBalance())->toBeTrue();
 });
 
-it('records a zero-cashback credit above the minimum without posting an empty journal', function () {
-    // Eligible 24 at 200bp rounds everything to zero — nothing accrues.
+it('only produces zero cashback via the below-minimum path, never via rounding', function () {
+    // 24 @ 200bp under ceiling is cashback 1 / fee 1 — rounding can no longer
+    // zero a reward. Below the merchant minimum stays the one zero path.
     $this->merchant->update(['min_eligible_laari' => 10]);
 
     $this->postJson('/api/merchant/credits', manualCreditPayload([
@@ -140,11 +142,12 @@ it('records a zero-cashback credit above the minimum without posting an empty jo
         'sale_amount' => 24,
     ]))
         ->assertCreated()
-        ->assertJsonPath('data.cashback_laari', 0)
-        ->assertJsonPath('data.fee_laari', 0);
+        ->assertJsonPath('data.cashback_laari', 1)
+        ->assertJsonPath('data.fee_laari', 1);
 
-    expect(DB::table('ledger_journals')->count())->toBe(0)
-        ->and(Transaction::query()->count())->toBe(1);
+    expect(DB::table('ledger_journals')->count())->toBe(1)
+        ->and(Transaction::query()->count())->toBe(1)
+        ->and((new Balances)->journalsAllBalance())->toBeTrue();
 });
 
 it('rejects an occurred_at without an explicit UTC offset', function () {
@@ -215,8 +218,8 @@ it('freezes the rate effective at occurred_at, not the current rate', function (
         ->assertCreated()
         ->assertJsonPath('data.rate_bp', 100)
         ->assertJsonPath('data.fee_bp', 50)
-        ->assertJsonPath('data.cashback_laari', intdiv(125000 * 100 + 5000, 10000))
-        ->assertJsonPath('data.fee_laari', intdiv(125000 * 50 + 5000, 10000));
+        ->assertJsonPath('data.cashback_laari', intdiv(125000 * 100 + 9999, 10000))
+        ->assertJsonPath('data.fee_laari', intdiv(125000 * 50 + 9999, 10000));
 
     expect(Transaction::query()->sole()->rate_bp)->toBe(100);
 });

@@ -1,12 +1,13 @@
 import { ReactNode, Suspense } from 'react';
-import { Inter } from 'next/font/google';
-import { cn } from '@/lib/utils';
-import { TooltipProvider } from '@/components/ui/tooltip';
-import { Toaster } from '@/components/ui/sonner';
 import { Metadata } from 'next';
+import { Inter } from 'next/font/google';
 import { ThemeProvider } from 'next-themes';
-
+import { cn } from '@/lib/utils';
+import { Toaster } from '@/components/ui/sonner';
+import { TooltipProvider } from '@/components/ui/tooltip';
+import { QueryProvider } from '@/components/providers';
 import '@/styles/globals.css';
+
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
@@ -37,11 +38,13 @@ export default async function RootLayout({
           disableTransitionOnChange
           enableColorScheme
         >
-          <TooltipProvider delayDuration={0}>
-            <Suspense>{children}</Suspense>
-            <Toaster />
-          </TooltipProvider>
-        </ThemeProvider>       
+          <QueryProvider>
+            <TooltipProvider delayDuration={0}>
+              <Suspense>{children}</Suspense>
+              <Toaster />
+            </TooltipProvider>
+          </QueryProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

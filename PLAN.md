@@ -107,11 +107,14 @@ The three apps share `packages/ui` and `packages/api-client`. Only `apps/admin` 
 ### Computation
 
 ```
-cashback_laari = intdiv(eligible_laari * rate_bp + 5000, 10000)
-fee_laari      = intdiv(eligible_laari * fee_bp  + 5000, 10000)
+cashback_laari = intdiv(eligible_laari * rate_bp + 9999, 10000)
+fee_laari      = intdiv(eligible_laari * fee_bp  + 9999, 10000)
 ```
 
-Integer division with `+ 5000` gives round-half-up without touching a float.
+Integer division with `+ 9999` gives **ceiling** — every fractional laari rounds
+UP to the next laari. Customer-favourable, and it eliminates fractional edge
+cases entirely: any nonzero eligible amount yields at least 1 laari of cashback
+and 1 laari of fee.
 
 **Round at the line, then sum. Never recompute against a batch aggregate.**
 
@@ -135,7 +138,7 @@ fee_laari      = intdiv(eligible_laari * fee_bp  + 5000, 10000)
 
 // when a promotional cap clips the reward, the fee follows the reward granted
 cashback_laari = min(cashback_laari, cap_remaining_laari)
-fee_laari      = intdiv(cashback_laari * fee_bp + intdiv(rate_bp, 2), rate_bp)
+fee_laari      = intdiv(cashback_laari * fee_bp + rate_bp - 1, rate_bp)   // ceiling
 ```
 
 Also needed beyond the promotional cap: per-transaction maximum and per-customer-per-day maximum on the standing rate.
@@ -254,8 +257,8 @@ with a `partially_failed` branch.
 ## 7. Settlement rules
 
 - **Allocation: oldest-first, fully.** A partial payment confirms whole transactions in age order, leaving the remainder Pending. Never pro-rata — it produces half-confirmed rewards and reintroduces rounding residue.
-- **Overpayment** becomes a merchant credit applied to the next batch. Never an automatic refund.
-- **Tolerance band:** auto-match within ±MVR 1 (`100` laari).
+- **Overpayment** becomes a merchant credit applied to the next batch (wallet balance). Never an automatic refund.
+- **No tolerance band.** A payment either covers lines fully (oldest-first) or the uncovered lines stay Pending. Exception — **the forgiveness rule:** if the remaining unpaid balance on a batch is under MVR 1 (`< 100` laari), forgive it: allocate all remaining lines, book the shortfall as DR Platform-funded rewards / CR Merchant receivable. The customer's cashback confirms in full; the platform absorbs the sub-laari gap. Never book settlement shortfalls to bad debt — that account is reserved for the 90-day merchant-default write-off.
 - **Batch due date** = the earliest line's due date, not the batch creation date.
 - **Locked batches:** a reversal POSTed against a line inside a non-draft settlement cannot reverse it. It becomes a credit adjustment on the next batch, and the API returns a distinct error code so vendors can tell it apart from a failure.
 - **Wallet settlement runs the same path** — same states, same ledger entries, only the funding source differs. Do not build a second code path.
@@ -292,6 +295,7 @@ Every event below posts one balanced journal. This table is the specification �
 | Reversal (pre-confirmation) | Customer Cashback Liability, Platform Fee Revenue, Fee GST Payable | Merchant Receivable |
 | Write-off (90d past due) | Bad Debt Expense (fee + gst), Customer Cashback Liability (cashback) | Merchant Receivable |
 | Platform-funded reward (referral) | Platform-Funded Rewards Expense | Customer Cashback Liability |
+| Settlement shortfall forgiven (< MVR 1) | Platform-Funded Rewards Expense | Merchant Receivable |
 
 Notes:
 - Revenue is recognised on **accrual**, matching the receivable, with collection risk handled through bad debt. Recognising at settlement instead would leave the accrual entry unbalanced.

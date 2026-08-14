@@ -2,8 +2,10 @@
 
 namespace App\Models;
 
+use App\Domain\Payout\PayoutItemState;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class PayoutItem extends Model
 {
@@ -18,6 +20,7 @@ class PayoutItem extends Model
             'batch_id' => 'integer',
             'customer_id' => 'integer',
             'amount_laari' => 'integer',
+            'state' => PayoutItemState::class,
         ];
     }
 
@@ -29,5 +32,10 @@ class PayoutItem extends Model
     public function customer(): BelongsTo
     {
         return $this->belongsTo(Customer::class);
+    }
+
+    public function transactions(): HasMany
+    {
+        return $this->hasMany(Transaction::class, 'payout_item_id');
     }
 }

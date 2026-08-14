@@ -121,8 +121,8 @@ it('reconciles a few hundred seeded transactions to the laari', function () {
 
         expect($transaction->rate_bp)->toBe($rateBp)
             ->and($transaction->fee_bp)->toBe($feeBp)
-            ->and($transaction->cashback_laari)->toBe($belowMinimum ? 0 : intdiv($eligible * $rateBp + 5000, 10000))
-            ->and($transaction->fee_laari)->toBe($belowMinimum ? 0 : intdiv($eligible * $feeBp + 5000, 10000))
+            ->and($transaction->cashback_laari)->toBe($belowMinimum ? 0 : intdiv($eligible * $rateBp + 9999, 10000))
+            ->and($transaction->fee_laari)->toBe($belowMinimum ? 0 : intdiv($eligible * $feeBp + 9999, 10000))
             ->and($transaction->fee_gst_laari)->toBe(0)
             ->and($transaction->state)->toBe(
                 $belowMinimum ? TransactionState::Tracked : TransactionState::AwaitingValidation

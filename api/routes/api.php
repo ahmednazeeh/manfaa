@@ -37,3 +37,8 @@ Route::prefix('merchant')->middleware('auth:merchant')->group(function () {
     // Manual credits are the exposed fraud surface (§11) — throttled per merchant user.
     Route::post('credits', [CreditController::class, 'store'])->middleware('throttle:30,1');
 });
+
+// Per-domain route files — each domain owns exactly one file in routes/api/.
+foreach (glob(__DIR__.'/api/*.php') as $domainRoutes) {
+    require $domainRoutes;
+}

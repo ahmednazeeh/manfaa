@@ -51,13 +51,13 @@ it('reproduces the §4 fixture line by line and sums the batch from the lines', 
         ->and($dueSum->formatMvr())->toBe('118.25');
 });
 
-it('rounds 33300 laari at 75 bp half-up to 250', function () {
+it('ceils 33300 laari at 75 bp to 250', function () {
     // 33300 * 75 = 2,497,500; + 5000 = 2,502,500; intdiv 10000 = 250.
-    // (MVR 333 at 0.75% is MVR 2.4975 -> rounds half-up to MVR 2.50.)
+    // (MVR 333 at 0.75% is MVR 2.4975 -> 2.4975 ceils to MVR 2.50.)
     $result = (new CashbackCalculator)->calculate(Laari::of(33300), Rate::cashback(75));
 
     expect($result->feeBp)->toBe(25)
-        ->and($result->cashbackLaari)->toBe(intdiv(33300 * 75 + 5000, 10000))
+        ->and($result->cashbackLaari)->toBe(intdiv(33300 * 75 + 9999, 10000))
         ->and($result->cashbackLaari)->toBe(250);
 });
 
@@ -77,8 +77,8 @@ it('rounds products ending in exactly .5 laari upward', function (int $eligible,
     [1250, 500, 63],   // 62.5 -> 63
 ]);
 
-it('rounds the fee half-up at exactly .5 laari', function () {
-    // Eligible 100 laari at 100 bp -> fee tier 50 bp: 100 * 50 = 5000 -> 0.5 -> 1.
+it('rounds the fee up at exactly .5 laari', function () {
+    // Eligible 100 laari at 100 bp -> fee tier 50 bp: 100 * 50 = 5000 -> 0.5 -> ceil 1.
     $result = (new CashbackCalculator)->calculate(Laari::of(100), Rate::cashback(100));
 
     expect($result->feeBp)->toBe(50)
@@ -86,13 +86,31 @@ it('rounds the fee half-up at exactly .5 laari', function () {
         ->and($result->cashbackLaari)->toBe(1); // 100 * 100 = 10000 -> exactly 1.0
 });
 
-it('rounds just below and just above the half boundary correctly', function () {
+it('always rounds any fractional laari up to the next laari', function () {
     $calculator = new CashbackCalculator;
 
-    // 24 * 200 = 4800 -> 0.48 rounds down; 26 * 200 = 5200 -> 0.52 rounds up.
-    expect($calculator->calculate(Laari::of(24), Rate::cashback(200))->cashbackLaari)->toBe(0)
-        ->and($calculator->calculate(Laari::of(26), Rate::cashback(200))->cashbackLaari)->toBe(1);
+    // Ceiling: 24 * 200 = 4800 -> 0.48 -> 1; 26 * 200 = 5200 -> 0.52 -> 1.
+    expect($calculator->calculate(Laari::of(24), Rate::cashback(200))->cashbackLaari)->toBe(1)
+        ->and($calculator->calculate(Laari::of(26), Rate::cashback(200))->cashbackLaari)->toBe(1)
+        // Exact products stay exact: 50 * 200 = 10000 -> exactly 1.
+        ->and($calculator->calculate(Laari::of(50), Rate::cashback(200))->cashbackLaari)->toBe(1);
 });
+
+it('produces at least one laari of cashback and fee for any nonzero eligible amount', function () {
+    // A ceiling consequence worth pinning: no nonzero sale ever rounds to zero reward.
+    $result = (new CashbackCalculator)->calculate(Laari::of(1), Rate::cashback(50));
+
+    expect($result->cashbackLaari)->toBe(1)
+        ->and($result->feeLaari)->toBe(1);
+});
+
+it('rejects a negative eligible amount', function () {
+    (new CashbackCalculator)->calculate(Laari::of(-100), Rate::cashback(200));
+})->throws(InvalidArgumentException::class);
+
+it('rejects a negative cap remaining', function () {
+    (new CashbackCalculator)->calculateCapped(Laari::of(100000), Rate::cashback(200), Laari::of(-1));
+})->throws(InvalidArgumentException::class);
 
 it('clips cashback to the cap and derives the fee from the granted reward', function () {
     $calculator = new CashbackCalculator;
@@ -138,9 +156,9 @@ it('preserves the fee-to-cashback ratio under capping at 200bp/75bp', function (
     foreach (range(1, 2000) as $cap) {
         $result = $calculator->calculateCapped($eligible, $rate, Laari::of($cap));
 
-        // Expected in integer math: round-half-up of cashback * 0.375
-        // = intdiv(cashback * 375 + 500, 1000).
-        $expectedFee = intdiv($cap * 375 + 500, 1000);
+        // Expected in integer math: ceiling of cashback * 0.375
+        // = intdiv(cashback * 375 + 999, 1000).
+        $expectedFee = intdiv($cap * 375 + 999, 1000);
 
         expect($result->cashbackLaari)->toBe($cap)
             ->and($result->feeLaari)->toBe($expectedFee, "fee ratio broken at cashback {$cap}");

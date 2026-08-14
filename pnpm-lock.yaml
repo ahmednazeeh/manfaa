@@ -654,6 +654,9 @@ importers:
       '@manfaa/config':
         specifier: workspace:*
         version: link:../config
+      '@types/node':
+        specifier: ^24.10.2
+        version: 24.13.3
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
