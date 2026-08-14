@@ -84,11 +84,12 @@ class TransactionsController extends V1Controller
         } catch (NoEffectiveRateException) {
             return $this->error(422, 'no_effective_rate', 'No cashback rate is effective at occurred_at — contact the platform.');
         } catch (MerchantNotActiveException) {
-            // Closed merchant — the credential should already be revoked;
-            // there is no registry code for this, so refuse like a missing
-            // grant rather than record a sale for a merchant that no
-            // longer exists commercially.
-            return $this->error(403, 'forbidden_ability', 'This merchant account is closed.');
+            // Closed or never-approved merchant (draft / pending_review /
+            // rejected) — the credential should not exist or should already
+            // be revoked; there is no registry code for this, so refuse like
+            // a missing grant rather than record a sale for a merchant that
+            // is not trading on the platform.
+            return $this->error(403, 'forbidden_ability', 'This merchant account is not active on the platform.');
         } catch (DuplicateInvoiceException $exception) {
             $existing = Transaction::query()
                 ->where('merchant_id', $merchant->id)

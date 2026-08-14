@@ -39,9 +39,9 @@ final class DiscoveryService
 {
     public const int CACHE_SECONDS = 60;
 
-    public const string CACHE_KEY = 'discovery:entries:v2';
+    public const string CACHE_KEY = 'discovery:entries:v3';
 
-    public const string STORE_CACHE_PREFIX = 'discovery:store:v2:';
+    public const string STORE_CACHE_PREFIX = 'discovery:store:v3:';
 
     public const int DIRECTORY_DEFAULT_PER_PAGE = 12;
 
@@ -127,7 +127,7 @@ final class DiscoveryService
             'featured' => $present(array_values(array_filter($entries, fn (array $e): bool => $e['featured']))),
             'increased' => $present(array_values(array_filter($entries, fn (array $e): bool => $e['rate_bp'] > $e['standing_rate_bp']))),
             'nearby' => $present($nearby),
-            'online' => $present(array_values(array_filter($entries, fn (array $e): bool => $e['is_online']))),
+            'online' => $present(array_values(array_filter($entries, fn (array $e): bool => in_array($e['channel'], ['online', 'both'], true)))),
         ];
     }
 
@@ -221,7 +221,7 @@ final class DiscoveryService
 
     /**
      * The public contract of a DIRECTORY entry — the discovery entry shape
-     * minus distance (the directory is not geographic) plus is_online.
+     * minus distance (the directory is not geographic).
      *
      * @param  array<string, mixed>  $entry
      * @return array<string, mixed>
@@ -233,7 +233,7 @@ final class DiscoveryService
             'slug' => $entry['slug'],
             'category' => $entry['category'],
             'logo_url' => $entry['logo_url'],
-            'is_online' => $entry['is_online'],
+            'channel' => $entry['channel'],
             'rate_bp' => $entry['rate_bp'],
             'standing_rate_bp' => $entry['standing_rate_bp'],
             'promo_ends_at' => $entry['promo_ends_at'],
@@ -254,6 +254,7 @@ final class DiscoveryService
             'slug' => $entry['slug'],
             'category' => $entry['category'],
             'logo_url' => $entry['logo_url'],
+            'channel' => $entry['channel'],
             'rate_bp' => $entry['rate_bp'],
             'standing_rate_bp' => $entry['standing_rate_bp'],
             'promo_ends_at' => $entry['promo_ends_at'],
@@ -280,7 +281,7 @@ final class DiscoveryService
             ))
             ->when($category !== null, fn ($query) => $query->where('category', $category))
             ->orderBy('name')
-            ->get(['id', 'name', 'slug', 'category', 'logo_path', 'featured', 'is_online']);
+            ->get(['id', 'name', 'slug', 'category', 'logo_path', 'featured', 'channel']);
 
         if ($merchants->isEmpty()) {
             return [];
@@ -344,7 +345,7 @@ final class DiscoveryService
                 'standing_rate_bp' => $standing->rate_bp,
                 'promo_ends_at' => $boosted ? $promo->ends_at->toIso8601String() : null,
                 'featured' => (bool) $merchant->featured,
-                'is_online' => (bool) $merchant->is_online,
+                'channel' => $merchant->channel,
                 'branches' => $branches->get($merchant->id, collect())
                     ->map(fn (MerchantBranch $b): array => [(float) $b->lat, (float) $b->lng])
                     ->all(),
@@ -364,7 +365,7 @@ final class DiscoveryService
         $merchant = Merchant::query()
             ->where('status', 'active')
             ->where('slug', $slug)
-            ->first(['id', 'name', 'slug', 'category', 'logo_path', 'featured', 'is_online', 'eligibility_basis', 'created_at']);
+            ->first(['id', 'name', 'slug', 'category', 'logo_path', 'featured', 'channel', 'eligibility_basis', 'created_at']);
 
         if ($merchant === null) {
             return null;
@@ -409,7 +410,7 @@ final class DiscoveryService
             'slug' => $merchant->slug,
             'category' => $merchant->category,
             'logo_url' => $this->logoUrl($merchant->logo_path),
-            'is_online' => (bool) $merchant->is_online,
+            'channel' => $merchant->channel,
             'featured' => (bool) $merchant->featured,
             'rate_bp' => $promo?->rate_bp ?? $standing->rate_bp,
             'standing_rate_bp' => $standing->rate_bp,

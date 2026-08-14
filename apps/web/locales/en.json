@@ -195,7 +195,21 @@
     "nearbyAskLocation": "Share your location to see stores near you.",
     "sectionEmpty": "Nothing here right now — check back soon.",
     "empty": "No stores are live yet — check back soon.",
-    "viewAll": "View all"
+    "viewAll": "View all",
+    "channelInStore": "In Store",
+    "channelOnline": "Online",
+    "channelBoth": "In Store & Online"
+  },
+  "categories": {
+    "grocery": "Grocery",
+    "restaurant": "Restaurant",
+    "cafe": "Café",
+    "fashion": "Fashion",
+    "electronics": "Electronics",
+    "pharmacy": "Pharmacy",
+    "beauty": "Beauty",
+    "services": "Services",
+    "other": "Other"
   },
   "stores": {
     "title": "All stores",
@@ -213,7 +227,6 @@
   "store": {
     "backToDiscover": "Back to Discover",
     "featuredBadge": "Featured",
-    "onlineBadge": "Online store",
     "joinedLabel": "Joined {{date}}",
     "minPurchase": "On purchases of {{amount}} or more",
     "howToEarnTitle": "How to earn here",
@@ -244,6 +257,7 @@
   },
   "landing": {
     "dashboard": "Dashboard",
+    "openDashboard": "Open dashboard",
     "createAccount": "Create account",
     "heroTitle": "Real cashback in MVR at Maldivian stores",
     "heroSubtitle": "Join free with your phone number. When a store confirms your purchase, you'll earn a percentage back in MVR — paid to your bank account monthly.",
@@ -265,6 +279,7 @@
     "marketplaceBody": "Shop products from Maldivian sellers with cashback built in — one basket, many sellers, the same Manfaa account.",
     "marketplaceCta": "Get notified",
     "marketplaceCtaHint": "Create a free account and we'll let you know when it opens.",
+    "marketplaceSignedInHint": "You're all set — we'll let you know when it opens.",
     "marketplaceFooter": "Marketplace (coming soon)"
   }
 }

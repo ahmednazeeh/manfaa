@@ -1,11 +1,13 @@
 'use client';
 
-import { ReactNode } from 'react';
+import { ComponentType, ReactNode } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { listStoreReviews } from '@manfaa/api-client';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Banknote,
+  ClipboardCheck,
   CreditCard,
   Landmark,
   LogOut,
@@ -14,6 +16,7 @@ import {
   ShieldCheck,
   SlidersHorizontal,
   Store,
+  Tags,
   type LucideIcon,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -31,11 +34,45 @@ interface NavItem {
   icon: LucideIcon;
   /** Hidden unless the signed-in admin's role is superadmin. */
   superadminOnly?: boolean;
+  /** Optional live counter rendered after the label (e.g. queue size). */
+  badge?: ComponentType;
+}
+
+/**
+ * How many self-signed-up stores are waiting in the approval queue. Shares
+ * its query key (and therefore its cache entry) with the /store-reviews
+ * pending tab; polled so the badge stays honest while an admin works
+ * elsewhere. Renders nothing while loading or at zero.
+ */
+function PendingStoreReviewsBadge() {
+  const query = useQuery({
+    queryKey: ['admin', 'store-reviews', 'pending_review'],
+    queryFn: ({ signal }) =>
+      listStoreReviews({ state: 'pending_review' }, { signal }),
+    refetchInterval: 60_000,
+    staleTime: 30_000,
+  });
+
+  const count = query.data?.meta.counts.pending_review ?? 0;
+  if (count === 0) {
+    return null;
+  }
+  return (
+    <Badge variant="warning" size="sm" shape="circle">
+      {count}
+    </Badge>
+  );
 }
 
 const NAV_ITEMS: NavItem[] = [
   { href: '/settlements', label: 'Settlements', icon: Landmark },
   { href: '/merchants', label: 'Merchants', icon: Store },
+  {
+    href: '/store-reviews',
+    label: 'Store reviews',
+    icon: ClipboardCheck,
+    badge: PendingStoreReviewsBadge,
+  },
   { href: '/payouts', label: 'Payout batches', icon: Banknote },
   { href: '/reconciliation', label: 'Reconciliation', icon: Scale },
 ];
@@ -44,6 +81,7 @@ const SETTINGS_ITEMS: NavItem[] = [
   { href: '/settings/platform', label: 'Platform', icon: SlidersHorizontal },
   { href: '/settings/fee-tiers', label: 'Fee tiers', icon: Percent },
   { href: '/settings/bank-accounts', label: 'Bank accounts', icon: CreditCard },
+  { href: '/settings/store-categories', label: 'Store categories', icon: Tags },
   {
     href: '/settings/admins',
     label: 'Admins',
@@ -54,6 +92,7 @@ const SETTINGS_ITEMS: NavItem[] = [
 
 function NavLink({ item, active }: { item: NavItem; active: boolean }) {
   const Icon = item.icon;
+  const CountBadge = item.badge;
   return (
     <Link
       href={item.href}
@@ -65,7 +104,8 @@ function NavLink({ item, active }: { item: NavItem; active: boolean }) {
       )}
     >
       <Icon className="size-4 shrink-0" />
-      {item.label}
+      <span className="min-w-0 flex-1">{item.label}</span>
+      {CountBadge ? <CountBadge /> : null}
     </Link>
   );
 }

@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { useDiscovery } from '@/lib/queries';
+import { useDiscovery, useMe } from '@/lib/queries';
 import { SEARCH_MAX_CHARS } from '@/lib/search';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -37,7 +37,34 @@ import { PublicFooter, PublicHeader } from '@/components/app/public-header';
  * public GET /api/discover endpoint, and the shared PublicHeader quietly
  * upgrades to a "Dashboard" button when a customer session cookie is
  * already present.
+ *
+ * Authed visitors (the same silent me-probe the header uses; react-query
+ * dedupes the request) never see a "Create account" CTA anywhere on this
+ * page: the hero and how-it-works CTAs become "Open dashboard", and the
+ * marketplace teaser's get-notified CTA collapses to a you're-all-set line
+ * (being notified just means having an account). While the probe is still
+ * in flight — and always when it 401s — the signed-out page renders
+ * unchanged.
  */
+
+/**
+ * The landing page's primary CTA: Create account for visitors, Open
+ * dashboard once the me-probe confirms a session.
+ */
+function PrimaryCta() {
+  const { t } = useTranslation();
+  const { data: me } = useMe();
+
+  return (
+    <Button size="lg" asChild>
+      {me ? (
+        <Link href="/dashboard">{t('landing.openDashboard')}</Link>
+      ) : (
+        <Link href="/signup">{t('landing.createAccount')}</Link>
+      )}
+    </Button>
+  );
+}
 
 /**
  * Hero search: submit/enter hands the query to /discover, where the real
@@ -98,9 +125,7 @@ function Hero() {
       </p>
       <HeroSearch />
       <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
-        <Button size="lg" asChild>
-          <Link href="/signup">{t('landing.createAccount')}</Link>
-        </Button>
+        <PrimaryCta />
         <Button size="lg" variant="outline" asChild>
           <a href="#how-it-works">{t('landing.howTitle')}</a>
         </Button>
@@ -112,6 +137,7 @@ function Hero() {
 /** Shown when the API has no merchants in any section yet. */
 function AllEmptyBlock() {
   const { t } = useTranslation();
+  const { data: me } = useMe();
 
   return (
     <Card className="mx-auto w-full max-w-xl">
@@ -128,7 +154,11 @@ function AllEmptyBlock() {
           </p>
         </div>
         <Button asChild>
-          <Link href="/signup">{t('landing.createAccount')}</Link>
+          {me ? (
+            <Link href="/dashboard">{t('landing.openDashboard')}</Link>
+          ) : (
+            <Link href="/signup">{t('landing.createAccount')}</Link>
+          )}
         </Button>
       </CardContent>
     </Card>
@@ -294,9 +324,7 @@ function HowItWorks() {
             body={t('landing.step3Body')}
           />
         </ol>
-        <Button size="lg" asChild>
-          <Link href="/signup">{t('landing.createAccount')}</Link>
-        </Button>
+        <PrimaryCta />
       </div>
     </section>
   );
@@ -305,10 +333,12 @@ function HowItWorks() {
 /**
  * Multivendor-marketplace teaser (PLAN "Later": multi-vendor marketplace).
  * One restrained block, no email capture — "get notified" simply means
- * having an account, so the CTA is the same Create account flow.
+ * having an account, so the CTA is the same Create account flow for
+ * visitors, and collapses to a "you're all set" line once signed in.
  */
 function MarketplaceTeaser() {
   const { t } = useTranslation();
+  const { data: me } = useMe();
 
   return (
     <section className="container pb-16">
@@ -330,14 +360,20 @@ function MarketplaceTeaser() {
               {t('landing.marketplaceBody')}
             </p>
           </div>
-          <div className="flex flex-col items-center gap-1.5">
-            <Button variant="outline" asChild>
-              <Link href="/signup">{t('landing.marketplaceCta')}</Link>
-            </Button>
+          {me ? (
             <span className="text-xs text-muted-foreground">
-              {t('landing.marketplaceCtaHint')}
+              {t('landing.marketplaceSignedInHint')}
             </span>
-          </div>
+          ) : (
+            <div className="flex flex-col items-center gap-1.5">
+              <Button variant="outline" asChild>
+                <Link href="/signup">{t('landing.marketplaceCta')}</Link>
+              </Button>
+              <span className="text-xs text-muted-foreground">
+                {t('landing.marketplaceCtaHint')}
+              </span>
+            </div>
+          )}
         </CardContent>
       </Card>
     </section>

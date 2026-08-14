@@ -24,6 +24,10 @@ class MerchantUserResource extends JsonResource
             'merchant' => [
                 'id' => $this->merchant->id,
                 'name' => $this->merchant->name,
+                // The onboarding lifecycle status — the panel routes draft /
+                // rejected owners into the setup wizard and pending_review
+                // ones onto the waiting screen.
+                'status' => $this->merchant->status,
             ],
         ];
     }

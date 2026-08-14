@@ -16,7 +16,7 @@ final class MerchantNotActiveException extends DomainException
     public static function for(Merchant $merchant): self
     {
         return new self(sprintf(
-            'Merchant %s is %s — manual credits require an active merchant.',
+            'Merchant %s is %s — credits require an active merchant.',
             $merchant->name,
             $merchant->status,
         ));

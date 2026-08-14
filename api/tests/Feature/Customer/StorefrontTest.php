@@ -51,7 +51,7 @@ it('paginates the directory alphabetically with default and capped page sizes', 
 
     // Every entry carries exactly the public directory contract.
     expect(array_keys($data[0]))->toBe([
-        'name', 'slug', 'category', 'logo_url', 'is_online', 'rate_bp', 'standing_rate_bp', 'promo_ends_at',
+        'name', 'slug', 'category', 'logo_url', 'channel', 'rate_bp', 'standing_rate_bp', 'promo_ends_at',
     ]);
 
     // No logo uploaded — the slot is present and null, never absent.
@@ -238,7 +238,7 @@ it('serves the full public store page for an active merchant', function () {
         'slug' => 'cafe-alpha',
         'category' => 'cafe',
         'featured' => true,
-        'is_online' => true,
+        'channel' => 'both',
         'eligibility_basis' => 'Invoice total excluding GST and service charge.',
     ], 200);
     Promotion::query()->create([
@@ -259,7 +259,7 @@ it('serves the full public store page for an active merchant', function () {
     $data = $this->getJson('/api/discover/merchants/cafe-alpha')->assertOk()->json('data');
 
     expect(array_keys($data))->toBe([
-        'name', 'slug', 'category', 'logo_url', 'is_online', 'featured',
+        'name', 'slug', 'category', 'logo_url', 'channel', 'featured',
         'rate_bp', 'standing_rate_bp', 'promotion', 'cashback_basis', 'branches', 'joined',
     ]);
 
@@ -267,7 +267,7 @@ it('serves the full public store page for an active merchant', function () {
     expect($data['slug'])->toBe('cafe-alpha');
     expect($data['category'])->toBe('cafe');
     expect($data['logo_url'])->toBeNull(); // no logo uploaded — null, never absent
-    expect($data['is_online'])->toBeTrue();
+    expect($data['channel'])->toBe('both');
     expect($data['featured'])->toBeTrue();
 
     // Boosted now, usually 2% — all integer basis points.

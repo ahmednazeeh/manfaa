@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { apiFetch } from './client';
-import { dataWrapped } from './resources';
+import { dataWrapped, MerchantChannelSchema } from './resources';
 
 /**
  * Public merchant discovery (Phase 3) — no auth required, throttled per IP,
@@ -23,6 +23,8 @@ export const DiscoveryEntrySchema = z.object({
   category: z.string().nullable(),
   /** Absolute URL of the merchant logo; null when none is uploaded. */
   logo_url: z.string().nullable(),
+  /** Never rendered as the literal "both" — display "In Store & Online". */
+  channel: MerchantChannelSchema,
   rate_bp: z.number().int(),
   standing_rate_bp: z.number().int(),
   promo_ends_at: z.string().nullable(),
@@ -72,7 +74,7 @@ export function getDiscovery(
 
 /**
  * One directory row: the discovery entry shape minus `distance_m` (the
- * directory is not geographic) plus `is_online`.
+ * directory is not geographic).
  */
 export const DirectoryEntrySchema = z.object({
   name: z.string(),
@@ -80,7 +82,8 @@ export const DirectoryEntrySchema = z.object({
   category: z.string().nullable(),
   /** Absolute URL of the merchant logo; null when none is uploaded. */
   logo_url: z.string().nullable(),
-  is_online: z.boolean(),
+  /** Never rendered as the literal "both" — display "In Store & Online". */
+  channel: MerchantChannelSchema,
   rate_bp: z.number().int(),
   standing_rate_bp: z.number().int(),
   promo_ends_at: z.string().nullable(),
@@ -90,7 +93,10 @@ export type DirectoryEntry = z.infer<typeof DirectoryEntrySchema>;
 /**
  * `total` is the exact count of the full matching set. `categories` is the
  * distinct category list across ALL listed merchants (unfiltered) for the
- * filter-chip UI — it does not shrink when a filter is applied.
+ * filter-chip UI — it does not shrink when a filter is applied. Since the
+ * curated store-category decision (§1 2026-08-15) the values are category
+ * SLUGS from the superadmin-curated list; pass them back verbatim as the
+ * `category` filter.
  */
 export const DirectoryMetaSchema = z.object({
   total: z.number().int(),
@@ -181,7 +187,8 @@ export const StoreDetailSchema = z.object({
   category: z.string().nullable(),
   /** Absolute URL of the merchant logo; null when none is uploaded. */
   logo_url: z.string().nullable(),
-  is_online: z.boolean(),
+  /** Never rendered as the literal "both" — display "In Store & Online". */
+  channel: MerchantChannelSchema,
   featured: z.boolean(),
   rate_bp: z.number().int(),
   standing_rate_bp: z.number().int(),

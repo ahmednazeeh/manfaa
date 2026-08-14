@@ -2,9 +2,11 @@ import {
   apiFetch,
   bootstrapCsrf,
   dataWrapped,
+  MerchantStatusSchema,
   paginated,
   RateDescriptionSchema,
   TransactionSchema,
+  type MerchantStatus,
   type TransactionState,
 } from '@manfaa/api-client';
 import { z } from 'zod';
@@ -23,9 +25,26 @@ export const MerchantMeSchema = z.object({
   merchant: z.object({
     id: z.number().int(),
     name: z.string(),
+    /**
+     * The onboarding lifecycle — the panel routes draft/rejected/
+     * pending_review users onto /setup and keeps the rest of the panel
+     * inaccessible until the store is approved.
+     */
+    status: MerchantStatusSchema,
   }),
 });
 export type MerchantMe = z.infer<typeof MerchantMeSchema>;
+
+/**
+ * Statuses that belong on /setup (the wizard or its waiting/rejection
+ * screens) instead of the panel: draft (mid-wizard), pending_review
+ * (submitted, awaiting the admin queue) and rejected (sent back).
+ */
+export function isOnboardingStatus(status: MerchantStatus): boolean {
+  return (
+    status === 'draft' || status === 'pending_review' || status === 'rejected'
+  );
+}
 
 const MeResponseSchema = dataWrapped(MerchantMeSchema);
 
@@ -35,10 +54,14 @@ export async function login(body: {
   password: string;
 }): Promise<MerchantMe> {
   await bootstrapCsrf();
-  const response = await apiFetch('/api/merchant/auth/login', MeResponseSchema, {
-    method: 'POST',
-    body,
-  });
+  const response = await apiFetch(
+    '/api/merchant/auth/login',
+    MeResponseSchema,
+    {
+      method: 'POST',
+      body,
+    },
+  );
   return response.data;
 }
 

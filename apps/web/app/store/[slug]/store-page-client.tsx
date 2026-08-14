@@ -31,6 +31,7 @@ import { ErrorBlock, LoadingBlock } from '@/components/app/async-states';
 import { useLocationRequest } from '@/components/app/discovery';
 import { PublicFooter, PublicHeader } from '@/components/app/public-header';
 import { StoreAvatar } from '@/components/app/store-avatar';
+import { ChannelChip, useCategoryLabel } from '@/components/app/store-labels';
 
 /**
  * PUBLIC store page (/store/[slug]): the merchant's cashback offer in full —
@@ -142,31 +143,31 @@ function EarnStep({
 }
 
 /**
- * How earning works AT THIS STORE. Step 1 adapts to where the store sells
+ * How earning works AT THIS STORE. Step 1 adapts to the store's channel
  * (till, online, or both); the final step keeps the §9.4 discipline — the
  * copy is future-conditional on the store confirming, never a promise.
  */
 function HowToEarn({ store }: { store: StoreDetail }) {
   const { t } = useTranslation();
-  const hasBranches = store.branches.length > 0;
 
-  const step1 = store.is_online
-    ? hasBranches
+  const step1 =
+    store.channel === 'online'
       ? {
-          icon: QrCode,
-          title: t('store.stepShowBothTitle'),
-          body: t('store.stepShowBothBody'),
-        }
-      : {
           icon: Globe,
           title: t('store.stepShowOnlineTitle'),
           body: t('store.stepShowOnlineBody'),
         }
-    : {
-        icon: QrCode,
-        title: t('store.stepShowTillTitle'),
-        body: t('store.stepShowTillBody'),
-      };
+      : store.channel === 'both'
+        ? {
+            icon: QrCode,
+            title: t('store.stepShowBothTitle'),
+            body: t('store.stepShowBothBody'),
+          }
+        : {
+            icon: QrCode,
+            title: t('store.stepShowTillTitle'),
+            body: t('store.stepShowTillBody'),
+          };
 
   return (
     <section className="flex flex-col gap-4">
@@ -393,6 +394,7 @@ function StoreCta({ store }: { store: StoreDetail }) {
 
 function StoreContent({ store }: { store: StoreDetail }) {
   const { t } = useTranslation();
+  const categoryLabel = useCategoryLabel();
 
   return (
     <div className="flex w-full max-w-3xl flex-col gap-8 pb-10">
@@ -416,16 +418,17 @@ function StoreContent({ store }: { store: StoreDetail }) {
             )}
           </div>
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
-            {store.category !== null && <span>{store.category}</span>}
-            {store.is_online && (
-              <span className="inline-flex items-center gap-1">
-                <Globe className="size-3.5" />
-                {t('store.onlineBadge')}
-              </span>
+            {store.category !== null && (
+              <span>{categoryLabel(store.category)}</span>
             )}
+            {/* The channel label sits right beside the category — always
+                the localised label, never the raw enum. */}
+            <ChannelChip channel={store.channel} />
             {store.joined !== null && (
               <span>
-                {t('store.joinedLabel', { date: formatMonthYear(store.joined) })}
+                {t('store.joinedLabel', {
+                  date: formatMonthYear(store.joined),
+                })}
               </span>
             )}
           </div>

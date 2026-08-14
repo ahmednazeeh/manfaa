@@ -34,3 +34,7 @@ export * from './admin';
 export * from './customer';
 // Public discovery: no auth, typed sections.
 export * from './discover';
+// Store onboarding (Task #24): merchant self-signup OTP flow, the resumable
+// setup wizard (profile / logo / rate / submit), the admin store approval
+// queue, and curated store-category CRUD.
+export * from './onboarding';

@@ -1,9 +1,15 @@
 'use client';
 
 import { useState } from 'react';
-import { ApiError } from '@manfaa/api-client';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { ApiError } from '@manfaa/api-client';
 import { Eye, EyeOff, LoaderCircle, TriangleAlert } from 'lucide-react';
+import { useForm } from 'react-hook-form';
+import { useTranslation } from 'react-i18next';
+import { z } from 'zod';
+import { isOnboardingStatus } from '@/lib/api';
 import { toAbsoluteUrl } from '@/lib/helpers';
 import { useLogin } from '@/lib/queries';
 import { Alert, AlertIcon, AlertTitle } from '@/components/ui/alert';
@@ -18,21 +24,20 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
-import { useForm } from 'react-hook-form';
-import { useRouter } from 'next/navigation';
-import { z } from 'zod';
-
-const LoginFormSchema = z.object({
-  email: z.email('Enter a valid email address.'),
-  password: z.string().min(1, 'Enter your password.'),
-});
-type LoginFormValues = z.infer<typeof LoginFormSchema>;
+import { LanguageSwitcher } from '@/components/app/language-switcher';
 
 export default function LoginPage() {
+  const { t } = useTranslation();
   const router = useRouter();
   const loginMutation = useLogin();
   const [showPassword, setShowPassword] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const LoginFormSchema = z.object({
+    email: z.email(t('auth.emailInvalid')),
+    password: z.string().min(1, t('auth.passwordRequired')),
+  });
+  type LoginFormValues = z.infer<typeof LoginFormSchema>;
 
   const form = useForm<LoginFormValues>({
     resolver: zodResolver(LoginFormSchema),
@@ -42,42 +47,49 @@ export default function LoginPage() {
   const onSubmit = (values: LoginFormValues) => {
     setErrorMessage(null);
     loginMutation.mutate(values, {
-      onSuccess: () => {
-        router.replace('/dashboard');
+      onSuccess: (me) => {
+        // Draft / pending_review / rejected stores land on /setup — the
+        // wizard, waiting screen or rejection screen; the panel stays locked.
+        router.replace(
+          isOnboardingStatus(me.merchant.status) ? '/setup' : '/dashboard',
+        );
       },
       onError: (error) => {
         if (error instanceof ApiError && error.status === 422) {
-          setErrorMessage('Invalid email or password.');
+          setErrorMessage(t('auth.invalidCredentials'));
         } else if (error instanceof ApiError && error.status === 429) {
-          setErrorMessage('Too many attempts — try again in a minute.');
+          setErrorMessage(t('common.tooManyAttempts'));
         } else {
-          setErrorMessage('Could not reach the server. Try again.');
+          setErrorMessage(t('common.serverUnreachable'));
         }
       },
     });
   };
 
   return (
-    <div className="grow flex items-center justify-center min-h-screen w-full bg-muted/40 p-5">
+    <div className="relative grow flex items-center justify-center min-h-screen w-full bg-muted/40 p-5">
+      <div className="absolute top-4 end-4">
+        <LanguageSwitcher />
+      </div>
       <Card className="w-full max-w-[400px]">
         <CardContent className="p-8 flex flex-col gap-6">
           <div className="flex flex-col items-center gap-3">
             <img
               src={toAbsoluteUrl('/media/app/default-logo.svg')}
               className="dark:hidden h-[26px]"
-              alt="Manfaa"
+              alt={t('common.appName')}
             />
             <img
               src={toAbsoluteUrl('/media/app/default-logo-dark.svg')}
               className="hidden dark:block h-[26px]"
-              alt="Manfaa"
+              alt={t('common.appName')}
             />
             <div className="text-center">
               <h1 className="text-lg font-semibold text-mono">
-                Merchant panel
+                {t('auth.loginTitle')}
               </h1>
               <p className="text-sm text-muted-foreground">
-                Sign in with your merchant account
+                {t('auth.loginSubtitle')}
               </p>
             </div>
           </div>
@@ -101,12 +113,12 @@ export default function LoginPage() {
                 name="email"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Email</FormLabel>
+                    <FormLabel>{t('auth.emailLabel')}</FormLabel>
                     <FormControl>
                       <Input
                         type="email"
                         autoComplete="email"
-                        placeholder="you@store.mv"
+                        placeholder={t('auth.emailPlaceholder')}
                         {...field}
                       />
                     </FormControl>
@@ -119,13 +131,13 @@ export default function LoginPage() {
                 name="password"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Password</FormLabel>
+                    <FormLabel>{t('auth.passwordLabel')}</FormLabel>
                     <FormControl>
                       <div className="relative">
                         <Input
                           type={showPassword ? 'text' : 'password'}
                           autoComplete="current-password"
-                          placeholder="Your password"
+                          placeholder={t('auth.passwordPlaceholder')}
                           {...field}
                         />
                         <Button
@@ -134,7 +146,9 @@ export default function LoginPage() {
                           mode="icon"
                           size="sm"
                           aria-label={
-                            showPassword ? 'Hide password' : 'Show password'
+                            showPassword
+                              ? t('common.hidePassword')
+                              : t('common.showPassword')
                           }
                           className="absolute end-1 top-1/2 -translate-y-1/2 h-6 w-6 text-muted-foreground"
                           onClick={() => setShowPassword((value) => !value)}
@@ -159,10 +173,20 @@ export default function LoginPage() {
                 {loginMutation.isPending && (
                   <LoaderCircle className="animate-spin" />
                 )}
-                Sign in
+                {t('auth.signIn')}
               </Button>
             </form>
           </Form>
+
+          <p className="text-sm text-muted-foreground text-center">
+            {t('auth.noStoreYet')}{' '}
+            <Link
+              href="/signup"
+              className="text-primary font-medium hover:underline"
+            >
+              {t('auth.createYourStore')}
+            </Link>
+          </p>
         </CardContent>
       </Card>
     </div>

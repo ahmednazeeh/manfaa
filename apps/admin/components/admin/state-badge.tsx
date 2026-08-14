@@ -147,6 +147,13 @@ export function PayoutItemStateBadge({ state }: { state: PayoutItemState }) {
 }
 
 const MERCHANT_STATUSES: Record<string, { label: string } & ChipStyle> = {
+  draft: { label: 'Draft', variant: 'secondary', appearance: 'light' },
+  pending_review: {
+    label: 'Pending review',
+    variant: 'warning',
+    appearance: 'light',
+  },
+  rejected: { label: 'Rejected', variant: 'destructive', appearance: 'light' },
   active: { label: 'Active', variant: 'success', appearance: 'light' },
   suspended: {
     label: 'Suspended',

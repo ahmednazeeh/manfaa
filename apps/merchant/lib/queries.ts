@@ -2,6 +2,7 @@
 
 import {
   ApiError,
+  bootstrapCsrf,
   cancelMerchantPromotion,
   createMerchantBranch,
   createMerchantCredit,
@@ -12,6 +13,7 @@ import {
   getMerchantOutstanding,
   getMerchantProfile,
   getMerchantSettlement,
+  getMerchantSetup,
   getMerchantWallet,
   listMerchantBranches,
   listMerchantPromotions,
@@ -19,30 +21,38 @@ import {
   listMerchantStaff,
   lookupMerchantCustomer,
   publishMerchantPromotion,
+  registerMerchantSignup,
+  requestMerchantSignupOtp,
   submitMerchantSettlement,
+  submitMerchantSetup,
   updateMerchantBankAccount,
   updateMerchantBranch,
   updateMerchantPreferences,
   updateMerchantProfile,
+  updateMerchantSetupProfile,
+  updateMerchantSetupRate,
   updateMerchantStaff,
+  uploadMerchantSettingsLogo,
+  uploadMerchantSetupLogo,
+  verifyMerchantSignupOtp,
   walletSettleMerchantSettlement,
   type CreateCreditRequest,
-  type CreatePromotionRequest,
   type CreateMerchantBranchRequest,
   type CreateMerchantStaffRequest,
+  type CreatePromotionRequest,
   type CreateSettlementRequest,
+  type MerchantSetupStateResponse,
+  type MerchantSignupRegisterRequest,
+  type MerchantSignupVerifyOtpRequest,
   type TransactionState,
   type UpdateMerchantBankAccountRequest,
   type UpdateMerchantBranchRequest,
   type UpdateMerchantPreferencesRequest,
   type UpdateMerchantProfileRequest,
+  type UpdateMerchantSetupProfileRequest,
   type UpdateMerchantStaffRequest,
 } from '@manfaa/api-client';
-import {
-  useMutation,
-  useQuery,
-  useQueryClient,
-} from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   changeRate,
   fetchMe,
@@ -73,6 +83,7 @@ export const queryKeys = {
   staff: ['merchant', 'staff'] as const,
   preferences: ['merchant', 'preferences'] as const,
   promotions: ['merchant', 'promotions'] as const,
+  setup: ['merchant', 'setup'] as const,
 };
 
 export function isUnauthorized(error: unknown): boolean {
@@ -158,10 +169,16 @@ export function useTransactions(state: TransactionState | 'all', page: number) {
 function useInvalidateSettlementData() {
   const queryClient = useQueryClient();
   return () => {
-    void queryClient.invalidateQueries({ queryKey: ['merchant', 'settlements'] });
-    void queryClient.invalidateQueries({ queryKey: ['merchant', 'settlement'] });
+    void queryClient.invalidateQueries({
+      queryKey: ['merchant', 'settlements'],
+    });
+    void queryClient.invalidateQueries({
+      queryKey: ['merchant', 'settlement'],
+    });
     void queryClient.invalidateQueries({ queryKey: queryKeys.outstanding });
-    void queryClient.invalidateQueries({ queryKey: ['merchant', 'transactions'] });
+    void queryClient.invalidateQueries({
+      queryKey: ['merchant', 'transactions'],
+    });
     void queryClient.invalidateQueries({ queryKey: queryKeys.wallet });
   };
 }
@@ -466,11 +483,176 @@ export function useUpdatePreferences() {
 export function apiErrorMessage(error: unknown, fallback: string): string {
   if (error instanceof ApiError) {
     const body = error.body as
-      | { message?: unknown; errors?: Record<string, unknown> }
-      | undefined;
+      { message?: unknown; errors?: Record<string, unknown> } | undefined;
     if (body && typeof body.message === 'string' && body.message.length > 0) {
       return body.message;
     }
   }
   return fallback;
+}
+
+/**
+ * The API's 422 validation messages are stable error KEYS (e.g.
+ * `otp_invalid`, `email_already_registered`) — collect them so the UI can
+ * translate rather than echo raw identifiers.
+ */
+export function validationErrorKeys(error: unknown): string[] {
+  if (!(error instanceof ApiError) || error.status !== 422) {
+    return [];
+  }
+  const body = error.body as { errors?: Record<string, unknown> } | undefined;
+  if (!body?.errors) {
+    return [];
+  }
+  const keys: string[] = [];
+  for (const messages of Object.values(body.errors)) {
+    if (Array.isArray(messages)) {
+      for (const message of messages) {
+        if (typeof message === 'string') {
+          keys.push(message);
+        }
+      }
+    } else if (typeof messages === 'string') {
+      keys.push(messages);
+    }
+  }
+  return keys;
+}
+
+// ---------------------------------------------------------------------------
+// Store self-signup (§1 decision 2026-08-15) — public OTP flow
+// ---------------------------------------------------------------------------
+
+export function useSignupRequestOtp() {
+  return useMutation({
+    mutationFn: async (phone: string) => {
+      // First call of the session — make sure the CSRF cookie exists.
+      await bootstrapCsrf();
+      return requestMerchantSignupOtp({ phone });
+    },
+  });
+}
+
+export function useSignupVerifyOtp() {
+  return useMutation({
+    mutationFn: (body: MerchantSignupVerifyOtpRequest) =>
+      verifyMerchantSignupOtp(body),
+  });
+}
+
+/**
+ * Register creates the DRAFT merchant + owner and logs the session in, so
+ * success primes the me cache and the router can land on /setup directly.
+ */
+export function useSignupRegister() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: MerchantSignupRegisterRequest) =>
+      registerMerchantSignup(body),
+    onSuccess: (response) => {
+      queryClient.setQueryData(queryKeys.me, response.data);
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Setup wizard (owner only, resumable) + post-approval logo
+// ---------------------------------------------------------------------------
+
+/**
+ * GET /api/merchant/setup — readable in EVERY lifecycle state; the /setup
+ * screen renders the wizard, the waiting screen and the rejection banner
+ * from it, and Settings reuses it for the curated category list + logo URL.
+ */
+export function useSetupState(enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.setup,
+    queryFn: ({ signal }) => getMerchantSetup({ signal }),
+    select: (response) => response.data,
+    retry: false,
+    enabled,
+  });
+}
+
+/** Every wizard write returns the full refreshed setup state — cache it. */
+function useCacheSetupState() {
+  const queryClient = useQueryClient();
+  return (response: MerchantSetupStateResponse) => {
+    queryClient.setQueryData(queryKeys.setup, response);
+  };
+}
+
+export function useUpdateSetupProfile() {
+  const cache = useCacheSetupState();
+  return useMutation({
+    mutationFn: (body: UpdateMerchantSetupProfileRequest) =>
+      updateMerchantSetupProfile(body),
+    onSuccess: cache,
+  });
+}
+
+export function useUpdateSetupRate() {
+  const cache = useCacheSetupState();
+  return useMutation({
+    mutationFn: (rateBp: number) =>
+      updateMerchantSetupRate({ rate_bp: rateBp }),
+    onSuccess: cache,
+  });
+}
+
+/**
+ * Logo upload during the wizard (draft/rejected). The response carries only
+ * the new URL, so the setup state is invalidated for the fresh values.
+ */
+export function useUploadSetupLogo() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (file: File) => uploadMerchantSetupLogo(file),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.setup });
+    },
+  });
+}
+
+/** The identical logo action mounted under Settings for ACTIVE merchants. */
+export function useUploadSettingsLogo() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (file: File) => uploadMerchantSettingsLogo(file),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.setup });
+    },
+  });
+}
+
+/**
+ * Submit → pending_review. The me cache's merchant.status is refreshed too,
+ * so the (app) layout's onboarding gate and /setup agree immediately.
+ */
+export function useSubmitSetup() {
+  const queryClient = useQueryClient();
+  const cache = useCacheSetupState();
+  return useMutation({
+    mutationFn: () => submitMerchantSetup(),
+    onSuccess: (response) => {
+      cache(response);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.me });
+    },
+  });
+}
+
+/** The wizard-refusal `code` on an ApiError body, if any. */
+export function onboardingErrorCode(error: unknown): string | null {
+  if (!(error instanceof ApiError)) return null;
+  const body = error.body as { code?: unknown } | undefined;
+  return typeof body?.code === 'string' ? body.code : null;
+}
+
+/** 422 `setup_incomplete` — the missing requirement keys, [] otherwise. */
+export function setupMissingKeys(error: unknown): string[] {
+  if (onboardingErrorCode(error) !== 'setup_incomplete') return [];
+  const body = (error as ApiError).body as { missing?: unknown } | undefined;
+  return Array.isArray(body?.missing)
+    ? body.missing.filter((key): key is string => typeof key === 'string')
+    : [];
 }

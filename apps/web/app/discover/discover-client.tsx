@@ -28,6 +28,7 @@ import {
 } from '@/components/app/discovery';
 import { ListPagination } from '@/components/app/list-pagination';
 import { PublicFooter, PublicHeader } from '@/components/app/public-header';
+import { useCategoryLabel } from '@/components/app/store-labels';
 
 /**
  * The single PUBLIC discovery page — the former /discover shelves and the
@@ -62,6 +63,12 @@ function toCardEntry(entry: DirectoryEntry) {
   return { ...entry, distance_m: null };
 }
 
+/**
+ * Curated-category filter chips. `categories` is the slug list from the
+ * directory meta; the slug is what travels in the URL and back to the API,
+ * while the chip TEXT is the localised display label (capitalised slug only
+ * for a slug this app has no translation for yet).
+ */
 function CategoryChips({
   categories,
   selected,
@@ -72,6 +79,7 @@ function CategoryChips({
   onSelect: (category: string | null) => void;
 }) {
   const { t } = useTranslation();
+  const categoryLabel = useCategoryLabel();
 
   if (categories.length === 0) {
     return null;
@@ -103,7 +111,7 @@ function CategoryChips({
               : 'border-border text-secondary-foreground hover:border-primary/40 hover:text-foreground',
           )}
         >
-          {category}
+          {categoryLabel(category)}
         </button>
       ))}
     </div>

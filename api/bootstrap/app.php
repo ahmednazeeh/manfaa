@@ -21,6 +21,11 @@ return Application::configure(basePath: dirname(__DIR__))
         // trust the local proxy so X-Forwarded-Proto marks requests secure
         // and secure cookies survive the fastcgi hop.
         $middleware->trustProxies(at: '*');
+
+        // API-only app: never redirect guests to a (nonexistent) login page —
+        // an unauthenticated request without an Accept header would otherwise
+        // 500 on route('login'). Null → AuthenticationException → JSON 401.
+        $middleware->redirectGuestsTo(fn () => null);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(

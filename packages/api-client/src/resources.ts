@@ -54,6 +54,34 @@ export function paginated<Schema extends z.ZodType>(schema: Schema) {
 }
 
 // ---------------------------------------------------------------------------
+// Merchant lifecycle + channel (§1 decisions 2026-08-15)
+// ---------------------------------------------------------------------------
+
+/**
+ * Where the store sells. Replaces the former `is_online` boolean everywhere.
+ * Display copy NEVER says "both" — the UI renders it as "In Store & Online"
+ * (localised).
+ */
+export const MerchantChannelSchema = z.enum(['in_store', 'online', 'both']);
+export type MerchantChannel = z.infer<typeof MerchantChannelSchema>;
+
+/**
+ * The full merchant lifecycle. `draft` (mid-wizard), `pending_review`
+ * (submitted, awaiting the superadmin queue) and `rejected` (sent back with
+ * a reason) are the self-signup onboarding states — none of the three is
+ * EVER visible publicly; public payloads expose ACTIVE merchants only.
+ */
+export const MerchantStatusSchema = z.enum([
+  'draft',
+  'pending_review',
+  'rejected',
+  'active',
+  'suspended',
+  'closed',
+]);
+export type MerchantStatus = z.infer<typeof MerchantStatusSchema>;
+
+// ---------------------------------------------------------------------------
 // Transactions
 // ---------------------------------------------------------------------------
 

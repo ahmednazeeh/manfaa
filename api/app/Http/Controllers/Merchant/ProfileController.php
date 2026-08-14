@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Merchant;
 
+use App\Domain\Onboarding\OnboardingService;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\MerchantProfileResource;
 use App\Models\Merchant;
 use App\Models\MerchantUser;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 /**
  * Owner-editable merchant profile (EnsureMerchantOwner gates the routes).
@@ -26,8 +28,13 @@ class ProfileController extends Controller
     public function update(Request $request): MerchantProfileResource
     {
         $validated = $request->validate([
-            'category' => ['sometimes', 'nullable', 'string', 'max:100'],
-            'is_online' => ['sometimes', 'boolean'],
+            // Curated categories only (§1 decision 2026-08-15): the slug
+            // must be an ACTIVE store_categories row.
+            'category' => [
+                'sometimes', 'nullable', 'string', 'max:80',
+                Rule::exists('store_categories', 'slug')->where('active', true),
+            ],
+            'channel' => ['sometimes', 'string', Rule::in(OnboardingService::CHANNELS)],
             'eligibility_basis' => ['sometimes', 'nullable', 'string', 'max:2000'],
             'contact_email' => ['sometimes', 'nullable', 'string', 'email', 'max:255'],
             'contact_phone' => ['sometimes', 'nullable', 'string', 'max:32'],

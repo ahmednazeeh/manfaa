@@ -6,6 +6,7 @@ use App\Http\Controllers\Merchant\CustomerLookupController;
 use App\Http\Controllers\Merchant\PreferencesController;
 use App\Http\Controllers\Merchant\ProfileController;
 use App\Http\Controllers\Merchant\StaffController;
+use App\Http\Middleware\EnsureMerchantApproved;
 use App\Http\Middleware\EnsureMerchantOwner;
 use Illuminate\Support\Facades\Route;
 
@@ -21,7 +22,10 @@ Route::prefix('merchant')->middleware('auth:merchant')->group(function () {
 
     Route::middleware(EnsureMerchantOwner::class)->group(function () {
         Route::get('profile', [ProfileController::class, 'show']);
-        Route::patch('profile', [ProfileController::class, 'update']);
+        // Post-approval stores only: before approval the wizard is the sole
+        // write path, and a pending_review store must not rewrite the fields
+        // the superadmin queue is reviewing (EnsureMerchantApproved).
+        Route::patch('profile', [ProfileController::class, 'update'])->middleware(EnsureMerchantApproved::class);
 
         Route::patch('bank-account', [BankAccountController::class, 'update']);
 

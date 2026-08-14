@@ -2,6 +2,8 @@ import { z } from 'zod';
 import { apiFetch } from './client';
 import {
   dataWrapped,
+  MerchantChannelSchema,
+  MerchantStatusSchema,
   paginated,
   PromotionSchema,
   PromotionStatusSchema,
@@ -342,15 +344,18 @@ export function cancelMerchantPromotion(
  * read-only display — renaming the business is an identity change and stays
  * admin-only (a PATCHed `name` is dropped server-side). `eligibility_basis`
  * is the §11 free-text mirror of the agreement, displayed to customers,
- * never used in computation.
+ * never used in computation. `category` is a SLUG from the superadmin-
+ * curated store-category list (no free text); `channel` replaces the former
+ * `is_online` boolean.
  */
 export const MerchantProfileSchema = z.object({
   id: z.number().int(),
   name: z.string(),
   slug: z.string(),
-  status: z.enum(['active', 'suspended', 'closed']),
+  status: MerchantStatusSchema,
   category: z.string().nullable(),
-  is_online: z.boolean(),
+  /** Never rendered as the literal "both" — display "In Store & Online". */
+  channel: MerchantChannelSchema,
   eligibility_basis: z.string().nullable(),
   contact_email: z.string().nullable(),
   contact_phone: z.string().nullable(),
@@ -363,8 +368,9 @@ export type MerchantProfileResponse = z.infer<
 >;
 
 export const UpdateMerchantProfileRequestSchema = z.object({
-  category: z.string().max(100).nullable().optional(),
-  is_online: z.boolean().optional(),
+  /** An ACTIVE curated store-category slug (422 otherwise), or null. */
+  category: z.string().max(80).nullable().optional(),
+  channel: MerchantChannelSchema.optional(),
   eligibility_basis: z.string().max(2000).nullable().optional(),
   contact_email: z.email().max(255).nullable().optional(),
   contact_phone: z.string().max(32).nullable().optional(),

@@ -43,7 +43,12 @@ final readonly class ApiCreditService
         ?int $branchId = null,
         ?string $idempotencyKey = null,
     ): Transaction {
-        if ($merchant->status === 'closed') {
+        // Only active and suspended merchants may reach the recorder (§7:
+        // suspension stops cashback creation, not ingestion). Closed is
+        // terminal, and the pre-approval statuses (draft / pending_review /
+        // rejected) have never traded — a credential should not even exist
+        // for them, but defence in depth refuses the write outright.
+        if (! in_array($merchant->status, ['active', 'suspended'], true)) {
             throw MerchantNotActiveException::for($merchant);
         }
 

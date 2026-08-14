@@ -42,7 +42,7 @@ function discoveryFixture(): array
     );
 
     $beta = discoveryMerchant(
-        ['name' => 'Hulhu Beta', 'slug' => 'hulhu-beta', 'is_online' => true, 'category' => 'grocery'],
+        ['name' => 'Hulhu Beta', 'slug' => 'hulhu-beta', 'channel' => 'online', 'category' => 'grocery'],
         100,
         [4.2105, 73.5401], // Hulhumalé
     );
@@ -63,7 +63,7 @@ function discoveryFixture(): array
 
     // Suspended — invisible everywhere despite flags and a live rate.
     discoveryMerchant(
-        ['name' => 'Sus Delta', 'slug' => 'sus-delta', 'status' => 'suspended', 'featured' => true, 'is_online' => true],
+        ['name' => 'Sus Delta', 'slug' => 'sus-delta', 'status' => 'suspended', 'featured' => true, 'channel' => 'online'],
         400,
         [4.1752, 73.5089],
     );
@@ -192,7 +192,7 @@ it('leaks nothing: no internal ids, no PII, no commercial terms', function () {
     foreach ($data as $section) {
         foreach ($section as $entry) {
             expect(array_keys($entry))->toBe([
-                'name', 'slug', 'category', 'logo_url', 'rate_bp', 'standing_rate_bp', 'promo_ends_at', 'distance_m',
+                'name', 'slug', 'category', 'logo_url', 'channel', 'rate_bp', 'standing_rate_bp', 'promo_ends_at', 'distance_m',
             ]);
         }
     }
@@ -233,7 +233,7 @@ it('caps every section and computes distance only inside the nearby bounding box
     // dataset.
     foreach (range(1, 55) as $i) {
         discoveryMerchant(
-            ['name' => sprintf('Bulk %02d', $i), 'slug' => "bulk-{$i}", 'is_online' => true],
+            ['name' => sprintf('Bulk %02d', $i), 'slug' => "bulk-{$i}", 'channel' => 'both'],
             100,
             [4.1752 + $i * 0.0001, 73.5089],
         );

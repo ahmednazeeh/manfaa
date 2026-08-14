@@ -27,7 +27,7 @@ class MerchantProfileResource extends JsonResource
             'slug' => $this->slug,
             'status' => $this->status,
             'category' => $this->category,
-            'is_online' => (bool) $this->is_online,
+            'channel' => $this->channel,
             'eligibility_basis' => $this->eligibility_basis,
             'contact_email' => $this->contact_email,
             'contact_phone' => $this->contact_phone,

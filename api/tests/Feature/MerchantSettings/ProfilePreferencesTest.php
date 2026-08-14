@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Domain\Platform\PlatformConfig;
 use App\Models\Merchant;
 use App\Models\MerchantUser;
+use App\Models\StoreCategory;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -29,26 +30,35 @@ it('shows and updates the profile', function () {
         ->assertJsonPath('data.contact_email', null);
 
     $this->patchJson('/api/merchant/profile', [
-        'category' => 'F&B',
-        'is_online' => true,
+        'category' => 'restaurant',
+        'channel' => 'both',
         'eligibility_basis' => 'Food and drink, excluding service charge.',
         'contact_email' => 'owner@store.mv',
         'contact_phone' => '+9607771234',
     ])->assertOk()
-        ->assertJsonPath('data.category', 'F&B')
-        ->assertJsonPath('data.is_online', true)
+        ->assertJsonPath('data.category', 'restaurant')
+        ->assertJsonPath('data.channel', 'both')
         ->assertJsonPath('data.contact_email', 'owner@store.mv');
 
     $merchant = $this->merchant->refresh();
 
-    expect($merchant->category)->toBe('F&B')
-        ->and($merchant->is_online)->toBeTrue()
+    expect($merchant->category)->toBe('restaurant')
+        ->and($merchant->channel)->toBe('both')
         ->and($merchant->eligibility_basis)->toBe('Food and drink, excluding service charge.')
         ->and($merchant->contact_phone)->toBe('+9607771234');
 });
 
+it('rejects a category outside the curated list and an unknown channel', function () {
+    $this->patchJson('/api/merchant/profile', ['category' => 'F&B'])->assertUnprocessable();
+    $this->patchJson('/api/merchant/profile', ['channel' => 'metaverse'])->assertUnprocessable();
+
+    // Inactive curated categories are not pickable either.
+    StoreCategory::query()->where('slug', 'beauty')->update(['active' => false]);
+    $this->patchJson('/api/merchant/profile', ['category' => 'beauty'])->assertUnprocessable();
+});
+
 it('clears nullable profile fields explicitly', function () {
-    $this->merchant->update(['contact_email' => 'old@store.mv', 'category' => 'Retail']);
+    $this->merchant->update(['contact_email' => 'old@store.mv', 'category' => 'grocery']);
 
     $this->patchJson('/api/merchant/profile', ['contact_email' => null, 'category' => null])
         ->assertOk()
@@ -57,7 +67,7 @@ it('clears nullable profile fields explicitly', function () {
 });
 
 it('never lets the profile rename the business — identity is admin-only', function () {
-    $this->patchJson('/api/merchant/profile', ['name' => 'Sneaky Rebrand', 'category' => 'F&B'])
+    $this->patchJson('/api/merchant/profile', ['name' => 'Sneaky Rebrand', 'category' => 'cafe'])
         ->assertOk();
 
     expect($this->merchant->refresh()->name)->toBe('Original Name');

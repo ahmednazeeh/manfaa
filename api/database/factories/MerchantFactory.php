@@ -32,6 +32,7 @@ class MerchantFactory extends Factory
             'validation_window_days' => 3,
             'min_eligible_laari' => 5000,
             'eligibility_basis' => 'Invoice total excluding GST and service charge.',
+            'channel' => 'in_store',
         ];
     }
 
@@ -39,6 +40,31 @@ class MerchantFactory extends Factory
     {
         return $this->state(fn (array $attributes) => [
             'status' => 'suspended',
+        ]);
+    }
+
+    public function draft(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'status' => 'draft',
+        ]);
+    }
+
+    public function pendingReview(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'status' => 'pending_review',
+            'submitted_at' => now(),
+        ]);
+    }
+
+    public function rejected(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'status' => 'rejected',
+            'submitted_at' => now()->subHour(),
+            'rejected_at' => now(),
+            'rejected_reason' => 'Please add a clearer eligibility statement.',
         ]);
     }
 }

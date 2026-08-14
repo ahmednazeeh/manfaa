@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useScrollPosition } from '@/hooks/use-scroll-position';
 import { useLogout } from '@/lib/queries';
+import { LanguageSwitcher } from '@/components/app/language-switcher';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -150,6 +151,7 @@ export function Header() {
         </div>
 
         <div className="flex items-center gap-3 ms-auto">
+          <LanguageSwitcher />
           <ThemeToggle />
           <UserMenu />
         </div>

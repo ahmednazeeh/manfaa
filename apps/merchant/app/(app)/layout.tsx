@@ -1,28 +1,39 @@
 'use client';
 
 import { ReactNode, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { isOnboardingStatus } from '@/lib/api';
 import { isUnauthorized, useMe } from '@/lib/queries';
 import { AppLayout } from '@/components/app-layout/app-layout';
 import { ErrorBlock } from '@/components/app/async-states';
 import { ScreenLoader } from '@/components/screen-loader';
-import { useRouter } from 'next/navigation';
 
 /**
  * Auth guard for every merchant-panel screen: resolves the session via
  * GET /api/merchant/auth/me, bounces to /login on 401, and renders the
  * panel chrome once the merchant user is known.
+ *
+ * Onboarding gate (§1 decision 2026-08-15): while the merchant is draft,
+ * pending_review or rejected the whole panel is off-limits — every screen
+ * redirects to /setup (the wizard / waiting / rejection views), which
+ * offers logout. The API enforces the same rule server-side; this keeps the
+ * navigation honest.
  */
 export default function ProtectedLayout({ children }: { children: ReactNode }) {
   const router = useRouter();
   const { data: me, isPending, error } = useMe();
 
+  const onboarding = me !== undefined && isOnboardingStatus(me.merchant.status);
+
   useEffect(() => {
     if (isUnauthorized(error)) {
       router.replace('/login');
+    } else if (onboarding) {
+      router.replace('/setup');
     }
-  }, [error, router]);
+  }, [error, onboarding, router]);
 
-  if (isPending || isUnauthorized(error)) {
+  if (isPending || isUnauthorized(error) || onboarding) {
     return <ScreenLoader />;
   }
 

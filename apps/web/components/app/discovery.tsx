@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { EmptyBlock } from '@/components/app/async-states';
 import { StoreAvatar } from '@/components/app/store-avatar';
+import { ChannelChip, useCategoryLabel } from '@/components/app/store-labels';
 
 /**
  * Merchant discovery building blocks shared by the public landing page and
@@ -96,53 +97,56 @@ function StoreLink({ slug, children }: { slug: string; children: ReactNode }) {
 const clickableCard =
   'h-full transition-colors group-hover:border-primary/40 group-hover:bg-muted/40';
 
-/** Standard merchant card: name, category, current rate, promo/distance. */
+/**
+ * Standard merchant card (§1 store-channel decision): avatar on the
+ * inline-start, then name, the current rate prominent, and the channel
+ * label chip — never the raw channel enum. Category (curated-list label),
+ * promo end and distance follow as muted meta.
+ */
 export function MerchantCard({ entry }: { entry: DiscoveryEntry }) {
   const { t } = useTranslation();
+  const categoryLabel = useCategoryLabel();
   const boosted = entry.rate_bp > entry.standing_rate_bp;
 
   return (
     <StoreLink slug={entry.slug}>
       <Card className={clickableCard}>
-        <CardContent className="flex flex-col gap-2 p-5">
-          <div className="flex items-start justify-between gap-2">
-            <div className="flex min-w-0 items-center gap-3">
-              <StoreAvatar
-                name={entry.name}
-                slug={entry.slug}
-                logoUrl={entry.logo_url}
-              />
-              <span className="text-sm font-medium text-mono">
-                {entry.name}
-              </span>
+        <CardContent className="flex items-start gap-3 p-5">
+          <StoreAvatar
+            name={entry.name}
+            slug={entry.slug}
+            logoUrl={entry.logo_url}
+          />
+          <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+            <span className="truncate text-sm font-medium text-mono">
+              {entry.name}
+            </span>
+
+            <span className="text-lg font-semibold text-mono">
+              {boosted
+                ? t('discover.rateUsually', {
+                    rate: formatRateBp(entry.rate_bp),
+                    usual: formatRateBp(entry.standing_rate_bp),
+                  })
+                : t('discover.rate', { rate: formatRateBp(entry.rate_bp) })}
+            </span>
+
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+              <ChannelChip channel={entry.channel} />
+              {entry.category !== null && (
+                <span>{categoryLabel(entry.category)}</span>
+              )}
+              {boosted && entry.promo_ends_at !== null && (
+                <span>
+                  {t('discover.promoUntil', {
+                    date: formatDate(entry.promo_ends_at),
+                  })}
+                </span>
+              )}
+              {entry.distance_m !== null && (
+                <DistanceLine meters={entry.distance_m} />
+              )}
             </div>
-            {entry.category !== null && (
-              <Badge variant="secondary" appearance="light" size="sm">
-                {entry.category}
-              </Badge>
-            )}
-          </div>
-
-          <span className="text-lg font-semibold text-mono">
-            {boosted
-              ? t('discover.rateUsually', {
-                  rate: formatRateBp(entry.rate_bp),
-                  usual: formatRateBp(entry.standing_rate_bp),
-                })
-              : t('discover.rate', { rate: formatRateBp(entry.rate_bp) })}
-          </span>
-
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-            {boosted && entry.promo_ends_at !== null && (
-              <span>
-                {t('discover.promoUntil', {
-                  date: formatDate(entry.promo_ends_at),
-                })}
-              </span>
-            )}
-            {entry.distance_m !== null && (
-              <DistanceLine meters={entry.distance_m} />
-            )}
           </div>
         </CardContent>
       </Card>
@@ -151,56 +155,61 @@ export function MerchantCard({ entry }: { entry: DiscoveryEntry }) {
 }
 
 /**
- * Promotion card for the "increased cashback" shelf: the boosted rate is the
- * headline, the standing rate is struck out beside it, and the promo end
- * date sits in a chip.
+ * Promotion card for the "increased cashback" shelf: same avatar-start
+ * layout, the boosted rate as the headline, the standing rate struck out in
+ * the meta row, the promo end in a chip, and the channel label chip —
+ * never the raw enum.
  */
 export function PromoCard({ entry }: { entry: DiscoveryEntry }) {
   const { t } = useTranslation();
+  const categoryLabel = useCategoryLabel();
 
   return (
     <StoreLink slug={entry.slug}>
       <Card className={clickableCard}>
-        <CardContent className="flex flex-col gap-3 p-5">
-          <div className="flex items-start justify-between gap-2">
-            <div className="flex min-w-0 items-center gap-3">
-              <StoreAvatar
-                name={entry.name}
-                slug={entry.slug}
-                logoUrl={entry.logo_url}
-              />
-              <span className="text-sm font-medium text-mono">
+        <CardContent className="flex items-start gap-3 p-5">
+          <StoreAvatar
+            name={entry.name}
+            slug={entry.slug}
+            logoUrl={entry.logo_url}
+          />
+          <div className="flex min-w-0 flex-1 flex-col gap-2">
+            <div className="flex items-start justify-between gap-2">
+              <span className="truncate text-sm font-medium text-mono">
                 {entry.name}
               </span>
+              {entry.promo_ends_at !== null && (
+                <Badge variant="warning" appearance="light" size="sm">
+                  {t('discover.endsChip', {
+                    date: formatDate(entry.promo_ends_at),
+                  })}
+                </Badge>
+              )}
             </div>
-            {entry.promo_ends_at !== null && (
-              <Badge variant="warning" appearance="light" size="sm">
-                {t('discover.endsChip', {
-                  date: formatDate(entry.promo_ends_at),
+
+            <div className="flex items-baseline gap-2">
+              <span className="text-3xl font-bold tracking-tight text-primary">
+                {formatRateBp(entry.rate_bp)}
+              </span>
+              <span className="text-sm text-muted-foreground">
+                {t('discover.cashbackLabel')}
+              </span>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+              <span className="line-through">
+                {t('discover.usuallyRate', {
+                  rate: formatRateBp(entry.standing_rate_bp),
                 })}
-              </Badge>
-            )}
-          </div>
-
-          <div className="flex items-baseline gap-2">
-            <span className="text-3xl font-bold tracking-tight text-primary">
-              {formatRateBp(entry.rate_bp)}
-            </span>
-            <span className="text-sm text-muted-foreground">
-              {t('discover.cashbackLabel')}
-            </span>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-            <span className="line-through">
-              {t('discover.usuallyRate', {
-                rate: formatRateBp(entry.standing_rate_bp),
-              })}
-            </span>
-            {entry.category !== null && <span>{entry.category}</span>}
-            {entry.distance_m !== null && (
-              <DistanceLine meters={entry.distance_m} />
-            )}
+              </span>
+              <ChannelChip channel={entry.channel} />
+              {entry.category !== null && (
+                <span>{categoryLabel(entry.category)}</span>
+              )}
+              {entry.distance_m !== null && (
+                <DistanceLine meters={entry.distance_m} />
+              )}
+            </div>
           </div>
         </CardContent>
       </Card>

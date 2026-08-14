@@ -5,6 +5,7 @@ namespace App\Models;
 use Database\Factories\MerchantFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Laravel\Sanctum\HasApiTokens;
@@ -24,7 +25,10 @@ class Merchant extends Model
         return [
             'validation_window_days' => 'integer',
             'min_eligible_laari' => 'integer',
-            'is_online' => 'boolean',
+            'setup_state' => 'array',
+            'submitted_at' => 'immutable_datetime',
+            'approved_at' => 'immutable_datetime',
+            'rejected_at' => 'immutable_datetime',
         ];
     }
 
@@ -66,5 +70,10 @@ class Merchant extends Model
     public function wallet(): HasOne
     {
         return $this->hasOne(MerchantWallet::class);
+    }
+
+    public function approvedBy(): BelongsTo
+    {
+        return $this->belongsTo(AdminUser::class, 'approved_by');
     }
 }
