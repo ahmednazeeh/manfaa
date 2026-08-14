@@ -27,6 +27,15 @@ use Illuminate\Support\Facades\DB;
  * is still recorded (ingestion never stops) but with zero cashback, zero
  * fee, no journal, and an immediate terminal reversal — the exact
  * below-minimum mechanics with a different reason code.
+ *
+ * Promotions (PLAN §12 Phase 3): TermsResolver walks the live PUBLISHED
+ * candidates covering occurred_at, the sale's branch and its minimum
+ * purchase — promo rate pricing the row, fee following the promo rate's §4
+ * tier, per-customer caps settled under a Postgres advisory transaction
+ * lock, exhausted candidates falling through to the next live promotion,
+ * and the whole result floored at the standing terms (a promotion never
+ * pays less than no promotion). A sale matching no candidate simply earns
+ * the standing rate; it is never rejected.
  */
 final readonly class CreditRecorder
 {
@@ -40,6 +49,7 @@ final readonly class CreditRecorder
         private TransitionService $transitions,
         private Postings $postings,
         private CashbackCalculator $calculator,
+        private TermsResolver $terms,
     ) {}
 
     public function record(
@@ -68,7 +78,7 @@ final readonly class CreditRecorder
         // Rate and fee are frozen at occurred_at even when the cashback is
         // zeroed (below minimum, suspended merchant) — the row must evidence
         // the terms it met.
-        $result = $this->calculator->calculate($eligible, Rate::cashback($this->resolveRateBp($merchant, $occurredAt)));
+        $standingBp = $this->resolveRateBp($merchant, $occurredAt);
 
         $ineligible = $ineligibleReason !== null;
         $belowMinimum = $eligible->value() < $merchant->min_eligible_laari;
@@ -82,11 +92,19 @@ final readonly class CreditRecorder
         $reason = $ineligible ? $ineligibleReason : ($belowMinimum ? 'below_minimum' : null);
 
         try {
-            return DB::transaction(function () use ($merchant, $actor, $origin, $customer, $invoiceNo, $eligible, $saleAmount, $occurredAt, $now, $branchId, $idempotencyKey, $result, $zeroed, $reason, $stale): Transaction {
+            return DB::transaction(function () use ($merchant, $actor, $origin, $customer, $invoiceNo, $eligible, $saleAmount, $occurredAt, $now, $branchId, $idempotencyKey, $standingBp, $zeroed, $reason, $stale): Transaction {
+                // Promo-aware terms at occurred_at (PLAN §12 Phase 3): only
+                // rows that actually accrue consult promotions — a zeroed row
+                // freezes the standing terms it failed against.
+                [$result, $promotionId] = $zeroed
+                    ? [$this->calculator->calculate($eligible, Rate::cashback($standingBp)), null]
+                    : $this->terms->resolve($merchant->id, $branchId, $eligible, $standingBp, $customer->id, $occurredAt);
+
                 $transaction = Transaction::query()->create([
                     'merchant_id' => $merchant->id,
                     'branch_id' => $branchId,
                     'customer_id' => $customer->id,
+                    'promotion_id' => $promotionId,
                     'origin' => $origin,
                     'invoice_no' => $invoiceNo,
                     'idempotency_key' => $idempotencyKey,

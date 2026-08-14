@@ -133,8 +133,8 @@ Reject any `rate_bp` below 50, above 1000, or non-integer — otherwise 4.995% f
 
 ```
 // normal
-cashback_laari = intdiv(eligible_laari * rate_bp + 5000, 10000)
-fee_laari      = intdiv(eligible_laari * fee_bp  + 5000, 10000)
+cashback_laari = intdiv(eligible_laari * rate_bp + 9999, 10000)   // ceiling
+fee_laari      = intdiv(eligible_laari * fee_bp  + 9999, 10000)   // ceiling
 
 // when a promotional cap clips the reward, the fee follows the reward granted
 cashback_laari = min(cashback_laari, cap_remaining_laari)

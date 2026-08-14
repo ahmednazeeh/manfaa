@@ -34,7 +34,11 @@ export function MoneyText({
   ...props
 }: MoneyTextProps) {
   return (
+    // dir="ltr" isolates the amount from an RTL (Dhivehi) paragraph: money
+    // always reads "MVR 1,234.56" / "-MVR 5.00" — without the isolate the
+    // bidi algorithm moves a leading minus to the other end under dir="rtl".
     <span
+      dir="ltr"
       className={['tabular-nums', className].filter(Boolean).join(' ')}
       {...props}
     >

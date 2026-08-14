@@ -3,15 +3,20 @@ import { apiFetch } from './client';
 import {
   dataWrapped,
   paginated,
+  PromotionSchema,
+  PromotionStatusSchema,
+  RateDescriptionSchema,
   SettlementSchema,
   TransactionSchema,
   WalletSchema,
+  type PromotionStatus,
 } from './resources';
 
 /**
- * Typed contracts for the merchant surface (Phase 1): outstanding by age
- * bucket, the settlement builder and lifecycle, the wallet, and manual
- * credits. All amounts sent and received are integer laari.
+ * Typed contracts for the merchant surface: outstanding by age bucket, the
+ * settlement builder and lifecycle, the wallet, manual credits (Phase 1),
+ * and the promotion builder (Phase 3). All amounts sent and received are
+ * integer laari.
  */
 
 interface RequestOptions {
@@ -192,4 +197,121 @@ export function createMerchantCredit(
     body,
     signal: options.signal,
   });
+}
+
+// ---------------------------------------------------------------------------
+// Promotions (Phase 3)
+// ---------------------------------------------------------------------------
+
+/**
+ * The §4 all-in cost picture returned alongside create and publish: what the
+ * merchant pays per transaction during the promotion versus their standing
+ * terms at the window start. `tier_changed` is the tier-cliff warning the UI
+ * must surface (e.g. 499 → 500 bp: +0.01pp cashback costs +0.26pp all-in).
+ */
+export const PromotionCostPreviewSchema = z.object({
+  promo: RateDescriptionSchema,
+  /** Null when no standing rate is effective at the window start. */
+  standing: RateDescriptionSchema.nullable(),
+  all_in_delta_bp: z.number().int().nullable(),
+  tier_changed: z.boolean(),
+});
+export type PromotionCostPreview = z.infer<typeof PromotionCostPreviewSchema>;
+
+export const MerchantPromotionListResponseSchema = z.object({
+  data: z.array(PromotionSchema),
+});
+export type MerchantPromotionListResponse = z.infer<
+  typeof MerchantPromotionListResponseSchema
+>;
+
+export const MerchantPromotionResponseSchema = dataWrapped(PromotionSchema);
+export type MerchantPromotionResponse = z.infer<
+  typeof MerchantPromotionResponseSchema
+>;
+
+export const MerchantPromotionWithPreviewResponseSchema = z.object({
+  data: PromotionSchema,
+  cost_preview: PromotionCostPreviewSchema,
+});
+export type MerchantPromotionWithPreviewResponse = z.infer<
+  typeof MerchantPromotionWithPreviewResponseSchema
+>;
+
+/** GET /api/merchant/promotions — newest first; staff may read, owner mutates. */
+export function listMerchantPromotions(
+  params: { status?: PromotionStatus } = {},
+  options: RequestOptions = {},
+): Promise<MerchantPromotionListResponse> {
+  const query =
+    params.status !== undefined
+      ? `?status=${encodeURIComponent(params.status)}`
+      : '';
+  return apiFetch(
+    `/api/merchant/promotions${query}`,
+    MerchantPromotionListResponseSchema,
+    { signal: options.signal },
+  );
+}
+
+export const CreatePromotionRequestSchema = z.object({
+  /** Integer basis points, 50–1000, and must exceed the standing rate. */
+  rate_bp: z.number().int().min(50).max(1000),
+  /** ISO 8601 with an explicit UTC offset, e.g. "2026-09-01T00:00:00+05:00". */
+  starts_at: z.string(),
+  ends_at: z.string(),
+  /** Integer laari. */
+  min_purchase_laari: z.number().int().min(0).optional(),
+  /** Integer laari; the per-customer promo cap. */
+  max_cashback_per_customer_laari: z.number().int().min(1).optional(),
+  /** Omit for a merchant-wide promotion. */
+  branch_id: z.number().int().optional(),
+});
+export type CreatePromotionRequest = z.infer<
+  typeof CreatePromotionRequestSchema
+>;
+
+/** POST /api/merchant/promotions — creates a draft (201). Owner only (403). */
+export function createMerchantPromotion(
+  body: CreatePromotionRequest,
+  options: RequestOptions = {},
+): Promise<MerchantPromotionWithPreviewResponse> {
+  return apiFetch(
+    '/api/merchant/promotions',
+    MerchantPromotionWithPreviewResponseSchema,
+    { method: 'POST', body, signal: options.signal },
+  );
+}
+
+/**
+ * POST /api/merchant/promotions/{id}/publish — draft → published. Owner
+ * only. Once published the promotion is IMMUTABLE for its stated duration —
+ * there is deliberately no update and no early-end endpoint; a non-draft
+ * answers 409.
+ */
+export function publishMerchantPromotion(
+  id: number,
+  options: RequestOptions = {},
+): Promise<MerchantPromotionWithPreviewResponse> {
+  return apiFetch(
+    `/api/merchant/promotions/${id}/publish`,
+    MerchantPromotionWithPreviewResponseSchema,
+    { method: 'POST', signal: options.signal },
+  );
+}
+
+/**
+ * POST /api/merchant/promotions/{id}/cancel — withdraws a DRAFT. Owner only.
+ * A published promotion can never be cancelled (409) — that would be the
+ * forbidden early end.
+ */
+export function cancelMerchantPromotion(
+  id: number,
+  options: RequestOptions = {},
+): Promise<MerchantPromotionResponse> {
+  return apiFetch(
+    `/api/merchant/promotions/${id}/cancel`,
+    MerchantPromotionResponseSchema,
+    { method: 'POST', signal: options.signal },
+  );
 }

@@ -260,6 +260,28 @@ offline queue promptly.
 A closed (not merely suspended) merchant account answers
 `403 forbidden_ability` in the error envelope — stop sending and contact us.
 
+#### Online stores
+
+Web checkouts use the **same endpoint, same contract** — nothing above
+changes. Two ways to key the customer:
+
+- **Customer code at checkout** — ask for the 6-digit code in your checkout
+  flow and send it as `customer_ref`, exactly like a till.
+- **Phone-keyed posting** — send the customer's Maldivian mobile as
+  `customer_ref` instead: full `+960XXXXXXX`, or the 7-digit local form
+  (mobiles start `7` or `9`; we normalise to `+960` E.164). Phone-keyed
+  transactions record `origin: "api_phone"`; the reward still lands at
+  Pending and confirms on settlement like any other sale. An unknown phone
+  answers `422 customer_not_found`, exactly like an unknown code.
+
+Mind the mistyped-phone risk: a one-digit slip is far more likely to be a
+*real, currently-assigned* number than a mistyped code is to be a real code,
+and it silently credits a stranger. Prefer a verified phone from your own
+account records over free-typed entry, or confirm the masked name via
+`GET /v1/customers/lookup` (§4.4) before posting. A later release will let
+customers reject transactions they don't recognise — until then, send a
+reversal if a customer reports a credit that isn't theirs.
+
 ### 4.2 Reverse a sale — `POST /v1/transactions/{id}/reverse`
 
 Ability: `transactions:reverse`.

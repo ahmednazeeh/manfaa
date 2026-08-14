@@ -10,6 +10,7 @@ use App\Domain\Adjustment\ReversalService;
 use App\Domain\Cashback\Actor;
 use App\Domain\Cashback\ApiCreditService;
 use App\Domain\Cashback\CustomerNotFoundException;
+use App\Domain\Cashback\CustomerRef;
 use App\Domain\Cashback\DuplicateInvoiceException;
 use App\Domain\Cashback\FutureDatedTransactionException;
 use App\Domain\Cashback\MerchantNotActiveException;
@@ -44,7 +45,10 @@ class TransactionsController extends V1Controller
     {
         $data = $this->validateEnvelope($request, [
             'invoice_no' => ['required', 'string', 'max:64'],
-            'customer_ref' => ['required', 'string', 'digits:6'],
+            // Dual ref (CustomerRef): 6-digit code, or a Maldivian mobile
+            // (+960XXXXXXX / 7-digit local starting 7 or 9). Phone-keyed
+            // sales record origin api_phone; code-keyed stay pos.
+            'customer_ref' => ['required', 'string', 'regex:'.CustomerRef::PATTERN],
             'eligible_amount' => ['required', 'integer', 'min:1'],
             'sale_amount' => ['nullable', 'integer', 'min:1'],
             'occurred_at' => ['required', self::OCCURRED_AT_FORMATS],

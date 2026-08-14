@@ -16,11 +16,14 @@ class Promotion extends Model
     {
         return [
             'merchant_id' => 'integer',
+            'branch_id' => 'integer',
             'rate_bp' => 'integer',
             'starts_at' => 'immutable_datetime',
             'ends_at' => 'immutable_datetime',
             'min_purchase_laari' => 'integer',
             'max_cashback_per_customer_laari' => 'integer',
+            'published_at' => 'immutable_datetime',
+            'cancelled_at' => 'immutable_datetime',
         ];
     }
 

@@ -98,6 +98,63 @@ export const TransactionSchema = z.object({
 export type Transaction = z.infer<typeof TransactionSchema>;
 
 // ---------------------------------------------------------------------------
+// Promotions (shared by the merchant builder and the admin listing)
+// ---------------------------------------------------------------------------
+
+export const PromotionStatusSchema = z.enum([
+  'draft',
+  'published',
+  'ended',
+  'cancelled',
+]);
+export type PromotionStatus = z.infer<typeof PromotionStatusSchema>;
+
+/**
+ * The §4 cost picture of one cashback rate, all integer basis points: the
+ * platform fee tier the rate lands on and the resulting all-in merchant
+ * cost. Mind the tier cliffs (e.g. 499 → 500 moves the fee tier).
+ */
+export const RateDescriptionSchema = z.object({
+  rate_bp: z.number().int(),
+  fee_bp: z.number().int(),
+  all_in_bp: z.number().int(),
+});
+export type RateDescription = z.infer<typeof RateDescriptionSchema>;
+
+/**
+ * One promotion as the merchant and admin panels see it. The fee fields are
+ * resolved from the promo rate's §4 tier exactly as they will be at credit
+ * time. Timestamps are ISO 8601 in the business timezone (UTC+5).
+ */
+export const PromotionSchema = RateDescriptionSchema.extend({
+  id: z.number().int(),
+  merchant_id: z.number().int(),
+  branch_id: z.number().int().nullable(),
+  status: PromotionStatusSchema,
+  /** published AND the window covers now. */
+  is_live: z.boolean(),
+  starts_at: z.string(),
+  ends_at: z.string(),
+  min_purchase_laari: z.number().int().nullable(),
+  max_cashback_per_customer_laari: z.number().int().nullable(),
+  published_at: z.string().nullable(),
+  cancelled_at: z.string().nullable(),
+});
+export type Promotion = z.infer<typeof PromotionSchema>;
+
+// ---------------------------------------------------------------------------
+// Claims (customer files them; admin resolves them)
+// ---------------------------------------------------------------------------
+
+export const ClaimStateSchema = z.enum([
+  'open',
+  'in_review',
+  'approved',
+  'rejected',
+]);
+export type ClaimState = z.infer<typeof ClaimStateSchema>;
+
+// ---------------------------------------------------------------------------
 // Settlements
 // ---------------------------------------------------------------------------
 

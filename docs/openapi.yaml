@@ -195,6 +195,13 @@ paths:
                   customer_ref: '482917'
                   eligible_amount: 50000
                   occurred_at: '2026-08-14T11:09:00+05:00'
+              phoneKeyed:
+                summary: Online store, keyed by customer phone (origin api_phone)
+                value:
+                  invoice_no: WEB-88410
+                  customer_ref: '+9607712345'
+                  eligible_amount: 118000
+                  occurred_at: '2026-08-14T11:12:41+05:00'
       responses:
         '201':
           description: |
@@ -702,10 +709,14 @@ paths:
       summary: Confirm a customer ref at the till
       x-required-ability: customers:lookup
       description: |
-        Resolves a customer ref (the 6-digit customer code the customer
-        shows as digits or QR) to a **masked** name so the cashier can
-        confirm the right person is being credited — the defence against
-        recycled phone numbers and typos crediting a stranger.
+        Resolves a customer ref — the 6-digit customer code the customer
+        shows as digits or QR, or their Maldivian mobile (`+960XXXXXXX` or
+        the 7-digit local form starting `7` or `9`) — to a **masked** name
+        so the cashier can confirm the right person is being credited — the
+        defence against recycled phone numbers and typos crediting a
+        stranger. Confirm before every phone-keyed credit: a mistyped
+        mobile is a real, currently-assigned number more often than a
+        mistyped code is a real code.
 
         `valid: true` means the customer can currently earn. A ref that
         resolves but cannot earn (customer blocked or closed) returns `200`
@@ -718,11 +729,18 @@ paths:
         - name: ref
           in: query
           required: true
-          description: The customer's 6-digit code, as shown at the till.
+          description: |
+            The customer's 6-digit code as shown at the till, or their
+            Maldivian mobile (`+960XXXXXXX`, or 7-digit local starting `7`
+            or `9`). Remember to URL-encode `+` as `%2B`.
           schema:
             type: string
-            pattern: '^\d{6}$'
-          example: '482917'
+            pattern: '^(\d{6}|\+960[79]\d{6}|[79]\d{6})$'
+          examples:
+            code:
+              value: '482917'
+            phone:
+              value: '+9607712345'
       responses:
         '200':
           description: The ref resolves; confirm the masked name with the customer.
@@ -759,7 +777,7 @@ paths:
                       code: customer_not_found
                       message: 'No customer matches ref "000000".'
         '422':
-          description: '`validation_failed` — `ref` missing or not six digits.'
+          description: '`validation_failed` — `ref` missing, or neither a 6-digit code nor a Maldivian mobile.'
           content:
             application/json:
               schema:
@@ -772,7 +790,7 @@ paths:
                       message: The given data was invalid.
                       errors:
                         ref:
-                          - The ref field must be exactly six digits.
+                          - The ref field format is invalid.
 
 # ---------------------------------------------------------------------------
 # Outbound webhooks (PLAN §9.3)
@@ -1249,8 +1267,19 @@ components:
             `409 duplicate_invoice`.
         customer_ref:
           type: string
-          pattern: '^\d{6}$'
-          description: The customer's 6-digit code, shown at the till as digits or QR.
+          pattern: '^(\d{6}|\+960[79]\d{6}|[79]\d{6})$'
+          description: |
+            Who to credit — EITHER the customer's 6-digit code (shown at the
+            till as digits or QR), OR their Maldivian mobile number: full
+            `+960XXXXXXX`, or the 7-digit local form (mobiles start `7` or
+            `9`), normalised server-side to `+960` E.164 before lookup. The
+            two spaces never collide — codes are exactly six digits, local
+            mobiles exactly seven. Code-keyed transactions record
+            `origin: pos`; phone-keyed record `origin: api_phone`. An
+            unknown phone answers exactly like an unknown code —
+            `422 customer_not_found`. Any other shape is
+            `422 validation_failed`.
+          examples: ['482917', '+9607712345', '7712345']
         eligible_amount:
           allOf:
             - $ref: '#/components/schemas/LaariAmount'
@@ -1318,7 +1347,10 @@ components:
           description: Platform transaction id. Store it — reversals address it.
         origin:
           type: string
-          description: How the transaction entered the platform. API-created transactions are `pos`.
+          description: |
+            How the transaction entered the platform. API-created
+            transactions are `pos` when `customer_ref` was the 6-digit code,
+            `api_phone` when it was a phone number.
           enum: [pos, manual, online_link, api_phone, card_linked]
         invoice_no:
           type: string

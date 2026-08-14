@@ -10,9 +10,16 @@ use App\Models\Transaction;
 use Carbon\CarbonImmutable;
 
 /**
- * The §9.2 POS ingestion path: origin 'pos', same rate-at-occurred_at
- * resolution, ceiling money, below-minimum and stale routing as the manual
- * path — all shared through CreditRecorder.
+ * The §9.2 API ingestion path: same rate-at-occurred_at resolution, ceiling
+ * money, below-minimum and stale routing as the manual path — all shared
+ * through CreditRecorder.
+ *
+ * customer_ref resolution is dual (original-spec online model 3): a 6-digit
+ * customer code, or a Maldivian mobile normalised to +960 E.164
+ * (CustomerRef). Phone-keyed credits record origin 'api_phone'; code-keyed
+ * stay 'pos'. An unknown phone answers exactly like an unknown code —
+ * CustomerNotFoundException, same shape — so the write path leaks nothing
+ * the rate-limited lookup endpoint does not already answer.
  *
  * The one POS-specific rule is §7 suspension semantics: suspension stops
  * cashback CREATION, not ingestion. A suspended merchant's till keeps
@@ -40,11 +47,26 @@ final readonly class ApiCreditService
             throw MerchantNotActiveException::for($merchant);
         }
 
+        // Controller validation already rejects malformed refs; a malformed
+        // ref reaching here gets the same terminal answer as an unknown one.
+        $ref = CustomerRef::parse($customerRef)
+            ?? throw CustomerNotFoundException::forCode($customerRef);
+
+        // Phone refs resolve here (CreditRecorder only knows codes, and its
+        // code path stays untouched); the recorder re-reads the customer by
+        // the code we hand it — same unique row, one source of truth.
+        $customerCode = $ref->normalized;
+
+        if ($ref->isPhone) {
+            $customer = $ref->resolve() ?? throw CustomerNotFoundException::forCode($customerRef);
+            $customerCode = $customer->customer_code;
+        }
+
         return $this->recorder->record(
             merchant: $merchant,
             actor: $actor,
-            origin: 'pos',
-            customerCode: $customerRef,
+            origin: $ref->origin(),
+            customerCode: $customerCode,
             invoiceNo: $invoiceNo,
             eligible: $eligible,
             saleAmount: $saleAmount,

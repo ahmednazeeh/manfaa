@@ -31,6 +31,26 @@
   text-align: start;
 }
 
+/*
+ * Dhivehi font wiring.
+ *
+ * `.font-thaana` is the opt-in utility for a single element (e.g. the
+ * "ދިވެހި" entry in a language switcher while the app is in English).
+ * The `html[lang='dv'] body` rule flips the WHOLE app to the Thaana font
+ * once the language provider sets <html lang="dv"> — it outweighs the
+ * next/font class on <body> by specificity, so apps need no override.
+ *
+ * Numerals: numbers, money and dates keep Latin (ASCII) digits under
+ * Dhivehi. Thaana defines no digits of its own and Maldivian financial
+ * material (bank statements, MMA notices, receipts) prints Latin numerals,
+ * so "MVR 1,234.56" renders identically in both languages — no digit
+ * remapping anywhere. Faruma carries Latin glyphs for exactly this case.
+ */
+.font-thaana,
+html[lang='dv'] body {
+  font-family: 'Faruma', 'DAM Kalhi', system-ui, sans-serif;
+}
+
 /* Money values align in columns regardless of theme or direction. */
 .money {
   font-variant-numeric: tabular-nums;

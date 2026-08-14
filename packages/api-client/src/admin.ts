@@ -1,18 +1,23 @@
 import { z } from 'zod';
 import { apiFetch, apiFetchText } from './client';
 import {
+  ClaimStateSchema,
   dataWrapped,
   paginated,
   PayoutBatchSchema,
+  PromotionSchema,
   SettlementPaymentSchema,
   SettlementSchema,
+  type ClaimState,
+  type PromotionStatus,
   type SettlementState,
 } from './resources';
 
 /**
- * Typed contracts for the admin surface (Phase 1): the settlement matching
- * queue, merchant standing and notices, reconciliation runs, and the payout
- * batch lifecycle. All amounts sent and received are integer laari.
+ * Typed contracts for the admin surface: the settlement matching queue,
+ * merchant standing and notices, reconciliation runs, the payout batch
+ * lifecycle (Phase 1), and the claims queue and promotions read model
+ * (Phase 3). All amounts sent and received are integer laari.
  */
 
 interface RequestOptions {
@@ -354,5 +359,152 @@ export function importAdminPayoutResults(
     `/api/admin/payout-batches/${batchId}/import`,
     PayoutBatchResponseSchema,
     { method: 'POST', body, signal: options.signal },
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Claims queue (Phase 3)
+// ---------------------------------------------------------------------------
+
+/**
+ * A claim as the admin queue sees it: everything the customer view shows,
+ * plus who filed it, who resolved it, and the resulting transaction link.
+ */
+export const AdminClaimSchema = z.object({
+  id: z.number().int(),
+  state: ClaimStateSchema,
+  merchant: z.object({
+    id: z.number().int(),
+    name: z.string(),
+    slug: z.string(),
+  }),
+  customer: z.object({
+    id: z.number().int(),
+    customer_code: z.string(),
+    name: z.string(),
+  }),
+  /** Business-timezone date, YYYY-MM-DD. */
+  purchased_at: z.string(),
+  amount_laari: z.number().int(),
+  currency: z.string(),
+  receipt_no: z.string(),
+  note: z.string().nullable(),
+  resolved_by: z.number().int().nullable(),
+  resolved_at: z.string().nullable(),
+  resolution_note: z.string().nullable(),
+  /** The transaction minted by approval (origin 'claim'). */
+  resulting_transaction_id: z.number().int().nullable(),
+  created_at: z.string(),
+});
+export type AdminClaim = z.infer<typeof AdminClaimSchema>;
+
+export const AdminClaimListResponseSchema = paginated(AdminClaimSchema);
+export type AdminClaimListResponse = z.infer<
+  typeof AdminClaimListResponseSchema
+>;
+
+export const AdminClaimResponseSchema = dataWrapped(AdminClaimSchema);
+export type AdminClaimResponse = z.infer<typeof AdminClaimResponseSchema>;
+
+/** GET /api/admin/claims — oldest first, optionally by state, 25 per page. */
+export function listAdminClaims(
+  params: { state?: ClaimState; page?: number; per_page?: number } = {},
+  options: RequestOptions = {},
+): Promise<AdminClaimListResponse> {
+  return apiFetch(
+    `/api/admin/claims${queryString({
+      state: params.state,
+      page: params.page,
+      per_page: params.per_page,
+    })}`,
+    AdminClaimListResponseSchema,
+    { signal: options.signal },
+  );
+}
+
+export const ApproveClaimRequestSchema = z.object({
+  resolution_note: z.string().max(1000).optional(),
+});
+export type ApproveClaimRequest = z.infer<typeof ApproveClaimRequestSchema>;
+
+/**
+ * POST /api/admin/claims/{id}/approve — mints the missed transaction:
+ * origin 'claim', the merchant's rate at the purchase date, normal ceiling
+ * money, merchant-funded accrual. 409 when already resolved or the invoice
+ * duplicates; 422 when the merchant is inactive, the amount is below
+ * minimum, or no rate was effective.
+ */
+export function approveAdminClaim(
+  claimId: number,
+  body: ApproveClaimRequest = {},
+  options: RequestOptions = {},
+): Promise<AdminClaimResponse> {
+  return apiFetch(
+    `/api/admin/claims/${claimId}/approve`,
+    AdminClaimResponseSchema,
+    { method: 'POST', body, signal: options.signal },
+  );
+}
+
+export const RejectClaimRequestSchema = z.object({
+  /** Required — becomes the resolution_note the customer sees (§9.4). */
+  reason: z.string().min(1).max(1000),
+});
+export type RejectClaimRequest = z.infer<typeof RejectClaimRequestSchema>;
+
+/** POST /api/admin/claims/{id}/reject — 409 when already resolved. */
+export function rejectAdminClaim(
+  claimId: number,
+  body: RejectClaimRequest,
+  options: RequestOptions = {},
+): Promise<AdminClaimResponse> {
+  return apiFetch(
+    `/api/admin/claims/${claimId}/reject`,
+    AdminClaimResponseSchema,
+    { method: 'POST', body, signal: options.signal },
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Promotions read model (Phase 3)
+// ---------------------------------------------------------------------------
+
+/** Custom envelope: plain meta, no links block. */
+export const AdminPromotionListResponseSchema = z.object({
+  data: z.array(PromotionSchema),
+  meta: z.object({
+    current_page: z.number().int(),
+    last_page: z.number().int(),
+    per_page: z.number().int(),
+    total: z.number().int(),
+  }),
+});
+export type AdminPromotionListResponse = z.infer<
+  typeof AdminPromotionListResponseSchema
+>;
+
+/**
+ * GET /api/admin/promotions — every merchant's promotions, newest first,
+ * filterable by merchant, status, and liveness (published AND the window
+ * covering now), 25 per page.
+ */
+export function listAdminPromotions(
+  params: {
+    merchant_id?: number;
+    status?: PromotionStatus;
+    live?: boolean;
+    page?: number;
+  } = {},
+  options: RequestOptions = {},
+): Promise<AdminPromotionListResponse> {
+  return apiFetch(
+    `/api/admin/promotions${queryString({
+      merchant_id: params.merchant_id,
+      status: params.status,
+      live: params.live === undefined ? undefined : params.live ? 1 : 0,
+      page: params.page,
+    })}`,
+    AdminPromotionListResponseSchema,
+    { signal: options.signal },
   );
 }

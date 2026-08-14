@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\V1;
 
-use App\Models\Customer;
+use App\Domain\Cashback\CustomerRef;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -12,18 +12,20 @@ use Illuminate\Support\Facades\RateLimiter;
 
 /**
  * GET /v1/customers/lookup?ref= — cashier confirmation at the till (§9.2,
- * §11): resolves the 6-digit customer code to a MASKED name so the right
+ * §11): resolves a customer ref — the 6-digit code, or a Maldivian mobile
+ * normalised to +960 E.164 (CustomerRef) — to a MASKED name so the right
  * person is credited. Only the masked name ever crosses this API — no
  * balance, phone number, or any other customer data.
  *
- * Enumeration control: the code space is only 10^6, so a credential walking
- * it could confirm which codes exist and harvest name fragments. A till's
- * legitimate misses are typos by a customer standing at the counter, so
- * failed lookups are (a) written to the log as an audit trail and (b)
- * counted per credential — past MISS_LIMIT misses in a day, every lookup on
- * that credential answers 429 until the window rolls, and the trip itself is
- * logged loudly for operations. Successful lookups are never throttled here
- * (the shared vendor-api limit still applies).
+ * Enumeration control: the code space is only 10^6 and the local mobile
+ * space barely bigger, so a credential walking either could confirm which
+ * refs exist and harvest name fragments. A till's legitimate misses are
+ * typos by a customer standing at the counter, so failed lookups — code and
+ * phone alike, one shared counter — are (a) written to the log as an audit
+ * trail and (b) counted per credential — past MISS_LIMIT misses in a day,
+ * every lookup on that credential answers 429 until the window rolls, and
+ * the trip itself is logged loudly for operations. Successful lookups are
+ * never throttled here (the shared vendor-api limit still applies).
  */
 class CustomerLookupController extends V1Controller
 {
@@ -35,7 +37,7 @@ class CustomerLookupController extends V1Controller
     public function __invoke(Request $request): JsonResponse
     {
         $data = $this->validateEnvelope($request, [
-            'ref' => ['required', 'string', 'digits:6'],
+            'ref' => ['required', 'string', 'regex:'.CustomerRef::PATTERN],
         ]);
 
         $missKey = $this->missKey($request);
@@ -48,7 +50,17 @@ class CustomerLookupController extends V1Controller
             );
         }
 
-        $customer = Customer::query()->where('customer_code', $data['ref'])->first();
+        $ref = CustomerRef::parse($data['ref']);
+
+        if ($ref === null) {
+            // Unreachable — the regex rule IS the parse pattern — but a
+            // guard beats a null deref if the two ever drift.
+            return $this->error(422, 'validation_failed', 'The given data was invalid.', errors: [
+                'ref' => ['The ref format is invalid.'],
+            ]);
+        }
+
+        $customer = $ref->resolve();
 
         if ($customer === null) {
             RateLimiter::hit($missKey, self::MISS_DECAY_SECONDS);
