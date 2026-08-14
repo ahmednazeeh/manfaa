@@ -30,6 +30,16 @@ Settled. Treat as constraints, not proposals.
 | Settlement flow | **Receipt-first, merchant-driven** (decision 2026-08-14 late): no settlement exists without a payment receipt. Merchant flow: select transactions → see amount due + platform bank account (copy button) + reference → transfer at their bank → upload slip + enter bank ref → SUBMIT creates the settlement directly in payment_review. Admin reviews the slip: Match (allocate/confirm) or Reject → rejected settlement cancels, lines release, merchant simply creates a new one. Admin-side recording remains as a fallback. No more merchant dead-end at awaiting_payment. |
 | Customer surface | Full customer web app ships in v1. Flutter consumes the same API later. |
 | Vendor auth | Per-merchant **Sanctum tokens** with abilities now; OAuth consent flow deferred to a later phase. |
+| Store self-signup | **Open self-signup with admin approval** (decision 2026-08-15): email + password + Maldivian mobile verified by SMS OTP → setup wizard (logo, channel, curated category, terms & exclusions, cashback %) → Save moves the store to **pending review**; superadmin approval queue activates it. Quitting mid-wizard resumes on next login. Store is invisible publicly until approved. Admin-created merchants remain possible. |
+| Store channel | `is_online` bool becomes **channel enum: in_store / online / both**. Display copy never says "both" — it reads "In Store & Online" (localised). Card layout: logo left, then name, cashback %, channel label. |
+| Store categories | **Superadmin-curated list** — admin CRUD on store categories; stores pick from the list only (no free text). Distinct from per-store PRODUCT categories below. |
+| Product-category rates | **Line-item pricing** (decision 2026-08-15): stores define their own product categories with per-category overrides (excluded, or a rate). Credit form and /v1 accept optional `lines: [{category, amount}]`; each line prices at its category's rate (excluded → 0, unlisted → standing rate), per-line ceiling rounding then sum per §4; the split is stored on the transaction. Lines must sum to the eligible amount. No lines supplied → whole amount at the standing rate (back-compatible). |
+| Staff roles | Three tiers (decision 2026-08-15): **Owner** (everything), **Manager** (rates, promotions, settlements, branches — NOT bank account, staff management, or API credentials), **Staff** (credit entry + read-only). |
+
+**Flagged assumption (promo × category precedence):** during a live promotion,
+excluded product categories STAY excluded; every non-excluded line prices at
+max(promotion rate, its category rate) — a promotion never pays less, and
+exclusions always hold. Change here if wrong.
 
 ### Assumptions taken (flagged, change if wrong)
 
@@ -515,6 +525,19 @@ Everything below is the remaining backlog, in execution order. Workflows must
 not overlap on the same app directory.
 
 ### Queued (in order)
+0a. **Task #24 — store onboarding wizard + storefront listing upgrade**
+   (decisions in §1): self-signup with phone OTP → resumable setup wizard
+   (logo, channel, curated category, terms, rate) → pending review → admin
+   approval queue; channel enum in_store/online/both (display "In Store &
+   Online", never "both"); superadmin-curated store categories; card layout
+   logo|name|%|channel; authed visitors never see "Create account" on /.
+0b. **Task #25 — product-category overrides with line-item pricing**
+   (HIGH-RISK money change, full review round mandatory): per-store product
+   categories (excluded or rate override), credits + /v1 accept
+   lines[{category, amount}] summing to eligible, per-line §4 ceiling
+   pricing + stored splits, promo precedence = max(promo, category) for
+   non-excluded lines, store page renders the category table.
+0c. **Task #26 — Manager role** (Owner / Manager / Staff three-tier).
 1. **Task #23 — receipt-first settlement flow + backdated policy + QR scan**
    (decisions already in §1 log): merchant settlement wizard ends with slip
    upload + bank ref, submit lands in payment_review (no settlement without
