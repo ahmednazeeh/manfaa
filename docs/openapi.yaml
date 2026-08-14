@@ -118,12 +118,12 @@ info:
     fixture data set is published in the vendor integration guide.
   contact:
     name: Manfaa integrations
-    email: integrations@manfaa.mv
+    email: integrations@manfaa.app
 
 servers:
-  - url: https://api.manfaa.mv/api
+  - url: https://api.manfaa.app/api
     description: Production. (Domain is the PLAN §14 placeholder until the production domain is confirmed.)
-  - url: https://sandbox.api.manfaa.mv/api
+  - url: https://api.manfaa.app/api
     description: Sandbox — fixture merchants and test customer refs (PLAN §9.5). No real cashback is ever created here.
 
 security:

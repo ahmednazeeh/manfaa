@@ -16,6 +16,11 @@ return Application::configure(basePath: dirname(__DIR__))
         // Sanctum stateful SPA auth: first-party panels and the customer web
         // app authenticate over session cookies against the api routes.
         $middleware->statefulApi();
+
+        // Origin sits behind nginx (same host) with Cloudflare in front;
+        // trust the local proxy so X-Forwarded-Proto marks requests secure
+        // and secure cookies survive the fastcgi hop.
+        $middleware->trustProxies(at: '*');
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(

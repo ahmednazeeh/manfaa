@@ -6,9 +6,6 @@ const nextConfig = {
   // Asset prefix for static assets
   assetPrefix: process.env.NEXT_PUBLIC_BASE_PATH || '',
 
-  // Standalone output for Docker deployment
-  output: 'standalone',
-
   // Workspace packages shipped as TypeScript source
   transpilePackages: ['@manfaa/ui', '@manfaa/api-client'],
 };

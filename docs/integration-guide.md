@@ -7,8 +7,8 @@ authoritative reference for every field and code.
 
 | Environment | Base URL |
 |---|---|
-| Sandbox | `https://sandbox.api.manfaa.mv/api` |
-| Production | `https://api.manfaa.mv/api` |
+| Sandbox | `https://sandbox.api.manfaa.app/api` |
+| Production | `https://api.manfaa.app/api` |
 
 Everything below uses the sandbox. Nothing you do there mints real cashback.
 
@@ -52,7 +52,7 @@ Export the printed token for the examples below:
 
 ```sh
 export MANFAA_TOKEN="<token printed by manfaa:sandbox>"
-export MANFAA_API="https://sandbox.api.manfaa.mv/api"
+export MANFAA_API="https://sandbox.api.manfaa.app/api"
 ```
 
 ---
@@ -567,4 +567,4 @@ that: monitor your endpoint's availability.
 - [ ] Webhook signature verified over raw bytes, events deduped by `id`
 - [ ] Rate cache refreshed on `merchant.rate_changed`, advertising stopped on `merchant.suspended`
 
-Questions: **integrations@manfaa.mv**.
+Questions: **integrations@manfaa.app**.
