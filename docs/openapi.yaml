@@ -1,0 +1,1650 @@
+openapi: 3.1.0
+
+# ---------------------------------------------------------------------------
+# Manfaa Vendor API — Phase 2 design artefact (PLAN §9).
+#
+# Written BEFORE the implementation. This document is the contract POS
+# vendors code against on day one and never revisit; the implementation
+# conforms to it, not the other way round.
+#
+# Reconciled against internal conventions already shipped in Phases 0–1:
+#   - money is an integer count of laari, rates are integer basis points,
+#     no floats anywhere (PLAN §4);
+#   - resources expose the raw laari integers plus pre-formatted MVR strings
+#     (e.g. cashback_laari: 2000 alongside cashback_mvr: "20.00");
+#   - timestamps are ISO 8601 with explicit UTC offset, stored UTC,
+#     business rules evaluated in UTC+5 (PLAN §13);
+#   - every state change flows through the transaction state machine (§6);
+#     the states named here are exactly the internal states.
+# ---------------------------------------------------------------------------
+
+info:
+  title: Manfaa Vendor API
+  version: 1.0.0
+  summary: Vendor-facing cashback ingestion API for POS systems and web merchants.
+  description: |
+    Maldives-wide cashback marketplace. POS systems and web merchants **POST**
+    sales to this API; the platform computes cashback, runs the settlement
+    clock, and pays customers. There is no polling contract — on-prem tills
+    sit behind NAT, so all integration traffic is inbound to us, plus signed
+    outbound webhooks (see the *Webhooks* section) so tills never cache stale
+    offers.
+
+    ## Money
+
+    - Every amount is an **integer count of laari** (1/100 MVR). Field names
+      carry the unit: `eligible_amount`, `cashback_laari`. JSON numbers with a
+      fractional part are rejected with `validation_failed` — never send
+      floats.
+    - Every rate is an **integer count of basis points**: 2% is `200`.
+    - Cashback and fee round **up** to the next whole laari per line
+      (`ceil(eligible × bp / 10000)`), customer-favourable, so any nonzero
+      eligible amount yields at least 1 laari.
+    - Responses carry both the integer (`cashback_laari`) and a
+      pre-formatted string (`cashback_mvr`, e.g. `"4,300.25"`) for receipt
+      and till display. The integer is the value; the string is presentation.
+    - `currency` is `MVR` only in v1.
+
+    ## Eligible amount
+
+    `eligible_amount` is **the merchant's own figure and is taken at face
+    value** — how it is derived (tax, service charge, excluded categories) is
+    the merchant's policy, defined in their agreement, never recomputed or
+    second-guessed by the API. `sale_amount` is optional, reference-only, and
+    never used in any computation.
+
+    ## Rates
+
+    The rate applied is the merchant's rate **effective at `occurred_at`**,
+    frozen onto the transaction. The till's displayed rate is advisory; the
+    server recomputes authoritatively. Rate *decreases* take effect only at
+    00:00 (UTC+5) the next day, so a stale till cache can only
+    under-promise, never over-promise.
+
+    ## Idempotency
+
+    Every write requires an `Idempotency-Key` header (a missing header is
+    `422 idempotency_key_required`). Keys are scoped to the merchant
+    credential. A repeated key with an identical request body replays the
+    original result with HTTP `200` and the response header
+    `Idempotency-Replay: true`. A repeated key with a **different** body is
+    rejected `422 idempotency_key_reuse_mismatch`. Independently,
+    `(merchant, invoice_no)` is unique — the same sale arriving as two
+    *distinct* requests (different keys) is rejected `409 duplicate_invoice`.
+
+    Use a fresh UUID v4 per logical write. Replays for transaction creation
+    are permanent (backed by the stored row); replays for reversals are
+    guaranteed for at least 7 days after first use.
+
+    **Retry rule:** on a network failure, timeout, or any `5xx`, retry with
+    the **same** `Idempotency-Key`. Every documented `4xx` is terminal — fix
+    the request or stop; do not blind-retry. Transient coordination codes
+    (e.g. `409 idempotency_key_in_flight`, returned while a concurrent
+    request holding the same key is still processing) are deliberately not
+    in the registry and follow the same rule: not listed means retry with
+    the same key.
+
+    ## Timestamps
+
+    `occurred_at` must be ISO 8601 **with an explicit UTC offset**
+    (`2026-08-14T11:04:22+05:00`; `Z` is an offset). Offsetless local times
+    are rejected `validation_failed`. Future-dated sales (beyond a 5-minute
+    clock-skew allowance) are rejected `future_dated`. Sales older than the
+    merchant's validation window plus 3 days are **accepted** but routed to
+    review (`state: on_hold`, `reason_code: stale_timestamp`) rather than
+    into a live settlement batch. All response timestamps are ISO 8601 UTC.
+
+    ## Errors
+
+    Every error response is the envelope `{"error": {"code", "message"}}`,
+    with three exceptions raised by the platform edge before the vendor API
+    proper: a missing/invalid/revoked token is `401`
+    `{"message": "Unauthenticated."}`, a valid token lacking the required
+    ability is `403` `{"message": "Invalid ability provided."}`, and
+    exceeding the rate limit (120 requests/minute per token) is `429`
+    `{"message": "Too Many Attempts."}` with a `Retry-After` header.
+    Everywhere else `code` is a stable machine code — the registry,
+    including the non-error reason codes that appear in `200` bodies, is
+    documented at
+    [`#/components/schemas/MachineCode`](#/components/schemas/MachineCode).
+    `message` is human-readable and may change; never match on it.
+
+    ## Sandbox
+
+    A full sandbox environment (see `servers`) provides fixture merchants,
+    test credentials, and published test customer refs, so no vendor ever
+    debugs against production or mints real cashback doing it. Sandbox
+    tokens are issued alongside production credentials at onboarding; the
+    fixture data set is published in the vendor integration guide.
+  contact:
+    name: Manfaa integrations
+    email: integrations@manfaa.mv
+
+servers:
+  - url: https://api.manfaa.mv/api
+    description: Production. (Domain is the PLAN §14 placeholder until the production domain is confirmed.)
+  - url: https://sandbox.api.manfaa.mv/api
+    description: Sandbox — fixture merchants and test customer refs (PLAN §9.5). No real cashback is ever created here.
+
+security:
+  - vendorToken: []
+
+tags:
+  - name: Transactions
+    description: Recording sales and sending reversals. Sending reversals for refunded or voided sales is a contractual obligation under the vendor integration agreement, not best-effort.
+  - name: Merchant
+    description: Merchant configuration reads for the till.
+  - name: Customers
+    description: Customer confirmation at the point of sale.
+
+paths:
+
+  /v1/transactions:
+    post:
+      operationId: createTransaction
+      tags: [Transactions]
+      summary: Record a sale and accrue cashback
+      x-required-ability: transactions:write
+      description: |
+        Records a sale for the authenticated merchant and accrues cashback at
+        the rate effective at `occurred_at`. The transaction enters the
+        merchant's validation (refund) window; the 15-day settlement clock
+        starts when that window closes.
+
+        This endpoint **never rejects a well-formed sale for business
+        reasons** — below-minimum sales and sales from suspended merchants
+        are accepted and recorded with `cashback_laari: 0`, a reason code,
+        and a distinct `200` body, so the cashier always sees something
+        truthful. Only malformed requests, duplicates, and auth failures are
+        errors.
+
+        | HTTP | Meaning |
+        |---|---|
+        | `201` | Created — cashback accrued (or held for review if stale). |
+        | `200` + `Idempotency-Replay: true` | Replay of the original result for this `Idempotency-Key`. |
+        | `200` `status: recorded_ineligible` | Merchant is suspended; sale recorded, **no cashback**. |
+        | `200` `status: below_minimum` | Below the merchant's minimum eligible amount; recorded, **no cashback**. |
+        | `409` | `duplicate_invoice`. |
+        | `422` | Validation failure — including offsetless or future-dated `occurred_at`, unknown `customer_ref`, missing or mismatched `Idempotency-Key`. |
+
+        A **closed** (not merely suspended) merchant account is refused
+        `403 forbidden_ability` in the error envelope — the credential
+        should already be revoked; stop sending and contact the platform.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransactionCreateRequest'
+            examples:
+              typical:
+                summary: A typical POS sale
+                value:
+                  invoice_no: INV-1001
+                  customer_ref: '482917'
+                  eligible_amount: 118000
+                  sale_amount: 125000
+                  occurred_at: '2026-08-14T11:04:22+05:00'
+                  branch_id: 3
+              minimal:
+                summary: Only the required fields
+                value:
+                  invoice_no: INV-1002
+                  customer_ref: '482917'
+                  eligible_amount: 50000
+                  occurred_at: '2026-08-14T11:09:00+05:00'
+      responses:
+        '201':
+          description: |
+            Sale recorded and cashback accrued. `state` is normally
+            `awaiting_validation` (the refund window). A sale older than the
+            merchant's validation window + 3 days is still `201` but arrives
+            in `state: on_hold` with `reason_code: stale_timestamp` — it is
+            routed to review, not into a live batch.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransactionWriteResult'
+              examples:
+                created:
+                  summary: Cashback accrued at 200 bp
+                  value:
+                    status: created
+                    reason: null
+                    transaction:
+                      id: 84521
+                      origin: pos
+                      invoice_no: INV-1001
+                      state: awaiting_validation
+                      reason_code: null
+                      currency: MVR
+                      eligible_laari: 118000
+                      sale_laari: 125000
+                      rate_bp: 200
+                      fee_bp: 75
+                      cashback_laari: 2360
+                      cashback_mvr: '23.60'
+                      fee_laari: 885
+                      fee_mvr: '8.85'
+                      fee_gst_laari: 0
+                      occurred_at: '2026-08-14T06:04:22+00:00'
+                      received_at: '2026-08-14T06:04:23+00:00'
+                staleHeld:
+                  summary: Stale sale accepted but held for review
+                  value:
+                    status: created
+                    reason: stale_timestamp
+                    transaction:
+                      id: 84522
+                      origin: pos
+                      invoice_no: INV-0844
+                      state: on_hold
+                      reason_code: stale_timestamp
+                      currency: MVR
+                      eligible_laari: 50000
+                      sale_laari: null
+                      rate_bp: 200
+                      fee_bp: 75
+                      cashback_laari: 1000
+                      cashback_mvr: '10.00'
+                      fee_laari: 375
+                      fee_mvr: '3.75'
+                      fee_gst_laari: 0
+                      occurred_at: '2026-08-01T10:00:00+00:00'
+                      received_at: '2026-08-14T06:04:23+00:00'
+        '200':
+          description: |
+            One of three non-error outcomes, distinguished by `status`:
+
+            - **Idempotent replay** — this `Idempotency-Key` was already
+              processed; the original result is returned unchanged, with the
+              `Idempotency-Replay: true` header. `status` reflects the
+              *original* outcome (a replayed creation has `status: created`).
+            - **`recorded_ineligible`** — the merchant is suspended
+              (settlement overdue past day 16). The sale is accepted and
+              recorded so the till never errors, but **no cashback accrues**:
+              `cashback_laari: 0`, `reason: merchant_suspended`, terminal
+              `state: reversed`. Resumes automatically on reinstatement — see
+              the `merchant.suspended` / `merchant.reinstated` webhooks.
+            - **`below_minimum`** — `eligible_amount` is below the merchant's
+              minimum eligible transaction. Recorded with
+              `cashback_laari: 0`, `reason: below_minimum`, terminal
+              `state: reversed`. Not an error — do not retry.
+          headers:
+            Idempotency-Replay:
+              $ref: '#/components/headers/IdempotencyReplay'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransactionWriteResult'
+              examples:
+                idempotentReplay:
+                  summary: Replay of an earlier successful creation (Idempotency-Replay header set)
+                  value:
+                    status: created
+                    reason: null
+                    transaction:
+                      id: 84521
+                      origin: pos
+                      invoice_no: INV-1001
+                      state: awaiting_validation
+                      reason_code: null
+                      currency: MVR
+                      eligible_laari: 118000
+                      sale_laari: 125000
+                      rate_bp: 200
+                      fee_bp: 75
+                      cashback_laari: 2360
+                      cashback_mvr: '23.60'
+                      fee_laari: 885
+                      fee_mvr: '8.85'
+                      fee_gst_laari: 0
+                      occurred_at: '2026-08-14T06:04:22+00:00'
+                      received_at: '2026-08-14T06:04:23+00:00'
+                recordedIneligibleSuspended:
+                  summary: Merchant suspended — recorded, no cashback
+                  value:
+                    status: recorded_ineligible
+                    reason: merchant_suspended
+                    transaction:
+                      id: 84523
+                      origin: pos
+                      invoice_no: INV-1003
+                      state: reversed
+                      reason_code: merchant_suspended
+                      currency: MVR
+                      eligible_laari: 200000
+                      sale_laari: null
+                      rate_bp: 200
+                      fee_bp: 75
+                      cashback_laari: 0
+                      cashback_mvr: '0.00'
+                      fee_laari: 0
+                      fee_mvr: '0.00'
+                      fee_gst_laari: 0
+                      occurred_at: '2026-08-14T06:10:00+00:00'
+                      received_at: '2026-08-14T06:10:01+00:00'
+                belowMinimum:
+                  summary: Below the merchant's minimum — recorded, zero cashback
+                  value:
+                    status: below_minimum
+                    reason: below_minimum
+                    transaction:
+                      id: 84524
+                      origin: pos
+                      invoice_no: INV-1004
+                      state: reversed
+                      reason_code: below_minimum
+                      currency: MVR
+                      eligible_laari: 3500
+                      sale_laari: 3500
+                      rate_bp: 200
+                      fee_bp: 75
+                      cashback_laari: 0
+                      cashback_mvr: '0.00'
+                      fee_laari: 0
+                      fee_mvr: '0.00'
+                      fee_gst_laari: 0
+                      occurred_at: '2026-08-14T06:12:00+00:00'
+                      received_at: '2026-08-14T06:12:01+00:00'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/ForbiddenAbility'
+        '409':
+          description: |
+            Terminal conflict — do not retry with the same request.
+
+            `duplicate_invoice` — this `invoice_no` already exists for the
+            merchant under a *different* `Idempotency-Key`: the same sale
+            arrived as two distinct requests. The existing transaction id
+            is in `error.meta.transaction_id`. Treat the sale as already
+            recorded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                duplicateInvoice:
+                  value:
+                    error:
+                      code: duplicate_invoice
+                      message: Invoice INV-1001 has already been recorded for this merchant.
+                      meta:
+                        transaction_id: 84521
+        '422':
+          description: |
+            The request is malformed or fails a published business rule.
+            Terminal — fix the request before resending (a corrected resend
+            is a new write: use a fresh `Idempotency-Key`).
+
+            Codes: `validation_failed` (shape errors — missing fields,
+            non-integer amounts, **offsetless `occurred_at`**, unknown
+            `branch_id`), `future_dated` (`occurred_at` beyond the 5-minute
+            skew allowance), `customer_not_found` (unknown `customer_ref` —
+            confirm the code with the customer via
+            `GET /v1/customers/lookup`), `no_effective_rate` (merchant has no
+            rate effective at `occurred_at` — contact the platform),
+            `idempotency_key_required` (the write arrived without the
+            mandatory `Idempotency-Key` header), and
+            `idempotency_key_reuse_mismatch` (this `Idempotency-Key` was
+            already used with a different request body — fix the till's key
+            generation; never reuse a key across different sales).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                idempotencyMismatch:
+                  value:
+                    error:
+                      code: idempotency_key_reuse_mismatch
+                      message: This Idempotency-Key was already used with a different request body.
+                offsetlessOccurredAt:
+                  summary: occurred_at without a UTC offset
+                  value:
+                    error:
+                      code: validation_failed
+                      message: The given data was invalid.
+                      errors:
+                        occurred_at:
+                          - The occurred_at field must be an ISO 8601 timestamp with an explicit UTC offset.
+                floatAmount:
+                  summary: Fractional eligible_amount
+                  value:
+                    error:
+                      code: validation_failed
+                      message: The given data was invalid.
+                      errors:
+                        eligible_amount:
+                          - The eligible_amount field must be an integer count of laari.
+                futureDated:
+                  value:
+                    error:
+                      code: future_dated
+                      message: occurred_at is in the future beyond the permitted clock-skew allowance.
+                customerNotFound:
+                  value:
+                    error:
+                      code: customer_not_found
+                      message: 'No customer matches ref "482917".'
+
+  /v1/transactions/{id}/reverse:
+    post:
+      operationId: reverseTransaction
+      tags: [Transactions]
+      summary: Reverse a recorded sale
+      x-required-ability: transactions:reverse
+      description: |
+        Reverses a sale — refund, till void, duplicate. Reversal reverses the
+        **stored** integers; nothing is ever recomputed from a since-changed
+        rate.
+
+        The outcome depends on where the transaction sits in its lifecycle,
+        and the `200` body distinguishes them so the till can tell them
+        apart:
+
+        - **`outcome: reversed`** — the transaction was still pending (not
+          yet locked into a settlement, not confirmed). It moves to
+          `state: reversed`; the accrual is reversed in full.
+        - **`outcome: adjustment_created`** — the transaction can no longer
+          be reversed in place: its line is **locked in a settlement batch**
+          that has left draft (`cause: locked_in_settlement`), or the reward
+          is **already confirmed or paid** (`cause: already_confirmed`). The
+          transaction is untouched; a credit adjustment is created instead
+          and applied to the merchant's next settlement batch. This is a
+          success, not a failure — record `adjustment.id` and move on.
+
+        Terminal states (`reversed`, `written_off`) return
+        `409 invalid_state`. Note: retrying a reversal with the **same**
+        `Idempotency-Key` replays the original `200`; `invalid_state` only
+        fires on a *new* key against an already-terminal transaction.
+
+        Cross-merchant ids return `404 transaction_not_found` —
+        indistinguishable from a nonexistent id, deliberately.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Transaction id, as returned at creation.
+          schema:
+            type: integer
+            format: int64
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReverseRequest'
+            examples:
+              refund:
+                value:
+                  reason: customer_refund
+                  occurred_at: '2026-08-15T09:30:00+05:00'
+      responses:
+        '200':
+          description: Reversal processed — see `outcome`.
+          headers:
+            Idempotency-Replay:
+              $ref: '#/components/headers/IdempotencyReplay'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReverseResult'
+              examples:
+                reversed:
+                  summary: Pending transaction reversed in place
+                  value:
+                    outcome: reversed
+                    cause: null
+                    adjustment: null
+                    transaction:
+                      id: 84521
+                      origin: pos
+                      invoice_no: INV-1001
+                      state: reversed
+                      reason_code: customer_refund
+                      currency: MVR
+                      eligible_laari: 118000
+                      sale_laari: 125000
+                      rate_bp: 200
+                      fee_bp: 75
+                      cashback_laari: 2360
+                      cashback_mvr: '23.60'
+                      fee_laari: 885
+                      fee_mvr: '8.85'
+                      fee_gst_laari: 0
+                      occurred_at: '2026-08-14T06:04:22+00:00'
+                      received_at: '2026-08-14T06:04:23+00:00'
+                lockedInSettlement:
+                  summary: Line locked in a non-draft settlement — credit adjustment created
+                  value:
+                    outcome: adjustment_created
+                    cause: locked_in_settlement
+                    adjustment:
+                      id: 311
+                      transaction_id: 84521
+                      amount_laari: -3245
+                      amount_mvr: '-32.45'
+                      currency: MVR
+                      reason_code: customer_refund
+                      created_at: '2026-08-15T04:30:00+00:00'
+                    transaction:
+                      id: 84521
+                      origin: pos
+                      invoice_no: INV-1001
+                      state: payable_unfunded
+                      reason_code: null
+                      currency: MVR
+                      eligible_laari: 118000
+                      sale_laari: 125000
+                      rate_bp: 200
+                      fee_bp: 75
+                      cashback_laari: 2360
+                      cashback_mvr: '23.60'
+                      fee_laari: 885
+                      fee_mvr: '8.85'
+                      fee_gst_laari: 0
+                      occurred_at: '2026-08-14T06:04:22+00:00'
+                      received_at: '2026-08-14T06:04:23+00:00'
+                alreadyConfirmed:
+                  summary: Reward already confirmed — credit adjustment created
+                  value:
+                    outcome: adjustment_created
+                    cause: already_confirmed
+                    adjustment:
+                      id: 312
+                      transaction_id: 84488
+                      amount_laari: -2750
+                      amount_mvr: '-27.50'
+                      currency: MVR
+                      reason_code: customer_refund
+                      created_at: '2026-08-15T04:31:00+00:00'
+                    transaction:
+                      id: 84488
+                      origin: pos
+                      invoice_no: INV-0991
+                      state: confirmed
+                      reason_code: null
+                      currency: MVR
+                      eligible_laari: 100000
+                      sale_laari: null
+                      rate_bp: 200
+                      fee_bp: 75
+                      cashback_laari: 2000
+                      cashback_mvr: '20.00'
+                      fee_laari: 750
+                      fee_mvr: '7.50'
+                      fee_gst_laari: 0
+                      occurred_at: '2026-08-10T05:00:00+00:00'
+                      received_at: '2026-08-10T05:00:01+00:00'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/ForbiddenAbility'
+        '404':
+          description: |
+            `transaction_not_found` — the id does not exist **or belongs to
+            another merchant**. The two cases are deliberately
+            indistinguishable.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                notFound:
+                  value:
+                    error:
+                      code: transaction_not_found
+                      message: No transaction with id 99999.
+        '409':
+          description: |
+            `invalid_state` — the transaction is in a terminal state
+            (`reversed`, `written_off`) and cannot be reversed again.
+            Terminal; do not retry. The current state is in
+            `error.meta.state`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                alreadyReversed:
+                  value:
+                    error:
+                      code: invalid_state
+                      message: Transaction 84521 is already reversed.
+                      meta:
+                        state: reversed
+        '422':
+          description: '`validation_failed` — missing `reason`, or offsetless / future-dated `occurred_at`.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                missingReason:
+                  value:
+                    error:
+                      code: validation_failed
+                      message: The given data was invalid.
+                      errors:
+                        reason:
+                          - The reason field is required.
+
+  /v1/merchants/me/rate:
+    get:
+      operationId: getMyRate
+      tags: [Merchant]
+      summary: Current rate for the till display
+      x-required-ability: rates:read
+      description: |
+        The authenticated merchant's current cashback rate and platform fee,
+        plus any **pending scheduled decrease**. Decreases take effect only
+        at 00:00 (UTC+5) the next day; increases take effect immediately, so
+        `pending_decrease` is the only kind of scheduled change that can
+        exist.
+
+        The value returned here is advisory, for the till display. The
+        server always recomputes authoritatively from the rate effective at
+        `occurred_at`. Vendors should refresh their cache on the
+        `merchant.rate_changed` webhook rather than poll.
+      responses:
+        '200':
+          description: Current rate and any pending scheduled decrease.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MerchantRate'
+              examples:
+                steady:
+                  summary: No pending change
+                  value:
+                    rate_bp: 200
+                    fee_bp: 75
+                    currency: MVR
+                    min_eligible_laari: 5000
+                    pending_decrease: null
+                decreaseScheduled:
+                  summary: Decrease scheduled for midnight UTC+5
+                  value:
+                    rate_bp: 200
+                    fee_bp: 75
+                    currency: MVR
+                    min_eligible_laari: 5000
+                    pending_decrease:
+                      rate_bp: 150
+                      fee_bp: 50
+                      effective_at: '2026-08-15T00:00:00+05:00'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/ForbiddenAbility'
+        '422':
+          description: '`no_effective_rate` — the merchant has no rate configured as of now. Contact the platform.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                noRate:
+                  value:
+                    error:
+                      code: no_effective_rate
+                      message: No cashback rate is currently effective — contact the platform.
+
+  /v1/customers/lookup:
+    get:
+      operationId: lookupCustomer
+      tags: [Customers]
+      summary: Confirm a customer ref at the till
+      x-required-ability: customers:lookup
+      description: |
+        Resolves a customer ref (the 6-digit customer code the customer
+        shows as digits or QR) to a **masked** name so the cashier can
+        confirm the right person is being credited — the defence against
+        recycled phone numbers and typos crediting a stranger.
+
+        `valid: true` means the customer can currently earn. A ref that
+        resolves but cannot earn (customer blocked or closed) returns `200`
+        with `valid: false`. An unknown ref returns `404
+        customer_not_found`.
+
+        Only the masked name is ever exposed. No balance, phone number, or
+        any other customer data crosses this API.
+      parameters:
+        - name: ref
+          in: query
+          required: true
+          description: The customer's 6-digit code, as shown at the till.
+          schema:
+            type: string
+            pattern: '^\d{6}$'
+          example: '482917'
+      responses:
+        '200':
+          description: The ref resolves; confirm the masked name with the customer.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerLookupResult'
+              examples:
+                valid:
+                  value:
+                    ref: '482917'
+                    valid: true
+                    masked_name: Ais*** Moh***
+                blocked:
+                  summary: Known ref that cannot currently earn
+                  value:
+                    ref: '104433'
+                    valid: false
+                    masked_name: Hus*** Ada***
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/ForbiddenAbility'
+        '404':
+          description: '`customer_not_found` — no customer matches this ref.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                unknown:
+                  value:
+                    error:
+                      code: customer_not_found
+                      message: 'No customer matches ref "000000".'
+        '422':
+          description: '`validation_failed` — `ref` missing or not six digits.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                badRef:
+                  value:
+                    error:
+                      code: validation_failed
+                      message: The given data was invalid.
+                      errors:
+                        ref:
+                          - The ref field must be exactly six digits.
+
+# ---------------------------------------------------------------------------
+# Outbound webhooks (PLAN §9.3)
+# ---------------------------------------------------------------------------
+webhooks:
+
+  merchant.rate_changed:
+    post:
+      operationId: webhookMerchantRateChanged
+      summary: The merchant's standing rate changed
+      description: |
+        Emitted whenever the merchant's rate changes. For decreases,
+        `effective_at` is 00:00 (UTC+5) the next day; for increases it is
+        the moment of the change. Refresh the till's cached rate on receipt
+        — without this event, tills cache indefinitely and quote offers the
+        platform will not honour.
+
+        See `WebhookEvent` for the envelope, signature verification, and the
+        retry policy common to all events.
+      parameters:
+        - $ref: '#/components/parameters/WebhookSignature'
+        - $ref: '#/components/parameters/WebhookTimestamp'
+        - $ref: '#/components/parameters/WebhookEventName'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/WebhookEvent'
+                - type: object
+                  properties:
+                    type:
+                      const: merchant.rate_changed
+                    data:
+                      $ref: '#/components/schemas/WebhookRateChangedData'
+            examples:
+              decrease:
+                value:
+                  id: evt_01J5A8Z0T2N9GQK4WMB3XVRD6H
+                  type: merchant.rate_changed
+                  created_at: '2026-08-14T16:05:11+05:00'
+                  data:
+                    merchant_id: 12
+                    rate_bp: 150
+                    fee_bp: 50
+                    previous_rate_bp: 200
+                    previous_fee_bp: 75
+                    effective_at: '2026-08-15T00:00:00+05:00'
+      responses:
+        '200':
+          description: Acknowledged. Any `2xx` counts as delivered; anything else (or a 10-second timeout) is retried.
+
+  merchant.suspended:
+    post:
+      operationId: webhookMerchantSuspended
+      summary: The merchant was suspended
+      description: |
+        Emitted when the merchant is automatically suspended (settlement
+        overdue past day 16). From this moment, `POST /v1/transactions`
+        returns `200 recorded_ineligible` with `reason: merchant_suspended`
+        — sales are still recorded, but no cashback accrues. Tills should
+        stop advertising cashback until `merchant.reinstated`.
+      parameters:
+        - $ref: '#/components/parameters/WebhookSignature'
+        - $ref: '#/components/parameters/WebhookTimestamp'
+        - $ref: '#/components/parameters/WebhookEventName'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/WebhookEvent'
+                - type: object
+                  properties:
+                    type:
+                      const: merchant.suspended
+                    data:
+                      $ref: '#/components/schemas/WebhookSuspendedData'
+            examples:
+              suspended:
+                value:
+                  id: evt_01J5A9B7WQZ3JD8T2NKC5YVEMF
+                  type: merchant.suspended
+                  created_at: '2026-08-16T00:05:00+05:00'
+                  data:
+                    merchant_id: 12
+                    reason: overdue_settlement
+                    suspended_at: '2026-08-16T00:05:00+05:00'
+      responses:
+        '200':
+          description: Acknowledged. Any `2xx` counts as delivered; anything else (or a 10-second timeout) is retried.
+
+  merchant.reinstated:
+    post:
+      operationId: webhookMerchantReinstated
+      summary: The merchant was reinstated
+      description: |
+        Emitted when a suspended merchant settles and is reinstated.
+        Cashback accrual resumes for sales received after
+        `reinstated_at`; tills may resume advertising the offer.
+      parameters:
+        - $ref: '#/components/parameters/WebhookSignature'
+        - $ref: '#/components/parameters/WebhookTimestamp'
+        - $ref: '#/components/parameters/WebhookEventName'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/WebhookEvent'
+                - type: object
+                  properties:
+                    type:
+                      const: merchant.reinstated
+                    data:
+                      $ref: '#/components/schemas/WebhookReinstatedData'
+            examples:
+              reinstated:
+                value:
+                  id: evt_01J5AB2R8XW4KE9V3PMD6ZTFNG
+                  type: merchant.reinstated
+                  created_at: '2026-08-18T10:12:00+05:00'
+                  data:
+                    merchant_id: 12
+                    reinstated_at: '2026-08-18T10:12:00+05:00'
+      responses:
+        '200':
+          description: Acknowledged. Any `2xx` counts as delivered; anything else (or a 10-second timeout) is retried.
+
+  transaction.reversed:
+    post:
+      operationId: webhookTransactionReversed
+      summary: A transaction was reversed
+      description: |
+        Emitted whenever one of the merchant's transactions transitions to
+        `reversed` — including reversals initiated outside this API (admin
+        action, dispute resolution), so the till's local record can be kept
+        in sync. Reversals the vendor itself initiated also emit this event;
+        deduplicate by transaction id.
+      parameters:
+        - $ref: '#/components/parameters/WebhookSignature'
+        - $ref: '#/components/parameters/WebhookTimestamp'
+        - $ref: '#/components/parameters/WebhookEventName'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/WebhookEvent'
+                - type: object
+                  properties:
+                    type:
+                      const: transaction.reversed
+                    data:
+                      $ref: '#/components/schemas/WebhookTransactionReversedData'
+            examples:
+              adminReversal:
+                value:
+                  id: evt_01J5AC9K2MHQ7FT5WNB8XVGDRP
+                  type: transaction.reversed
+                  created_at: '2026-08-15T14:20:00+05:00'
+                  data:
+                    transaction_id: 84521
+                    merchant_id: 12
+                    invoice_no: INV-1001
+                    reason: dispute_resolved
+                    reversed_at: '2026-08-15T14:20:00+05:00'
+      responses:
+        '200':
+          description: Acknowledged. Any `2xx` counts as delivered; anything else (or a 10-second timeout) is retried.
+
+# ---------------------------------------------------------------------------
+# Components
+# ---------------------------------------------------------------------------
+components:
+
+  securitySchemes:
+    vendorToken:
+      type: http
+      scheme: bearer
+      description: |
+        Per-merchant Sanctum personal access token, issued at onboarding —
+        one token per merchant per POS vendor, independently revocable, so a
+        merchant switching POS vendor never forces rotation across other
+        merchants.
+
+        Each token carries **abilities**; every operation declares the one
+        it requires as `x-required-ability`:
+
+        | Ability | Grants |
+        |---|---|
+        | `transactions:write` | `POST /v1/transactions` |
+        | `transactions:reverse` | `POST /v1/transactions/{id}/reverse` |
+        | `rates:read` | `GET /v1/merchants/me/rate` |
+        | `customers:lookup` | `GET /v1/customers/lookup` |
+
+        A missing or revoked token returns `401`
+        `{"message": "Unauthenticated."}`; a valid token lacking the
+        operation's ability returns `403`
+        `{"message": "Invalid ability provided."}` (both auth-layer bodies
+        — see `AuthLayerMessage`). Tokens are merchant-scoped: every
+        resource read or written belongs to the token's merchant, and other
+        merchants' resources answer `404`. Requests are throttled at 120
+        per minute **per token**; beyond that, `429`
+        `{"message": "Too Many Attempts."}` with `Retry-After`.
+
+  parameters:
+
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: |
+        Unique key for this write, generated by the till — a fresh UUID v4
+        per logical operation is recommended. Scoped to the merchant
+        credential. Omitting the header is `422 idempotency_key_required`.
+        Repeating a key with an identical body replays the original result
+        (`200` + `Idempotency-Replay: true`); repeating it with a different
+        body is `422 idempotency_key_reuse_mismatch`. Retries after network
+        failures or `5xx` MUST reuse the same key.
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 255
+      example: 0a1cf047-9d35-4f26-b8a9-6f2f7c1de1a4
+
+    WebhookSignature:
+      name: X-Manfaa-Signature
+      in: header
+      required: true
+      description: |
+        Lowercase hex encoding of `HMAC-SHA256(endpoint_secret, raw_body)`,
+        computed over the **raw request body bytes exactly as sent** — verify
+        before parsing, against the raw bytes, never a re-serialisation.
+        Compare in constant time. Retried deliveries carry an identical body
+        and therefore an identical signature.
+      schema:
+        type: string
+        pattern: '^[0-9a-f]{64}$'
+      example: 5b6c1de0f4a2b39c8e7d6f5a4b3c2d1e0f9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c
+
+    WebhookTimestamp:
+      name: X-Manfaa-Timestamp
+      in: header
+      required: true
+      description: |
+        Unix epoch seconds of this delivery **attempt**. Not covered by the
+        signature (which is over the body alone); use it for latency
+        monitoring and coarse staleness checks. Replay protection comes from
+        the signed body: deduplicate by the event `id` and reject events
+        whose signed `created_at` is implausibly old for your use.
+      schema:
+        type: integer
+        format: int64
+      example: 1755151511
+
+    WebhookEventName:
+      name: X-Manfaa-Event
+      in: header
+      required: true
+      description: |
+        The event name (equal to the body's `type`), so receivers can route
+        the delivery before parsing. Not covered by the signature — trust
+        the signed `type` field for anything beyond routing.
+      schema:
+        type: string
+        enum:
+          - merchant.rate_changed
+          - merchant.suspended
+          - merchant.reinstated
+          - transaction.reversed
+      example: merchant.rate_changed
+
+  headers:
+
+    IdempotencyReplay:
+      description: |
+        Present (with value `true`) when this response is a replay of a
+        previously processed `Idempotency-Key` rather than the result of new
+        work. Absent on first processing.
+      schema:
+        type: boolean
+
+  responses:
+
+    Unauthorized:
+      description: |
+        Missing, malformed, or revoked bearer token. Raised by the auth
+        layer before the vendor API proper, so the body is the bare
+        `{"message"}` shape, not the error envelope.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/AuthLayerMessage'
+          examples:
+            unauthorized:
+              value:
+                message: Unauthenticated.
+
+    ForbiddenAbility:
+      description: |
+        The token is valid but does not carry the ability this operation
+        requires (see `x-required-ability`). Raised by the auth layer, so
+        the body is the bare `{"message"}` shape, not the error envelope.
+        (The one enveloped `403` is the closed-merchant refusal on
+        `POST /v1/transactions`, code `forbidden_ability`.)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/AuthLayerMessage'
+          examples:
+            forbidden:
+              value:
+                message: Invalid ability provided.
+
+  schemas:
+
+    AuthLayerMessage:
+      type: object
+      description: |
+        The bare body shape of auth-layer and throttling failures (`401`,
+        missing-ability `403`, `429`), which are raised before the vendor
+        API proper and therefore do not use the error envelope.
+      required: [message]
+      properties:
+        message:
+          type: string
+          description: Human-readable. Distinguish these outcomes by HTTP status, never by message text.
+
+    MachineCode:
+      type: string
+      description: |
+        The registry of stable machine codes. Codes are contractual and
+        never change meaning; messages are human-readable and may change.
+        Codes appear in two places: as `error.code` in the error envelope,
+        and as reason/cause values inside `200`/`201` bodies (`reason`,
+        `cause`, `transaction.reason_code`).
+
+        Note: the usual `401` and missing-ability `403` are auth-layer
+        failures with the bare `{"message"}` body (see `AuthLayerMessage`)
+        — the `unauthorized` and `forbidden_ability` envelope codes appear
+        only on the edge paths noted below.
+
+        | Code | Appears as | HTTP | Retry? |
+        |---|---|---|---|
+        | `unauthorized` | error (edge paths; the usual 401 body is `{"message": "Unauthenticated."}`) | 401 | After fixing credentials |
+        | `forbidden_ability` | error (closed-merchant refusal; the usual missing-ability 403 body is `{"message": "Invalid ability provided."}`) | 403 | After fixing token abilities |
+        | `validation_failed` | error | 422 | Fix request; resend with a **fresh** key |
+        | `idempotency_key_required` | error | 422 | Add the header; resend |
+        | `idempotency_key_reuse_mismatch` | error | 422 | Never — fix key generation |
+        | `future_dated` | error | 422 | Fix the till clock; resend with a fresh key |
+        | `customer_not_found` | error | 422 (create) / 404 (lookup) | Re-confirm the ref with the customer |
+        | `no_effective_rate` | error | 422 | No — contact the platform |
+        | `duplicate_invoice` | error | 409 | Never — sale already recorded |
+        | `invalid_state` | error | 409 | Never — terminal state |
+        | `transaction_not_found` | error | 404 | Never |
+        | `merchant_suspended` | reason (`200 recorded_ineligible`) | — | n/a — recorded, no cashback |
+        | `below_minimum` | reason (`200 below_minimum`) | — | n/a — recorded, zero cashback |
+        | `stale_timestamp` | reason (`201`, `state: on_hold`) | — | n/a — accepted, routed to review |
+        | `locked_in_settlement` | cause (`200 adjustment_created`) | — | n/a — adjustment created |
+        | `already_confirmed` | cause (`200 adjustment_created`) | — | n/a — adjustment created |
+
+        Transient coordination codes (e.g. `409
+        idempotency_key_in_flight`) are deliberately unregistered. Anything
+        not listed here — and any `5xx` — is retryable with the same
+        `Idempotency-Key`.
+      enum:
+        - unauthorized
+        - forbidden_ability
+        - validation_failed
+        - idempotency_key_required
+        - idempotency_key_reuse_mismatch
+        - future_dated
+        - customer_not_found
+        - no_effective_rate
+        - duplicate_invoice
+        - invalid_state
+        - transaction_not_found
+        - merchant_suspended
+        - below_minimum
+        - stale_timestamp
+        - locked_in_settlement
+        - already_confirmed
+
+    Error:
+      type: object
+      description: |
+        The error envelope, identical on every non-2xx response except the
+        auth-layer `401`/`403` and throttling `429` (see
+        `AuthLayerMessage`): `{"error": {"code", "message"}}`. Match on
+        `code`, never on `message`. `errors` (per-field messages) is
+        present only with `validation_failed`; `meta` carries optional
+        machine-readable context (e.g. the existing `transaction_id` on
+        `duplicate_invoice`, the current `state` on `invalid_state`).
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              $ref: '#/components/schemas/MachineCode'
+            message:
+              type: string
+              description: Human-readable, subject to change. Never match on it.
+            errors:
+              type: object
+              description: Per-field validation messages. Present only when `code` is `validation_failed`.
+              additionalProperties:
+                type: array
+                items:
+                  type: string
+            meta:
+              type: object
+              description: Optional machine-readable context for this failure mode.
+              additionalProperties: true
+
+    LaariAmount:
+      type: integer
+      format: int64
+      description: An integer count of laari (1/100 MVR). Never fractional, never a float.
+
+    MvrString:
+      type: string
+      pattern: '^-?\d{1,3}(,\d{3})*\.\d{2}$'
+      description: |
+        Pre-formatted MVR presentation of a laari integer, with thousands
+        separators — e.g. laari `430025` is `"4,300.25"`. Presentation only;
+        the paired `*_laari` integer is the value.
+
+    TransactionState:
+      type: string
+      description: |
+        Internal transaction state (PLAN §6). The customer-facing status is
+        deliberately simpler; for the till, everything up to
+        `payable_unfunded`/`on_hold` is "pending", `confirmed`/`paid` are
+        final, `reversed`/`written_off` are terminal negatives.
+
+        | State | Meaning |
+        |---|---|
+        | `tracked` | POST received, not yet validated |
+        | `awaiting_validation` | In the refund window — settlement clock not started |
+        | `payable_unfunded` | Settlement clock running |
+        | `on_hold` | Fraud or dispute review |
+        | `confirmed` | Settlement received and allocated |
+        | `paid` | Included in a completed payout |
+        | `reversed` | Voided, duplicated, invalidated, or recorded-ineligible |
+        | `written_off` | Merchant never settled — 90 days past due |
+      enum:
+        - tracked
+        - awaiting_validation
+        - payable_unfunded
+        - on_hold
+        - confirmed
+        - paid
+        - reversed
+        - written_off
+
+    TransactionCreateRequest:
+      type: object
+      required: [invoice_no, customer_ref, eligible_amount, occurred_at]
+      properties:
+        invoice_no:
+          type: string
+          minLength: 1
+          maxLength: 64
+          description: |
+            The merchant's invoice number. Unique per merchant — a second
+            distinct request with the same `invoice_no` is
+            `409 duplicate_invoice`.
+        customer_ref:
+          type: string
+          pattern: '^\d{6}$'
+          description: The customer's 6-digit code, shown at the till as digits or QR.
+        eligible_amount:
+          allOf:
+            - $ref: '#/components/schemas/LaariAmount'
+          minimum: 1
+          description: |
+            The merchant's own eligible invoice total, in laari. Taken at
+            face value — never recomputed by the platform. This is the only
+            figure used in computation.
+        sale_amount:
+          type: ['integer', 'null']
+          format: int64
+          minimum: 1
+          description: |
+            Optional full invoice total, in laari. Never used in any
+            computation — kept for dispute answers, merchant analytics, and
+            eligible-ratio monitoring.
+        occurred_at:
+          type: string
+          format: date-time
+          description: |
+            When the sale happened at the till. ISO 8601 **with an explicit
+            UTC offset** (`Z` counts). Offsetless values are rejected
+            `validation_failed`; future-dated values (beyond 5 minutes of
+            skew) are rejected `future_dated`. The rate applied is the one
+            effective at this instant.
+          examples: ['2026-08-14T11:04:22+05:00']
+        branch_id:
+          type: ['integer', 'null']
+          format: int64
+          description: |
+            Optional branch, from the ids issued at onboarding. Must belong
+            to the authenticated merchant, else `validation_failed`.
+
+    Transaction:
+      type: object
+      description: |
+        The transaction resource. Amounts are laari integers with paired
+        `*_mvr` presentation strings. `rate_bp`/`fee_bp` are the basis
+        points frozen at `occurred_at` — they never change afterwards, even
+        if the merchant's rate does. On zero-cashback outcomes
+        (`below_minimum`, `merchant_suspended`) the frozen rate is still
+        present: the row evidences the terms the sale met.
+      required:
+        - id
+        - origin
+        - invoice_no
+        - state
+        - reason_code
+        - currency
+        - eligible_laari
+        - sale_laari
+        - rate_bp
+        - fee_bp
+        - cashback_laari
+        - cashback_mvr
+        - fee_laari
+        - fee_mvr
+        - fee_gst_laari
+        - occurred_at
+        - received_at
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: Platform transaction id. Store it — reversals address it.
+        origin:
+          type: string
+          description: How the transaction entered the platform. API-created transactions are `pos`.
+          enum: [pos, manual, online_link, api_phone, card_linked]
+        invoice_no:
+          type: string
+        state:
+          $ref: '#/components/schemas/TransactionState'
+        reason_code:
+          type: ['string', 'null']
+          description: Machine code qualifying the current state (see `MachineCode`), e.g. `below_minimum`, `merchant_suspended`, `stale_timestamp`, or the reversal reason.
+        currency:
+          type: string
+          const: MVR
+        eligible_laari:
+          $ref: '#/components/schemas/LaariAmount'
+        sale_laari:
+          type: ['integer', 'null']
+          format: int64
+          description: The reference-only sale total, if supplied.
+        rate_bp:
+          type: integer
+          minimum: 50
+          maximum: 1000
+          description: Cashback rate in basis points, frozen at `occurred_at`.
+        fee_bp:
+          type: integer
+          minimum: 25
+          maximum: 100
+          description: Platform fee in basis points, tiered on `rate_bp`, frozen at `occurred_at`.
+        cashback_laari:
+          $ref: '#/components/schemas/LaariAmount'
+        cashback_mvr:
+          $ref: '#/components/schemas/MvrString'
+        fee_laari:
+          $ref: '#/components/schemas/LaariAmount'
+        fee_mvr:
+          $ref: '#/components/schemas/MvrString'
+        fee_gst_laari:
+          $ref: '#/components/schemas/LaariAmount'
+        occurred_at:
+          type: string
+          format: date-time
+          description: As supplied, normalised to UTC.
+        received_at:
+          type: string
+          format: date-time
+          description: When the platform received the POST (UTC).
+
+    TransactionWriteResult:
+      type: object
+      description: |
+        Envelope for `POST /v1/transactions`. `status` names the outcome;
+        `reason` (a `MachineCode`) qualifies it when cashback did not accrue
+        normally. HTTP `201` means newly created with accrual; HTTP `200` is
+        an idempotent replay or a recorded-without-cashback outcome.
+      required: [status, reason, transaction]
+      properties:
+        status:
+          type: string
+          enum: [created, recorded_ineligible, below_minimum]
+          description: |
+            `created` — cashback accrued (HTTP 201, or 200 on replay).
+            `recorded_ineligible` — merchant suspended; recorded, no cashback.
+            `below_minimum` — under the merchant's minimum; recorded, zero cashback.
+        reason:
+          oneOf:
+            - $ref: '#/components/schemas/MachineCode'
+            - type: 'null'
+          description: '`merchant_suspended`, `below_minimum`, `stale_timestamp`, or `null` for a clean creation.'
+        transaction:
+          $ref: '#/components/schemas/Transaction'
+
+    ReverseRequest:
+      type: object
+      required: [reason, occurred_at]
+      properties:
+        reason:
+          type: string
+          description: Why the sale is being reversed. Recorded on the transaction event and reported to the customer factually.
+          enum: [customer_refund, till_void, duplicate, other]
+        occurred_at:
+          type: string
+          format: date-time
+          description: When the refund/void happened at the till. ISO 8601 with explicit UTC offset, same rules as on creation.
+          examples: ['2026-08-15T09:30:00+05:00']
+
+    ReverseResult:
+      type: object
+      description: |
+        Envelope for `POST /v1/transactions/{id}/reverse`. `outcome`
+        distinguishes an in-place reversal from a credit adjustment;
+        `cause` (a `MachineCode`) says why an adjustment was needed.
+        Reversals and adjustments always carry the **stored** integers —
+        nothing is recomputed.
+      required: [outcome, cause, adjustment, transaction]
+      properties:
+        outcome:
+          type: string
+          enum: [reversed, adjustment_created]
+          description: |
+            `reversed` — the transaction moved to `state: reversed`; the
+            accrual was reversed in full.
+            `adjustment_created` — the transaction could not be reversed in
+            place; a credit adjustment was created and will be applied to
+            the merchant's next settlement batch.
+        cause:
+          oneOf:
+            - $ref: '#/components/schemas/MachineCode'
+            - type: 'null'
+          description: |
+            Present when `outcome` is `adjustment_created`:
+            `locked_in_settlement` (the line sits in a settlement batch that
+            has left draft) or `already_confirmed` (the reward is confirmed
+            or already paid out). `null` when `outcome` is `reversed`.
+        adjustment:
+          oneOf:
+            - $ref: '#/components/schemas/Adjustment'
+            - type: 'null'
+          description: The credit adjustment, when `outcome` is `adjustment_created`; otherwise `null`.
+        transaction:
+          $ref: '#/components/schemas/Transaction'
+
+    Adjustment:
+      type: object
+      description: |
+        A post-lock/post-confirmation correction. History is never edited;
+        the adjustment is applied as a credit on the merchant's next
+        settlement batch. `amount_laari` is negative — the stored line total
+        (cashback + fee + GST), negated.
+      required: [id, transaction_id, amount_laari, amount_mvr, currency, reason_code, created_at]
+      properties:
+        id:
+          type: integer
+          format: int64
+        transaction_id:
+          type: integer
+          format: int64
+        amount_laari:
+          $ref: '#/components/schemas/LaariAmount'
+        amount_mvr:
+          $ref: '#/components/schemas/MvrString'
+        currency:
+          type: string
+          const: MVR
+        reason_code:
+          type: string
+          description: The reversal reason as submitted.
+        created_at:
+          type: string
+          format: date-time
+
+    MerchantRate:
+      type: object
+      description: The merchant's current standing rate, for the till display. Advisory — the server recomputes authoritatively at `occurred_at`.
+      required: [rate_bp, fee_bp, currency, min_eligible_laari, pending_decrease]
+      properties:
+        rate_bp:
+          type: integer
+          minimum: 50
+          maximum: 1000
+          description: Current customer cashback rate, basis points.
+        fee_bp:
+          type: integer
+          minimum: 25
+          maximum: 100
+          description: Current platform fee, basis points (tiered on `rate_bp`).
+        currency:
+          type: string
+          const: MVR
+        min_eligible_laari:
+          allOf:
+            - $ref: '#/components/schemas/LaariAmount'
+          description: Sales with `eligible_amount` below this record with zero cashback (`below_minimum`).
+        pending_decrease:
+          oneOf:
+            - $ref: '#/components/schemas/PendingRateDecrease'
+            - type: 'null'
+          description: The scheduled decrease taking effect at 00:00 UTC+5, if one exists. Increases apply immediately and never appear here.
+
+    PendingRateDecrease:
+      type: object
+      required: [rate_bp, fee_bp, effective_at]
+      properties:
+        rate_bp:
+          type: integer
+          minimum: 50
+          maximum: 1000
+        fee_bp:
+          type: integer
+          minimum: 25
+          maximum: 100
+        effective_at:
+          type: string
+          format: date-time
+          description: Always 00:00 UTC+5 on a following day.
+
+    CustomerLookupResult:
+      type: object
+      required: [ref, valid, masked_name]
+      properties:
+        ref:
+          type: string
+          pattern: '^\d{6}$'
+          description: The ref as looked up.
+        valid:
+          type: boolean
+          description: Whether this customer can currently earn cashback.
+        masked_name:
+          type: string
+          description: |
+            The customer's name with only the first three characters of each
+            part visible (e.g. `Ais*** Moh***`) — enough for the cashier to
+            confirm with the person present, nothing more.
+
+    WebhookEvent:
+      type: object
+      description: |
+        Common envelope for every outbound webhook delivery.
+
+        **Signature verification** — every delivery carries
+        `X-Manfaa-Signature` (lowercase hex `HMAC-SHA256` of the raw body
+        with your endpoint's signing secret, issued once at endpoint
+        registration), `X-Manfaa-Timestamp` (delivery-attempt time, unix
+        seconds) and `X-Manfaa-Event` (the event name, for routing before
+        parsing). Verify by computing the HMAC over the **raw body bytes**
+        and comparing constant-time; then parse. Deduplicate by `id` —
+        delivery is **at-least-once** and may be out of order. `created_at`
+        is inside the signed body and is the event's authoritative time.
+        A worked signature example is in the vendor integration guide.
+
+        **Retry policy** — a delivery counts as successful on any `2xx`
+        within 10 seconds. Otherwise it is retried with exponential backoff
+        at approximately 1 minute, 5 minutes, 30 minutes, 2 hours, 8 hours,
+        and 24 hours after the first attempt (6 retries over roughly 35
+        hours). After the final failure the event is parked and surfaced to
+        platform operations; it is not silently dropped. Retried deliveries
+        carry the identical body (and signature) with a fresh
+        `X-Manfaa-Timestamp`.
+      required: [id, type, created_at, data]
+      properties:
+        id:
+          type: string
+          description: Globally unique event id (`evt_` + ULID). Deduplicate on this.
+          pattern: '^evt_[0-9A-HJKMNP-TV-Z]{26}$'
+        type:
+          type: string
+          enum:
+            - merchant.rate_changed
+            - merchant.suspended
+            - merchant.reinstated
+            - transaction.reversed
+        created_at:
+          type: string
+          format: date-time
+          description: When the event occurred (signed, authoritative).
+        data:
+          type: object
+          description: Event-specific payload — see the per-event schemas.
+
+    WebhookRateChangedData:
+      type: object
+      required: [merchant_id, rate_bp, fee_bp, previous_rate_bp, previous_fee_bp, effective_at]
+      properties:
+        merchant_id:
+          type: integer
+          format: int64
+        rate_bp:
+          type: integer
+          minimum: 50
+          maximum: 1000
+        fee_bp:
+          type: integer
+          minimum: 25
+          maximum: 100
+        previous_rate_bp:
+          type: integer
+          minimum: 50
+          maximum: 1000
+        previous_fee_bp:
+          type: integer
+          minimum: 25
+          maximum: 100
+        effective_at:
+          type: string
+          format: date-time
+          description: When the new rate takes (or took) effect — 00:00 UTC+5 next day for decreases, immediate for increases.
+
+    WebhookSuspendedData:
+      type: object
+      required: [merchant_id, reason, suspended_at]
+      properties:
+        merchant_id:
+          type: integer
+          format: int64
+        reason:
+          type: string
+          description: Why the merchant was suspended. `overdue_settlement` is the automatic day-16 suspension.
+          enum: [overdue_settlement, manual]
+        suspended_at:
+          type: string
+          format: date-time
+
+    WebhookReinstatedData:
+      type: object
+      required: [merchant_id, reinstated_at]
+      properties:
+        merchant_id:
+          type: integer
+          format: int64
+        reinstated_at:
+          type: string
+          format: date-time
+
+    WebhookTransactionReversedData:
+      type: object
+      required: [transaction_id, merchant_id, invoice_no, reason, reversed_at]
+      properties:
+        transaction_id:
+          type: integer
+          format: int64
+        merchant_id:
+          type: integer
+          format: int64
+        invoice_no:
+          type: string
+        reason:
+          type: string
+          description: The reversal reason code recorded on the transition event.
+        reversed_at:
+          type: string
+          format: date-time

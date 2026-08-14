@@ -6,6 +6,7 @@ namespace App\Domain\Settlement;
 
 use App\Domain\Cashback\TransactionState;
 use App\Domain\Money\Laari;
+use App\Models\Adjustment;
 use App\Models\Merchant;
 use App\Models\Transaction;
 use Carbon\CarbonImmutable;
@@ -26,6 +27,7 @@ final class OutstandingSummary
      *     as_of: string,
      *     total: array<string, int|string>,
      *     buckets: array<string, array<string, int|string>>,
+     *     pending_adjustments: array<string, int|string>,
      * }
      */
     public function forMerchant(Merchant $merchant): array
@@ -70,6 +72,32 @@ final class OutstandingSummary
             'as_of' => $now->toIso8601String(),
             'total' => $total,
             'buckets' => $buckets,
+            'pending_adjustments' => $this->pendingAdjustments($merchant),
+        ];
+    }
+
+    /**
+     * §7 reversal credits not yet netted into a batch: the (negative) sum
+     * of the merchant's pending adjustments, shown so the dashboard's
+     * outstanding total and the next batch's amount due reconcile.
+     *
+     * @return array{count: int, credit_laari: int, credit_mvr: string}
+     */
+    private function pendingAdjustments(Merchant $merchant): array
+    {
+        $pending = Adjustment::query()
+            ->join('transactions', 'transactions.id', '=', 'adjustments.transaction_id')
+            ->where('transactions.merchant_id', $merchant->id)
+            ->where('adjustments.state', 'pending')
+            ->selectRaw('COUNT(*) AS pending_count, COALESCE(SUM(adjustments.amount_laari), 0) AS credit_total')
+            ->first();
+
+        $creditLaari = (int) $pending->credit_total;
+
+        return [
+            'count' => (int) $pending->pending_count,
+            'credit_laari' => $creditLaari,
+            'credit_mvr' => Laari::of($creditLaari)->formatMvr(),
         ];
     }
 

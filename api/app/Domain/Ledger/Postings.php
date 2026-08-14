@@ -126,6 +126,81 @@ final readonly class Postings
     }
 
     /**
+     * §7 locked-batch credit adjustment applied to a settlement draft. The
+     * merchant is credited (CR Merchant Receivable) for a sale whose reward
+     * SURVIVES — the transaction was already confirmed/paid, or sits frozen
+     * on a batch that will still allocate it — so the customer's cashback
+     * liability must NOT be released here: the platform now funds that
+     * reward, and the cashback share is charged to Platform-Funded Rewards
+     * Expense (§8's own account for rewards the platform funds; the same
+     * shape as the forgiveness rule). Fee and GST were refunded to the
+     * merchant, so revenue and the tax payable reverse as usual. Debiting
+     * the liability instead would double-release it — once here, once at
+     * payoutSent — leaving the account permanently understating what is
+     * owed to customers.
+     *
+     * Callers pass the POSITIVE component integers (the adjustment stores
+     * them negated).
+     */
+    public function applyAdjustmentCredit(
+        int $cashbackLaari,
+        int $feeLaari,
+        int $feeGstLaari,
+        string $referenceType = 'adjustment',
+        int $referenceId = 0,
+    ): int {
+        $lines = [];
+
+        if ($cashbackLaari !== 0) {
+            $lines[] = $this->dr(AccountCode::PlatformFundedRewards, $cashbackLaari);
+        }
+
+        if ($feeLaari !== 0) {
+            $lines[] = $this->dr(AccountCode::PlatformFeeRevenue, $feeLaari);
+        }
+
+        if ($feeGstLaari !== 0) {
+            $lines[] = $this->dr(AccountCode::FeeTaxPayable, $feeGstLaari);
+        }
+
+        $lines[] = $this->cr(AccountCode::MerchantReceivable, $cashbackLaari + $feeLaari + $feeGstLaari);
+
+        return $this->poster->post($referenceType, $referenceId, 'Adjustment credit applied', $lines);
+    }
+
+    /**
+     * Exact mirror of applyAdjustmentCredit, posted when the settlement the
+     * adjustment was netted into is cancelled and the adjustment returns to
+     * pending — the credit must not exist twice when a later batch
+     * re-applies it.
+     */
+    public function unapplyAdjustmentCredit(
+        int $cashbackLaari,
+        int $feeLaari,
+        int $feeGstLaari,
+        string $referenceType = 'adjustment',
+        int $referenceId = 0,
+    ): int {
+        $lines = [
+            $this->dr(AccountCode::MerchantReceivable, $cashbackLaari + $feeLaari + $feeGstLaari),
+        ];
+
+        if ($cashbackLaari !== 0) {
+            $lines[] = $this->cr(AccountCode::PlatformFundedRewards, $cashbackLaari);
+        }
+
+        if ($feeLaari !== 0) {
+            $lines[] = $this->cr(AccountCode::PlatformFeeRevenue, $feeLaari);
+        }
+
+        if ($feeGstLaari !== 0) {
+            $lines[] = $this->cr(AccountCode::FeeTaxPayable, $feeGstLaari);
+        }
+
+        return $this->poster->post($referenceType, $referenceId, 'Adjustment credit unapplied', $lines);
+    }
+
+    /**
      * Write-off at 90 days past due: the platform's own margin (fee + GST)
      * becomes bad debt, the customer liability is released, and the whole
      * receivable is cleared. GST reversal treatment is an open accountant

@@ -15,10 +15,12 @@ use App\Models\Transaction;
  *
  * Deliberately NOT wired into TransitionService: Phase 1 has no reversal
  * entry point that could reach a locked line (allocation only ever moves
- * lines forward to confirmed). The Phase 2 API reversal path and the
- * ManualCredit reversal flow must call this guard before attempting
- * TransitionService::reverse(), and translate SettlementLockedException into
- * the §7 distinct vendor-facing error code.
+ * lines forward to confirmed). NOTE: the Phase 2 API reversal path
+ * (ReversalService) does not call this static helper — it re-implements the
+ * same §7 check INSIDE its DB transaction with the settlement row locked,
+ * so a reversal racing a draft submit() serialises instead of reversing a
+ * freshly frozen line. Any new reversal entry point must do the same;
+ * checking outside the transaction is a race.
  */
 final class SettlementGuard
 {

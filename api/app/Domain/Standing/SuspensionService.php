@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Domain\Standing;
 
 use App\Domain\Cashback\TransactionState;
+use App\Domain\Webhooks\WebhookDispatcher;
+use App\Domain\Webhooks\WebhookEvents;
 use App\Models\Merchant;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
@@ -35,7 +37,10 @@ use Illuminate\Support\Facades\DB;
  */
 final readonly class SuspensionService
 {
-    public function __construct(private NoticeRecorder $notices) {}
+    public function __construct(
+        private NoticeRecorder $notices,
+        private WebhookDispatcher $webhooks,
+    ) {}
 
     /**
      * @return int the number of merchants suspended
@@ -55,6 +60,15 @@ final readonly class SuspensionService
 
             $this->notices->record($merchant->id, 'suspended', [
                 ...$this->overdueSummary($merchant->id, $now),
+                'suspended_at' => $now->toIso8601String(),
+            ]);
+
+            // §9.3: tills stop advertising cashback on receipt. This is the
+            // automatic day-16 suspension — the only suspension this
+            // service imposes — hence reason overdue_settlement.
+            $this->webhooks->dispatch(WebhookEvents::MERCHANT_SUSPENDED, [
+                'merchant_id' => $merchant->id,
+                'reason' => 'overdue_settlement',
                 'suspended_at' => $now->toIso8601String(),
             ]);
         }
@@ -97,6 +111,12 @@ final readonly class SuspensionService
             $this->notices->record($merchant->id, 'reinstated', [
                 'reinstated_at' => $now->toIso8601String(),
             ]);
+
+            // §9.3: tills may resume advertising the offer.
+            $this->webhooks->dispatch(WebhookEvents::MERCHANT_REINSTATED, [
+                'merchant_id' => $merchant->id,
+                'reinstated_at' => $now->toIso8601String(),
+            ]);
         }
 
         return $merchants->count();
@@ -127,6 +147,14 @@ final readonly class SuspensionService
             'manual' => true,
             'note' => $note,
             'admin_id' => $adminId,
+            'reinstated_at' => $now->toIso8601String(),
+        ]);
+
+        // §9.3: the manual path emits the same merchant.reinstated event as
+        // the automatic sweep — the vendor cares that cashback resumed, not
+        // which door it came back through.
+        $this->webhooks->dispatch(WebhookEvents::MERCHANT_REINSTATED, [
+            'merchant_id' => $merchant->id,
             'reinstated_at' => $now->toIso8601String(),
         ]);
     }

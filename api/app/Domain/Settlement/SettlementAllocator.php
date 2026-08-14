@@ -120,7 +120,9 @@ final class SettlementAllocator
      * allocates too and the platform books the gap. The batch lands on
      * settled only when every line is allocated; partially_settled otherwise.
      *
-     * Available funds are this payment's cash plus whatever of a prior
+     * Available funds are this payment's cash, plus any §7 adjustment credit
+     * netted into the batch at draft time (already posted at application —
+     * counted for coverage, never posted again), plus whatever of a prior
      * payment's parked remainder is still sitting in the wallet. The parked
      * remainder is a spendable §7 credit, so if the merchant already applied
      * it to another batch it is NOT counted again here — the wallet is never
@@ -164,21 +166,36 @@ final class SettlementAllocator
 
             $lines = SettlementLines::inAllocationOrder($settlement);
 
+            $lineTotal = 0;
             $previouslyAllocated = 0;
 
             foreach ($lines as $line) {
+                $lineTotal += SettlementLines::due($line);
+
                 if ($line->allocated_at !== null) {
                     $previouslyAllocated += SettlementLines::due($line);
                 }
             }
 
-            // What this match can actually fund: the payment's cash plus the
-            // portion of any earlier unallocated remainder that is BOTH still
-            // owed to this batch and still present in the wallet.
-            $priorUnallocated = max(0, $receivedBefore - $previouslyAllocated);
+            // §7 adjustment credits netted into this batch at draft time
+            // (amount_due = line total − applied credits). Their
+            // reverseAccrual already posted at application, so here they are
+            // PRE-POSTED funding: consumed before any cash, never re-posted,
+            // and emphatically never "forgiven" — forgiveness is reserved for
+            // real sub-MVR-1 shortfalls.
+            $adjustmentCredit = max(0, $lineTotal - $due);
+            $adjustmentAvailable = max(0, $adjustmentCredit - $previouslyAllocated);
+
+            // What this match can actually fund: the credit remainder, the
+            // payment's cash, plus the portion of any earlier unallocated cash
+            // remainder that is BOTH still owed to this batch and still
+            // present in the wallet. Prior allocations consumed the credit
+            // first, so the cash they consumed is what the credit left over.
+            $priorCashConsumed = $previouslyAllocated - min($adjustmentCredit, $previouslyAllocated);
+            $priorUnallocated = max(0, $receivedBefore - $priorCashConsumed);
             $walletAvailable = min($priorUnallocated, $this->wallet->lockedBalance($settlement->merchant));
-            $funds = $payment->amount_laari + $walletAvailable;
-            $remainingDue = $due - $previouslyAllocated;
+            $funds = $payment->amount_laari + $walletAvailable + $adjustmentAvailable;
+            $remainingDue = $lineTotal - $previouslyAllocated;
 
             // The forgiveness rule (§7): strictly under 100 laari short of the
             // whole batch, every remaining line allocates and the platform
@@ -212,12 +229,14 @@ final class SettlementAllocator
                 $this->allocator->allocate($line, Actor::admin($actor->id), $now);
             }
 
-            // Fund the newly allocated total: this payment's cash first, then
-            // the still-present wallet remainder, and — only when forgiving —
-            // the platform-absorbed shortfall.
-            $cashPortion = min($payment->amount_laari, $allocatedNow);
-            $walletPortion = min($walletAvailable, $allocatedNow - $cashPortion);
-            $forgivenShortfall = $allocatedNow - $cashPortion - $walletPortion;
+            // Fund the newly allocated total: the pre-posted adjustment credit
+            // first (no posting — its journal exists since application), then
+            // this payment's cash, then the still-present wallet remainder,
+            // and — only when forgiving — the platform-absorbed shortfall.
+            $adjustmentPortion = min($adjustmentAvailable, $allocatedNow);
+            $cashPortion = min($payment->amount_laari, $allocatedNow - $adjustmentPortion);
+            $walletPortion = min($walletAvailable, $allocatedNow - $adjustmentPortion - $cashPortion);
+            $forgivenShortfall = $allocatedNow - $adjustmentPortion - $cashPortion - $walletPortion;
             $remainder = $payment->amount_laari - $cashPortion;
 
             if ($cashPortion > 0) {
@@ -257,7 +276,10 @@ final class SettlementAllocator
 
             $settlement->forceFill([
                 'amount_received_laari' => $received,
-                'state' => $previouslyAllocated + $allocatedNow === $due
+                // Settled means every LINE is allocated; on an adjustment-
+                // netted batch the line total exceeds the netted amount_due,
+                // so completeness is measured against the lines.
+                'state' => $previouslyAllocated + $allocatedNow === $lineTotal
                     ? SettlementState::Settled
                     : SettlementState::PartiallySettled,
             ])->save();

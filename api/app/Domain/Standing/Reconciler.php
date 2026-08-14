@@ -26,6 +26,19 @@ use Illuminate\Support\Facades\DB;
  *      write-off.
  *    - Platform Fee Revenue = Σ(fee) over everything except reversed —
  *      write-off charges bad debt, it never claws back revenue.
+ *    - APPLIED adjustments (§7 locked-line reversals netted into a batch)
+ *      moved the ledger with their application-time credit journal
+ *      (applyAdjustmentCredit) while the underlying transaction kept its
+ *      state, so the derivation must mirror what that journal touches:
+ *      their (negative) fee component offsets revenue outright, and their
+ *      receivable credit offsets the receivable until the netted batch's
+ *      allocations consume it — credit-first, exactly as
+ *      SettlementAllocator funds allocations. The cashback share is
+ *      deliberately NOT mirrored into the liability: application charges
+ *      Platform-Funded Rewards Expense, never the liability — the
+ *      customer's reward survives an adjustment and is released only at
+ *      payout, reversal, or write-off, so the liability must keep tracking
+ *      the transaction states alone.
  *
  * Every run writes one append-only reconciliation_runs row; a divergent run
  * carries the exact issues found.
@@ -146,9 +159,39 @@ final readonly class Reconciler
                 SQL)
             ->first();
 
+        // Applied adjustments store NEGATIVE component integers; summing the
+        // fee in offsets revenue by exactly what the application-time credit
+        // journal debited. The cashback share touched Platform-Funded
+        // Rewards Expense, not the liability — no liability mirror exists.
+        $applied = DB::table('adjustments')
+            ->where('state', 'applied')
+            ->selectRaw('COALESCE(SUM(fee_laari), 0) AS fee_laari')
+            ->first();
+
+        // The receivable side of an applied credit is consumed as the netted
+        // batch's lines allocate (credit before cash, mirroring
+        // SettlementAllocator); only the unconsumed remainder still offsets
+        // the receivable.
+        $unconsumed = DB::selectOne(<<<'SQL'
+            SELECT COALESCE(SUM(GREATEST(per_settlement.credit_laari - per_settlement.allocated_laari, 0)), 0) AS laari
+            FROM (
+                SELECT
+                    -SUM(adjustments.amount_laari) AS credit_laari,
+                    COALESCE((
+                        SELECT SUM(settlement_lines.cashback_laari + settlement_lines.fee_laari + settlement_lines.fee_gst_laari)
+                        FROM settlement_lines
+                        WHERE settlement_lines.settlement_id = adjustments.settlement_id
+                          AND settlement_lines.allocated_at IS NOT NULL
+                    ), 0) AS allocated_laari
+                FROM adjustments
+                WHERE adjustments.state = 'applied'
+                GROUP BY adjustments.settlement_id
+            ) AS per_settlement
+            SQL);
+
         return [
             'receivable' => [
-                'derived_laari' => (int) $derived->receivable_laari,
+                'derived_laari' => (int) $derived->receivable_laari - (int) $unconsumed->laari,
                 'ledger_laari' => $this->balances->accountBalance(AccountCode::MerchantReceivable),
             ],
             'liability' => [
@@ -156,7 +199,7 @@ final readonly class Reconciler
                 'ledger_laari' => $this->balances->naturalBalance(AccountCode::CustomerCashbackLiability),
             ],
             'revenue' => [
-                'derived_laari' => (int) $derived->revenue_laari,
+                'derived_laari' => (int) $derived->revenue_laari + (int) $applied->fee_laari,
                 'ledger_laari' => $this->balances->naturalBalance(AccountCode::PlatformFeeRevenue),
             ],
         ];

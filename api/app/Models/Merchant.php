@@ -7,11 +7,12 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Laravel\Sanctum\HasApiTokens;
 
 class Merchant extends Model
 {
     /** @use HasFactory<MerchantFactory> */
-    use HasFactory;
+    use HasApiTokens, HasFactory;
 
     protected $guarded = [];
 

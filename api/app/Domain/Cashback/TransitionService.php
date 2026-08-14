@@ -43,6 +43,9 @@ final class TransitionService
      *
      * @param  array<string, mixed>  $meta
      * @param  array<string, mixed>  $attributes  extra transaction columns written atomically with the state
+     * @param  bool  $stampReasonOnRow  false records the reason on the EVENT only —
+     *                                  for transition annotations (e.g. auto_validation_window)
+     *                                  that do not qualify the resulting state
      */
     public function transition(
         Transaction $transaction,
@@ -51,10 +54,11 @@ final class TransitionService
         ?string $reasonCode = null,
         array $meta = [],
         array $attributes = [],
+        bool $stampReasonOnRow = true,
     ): TransactionEvent {
         $this->assertAllowed($transaction, $transaction->state, $to);
 
-        return DB::transaction(function () use ($transaction, $to, $actor, $reasonCode, $meta, $attributes): TransactionEvent {
+        return DB::transaction(function () use ($transaction, $to, $actor, $reasonCode, $meta, $attributes, $stampReasonOnRow): TransactionEvent {
             Transaction::query()->whereKey($transaction->getKey())->lockForUpdate()->first();
             $transaction->refresh();
 
@@ -63,7 +67,7 @@ final class TransitionService
 
             $transaction->forceFill([...$attributes, 'state' => $to]);
 
-            if ($reasonCode !== null) {
+            if ($reasonCode !== null && $stampReasonOnRow) {
                 $transaction->reason_code = $reasonCode;
             }
 
