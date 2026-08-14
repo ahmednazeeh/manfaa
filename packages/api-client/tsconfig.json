@@ -1,0 +1,4 @@
+{
+  "extends": "@manfaa/config/tsconfig.json",
+  "include": ["src"]
+}

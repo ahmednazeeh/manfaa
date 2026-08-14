@@ -1,0 +1,37 @@
+/*
+ * Manfaa shared styles.
+ *
+ * RTL: Dhivehi (Thaana script) is right-to-left. Every rule in this package —
+ * and in the apps — must use logical CSS properties (padding-inline-start,
+ * margin-inline-end, inset-inline-start, border-start-start-radius, ...) so
+ * layouts mirror correctly under `dir="rtl"` without RTL-specific overrides.
+ * Never use left/right physical properties in shared components.
+ */
+
+@font-face {
+  font-family: 'Faruma';
+  src: url('../fonts/faruma.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'DAM Kalhi';
+  src: url('../fonts/dam-kalhi.otf') format('opentype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Thaana text block: self-hosted fonts, right-to-left. */
+.thaana {
+  font-family: 'Faruma', 'DAM Kalhi', sans-serif;
+  direction: rtl;
+  text-align: start;
+}
+
+/* Money values align in columns regardless of theme or direction. */
+.money {
+  font-variant-numeric: tabular-nums;
+}
