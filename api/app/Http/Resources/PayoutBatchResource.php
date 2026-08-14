@@ -26,6 +26,10 @@ class PayoutBatchResource extends JsonResource
             'total_laari' => $this->total_laari,
             'currency' => $this->currency,
             'customer_count' => $this->customer_count,
+            // Money waiting on bank details: eligible customers skipped at
+            // build time because payout_bank/account/name were incomplete.
+            'excluded_customer_count' => $this->excluded_customer_count,
+            'excluded_total_laari' => $this->excluded_total_laari,
             'created_by' => $this->created_by,
             'approved_by_first' => $this->approved_by_first,
             'approved_by_second' => $this->approved_by_second,

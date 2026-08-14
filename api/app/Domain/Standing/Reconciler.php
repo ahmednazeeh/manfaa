@@ -29,10 +29,15 @@ use Illuminate\Support\Facades\DB;
  *
  * Every run writes one append-only reconciliation_runs row; a divergent run
  * carries the exact issues found.
+ *
+ * The run also surfaces stale holds — on_hold rows unchanged for over 30
+ * days (StaleHolds). They are review backlog, not corruption: the issue is
+ * recorded so nobody can miss it, but the run's status stays 'ok' and no
+ * automatic transition ever touches a held row.
  */
 final readonly class Reconciler
 {
-    public function __construct(private Balances $balances) {}
+    public function __construct(private Balances $balances, private StaleHolds $staleHolds) {}
 
     public function run(): ReconciliationRun
     {
@@ -64,13 +69,46 @@ final readonly class Reconciler
             }
         }
 
+        // Stale holds are appended last and never flip the status: only the
+        // invariant checks above decide ok versus divergent.
+        if (($staleHolds = $this->staleHoldIssue($now)) !== null) {
+            $issues[] = $staleHolds;
+        }
+
+        $divergent = collect($issues)->contains(fn (array $issue) => $issue['kind'] !== 'stale_holds');
+
         return ReconciliationRun::query()->create([
             'ran_at' => $now,
-            'status' => $issues === [] ? 'ok' : 'divergent',
+            'status' => $divergent ? 'divergent' : 'ok',
             'journals_checked' => $journalsChecked,
             'issues' => $issues === [] ? null : $issues,
             'totals' => $totals,
         ]);
+    }
+
+    /**
+     * @return array<string, mixed>|null the stale_holds issue, or null when none
+     */
+    private function staleHoldIssue(CarbonImmutable $now): ?array
+    {
+        $rows = $this->staleHolds->query($now)
+            ->orderBy('id')
+            ->selectRaw('id, cashback_laari + fee_laari + fee_gst_laari AS laari')
+            ->get();
+
+        if ($rows->isEmpty()) {
+            return null;
+        }
+
+        return [
+            'kind' => 'stale_holds',
+            'count' => $rows->count(),
+            'total_laari' => (int) $rows->sum('laari'),
+            'transactions' => $rows
+                ->map(fn (object $row) => ['id' => (int) $row->id, 'laari' => (int) $row->laari])
+                ->values()
+                ->all(),
+        ];
     }
 
     /**

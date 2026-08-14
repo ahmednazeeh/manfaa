@@ -37,6 +37,12 @@ final readonly class PayoutBatchBuilder
         $periodStart = CarbonImmutable::create($periodYear, $periodMonth, 1, 0, 0, 0, $timezone);
         $reference = sprintf('PB-%04d-%02d', $periodYear, $periodMonth);
 
+        // A batch built before the cutoff would silently miss every
+        // confirmation still to come — refuse early builds outright.
+        if ($cutoff->isAfter(CarbonImmutable::now('UTC'))) {
+            throw CutoffInFutureException::for($reference, $cutoff);
+        }
+
         return DB::transaction(function () use ($reference, $cutoff, $periodStart, $creator): PayoutBatch {
             $exists = PayoutBatch::query()
                 ->where('reference', $reference)
@@ -59,9 +65,23 @@ final readonly class PayoutBatchBuilder
 
             $totalLaari = 0;
             $customerCount = 0;
+            $excludedLaari = 0;
+            $excludedCount = 0;
 
             foreach ($this->eligibility->eligibleAt($cutoff) as $eligible) {
                 $customer = Customer::query()->findOrFail($eligible->customerId);
+
+                // A payout needs somewhere to go: a customer over the minimum
+                // but with incomplete bank details is skipped — their
+                // transactions stay unlinked and carry forward — and the
+                // skipped money is surfaced on the batch so admins can see
+                // what is waiting on bank details.
+                if (! $this->hasBankDetails($customer)) {
+                    $excludedLaari += $eligible->amountLaari;
+                    $excludedCount++;
+
+                    continue;
+                }
 
                 $item = PayoutItem::query()->create([
                     'batch_id' => $batch->id,
@@ -100,10 +120,26 @@ final readonly class PayoutBatchBuilder
             $batch->forceFill([
                 'total_laari' => $totalLaari,
                 'customer_count' => $customerCount,
+                'excluded_customer_count' => $excludedCount,
+                'excluded_total_laari' => $excludedLaari,
             ])->save();
 
             return $batch;
         });
+    }
+
+    /**
+     * All three §13 bank fields, present and non-blank.
+     */
+    private function hasBankDetails(Customer $customer): bool
+    {
+        foreach ([$customer->payout_bank, $customer->payout_account, $customer->payout_account_name] as $detail) {
+            if ($detail === null || trim($detail) === '') {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**

@@ -11,6 +11,7 @@ use App\Models\AdminUser;
 use App\Models\Settlement;
 use App\Models\SettlementPayment;
 use Carbon\CarbonImmutable;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 
@@ -62,6 +63,11 @@ final class SettlementAllocator
      * Registers a claimed bank transfer against the batch. The payment sits
      * pending until an admin matches it; the settlement moves to
      * payment_review so the matching queue picks it up.
+     *
+     * Idempotent per transfer: the unique (settlement_id, bank_ref) index is
+     * the authority on duplicates — recording the same reference twice rolls
+     * the whole attempt back and surfaces as DuplicateBankRefException, so
+     * one real transfer can never book cash twice.
      */
     public function recordBankPayment(Settlement $settlement, Laari $amount, string $bankRef, ?string $slipPath = null): SettlementPayment
     {
@@ -69,6 +75,15 @@ final class SettlementAllocator
             throw new InvalidArgumentException('A settlement payment must be a positive amount.');
         }
 
+        try {
+            return $this->storeBankPayment($settlement, $amount, $bankRef, $slipPath);
+        } catch (UniqueConstraintViolationException) {
+            throw DuplicateBankRefException::forSettlement($settlement, $bankRef);
+        }
+    }
+
+    private function storeBankPayment(Settlement $settlement, Laari $amount, string $bankRef, ?string $slipPath): SettlementPayment
+    {
         return DB::transaction(function () use ($settlement, $amount, $bankRef, $slipPath): SettlementPayment {
             $settlement = $this->locked($settlement);
 

@@ -432,6 +432,8 @@ it('runs the full Phase 1 lifecycle: credit → sweep → settle → forgive →
 
     // The failed amount re-enters the very next build, joined by B5 which
     // confirmed after the August cutoff — customer 3 still under the minimum.
+    // September's own cutoff (the 24th) must have passed before it can build.
+    Carbon::setTestNow(CarbonImmutable::parse('2026-09-26T10:00:00+05:00'));
     $this->postJson('/api/admin/payout-batches', ['year' => 2026, 'month' => 9])
         ->assertCreated()
         ->assertJsonPath('data.customer_count', 1)

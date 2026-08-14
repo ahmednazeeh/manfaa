@@ -99,17 +99,45 @@ it('returns 409 for a duplicate invoice and posts no second journal', function (
         ->and(DB::table('ledger_journals')->count())->toBe(1);
 });
 
-it('records a below-minimum credit with zero cashback and no journal', function () {
+it('records a below-minimum credit with zero cashback, no journal, immediately reversed', function () {
+    // Nothing ever accrues below the minimum, so the row must not sit in
+    // tracked showing the customer a Pending that can never confirm — it goes
+    // terminal at once, with the full event trail and no ledger posting.
     $this->postJson('/api/merchant/credits', manualCreditPayload(['eligible_amount' => 4999]))
         ->assertCreated()
-        ->assertJsonPath('data.state', 'tracked')
+        ->assertJsonPath('data.state', 'reversed')
         ->assertJsonPath('data.reason_code', 'below_minimum')
         ->assertJsonPath('data.cashback_laari', 0)
         ->assertJsonPath('data.fee_laari', 0)
         ->assertJsonPath('data.rate_bp', 200);
 
+    $transaction = Transaction::query()->sole();
+    $events = $transaction->events()->orderBy('id')->get();
+
     expect(DB::table('ledger_journals')->count())->toBe(0)
-        ->and(Transaction::query()->sole()->events()->count())->toBe(1);
+        ->and($transaction->state)->toBe(TransactionState::Reversed)
+        ->and($events)->toHaveCount(2)
+        ->and($events[0]->from_state)->toBeNull()
+        ->and($events[0]->to_state)->toBe('tracked')
+        ->and($events[0]->reason_code)->toBe('below_minimum')
+        ->and($events[1]->from_state)->toBe('tracked')
+        ->and($events[1]->to_state)->toBe('reversed')
+        ->and($events[1]->actor_type)->toBe('system')
+        ->and($events[1]->reason_code)->toBe('below_minimum');
+});
+
+it('reverses a stale below-minimum credit terminally instead of holding it', function () {
+    // Staleness gates validation; a below-minimum row has nothing to
+    // validate, so the terminal reversal wins over the stale hold.
+    $this->postJson('/api/merchant/credits', manualCreditPayload([
+        'eligible_amount' => 4999,
+        'occurred_at' => now()->subDays(7)->toIso8601String(),
+    ]))
+        ->assertCreated()
+        ->assertJsonPath('data.state', 'reversed')
+        ->assertJsonPath('data.reason_code', 'below_minimum');
+
+    expect(DB::table('ledger_journals')->count())->toBe(0);
 });
 
 it('ceils tiny credits to at least one laari of cashback and fee', function () {

@@ -106,9 +106,15 @@ final readonly class ManualCreditService
                     );
                 }
 
-                if ($stale) {
+                if ($belowMinimum) {
+                    // Nothing accrued and nothing will ever validate — park the
+                    // row in a terminal state immediately. Left tracked it would
+                    // show the customer a Pending that can never confirm. No
+                    // ledger reversal: the accrual never posted.
+                    $this->transitions->reverse($transaction, Actor::system(), 'below_minimum');
+                } elseif ($stale) {
                     $this->transitions->hold($transaction, Actor::system(), 'stale_timestamp');
-                } elseif (! $belowMinimum) {
+                } else {
                     $this->transitions->transition(
                         $transaction,
                         TransactionState::AwaitingValidation,

@@ -1,8 +1,8 @@
 <?php
 
+use App\Http\Middleware\AuthenticateMultiGuardSession;
 use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
-use Laravel\Sanctum\Http\Middleware\AuthenticateSession;
 use Laravel\Sanctum\Sanctum;
 
 return [
@@ -81,7 +81,10 @@ return [
     */
 
     'middleware' => [
-        'authenticate_session' => AuthenticateSession::class,
+        // The stock Sanctum middleware only checks the default guard's user;
+        // this override enforces the password-hash session check for every
+        // guard listed in 'guard' above.
+        'authenticate_session' => AuthenticateMultiGuardSession::class,
         'encrypt_cookies' => EncryptCookies::class,
         'validate_csrf_token' => ValidateCsrfToken::class,
     ],

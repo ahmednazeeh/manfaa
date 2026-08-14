@@ -13,6 +13,7 @@ use App\Models\MerchantWallet;
 use App\Models\Settlement;
 use App\Models\WalletTransaction;
 use Carbon\CarbonImmutable;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 
@@ -39,6 +40,12 @@ final class WalletFunding
      * Records a bank transfer into the wallet: movement row plus the §8
      * wallet top-up journal (DR Settlement Cash / CR Merchant Wallet
      * Balance).
+     *
+     * Idempotent per transfer: the unique (wallet_id, bank_ref) index is the
+     * authority on duplicates — the same reference recorded twice rolls the
+     * whole attempt back (balance, movement and journal) and surfaces as
+     * DuplicateBankRefException, so one real transfer credits the wallet
+     * exactly once.
      */
     public function recordTopUp(Merchant $merchant, Laari $amount, string $bankRef): WalletTransaction
     {
@@ -46,13 +53,17 @@ final class WalletFunding
             throw new InvalidArgumentException('A wallet top-up must be a positive amount.');
         }
 
-        return DB::transaction(function () use ($merchant, $amount, $bankRef): WalletTransaction {
-            $movement = $this->credit($merchant, $amount->value(), 'top_up', description: sprintf('Bank top-up (%s)', $bankRef));
+        try {
+            return DB::transaction(function () use ($merchant, $amount, $bankRef): WalletTransaction {
+                $movement = $this->credit($merchant, $amount->value(), 'top_up', description: sprintf('Bank top-up (%s)', $bankRef), bankRef: $bankRef);
 
-            $this->postings->walletTopUp($amount->value(), referenceId: $movement->id);
+                $this->postings->walletTopUp($amount->value(), referenceId: $movement->id);
 
-            return $movement;
-        });
+                return $movement;
+            });
+        } catch (UniqueConstraintViolationException) {
+            throw DuplicateBankRefException::forWalletTopUp($merchant, $bankRef);
+        }
     }
 
     /**
@@ -121,8 +132,9 @@ final class WalletFunding
         ?string $referenceType = null,
         ?int $referenceId = null,
         ?string $description = null,
+        ?string $bankRef = null,
     ): WalletTransaction {
-        return $this->move($merchant, $amountLaari, $type, $referenceType, $referenceId, $description);
+        return $this->move($merchant, $amountLaari, $type, $referenceType, $referenceId, $description, $bankRef);
     }
 
     /**
@@ -147,12 +159,13 @@ final class WalletFunding
         ?string $referenceType,
         ?int $referenceId,
         ?string $description,
+        ?string $bankRef = null,
     ): WalletTransaction {
         if ($signedLaari === 0) {
             throw new InvalidArgumentException('A wallet movement cannot be zero.');
         }
 
-        return DB::transaction(function () use ($merchant, $signedLaari, $type, $referenceType, $referenceId, $description): WalletTransaction {
+        return DB::transaction(function () use ($merchant, $signedLaari, $type, $referenceType, $referenceId, $description, $bankRef): WalletTransaction {
             $wallet = $this->lockedWallet($merchant);
             $balance = $wallet->balance_laari + $signedLaari;
 
@@ -170,6 +183,7 @@ final class WalletFunding
                 'reference_type' => $referenceType,
                 'reference_id' => $referenceId,
                 'description' => $description,
+                'bank_ref' => $bankRef,
             ]);
         });
     }

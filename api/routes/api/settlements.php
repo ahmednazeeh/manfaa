@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Admin\SettlementController as AdminSettlementController;
 use App\Http\Controllers\Admin\SettlementPaymentController;
+use App\Http\Controllers\Admin\WalletController;
 use App\Http\Controllers\Merchant\SettlementController as MerchantSettlementController;
 use Illuminate\Support\Facades\Route;
 
@@ -25,4 +26,5 @@ Route::prefix('admin')->middleware('auth:admin')->group(function () {
     Route::get('settlements/{id}', [AdminSettlementController::class, 'show'])->whereNumber('id');
     Route::post('settlements/{id}/payments', [AdminSettlementController::class, 'storePayment'])->whereNumber('id');
     Route::post('payments/{id}/match', [SettlementPaymentController::class, 'match'])->whereNumber('id');
+    Route::post('merchants/{merchant}/wallet/top-ups', [WalletController::class, 'storeTopUp'])->whereNumber('merchant');
 });

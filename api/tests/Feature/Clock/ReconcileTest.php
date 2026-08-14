@@ -74,7 +74,6 @@ it('records a divergent run and exits 1 when a journal does not balance', functi
         'description' => 'Raw unbalanced insert',
         'posted_at' => CarbonImmutable::now('UTC'),
         'created_at' => CarbonImmutable::now('UTC'),
-        'updated_at' => CarbonImmutable::now('UTC'),
     ]);
 
     $cashAccountId = (int) DB::table('ledger_accounts')->where('code', '1000')->value('id');
@@ -86,7 +85,6 @@ it('records a divergent run and exits 1 when a journal does not balance', functi
         'credit_laari' => 0,
         'currency' => 'MVR',
         'created_at' => CarbonImmutable::now('UTC'),
-        'updated_at' => CarbonImmutable::now('UTC'),
     ]);
 
     $this->artisan('manfaa:reconcile')->assertExitCode(1);
@@ -114,7 +112,6 @@ it('flags a derived-versus-ledger mismatch as divergent', function () {
         'description' => 'Phantom receivable clearance',
         'posted_at' => CarbonImmutable::now('UTC'),
         'created_at' => CarbonImmutable::now('UTC'),
-        'updated_at' => CarbonImmutable::now('UTC'),
     ]);
 
     $accounts = DB::table('ledger_accounts')->pluck('id', 'code');
@@ -127,7 +124,6 @@ it('flags a derived-versus-ledger mismatch as divergent', function () {
             'credit_laari' => 0,
             'currency' => 'MVR',
             'created_at' => CarbonImmutable::now('UTC'),
-            'updated_at' => CarbonImmutable::now('UTC'),
         ],
         [
             'journal_id' => $journalId,
@@ -136,7 +132,6 @@ it('flags a derived-versus-ledger mismatch as divergent', function () {
             'credit_laari' => 500,
             'currency' => 'MVR',
             'created_at' => CarbonImmutable::now('UTC'),
-            'updated_at' => CarbonImmutable::now('UTC'),
         ],
     ]);
 

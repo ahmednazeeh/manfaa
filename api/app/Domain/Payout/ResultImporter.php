@@ -155,7 +155,15 @@ final readonly class ResultImporter
      */
     private function parse(string $csv): array
     {
+        // Bank exports routinely arrive with a UTF-8 BOM and sometimes blank
+        // lines above the header — both are noise, never data. Strip the BOM
+        // so the header (or a first data cell) compares clean.
+        if (str_starts_with($csv, "\u{FEFF}")) {
+            $csv = substr($csv, strlen("\u{FEFF}"));
+        }
+
         $rows = [];
+        $beforeContent = true;
 
         foreach (preg_split('/\r\n|\r|\n/', trim($csv)) as $index => $line) {
             if (trim($line) === '') {
@@ -164,9 +172,14 @@ final readonly class ResultImporter
 
             $fields = str_getcsv($line);
 
-            if ($index === 0 && strtolower(trim($fields[0] ?? '')) === 'item_id') {
+            // The header is the first non-blank line, wherever it sits.
+            if ($beforeContent && strtolower(trim($fields[0] ?? '')) === 'item_id') {
+                $beforeContent = false;
+
                 continue;
             }
+
+            $beforeContent = false;
 
             $itemId = trim($fields[0] ?? '');
 

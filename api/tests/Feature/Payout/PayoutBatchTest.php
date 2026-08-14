@@ -32,8 +32,9 @@ use Tests\TestCase;
 uses(TestCase::class, RefreshDatabase::class);
 
 beforeEach(function () {
-    // A fixed instant inside the August 2026 period, before its cutoff.
-    Carbon::setTestNow(CarbonImmutable::parse('2026-08-14T12:00:00+05:00'));
+    // A fixed instant after the August 2026 cutoff (the 24th, §13) — a batch
+    // can only be built once its period's cutoff has passed.
+    Carbon::setTestNow(CarbonImmutable::parse('2026-08-26T12:00:00+05:00'));
 
     $this->seed(LedgerAccountSeeder::class);
 
@@ -62,6 +63,27 @@ afterEach(function () {
 function augustCutoff(): CarbonImmutable
 {
     return CarbonImmutable::parse('2026-08-24T23:59:59+05:00');
+}
+
+/**
+ * Moves the clock past the September 2026 cutoff so that period can build.
+ */
+function afterSeptemberCutoff(): void
+{
+    Carbon::setTestNow(CarbonImmutable::parse('2026-09-26T12:00:00+05:00'));
+}
+
+/**
+ * A customer with complete §13 bank details — the default fixture customer
+ * for payout tests, since a detail-less customer is excluded from batches.
+ */
+function payoutCustomer(array $attributes = []): Customer
+{
+    return Customer::factory()->create($attributes + [
+        'payout_bank' => 'BML',
+        'payout_account' => (string) fake()->unique()->numberBetween(7730000000000, 7739999999999),
+        'payout_account_name' => fake()->name(),
+    ]);
 }
 
 /**
@@ -121,9 +143,9 @@ function dualApprove(PayoutBatch $batch): PayoutBatch
 }
 
 it('includes confirmations up to the cutoff instant and rolls later ones to next month', function () {
-    $inside = Customer::factory()->create();
-    $outside = Customer::factory()->create();
-    $viaColumn = Customer::factory()->create();
+    $inside = payoutCustomer();
+    $outside = payoutCustomer();
+    $viaColumn = payoutCustomer();
 
     // 24th 23:59 business time is in; 25th 00:01 is out (§13).
     $inTx = confirmTransactionAt($this->merchant, $this->creditor, $inside, 500000, CarbonImmutable::parse('2026-08-24T23:59:00+05:00'));
@@ -152,8 +174,8 @@ it('includes confirmations up to the cutoff instant and rolls later ones to next
 });
 
 it('excludes customers below MVR 100 and includes them next period once topped up', function () {
-    $below = Customer::factory()->create();
-    $at = Customer::factory()->create();
+    $below = payoutCustomer();
+    $at = payoutCustomer();
 
     // 499,950 @ 200bp ceils to 9,999 laari — one short of the minimum.
     confirmTransactionAt($this->merchant, $this->creditor, $below, 499950, CarbonImmutable::parse('2026-08-20T10:00:00+05:00'));
@@ -172,6 +194,7 @@ it('excludes customers below MVR 100 and includes them next period once topped u
     // in September clears the bar, and both transactions pay out together.
     confirmTransactionAt($this->merchant, $this->creditor, $below, 5000, CarbonImmutable::parse('2026-09-10T10:00:00+05:00'));
 
+    afterSeptemberCutoff();
     $this->postJson('/api/admin/payout-batches', ['year' => 2026, 'month' => 9])->assertCreated();
 
     $september = PayoutBatch::query()->where('reference', 'PB-2026-09')->sole();
@@ -183,7 +206,7 @@ it('excludes customers below MVR 100 and includes them next period once topped u
 });
 
 it('requires two distinct admins to approve and refuses approval of a non-draft batch', function () {
-    confirmTransactionAt($this->merchant, $this->creditor, Customer::factory()->create(), 500000, CarbonImmutable::parse('2026-08-20T10:00:00+05:00'));
+    confirmTransactionAt($this->merchant, $this->creditor, payoutCustomer(), 500000, CarbonImmutable::parse('2026-08-20T10:00:00+05:00'));
 
     $this->postJson('/api/admin/payout-batches', ['year' => 2026, 'month' => 8])->assertCreated();
     $batch = PayoutBatch::query()->sole();
@@ -359,6 +382,7 @@ it('applies a mixed result file: pays, posts, re-queues failures, and re-imports
         ->and($failedTx->refresh()->payout_item_id)->toBeNull();
 
     // The failed customer's amount re-enters the very next build.
+    afterSeptemberCutoff();
     $this->postJson('/api/admin/payout-batches', ['year' => 2026, 'month' => 9])->assertCreated();
 
     $september = PayoutBatch::query()->where('reference', 'PB-2026-09')->sole();
@@ -370,7 +394,7 @@ it('applies a mixed result file: pays, posts, re-queues failures, and re-imports
 });
 
 it('never includes a linked transaction twice, and cancel unlinks so the period can be rebuilt', function () {
-    $customer = Customer::factory()->create();
+    $customer = payoutCustomer();
     $transaction = confirmTransactionAt($this->merchant, $this->creditor, $customer, 500000, CarbonImmutable::parse('2026-08-20T10:00:00+05:00'));
 
     $this->postJson('/api/admin/payout-batches', ['year' => 2026, 'month' => 8])->assertCreated();
@@ -382,6 +406,7 @@ it('never includes a linked transaction twice, and cancel unlinks so the period 
     $this->postJson('/api/admin/payout-batches', ['year' => 2026, 'month' => 8])->assertConflict();
 
     // The linked transaction cannot leak into another period's batch.
+    afterSeptemberCutoff();
     $this->postJson('/api/admin/payout-batches', ['year' => 2026, 'month' => 9])
         ->assertCreated()
         ->assertJsonPath('data.customer_count', 0)
@@ -414,7 +439,7 @@ it('never includes a linked transaction twice, and cancel unlinks so the period 
 });
 
 it('rejects a result file referencing another batch\'s items without changing anything', function () {
-    $customerA = Customer::factory()->create();
+    $customerA = payoutCustomer();
     confirmTransactionAt($this->merchant, $this->creditor, $customerA, 500000, CarbonImmutable::parse('2026-08-20T10:00:00+05:00'));
 
     $this->postJson('/api/admin/payout-batches', ['year' => 2026, 'month' => 8])->assertCreated();
@@ -433,4 +458,77 @@ it('rejects a result file referencing another batch\'s items without changing an
     // The whole file was rejected — even the valid row changed nothing.
     expect($item->refresh()->state)->toBe(PayoutItemState::Sent)
         ->and(DB::table('ledger_journals')->where('reference_type', 'payout_item')->count())->toBe(0);
+});
+
+it('refuses to build a batch whose cutoff instant is still in the future', function () {
+    confirmTransactionAt($this->merchant, $this->creditor, payoutCustomer(), 500000, CarbonImmutable::parse('2026-08-20T10:00:00+05:00'));
+
+    // "Now" is 26 August — September's cutoff (the 24th, §13) has not
+    // happened yet, so a September build would silently miss every
+    // confirmation still to come. It is refused and nothing is created.
+    $this->postJson('/api/admin/payout-batches', ['year' => 2026, 'month' => 9])
+        ->assertUnprocessable();
+
+    expect(PayoutBatch::query()->count())->toBe(0);
+
+    // The moment the cutoff has passed, the same request builds fine.
+    afterSeptemberCutoff();
+    $this->postJson('/api/admin/payout-batches', ['year' => 2026, 'month' => 9])
+        ->assertCreated()
+        ->assertJsonPath('data.reference', 'PB-2026-09');
+});
+
+it('excludes an eligible customer missing bank details and reports the money waiting', function () {
+    // 15,000 laari confirmed (750,000 @ 200bp) — over the minimum, but the
+    // customer never provided payout bank details.
+    $noAccount = Customer::factory()->create();
+    $banked = payoutCustomer();
+
+    $stranded = confirmTransactionAt($this->merchant, $this->creditor, $noAccount, 750000, CarbonImmutable::parse('2026-08-20T10:00:00+05:00'));
+    confirmTransactionAt($this->merchant, $this->creditor, $banked, 500000, CarbonImmutable::parse('2026-08-20T10:00:00+05:00'));
+
+    // The batch holds only the banked customer, and surfaces the skipped
+    // count and total so admins can see money waiting on bank details.
+    $this->postJson('/api/admin/payout-batches', ['year' => 2026, 'month' => 8])
+        ->assertCreated()
+        ->assertJsonPath('data.customer_count', 1)
+        ->assertJsonPath('data.total_laari', 10000)
+        ->assertJsonPath('data.excluded_customer_count', 1)
+        ->assertJsonPath('data.excluded_total_laari', 15000);
+
+    $batch = PayoutBatch::query()->sole();
+
+    // No item and no link: the money stays confirmed and unlinked, carrying
+    // forward to the first build after the details arrive.
+    expect($batch->items()->pluck('customer_id')->all())->toBe([$banked->id])
+        ->and((int) $batch->excluded_customer_count)->toBe(1)
+        ->and((int) $batch->excluded_total_laari)->toBe(15000)
+        ->and($stranded->refresh()->payout_item_id)->toBeNull()
+        ->and($stranded->state)->toBe(TransactionState::Confirmed);
+});
+
+it('imports a result file carrying a UTF-8 BOM and leading blank lines', function () {
+    confirmTransactionAt($this->merchant, $this->creditor, payoutCustomer(), 500000, CarbonImmutable::parse('2026-08-20T10:00:00+05:00'));
+
+    $this->postJson('/api/admin/payout-batches', ['year' => 2026, 'month' => 8])->assertCreated();
+    $batch = PayoutBatch::query()->sole();
+
+    dualApprove($batch);
+    app(BankFileExporter::class)->export($batch);
+
+    $item = $batch->items()->sole();
+
+    // Exactly what some banks emit: a UTF-8 BOM, then blank lines, then the
+    // header — all tolerated, none meaningful.
+    $csv = "\u{FEFF}\r\n\r\nitem_id,status,reference,failure_reason\r\n{$item->id},paid,BML-BOM-1,\r\n";
+
+    $this->post("/api/admin/payout-batches/{$batch->id}/import", [
+        'file' => UploadedFile::fake()->createWithContent('results.csv', $csv),
+    ], ['Accept' => 'application/json'])
+        ->assertOk()
+        ->assertJsonPath('data.state', 'completed');
+
+    expect($item->refresh()->state)->toBe(PayoutItemState::Paid)
+        ->and($item->bank_reference)->toBe('BML-BOM-1')
+        ->and(DB::table('ledger_journals')->where('reference_type', 'payout_item')->count())->toBe(1);
 });

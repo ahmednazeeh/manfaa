@@ -253,6 +253,9 @@ export const PayoutBatchSchema = z.object({
   total_laari: z.number().int(),
   currency: z.string(),
   customer_count: z.number().int(),
+  // Money waiting on bank details: eligible customers skipped at build time.
+  excluded_customer_count: z.number().int(),
+  excluded_total_laari: z.number().int(),
   created_by: z.number().int().nullable(),
   approved_by_first: z.number().int().nullable(),
   approved_by_second: z.number().int().nullable(),

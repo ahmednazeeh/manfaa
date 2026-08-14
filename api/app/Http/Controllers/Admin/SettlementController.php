@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Domain\Money\Laari;
+use App\Domain\Settlement\DuplicateBankRefException;
 use App\Domain\Settlement\InvalidSettlementStateException;
 use App\Domain\Settlement\SettlementAllocator;
 use App\Domain\Settlement\SettlementState;
@@ -60,7 +61,7 @@ class SettlementController extends Controller
                 $validated['bank_ref'],
                 $validated['slip_path'] ?? null,
             );
-        } catch (InvalidSettlementStateException $e) {
+        } catch (DuplicateBankRefException|InvalidSettlementStateException $e) {
             abort(409, $e->getMessage());
         }
 

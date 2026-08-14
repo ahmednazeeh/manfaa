@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Domain\Payout\ApprovalService;
 use App\Domain\Payout\BankFileExporter;
+use App\Domain\Payout\CutoffInFutureException;
 use App\Domain\Payout\DuplicatePayoutBatchException;
 use App\Domain\Payout\ImportRowException;
 use App\Domain\Payout\InvalidPayoutBatchStateException;
@@ -40,6 +41,8 @@ class PayoutBatchController extends Controller
 
         try {
             $batch = $builder->buildDraft((int) $validated['year'], (int) $validated['month'], $admin);
+        } catch (CutoffInFutureException $e) {
+            abort(422, $e->getMessage());
         } catch (DuplicatePayoutBatchException $e) {
             abort(409, $e->getMessage());
         }

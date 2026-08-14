@@ -125,10 +125,12 @@ it('reconciles a few hundred seeded transactions to the laari', function () {
             ->and($transaction->fee_laari)->toBe($belowMinimum ? 0 : intdiv($eligible * $feeBp + 9999, 10000))
             ->and($transaction->fee_gst_laari)->toBe(0)
             ->and($transaction->state)->toBe(
-                $belowMinimum ? TransactionState::Tracked : TransactionState::AwaitingValidation
+                // Below-minimum rows accrue nothing and can never validate, so
+                // creation parks them terminally reversed straight away.
+                $belowMinimum ? TransactionState::Reversed : TransactionState::AwaitingValidation
             );
 
-        $expectedEvents[$transaction->id] = $belowMinimum ? 1 : 2;
+        $expectedEvents[$transaction->id] = 2;
         $belowMinimumCount += $belowMinimum ? 1 : 0;
         $created[] = [$merchant, $invoiceNo];
     }
@@ -205,7 +207,9 @@ it('reconciles a few hundred seeded transactions to the laari', function () {
     expect($confirmedCount)->toBeGreaterThan(0)
         ->and($reversedCount)->toBeGreaterThan(0)
         ->and(Transaction::query()->where('state', 'confirmed')->count())->toBe($confirmedCount)
-        ->and(Transaction::query()->where('state', 'reversed')->count())->toBe($reversedCount);
+        // The below-minimum rows were reversed at creation, joining the
+        // refund reversals rolled here.
+        ->and(Transaction::query()->where('state', 'reversed')->count())->toBe($reversedCount + $belowMinimumCount);
 
     // Exactly one journal per accrual, settlement, and reversal — no strays.
     expect(DB::table('ledger_journals')->count())->toBe((295 - 6) + $confirmedCount + $reversedCount);

@@ -3,20 +3,25 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Domain\Cashback\TransactionState;
+use App\Domain\Standing\StaleHolds;
+use App\Domain\Standing\SuspensionService;
 use App\Http\Controllers\Controller;
 use App\Models\Merchant;
 use App\Models\MerchantNotice;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Query\JoinClause;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 class MerchantsController extends Controller
 {
     /**
      * Merchant standing for the admin panel: status plus outstanding and
-     * overdue unfunded-payable totals, summed from the STORED line integers.
+     * overdue unfunded-payable totals, summed from the STORED line integers —
+     * and the stale-hold backlog (on_hold unchanged for 30+ days), so held
+     * rows under fraud/dispute review stay visible instead of ageing quietly.
      */
-    public function index(): JsonResponse
+    public function index(StaleHolds $staleHolds): JsonResponse
     {
         $now = CarbonImmutable::now('UTC');
 
@@ -25,6 +30,7 @@ class MerchantsController extends Controller
                 $join->on('transactions.merchant_id', '=', 'merchants.id')
                     ->where('transactions.state', '=', TransactionState::PayableUnfunded->value);
             })
+            ->leftJoinSub($staleHolds->perMerchant($now), 'stale_holds', 'stale_holds.merchant_id', '=', 'merchants.id')
             ->groupBy('merchants.id')
             ->orderBy('merchants.name')
             ->selectRaw(<<<'SQL'
@@ -36,7 +42,9 @@ class MerchantsController extends Controller
                 COALESCE(SUM(transactions.cashback_laari + transactions.fee_laari + transactions.fee_gst_laari), 0) AS outstanding_laari,
                 COALESCE(SUM(transactions.cashback_laari + transactions.fee_laari + transactions.fee_gst_laari)
                     FILTER (WHERE transactions.due_at < ?), 0) AS overdue_laari,
-                MIN(transactions.due_at) AS oldest_due_at
+                MIN(transactions.due_at) AS oldest_due_at,
+                COALESCE(MAX(stale_holds.stale_hold_count), 0) AS stale_hold_count,
+                COALESCE(MAX(stale_holds.stale_hold_laari), 0) AS stale_hold_laari
                 SQL, [$now])
             ->get();
 
@@ -52,7 +60,37 @@ class MerchantsController extends Controller
                 'oldest_due_at' => $row->oldest_due_at !== null
                     ? CarbonImmutable::parse($row->oldest_due_at)->utc()->toIso8601String()
                     : null,
+                'stale_hold_count' => (int) $row->stale_hold_count,
+                'stale_hold_laari' => (int) $row->stale_hold_laari,
             ])->values(),
+        ]);
+    }
+
+    /**
+     * The manual path back for a suspended merchant — including one whose
+     * overdue debt was cleared by the 90-day write-off, which the automatic
+     * manfaa:reinstate sweep deliberately never touches. Whether such
+     * merchants should ever come back automatically is an open PLAN.md (§7)
+     * product decision; until it is made, this note-carrying admin action is
+     * the safe default and the only way back.
+     */
+    public function reinstate(Request $request, Merchant $merchant, SuspensionService $suspensions): JsonResponse
+    {
+        $validated = $request->validate([
+            'note' => ['required', 'string', 'max:1000'],
+        ]);
+
+        if ($merchant->status !== 'suspended') {
+            abort(409, sprintf('Merchant #%d is %s — only a suspended merchant can be reinstated.', $merchant->id, $merchant->status));
+        }
+
+        $suspensions->reinstateManually($merchant, $validated['note'], (int) $request->user()->getKey());
+
+        return response()->json([
+            'data' => [
+                'id' => $merchant->id,
+                'status' => $merchant->refresh()->status,
+            ],
         ]);
     }
 

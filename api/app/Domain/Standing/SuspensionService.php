@@ -102,6 +102,35 @@ final readonly class SuspensionService
         return $merchants->count();
     }
 
+    /**
+     * The manual reinstatement an admin performs by hand — the only path back
+     * for a merchant whose overdue debt was cleared by the 90-day write-off,
+     * which reinstate() above deliberately skips forever.
+     *
+     * OPEN POLICY (PLAN.md §7): whether a written-off merchant should ever be
+     * reinstated automatically — and on what terms (repayment of the
+     * defaulted debt, a probation window) — is an undecided product question.
+     * Until it is decided, the safe default implemented here is manual-only:
+     * a deliberate admin action carrying a required note, recorded in the
+     * append-only notice trail as {manual: true, note, admin_id}.
+     *
+     * The 'reinstated' notice this writes also postdates any 'suspended'
+     * notice, so the automatic sweep's own-suspension guard stays coherent.
+     */
+    public function reinstateManually(Merchant $merchant, string $note, int $adminId): void
+    {
+        $now = CarbonImmutable::now('UTC');
+
+        $merchant->update(['status' => 'active']);
+
+        $this->notices->record($merchant->id, 'reinstated', [
+            'manual' => true,
+            'note' => $note,
+            'admin_id' => $adminId,
+            'reinstated_at' => $now->toIso8601String(),
+        ]);
+    }
+
     private function overdue(Builder $query, CarbonImmutable $now): Builder
     {
         return $query

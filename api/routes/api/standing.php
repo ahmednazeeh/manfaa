@@ -9,5 +9,6 @@ use Illuminate\Support\Facades\Route;
 Route::prefix('admin')->middleware('auth:admin')->group(function () {
     Route::get('merchants', [MerchantsController::class, 'index']);
     Route::get('merchants/{merchant}/notices', [MerchantsController::class, 'notices']);
+    Route::post('merchants/{merchant}/reinstate', [MerchantsController::class, 'reinstate']);
     Route::get('reconciliation', [ReconciliationController::class, 'index']);
 });
