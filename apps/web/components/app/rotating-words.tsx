@@ -63,7 +63,10 @@ export function RotatingWords({
   }, [words.length]);
 
   return (
-    <span className={cn('relative inline-grid text-start', className)}>
+    // The caller's classes come first so a display utility from a call
+    // site cannot win the merge and collapse the grid — which silently
+    // turns the stacked phrases into a tall column of blank lines.
+    <span className={cn(className, 'relative inline-grid text-start')}>
       {/* Invisible, unanimated, and never removed: this is what holds the
           box open at the width of the longest phrase. */}
       {words.map((word) => (

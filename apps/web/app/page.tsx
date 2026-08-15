@@ -1,15 +1,12 @@
 'use client';
 
-import { useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import type { DiscoveryEntry, DiscoverySections } from '@manfaa/api-client';
 import {
   Banknote,
   Clock,
   Globe,
   QrCode,
-  Search,
   ShoppingBag,
   Sparkles,
   Store,
@@ -20,11 +17,9 @@ import type { LucideIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { formatDate, formatRate } from '@/lib/format';
 import { useDiscovery, useMe, useSignedIn } from '@/lib/queries';
-import { SEARCH_MAX_CHARS } from '@/lib/search';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
 import { CashbackDemo } from '@/components/app/cashback-demo';
 import {
   CategoryRail,
@@ -37,6 +32,7 @@ import {
 } from '@/components/app/discovery';
 import { PublicFooter, PublicHeader } from '@/components/app/public-header';
 import { RotatingWords } from '@/components/app/rotating-words';
+import { StoreSearch } from '@/components/app/store-search';
 import { useStoreName } from '@/components/app/store-labels';
 import { StoreAvatar } from '@/components/app/store-avatar';
 
@@ -88,52 +84,6 @@ function PrimaryCta({ className }: { className?: string }) {
         <Link href="/signup">{t('landing.createAccount')}</Link>
       )}
     </Button>
-  );
-}
-
-/**
- * Hero search: submit/enter hands the query to /discover, where the real
- * (debounced, min-2-chars) search lives. An empty submit still lands on the
- * full directory — never a dead end.
- */
-function HeroSearch() {
-  const { t } = useTranslation();
-  const router = useRouter();
-  const [value, setValue] = useState('');
-
-  return (
-    <form
-      role="search"
-      className="relative w-full max-w-md"
-      onSubmit={(event) => {
-        event.preventDefault();
-        // Clamped to the API's q window — an over-long paste must land on
-        // /discover as a valid search, never as a 422.
-        const q = value.trim().slice(0, SEARCH_MAX_CHARS);
-        router.push(
-          q === '' ? '/discover' : `/discover?q=${encodeURIComponent(q)}`,
-        );
-      }}
-    >
-      <Search className="pointer-events-none absolute start-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-      <Input
-        type="search"
-        variant="lg"
-        value={value}
-        onChange={(event) => setValue(event.target.value)}
-        maxLength={SEARCH_MAX_CHARS}
-        placeholder={t('landing.heroSearchPlaceholder')}
-        aria-label={t('nav.searchStores')}
-        className="ps-9 pe-24"
-      />
-      <Button
-        type="submit"
-        size="sm"
-        className="absolute end-1.5 top-1/2 -translate-y-1/2"
-      >
-        {t('common.search')}
-      </Button>
-    </form>
   );
 }
 
@@ -235,17 +185,22 @@ function Hero({ promoted }: { promoted: DiscoveryEntry | null }) {
   return (
     <section className="container pt-6 pb-10 lg:pt-10 lg:pb-14">
       <div className="grid items-center gap-10 lg:grid-cols-2 lg:gap-12">
-        <div className="flex max-w-xl flex-col gap-5">
+        <div className="flex max-w-2xl flex-col gap-5">
           {/* Three deliberate lines: the promise, then "when you", then the
               changing channel on its own. Keeping the rotating phrase on a
               line of its own is what stops the sentence above it reflowing
               as the phrase changes length — and it is the shape rakuten.com
               uses for the same kind of headline. `block` on each part, not
               <br>, so a narrow screen may still wrap within a part. */}
-          <h1 className="font-display text-4xl leading-[1.05] text-balance text-mono sm:text-5xl lg:text-6xl">
+          {/* No text-balance: the three lines are authored, and balancing
+              would re-split "Earn cash back in MVR" into two even halves
+              that fight the break below it. RotatingWords owns its own
+              display — passing a display class here would override the
+              grid that holds its box open. */}
+          <h1 className="font-display text-3xl leading-[1.08] text-mono sm:text-4xl lg:text-5xl">
             <span className="block">{t('landing.heroTitleLead')}</span>
             <span className="block">{t('landing.heroTitleWhenYou')}</span>
-            <RotatingWords words={channels} className="block text-primary" />
+            <RotatingWords words={channels} className="text-primary" />
           </h1>
           <p className="text-sm/relaxed text-pretty text-muted-foreground sm:text-base/relaxed">
             {t('landing.heroSubtitle')}
@@ -528,6 +483,31 @@ function MarketplaceTeaser() {
 }
 
 /**
+ * The one claim that separates Manfaa from a loyalty scheme, given its own
+ * band rather than a bullet: the reward is rufiyaa in a bank account, not
+ * points in a wallet only we honour. It sits after how-it-works, where a
+ * reader has just learned the mechanics and is deciding whether they are
+ * worth it.
+ */
+function RealMoney() {
+  const { t } = useTranslation();
+
+  return (
+    <section className="border-b border-border bg-secondary/30">
+      <div className="container flex flex-col items-center gap-3 py-10 text-center lg:py-14">
+        <Banknote className="size-7 text-primary" />
+        <h2 className="font-display text-2xl text-balance text-mono sm:text-3xl">
+          {t('landing.realMoneyTitle')}
+        </h2>
+        <p className="max-w-xl text-sm/relaxed text-pretty text-muted-foreground">
+          {t('landing.realMoneyBody')}
+        </p>
+      </div>
+    </section>
+  );
+}
+
+/**
  * The search block that opens the storefront for a SIGNED-OUT visitor,
  * sitting with the category rail below how-it-works: by then they know what
  * Manfaa is and the question has changed from "what is this?" to "who takes
@@ -548,7 +528,7 @@ function SearchAndCategories({
         <h2 className="font-display text-2xl text-mono sm:text-3xl">
           {t('landing.findStoreTitle')}
         </h2>
-        <HeroSearch />
+        <StoreSearch size="lg" className="max-w-xl" />
       </div>
       {isPending && <CategoryRailSkeleton />}
       {sections !== undefined && <CategoryRail sections={sections} />}
@@ -594,6 +574,7 @@ export default function LandingPage() {
           <>
             <Hero promoted={promoted} />
             <HowItWorks />
+            <RealMoney />
             <SearchAndCategories sections={data} isPending={isPending} />
             {storefront}
           </>

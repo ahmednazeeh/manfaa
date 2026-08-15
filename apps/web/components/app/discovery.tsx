@@ -11,6 +11,7 @@ import { ArrowRight, MapPin } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { formatDate, formatRate, splitDistance } from '@/lib/format';
+import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import { EmptyBlock } from '@/components/app/async-states';
 import { ScrollRow } from '@/components/app/scroll-row';
@@ -148,26 +149,21 @@ function DistanceLine({ meters }: { meters: number }) {
  * app is clickable through this — the slug is the only identifier that ever
  * travels in a URL.
  */
-function StoreLink({ slug, children }: { slug: string; children: ReactNode }) {
-  return (
-    <Link
-      href={`/store/${slug}`}
-      className="group block h-full rounded-xl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-    >
-      {children}
-    </Link>
-  );
-}
-
 /**
  * The one merchant card, shared by the landing shelves and the /discover
  * grid (§1 store-channel decision).
  *
- * Anatomy, top to bottom: the logo tile as the card's hero — no store has
- * uploaded a logo yet, so today that tile is the deterministic initials
- * mark and it carries the card on its own — then the name, the rate large
- * ("2% cashback"), the struck-through standing rate whenever a promotion is
- * beating it, and finally the channel chip with the muted meta.
+ * Anatomy: the logo tile as the card's hero, then the NAME, then the
+ * cashback rate as the largest thing on the card after it — that number is
+ * why anyone is looking — then the facts a shopper decides on: what kind of
+ * shop, whether they can walk in or must go online, how far away it is, and
+ * a way to read the terms before they go.
+ *
+ * The whole card is one click target via the stretched-link pattern: the
+ * store link is an absolutely positioned overlay, so the card body stays
+ * plain markup and "Terms" can be its own real link on top of it. Nesting a
+ * second anchor inside the first would be invalid HTML and would swallow
+ * one of the two destinations.
  */
 export function MerchantCard({ entry }: { entry: DiscoveryEntry }) {
   const { t } = useTranslation();
@@ -175,60 +171,82 @@ export function MerchantCard({ entry }: { entry: DiscoveryEntry }) {
   const storeName = useStoreName();
   const boosted = isBoosted(entry);
   const category = categoryLabel(entry.category);
+  const name = storeName(entry);
 
   return (
-    <StoreLink slug={entry.slug}>
-      <Card className="h-full transition-colors group-hover:border-primary/40">
-        <div className="p-3 pb-0">
-          {/* Square, so an uploaded square logo fills the slot instead of
-              being letterboxed inside a 4:3 box. */}
-          <div className="aspect-square w-full overflow-hidden rounded-lg">
-            <StoreAvatar
-              name={storeName(entry)}
-              slug={entry.slug}
-              logoUrl={entry.logo_url}
-              size="tile"
-            />
-          </div>
+    <Card className="group relative h-full transition-colors focus-within:border-primary/40 hover:border-primary/40">
+      {/* The stretched link: covers the card, sits under the Terms link. */}
+      <Link
+        href={`/store/${entry.slug}`}
+        aria-label={name}
+        className="absolute inset-0 z-0 rounded-xl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+      />
+
+      <div className="p-3 pb-0">
+        {/* Square, so an uploaded square logo fills the slot instead of
+            being letterboxed inside a 4:3 box. */}
+        <div className="aspect-square w-full overflow-hidden rounded-lg">
+          <StoreAvatar
+            name={name}
+            slug={entry.slug}
+            logoUrl={entry.logo_url}
+            size="tile"
+          />
         </div>
+      </div>
 
-        <div className="flex grow flex-col gap-1 p-4 pt-3">
-          <span className="truncate text-sm font-medium text-mono">
-            {storeName(entry)}
+      <div className="flex grow flex-col gap-1.5 p-4 pt-3">
+        <span className="line-clamp-2 text-base font-semibold text-mono">
+          {name}
+        </span>
+
+        <div className="flex flex-wrap items-baseline gap-x-2">
+          <span className="text-2xl font-bold tracking-tight text-primary">
+            {t('discover.rate', {
+              rate: formatRate(entry.cashback_rate_percent),
+            })}
           </span>
-
-          <div className="flex flex-wrap items-baseline gap-x-2">
-            <span className="text-xl font-bold tracking-tight text-primary">
-              {t('discover.rate', {
-                rate: formatRate(entry.cashback_rate_percent),
+          {boosted && (
+            <span className="text-xs text-muted-foreground line-through">
+              {t('discover.usuallyRate', {
+                rate: formatRate(entry.standing_cashback_rate_percent),
               })}
             </span>
-            {boosted && (
-              <span className="text-xs text-muted-foreground line-through">
-                {t('discover.usuallyRate', {
-                  rate: formatRate(entry.standing_cashback_rate_percent),
-                })}
-              </span>
-            )}
-          </div>
-
-          <div className="mt-auto flex flex-wrap items-center gap-x-2 gap-y-1 pt-2 text-2xs text-muted-foreground">
-            <ChannelChip channel={entry.channel} />
-            {category !== null && <span>{category}</span>}
-            {boosted && entry.promo_ends_at !== null && (
-              <span>
-                {t('discover.promoUntil', {
-                  date: formatDate(entry.promo_ends_at),
-                })}
-              </span>
-            )}
-            {entry.distance_m !== null && (
-              <DistanceLine meters={entry.distance_m} />
-            )}
-          </div>
+          )}
         </div>
-      </Card>
-    </StoreLink>
+
+        <div className="flex flex-wrap items-center gap-1.5">
+          <ChannelChip channel={entry.channel} />
+          {category !== null && (
+            <Badge variant="secondary" appearance="light" size="sm">
+              {category}
+            </Badge>
+          )}
+        </div>
+
+        <div className="mt-auto flex flex-wrap items-center gap-x-2 gap-y-1 pt-2 text-2xs text-muted-foreground">
+          {entry.distance_m !== null && (
+            <DistanceLine meters={entry.distance_m} />
+          )}
+          {boosted && entry.promo_ends_at !== null && (
+            <span>
+              {t('discover.promoUntil', {
+                date: formatDate(entry.promo_ends_at),
+              })}
+            </span>
+          )}
+          {/* Above the stretched link, so it is a genuine second
+              destination: what this store counts as eligible, before the
+              shopper walks in. */}
+          <Link
+            href={`/store/${entry.slug}#terms`}
+            className="relative z-10 ms-auto underline underline-offset-2 hover:text-foreground"
+          >
+            {t('discover.termsLink')}
+          </Link>
+        </div>
+      </div>
+    </Card>
   );
 }
 

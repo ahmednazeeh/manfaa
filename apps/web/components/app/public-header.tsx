@@ -1,15 +1,13 @@
 'use client';
 
-import { useState } from 'react';
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import { Search } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useMe } from '@/lib/queries';
-import { SEARCH_MAX_CHARS } from '@/lib/search';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { StoreSearch } from '@/components/app/store-search';
 import {
   LanguageSwitcher,
   ThemeToggle,
@@ -25,49 +23,6 @@ import {
  * place.
  */
 
-/**
- * The persistent storefront search. Wide and always present from `md` up —
- * on a cashback storefront, "which stores?" is the question every page is
- * answering, so the field belongs in the chrome rather than only in a hero.
- * Below `md` it collapses to the icon shortcut beside the controls.
- *
- * It only ever navigates: /discover owns the real debounced search, so
- * submitting here hands the query over and an empty submit still lands on
- * the full directory rather than doing nothing.
- */
-function HeaderSearch() {
-  const { t } = useTranslation();
-  const router = useRouter();
-  const [value, setValue] = useState('');
-
-  return (
-    <form
-      role="search"
-      className="relative w-full max-w-lg"
-      onSubmit={(event) => {
-        event.preventDefault();
-        // Clamped to the API's q window — an over-long paste must land on
-        // /discover as a valid search, never as a 422.
-        const q = value.trim().slice(0, SEARCH_MAX_CHARS);
-        router.push(
-          q === '' ? '/discover' : `/discover?q=${encodeURIComponent(q)}`,
-        );
-      }}
-    >
-      <Search className="pointer-events-none absolute start-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-      <Input
-        type="search"
-        value={value}
-        onChange={(event) => setValue(event.target.value)}
-        maxLength={SEARCH_MAX_CHARS}
-        placeholder={t('landing.heroSearchPlaceholder')}
-        aria-label={t('nav.searchStores')}
-        className="ps-9"
-      />
-    </form>
-  );
-}
-
 function NavLink({
   href,
   active,
@@ -82,8 +37,14 @@ function NavLink({
       href={href}
       aria-current={active ? 'page' : undefined}
       className={cn(
-        'text-sm font-medium transition-colors hover:text-foreground',
-        active ? 'text-foreground' : 'text-muted-foreground',
+        // The underline is the active state; colour alone was too quiet to
+        // read as navigation at all — "Discover" looked like a word beside
+        // the wordmark. -bottom-[1.3rem] parks it on the header's own
+        // border so the item appears to own that segment of it.
+        'relative text-sm font-medium transition-colors hover:text-foreground',
+        active
+          ? 'text-foreground after:absolute after:inset-x-0 after:-bottom-[1.3rem] after:h-0.5 after:rounded-full after:bg-primary after:content-[""]'
+          : 'text-muted-foreground',
       )}
     >
       {children}
@@ -124,6 +85,15 @@ export function PublicHeader() {
             >
               {t('nav.discover')}
             </NavLink>
+            {/* The only route to the merchant side from the storefront.
+                External host, so a plain anchor rather than a Link. */}
+            <a
+              href="https://merchant.manfaa.app/signup"
+              rel="noopener"
+              className="hidden text-sm font-medium text-muted-foreground transition-colors hover:text-foreground lg:inline"
+            >
+              {t('nav.becomeMerchant')}
+            </a>
           </nav>
         </div>
 
@@ -132,7 +102,7 @@ export function PublicHeader() {
         <div className="flex min-w-0 flex-1 justify-center">
           {showSearch && (
             <div className="hidden w-full justify-center md:flex">
-              <HeaderSearch />
+              <StoreSearch className="max-w-lg" />
             </div>
           )}
         </div>
@@ -150,7 +120,7 @@ export function PublicHeader() {
           <ThemeToggle />
           {me ? (
             <Button asChild>
-              <Link href="/dashboard">{t('landing.dashboard')}</Link>
+              <Link href="/dashboard">{t('nav.myCashback')}</Link>
             </Button>
           ) : (
             <>

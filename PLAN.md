@@ -588,6 +588,27 @@ in profile, never touches the slug) and every storefront surface shows it.
 Merchant PRODUCT categories now REQUIRE a Dhivehi name — they print on the
 customer's own receipt lines.
 
+### The storefront-UX round — DONE
+
+Customer payouts (list + detail, each opening onto the invoices and stores
+it paid for). Landing split by audience: a signed-in customer gets
+categories then the shelves, a visitor gets hero → how it works → cashback
+is real money → search + categories → shelves, with the bands alternating so
+sections stop running into one another. Search everywhere is one component
+with suggestions (stores with logos and rates, categories with their
+artwork) that always falls through to /discover. Navbar gained an active
+underline, a route to becoming a merchant, and calls the customer's own
+screen "My cashback" rather than "Dashboard". Merchant cards lead with the
+name, then the rate as the largest thing on the card, then channel and
+category badges, distance, and a Terms link (stretched-link pattern, so the
+card stays one target and Terms is still a real second destination).
+
+API: lined sales report `effective_cashback_rate_percent` beside the base
+rate, the rate endpoint flags `has_category_overrides`, every money field
+carries its `*_mvr` twin, and the docs work the categorised call end to end
+inline — Scalar's request and response selectors are independent, so an
+example pair could otherwise be read as a mismatch.
+
 ### Queue: EMPTY. Next work needs a product decision — see below.
 
 ### Open decisions awaiting the owner
