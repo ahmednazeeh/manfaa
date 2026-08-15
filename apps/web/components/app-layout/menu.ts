@@ -1,4 +1,5 @@
 import {
+  Banknote,
   Compass,
   House,
   Landmark,
@@ -24,6 +25,9 @@ export const APP_MENU: AppMenuItem[] = [
   { titleKey: 'nav.home', path: '/', icon: House },
   { titleKey: 'nav.dashboard', path: '/dashboard', icon: LayoutGrid },
   { titleKey: 'nav.transactions', path: '/transactions', icon: ReceiptText },
+  // Payouts (money that LANDED) sits beside transactions (money EARNED) and
+  // above the payout account (where it lands) — earn, receive, configure.
+  { titleKey: 'nav.payouts', path: '/payouts', icon: Banknote },
   { titleKey: 'nav.discover', path: '/discover', icon: Compass },
   { titleKey: 'nav.payoutAccount', path: '/payout-account', icon: Landmark },
 ];

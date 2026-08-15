@@ -324,6 +324,104 @@ export function listCustomerTransactions(
 }
 
 // ---------------------------------------------------------------------------
+// Payouts — the money that actually reached the bank
+// ---------------------------------------------------------------------------
+
+/**
+ * `sent` — in a bank file, awaiting the bank's result.
+ * `paid` — the bank confirmed it.
+ * `failed` — the bank rejected it; the cashback returns to the next batch.
+ *
+ * `pending` exists server-side but is never listed: it belongs to a draft
+ * batch nobody has approved, and showing it would promise money on a date
+ * the platform has not committed to.
+ */
+export const CustomerPayoutStatusSchema = z.enum(['sent', 'paid', 'failed']);
+export type CustomerPayoutStatus = z.infer<typeof CustomerPayoutStatusSchema>;
+
+export const CustomerPayoutSchema = z.object({
+  id: z.number().int(),
+  currency: z.string(),
+  amount_laari: z.number().int(),
+  status: CustomerPayoutStatusSchema,
+  /** A key to translate (e.g. `account_closed`), never prose. */
+  failure_reason: z.string().nullable(),
+  bank: z.string().nullable(),
+  /** Last four digits only — "•••• 4821". */
+  account_masked: z.string().nullable(),
+  /** What the customer's own bank statement shows against the credit. */
+  reference: z.string().nullable(),
+  period_start: z.string().nullable(),
+  period_end: z.string().nullable(),
+  transaction_count: z.number().int().optional(),
+  paid_at: z.string().nullable(),
+});
+export type CustomerPayout = z.infer<typeof CustomerPayoutSchema>;
+
+/** One purchase covered by a payout. */
+export const CustomerPayoutTransactionSchema = z.object({
+  id: z.number().int(),
+  invoice_no: z.string().nullable(),
+  occurred_at: z.string(),
+  eligible_laari: z.number().int(),
+  cashback_laari: z.number().int(),
+  merchant: z.object({
+    name: z.string(),
+    name_dv: z.string().nullable().catch(null),
+    slug: z.string(),
+  }),
+});
+export type CustomerPayoutTransaction = z.infer<
+  typeof CustomerPayoutTransactionSchema
+>;
+
+export const CustomerPayoutDetailSchema = CustomerPayoutSchema.omit({
+  transaction_count: true,
+}).extend({
+  transactions: z.array(CustomerPayoutTransactionSchema),
+});
+export type CustomerPayoutDetail = z.infer<typeof CustomerPayoutDetailSchema>;
+
+export const CustomerPayoutListResponseSchema = paginated(CustomerPayoutSchema);
+export type CustomerPayoutListResponse = z.infer<
+  typeof CustomerPayoutListResponseSchema
+>;
+
+export const CustomerPayoutDetailResponseSchema = dataWrapped(
+  CustomerPayoutDetailSchema,
+);
+export type CustomerPayoutDetailResponse = z.infer<
+  typeof CustomerPayoutDetailResponseSchema
+>;
+
+/** GET /api/customer/payouts — newest first, 25 per page (max 100). */
+export function listCustomerPayouts(
+  params: { page?: number; per_page?: number } = {},
+  options: RequestOptions = {},
+): Promise<CustomerPayoutListResponse> {
+  return apiFetch(
+    `/api/customer/payouts${queryString({
+      page: params.page,
+      per_page: params.per_page,
+    })}`,
+    CustomerPayoutListResponseSchema,
+    { signal: options.signal },
+  );
+}
+
+/** GET /api/customer/payouts/{id} — the payout and what it paid for. */
+export function getCustomerPayout(
+  id: number,
+  options: RequestOptions = {},
+): Promise<CustomerPayoutDetailResponse> {
+  return apiFetch(
+    `/api/customer/payouts/${id}`,
+    CustomerPayoutDetailResponseSchema,
+    { signal: options.signal },
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Payout account
 // ---------------------------------------------------------------------------
 

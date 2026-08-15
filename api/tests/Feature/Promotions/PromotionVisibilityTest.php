@@ -53,6 +53,11 @@ it('omits active_promotion entirely when none is live — the base contract stay
             'cashback_rate_percent' => '2.00',
             'platform_fee_percent' => '0.75',
             'currency' => 'MVR',
+            // Always present, unlike active_promotion: it answers a
+            // question every till has ("is the headline rate the whole
+            // story for this store?"), and a key that comes and goes is
+            // exactly what this exact-match assertion exists to prevent.
+            'has_category_overrides' => false,
             'min_eligible_laari' => 5000,
             'pending_decrease' => null,
         ]);

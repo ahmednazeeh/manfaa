@@ -37,7 +37,10 @@
     "stores": "Stores",
     "searchStores": "Search stores",
     "payoutAccount": "Payout account",
-    "publicNav": "Main menu"
+    "publicNav": "Main menu",
+    "payouts": "Payouts",
+    "myCashback": "My cashback",
+    "forMerchants": "For merchants"
   },
   "auth": {
     "loginTitle": "Welcome back",
@@ -317,5 +320,31 @@
     "demoToastTitle": "Ka-ching!",
     "demoToastBody": "You earned {{amount}} cashback at {{store}}.",
     "demoAlt": "A demonstration of the app: you show your Manfaa code at the till, {{store}} records a {{sale}} sale, and {{amount}} cashback lands in your balance."
+  },
+  "payouts": {
+    "title": "Payouts",
+    "subtitle": "Cashback we have sent to your bank account.",
+    "emptyTitle": "No payouts yet",
+    "emptyBody": "Confirmed cashback is paid to your bank account every month. Your first payout will appear here once it is sent.",
+    "forPeriod": "Earned {{from}} – {{to}}",
+    "purchaseCount_one": "{{count}} purchase",
+    "purchaseCount_other": "{{count}} purchases",
+    "reference": "Ref {{reference}}",
+    "failedNote": "The transfer did not go through — this cashback returns to your balance.",
+    "failedDetail": "The bank could not complete this transfer, so the cashback has gone back to your balance and will be included in a later payout. Check your payout account details are correct.",
+    "detailTitle": "Payout",
+    "detailSubtitle": "What this payment covered.",
+    "backToPayouts": "All payouts",
+    "periodLabel": "Earning period",
+    "referenceLabel": "Bank reference",
+    "accountLabel": "Paid to",
+    "paidAtLabel": "Paid on",
+    "includedTitle_one": "{{count}} purchase in this payout",
+    "includedTitle_other": "{{count}} purchases in this payout",
+    "status": {
+      "paid": "Paid",
+      "sent": "On its way",
+      "failed": "Failed"
+    }
   }
 }

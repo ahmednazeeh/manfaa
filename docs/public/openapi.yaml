@@ -194,6 +194,20 @@ paths:
         merchant's validation (refund) window; the 15-day settlement clock
         starts when that window closes.
 
+        **Sending `lines[]` changes which rate you should read back.** Each
+        line prices at its own category rate — excluded earns nothing, a
+        category override earns its own percent, the default bucket earns
+        the standing rate — and every line carries its own
+        `cashback_rate_percent` and `platform_fee_percent` in the response.
+        The row-level pair stays the BASE snapshot the sale was priced
+        against, so on a mixed basket it deliberately does not match what
+        the sale returned; `effective_cashback_rate_percent` is that figure.
+        The examples are named in pairs: pick the "Mixed basket with line
+        items" request, then open the **201** tab and choose the response
+        called "Reply to Mixed basket" — the response selector is
+        independent of the request one, so the body shown beside a request
+        is not automatically its answer.
+
         This endpoint **never rejects a well-formed sale for business
         reasons** — below-minimum sales and sales from suspended merchants
         are accepted and recorded with `cashback_laari: 0`, a reason code,
@@ -241,7 +255,7 @@ paths:
               $ref: '#/components/schemas/TransactionCreateRequest'
             examples:
               simplest:
-                summary: Simplest
+                summary: 'Simplest — one rate for the whole sale'
                 description: |
                   Everything a till is required to send: who to credit, the
                   invoice number, and the merchant's own eligible total in
@@ -310,7 +324,7 @@ paths:
                   sale_amount: 62500
                   occurred_at: '2026-08-15 11:09:00'
               mixedBasket:
-                summary: Mixed basket with line items
+                summary: 'Mixed basket with line items — each line its own rate'
                 description: |
                   A store with a product-category rate card. The three
                   lines sum to exactly `eligible_amount`
@@ -431,7 +445,7 @@ paths:
                 $ref: '#/components/schemas/TransactionWriteResult'
               examples:
                 created:
-                  summary: Created — cashback accrued at the standing 2.00%
+                  summary: 'Reply to “Simplest” — one rate for the whole sale'
                   description: |
                     The answer to the **Simplest** request example. Worked
                     integers, §4 ceiling rounding: cashback
@@ -459,6 +473,8 @@ paths:
                       sale_laari: null
                       cashback_rate_percent: '2.00'
                       platform_fee_percent: '0.75'
+                      effective_cashback_rate_percent: '2.00'
+                      effective_platform_fee_percent: '0.75'
                       cashback_laari: 2360
                       cashback_mvr: '23.60'
                       fee_laari: 885
@@ -467,7 +483,7 @@ paths:
                       occurred_at: '2026-08-15T06:04:22+00:00'
                       received_at: '2026-08-15T06:04:22+00:00'
                 linedCreated:
-                  summary: Lined created — the mixed basket priced per line
+                  summary: 'Reply to “Mixed basket” — a rate PER LINE, and an effective rate'
                   description: |
                     The answer to the **Mixed basket with line items**
                     request. Standing 5.00% (fee band 1.00%), `veggies`
@@ -487,7 +503,10 @@ paths:
                     aggregate. The row-level `cashback_rate_percent` /
                     `platform_fee_percent` are the base-rate snapshot,
                     which is why they read "5.00" / "1.00" while the
-                    veggies line reads "2.00".
+                    veggies line reads "2.00". What this sale actually
+                    RETURNED is `effective_cashback_rate_percent`, "2.75"
+                    — read that, or the per-line rates, never the base
+                    pair, when reporting a lined sale.
                   value:
                     status: created
                     reason: null
@@ -503,6 +522,8 @@ paths:
                       sale_laari: null
                       cashback_rate_percent: '5.00'
                       platform_fee_percent: '1.00'
+                      effective_cashback_rate_percent: '2.75'
+                      effective_platform_fee_percent: '0.64'
                       cashback_laari: 2750
                       cashback_mvr: '27.50'
                       fee_laari: 638
@@ -539,7 +560,7 @@ paths:
                           priced_by: standing
                           sort: 2
                 overridden:
-                  summary: Per-sale override applied — 5.00% frozen on the row
+                  summary: 'Reply to “Custom cashback for this sale” — 5.00% frozen on the row'
                   description: |
                     The answer to the **Custom cashback for this sale**
                     request. Standing 2.00%, override "5.00" on this sale.
@@ -564,6 +585,8 @@ paths:
                       sale_laari: null
                       cashback_rate_percent: '5.00'
                       platform_fee_percent: '1.00'
+                      effective_cashback_rate_percent: '5.00'
+                      effective_platform_fee_percent: '1.00'
                       cashback_laari: 5900
                       cashback_mvr: '59.00'
                       fee_laari: 1180
@@ -572,7 +595,7 @@ paths:
                       occurred_at: '2026-08-15T06:04:22+00:00'
                       received_at: '2026-08-15T06:04:23+00:00'
                 backdated:
-                  summary: Backdated sale — payable immediately, irreversible
+                  summary: 'Reply to a backdated occurred_at — payable at once, irreversible'
                   description: |
                     `occurred_at` is older than the merchant's validation
                     window plus the 3-day grace, so the sale skipped the
@@ -599,6 +622,8 @@ paths:
                       sale_laari: null
                       cashback_rate_percent: '2.00'
                       platform_fee_percent: '0.75'
+                      effective_cashback_rate_percent: '2.00'
+                      effective_platform_fee_percent: '0.75'
                       cashback_laari: 1000
                       cashback_mvr: '10.00'
                       fee_laari: 375
@@ -657,6 +682,8 @@ paths:
                       sale_laari: null
                       cashback_rate_percent: '2.00'
                       platform_fee_percent: '0.75'
+                      effective_cashback_rate_percent: '2.00'
+                      effective_platform_fee_percent: '0.75'
                       cashback_laari: 2360
                       cashback_mvr: '23.60'
                       fee_laari: 885
@@ -702,6 +729,8 @@ paths:
                       sale_laari: null
                       cashback_rate_percent: '2.00'
                       platform_fee_percent: '0.75'
+                      effective_cashback_rate_percent: '0.00'
+                      effective_platform_fee_percent: '0.00'
                       cashback_laari: 0
                       cashback_mvr: '0.00'
                       fee_laari: 0
@@ -737,6 +766,8 @@ paths:
                       sale_laari: 3500
                       cashback_rate_percent: '2.00'
                       platform_fee_percent: '0.75'
+                      effective_cashback_rate_percent: '0.00'
+                      effective_platform_fee_percent: '0.00'
                       cashback_laari: 0
                       cashback_mvr: '0.00'
                       fee_laari: 0
@@ -979,6 +1010,8 @@ paths:
                       sale_laari: null
                       cashback_rate_percent: '2.00'
                       platform_fee_percent: '0.75'
+                      effective_cashback_rate_percent: '2.00'
+                      effective_platform_fee_percent: '0.75'
                       cashback_laari: 2360
                       cashback_mvr: '23.60'
                       fee_laari: 885
@@ -1011,6 +1044,8 @@ paths:
                       sale_laari: null
                       cashback_rate_percent: '2.00'
                       platform_fee_percent: '0.75'
+                      effective_cashback_rate_percent: '2.00'
+                      effective_platform_fee_percent: '0.75'
                       cashback_laari: 2360
                       cashback_mvr: '23.60'
                       fee_laari: 885
@@ -1043,6 +1078,8 @@ paths:
                       sale_laari: null
                       cashback_rate_percent: '2.00'
                       platform_fee_percent: '0.75'
+                      effective_cashback_rate_percent: '2.00'
+                      effective_platform_fee_percent: '0.75'
                       cashback_laari: 2000
                       cashback_mvr: '20.00'
                       fee_laari: 750
@@ -1152,6 +1189,7 @@ paths:
                     platform_fee_percent: '0.75'
                     currency: MVR
                     min_eligible_laari: 5000
+                    has_category_overrides: false
                     pending_decrease: null
                 decreaseScheduled:
                   summary: Decrease scheduled for midnight UTC+5
@@ -1160,6 +1198,7 @@ paths:
                     platform_fee_percent: '0.75'
                     currency: MVR
                     min_eligible_laari: 5000
+                    has_category_overrides: false
                     pending_decrease:
                       cashback_rate_percent: '1.50'
                       platform_fee_percent: '0.50'
@@ -1176,6 +1215,7 @@ paths:
                     platform_fee_percent: '0.75'
                     currency: MVR
                     min_eligible_laari: 5000
+                    has_category_overrides: false
                     pending_decrease: null
                     active_promotion:
                       cashback_rate_percent: '5.00'
@@ -2093,6 +2133,22 @@ components:
         override is frozen here exactly the same way. On zero-cashback
         outcomes (`below_minimum`, `merchant_suspended`) the frozen rate is
         still present: the row evidences the terms the sale met.
+
+        **Two rate pairs, and a LINED sale needs the second one.**
+        `cashback_rate_percent` / `platform_fee_percent` are the BASE terms
+        the sale was priced AGAINST. `effective_cashback_rate_percent` /
+        `effective_platform_fee_percent` are what it actually EARNED —
+        `cashback_laari / eligible_laari`, rounded half-up to the nearest
+        basis point.
+
+        On a single-rate sale the two agree. On a sale with `lines[]` they
+        do not, because each line priced at its own category rate and the
+        base rate applied to none of the basket as a whole: 100,000 laari
+        made of 30,000 excluded + 25,000 at 2.00% + 45,000 at the 5.00%
+        standing rate earns 2,750, so the base rate reads `"5.00"` while
+        the sale really returned `"2.75"`. Print the per-line rates from
+        `lines[]` on an itemised receipt, and the effective pair wherever
+        you have room for exactly one number.
       required:
         - id
         - origin
@@ -2105,6 +2161,8 @@ components:
         - sale_laari
         - cashback_rate_percent
         - platform_fee_percent
+        - effective_cashback_rate_percent
+        - effective_platform_fee_percent
         - cashback_laari
         - cashback_mvr
         - fee_laari
@@ -2162,6 +2220,20 @@ components:
           allOf:
             - $ref: '#/components/schemas/PercentString'
           description: The platform fee, tiered on the APPLIED cashback rate and frozen with it.
+        effective_cashback_rate_percent:
+          type: ['string', 'null']
+          description: |
+            What the sale ACTUALLY returned: `cashback_laari /
+            eligible_laari` as a 2-decimal percent string, rounded half-up
+            to the nearest basis point. Equal to `cashback_rate_percent` on
+            a single-rate sale; DIFFERENT on a lined one, where it is the
+            only honest single figure. `null` only when `eligible_laari` is
+            zero — a rate on nothing is undefined, not 0%.
+          example: '2.75'
+        effective_platform_fee_percent:
+          type: ['string', 'null']
+          description: The same division for the fee — `fee_laari / eligible_laari`.
+          example: '0.64'
         cashback_laari:
           $ref: '#/components/schemas/LaariAmount'
         cashback_mvr:
@@ -2302,7 +2374,7 @@ components:
     MerchantRate:
       type: object
       description: The merchant's current standing rate, for the till display. Advisory — the server recomputes authoritatively at `occurred_at`.
-      required: [cashback_rate_percent, platform_fee_percent, currency, min_eligible_laari, pending_decrease]
+      required: [cashback_rate_percent, platform_fee_percent, currency, min_eligible_laari, has_category_overrides, pending_decrease]
       properties:
         cashback_rate_percent:
           allOf:
@@ -2319,6 +2391,18 @@ components:
           allOf:
             - $ref: '#/components/schemas/LaariAmount'
           description: Sales with `eligible_amount` below this record with zero cashback (`below_minimum`).
+        has_category_overrides:
+          type: boolean
+          description: |
+            `true` when this store has ACTIVE product categories — some
+            products are excluded, or carry their own rate. The headline
+            `cashback_rate_percent` above then applies only to what is NOT
+            in one of those categories, so a till that prints it against
+            the whole basket over-promises. Read
+            `GET /v1/merchants/me/product-categories` and send `lines[]`
+            on the sale; the per-line rates and
+            `effective_cashback_rate_percent` in the response are what the
+            customer actually earned.
         pending_decrease:
           oneOf:
             - $ref: '#/components/schemas/PendingRateDecrease'

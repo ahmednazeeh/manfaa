@@ -8,6 +8,7 @@ use App\Domain\Money\Percent;
 use App\Domain\Platform\FeeTierScheduleResolver;
 use App\Domain\Promotions\PromotionResolver;
 use App\Models\Merchant;
+use App\Models\MerchantProductCategory;
 use App\Models\MerchantRate;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
@@ -30,6 +31,15 @@ use Illuminate\Http\Request;
  * promotions carry their branch_id; the till applies min_purchase_laari
  * and branch scope itself for display, and the server still re-resolves
  * authoritatively at occurred_at.
+ *
+ * has_category_overrides is the honesty flag on the headline rate. A store
+ * that excludes tobacco, or prices vegetables at 1%, still has ONE standing
+ * rate — and a till that shows only that rate quotes a number the basket
+ * will not earn. The flag says "this store's rate depends on what is in the
+ * basket"; the till then reads
+ * GET /v1/merchants/me/product-categories and submits lines[]. It is a
+ * boolean rather than the category list itself so this endpoint stays the
+ * cheap, cacheable poll it is meant to be.
  */
 class MerchantRateController extends V1Controller
 {
@@ -82,6 +92,15 @@ class MerchantRateController extends V1Controller
             'platform_fee_percent' => Percent::format($feeTiers->feeBpAt($current->rate_bp, $now)),
             'currency' => 'MVR',
             'min_eligible_laari' => $merchant->min_eligible_laari,
+            // The headline rate above is NOT the whole story for this store
+            // when true: some products are excluded or carry their own
+            // rate, so a till that prints "cashback_rate_percent" against
+            // the whole basket will over-promise. Fetch
+            // GET /v1/merchants/me/product-categories and send lines[].
+            'has_category_overrides' => MerchantProductCategory::query()
+                ->where('merchant_id', $merchant->id)
+                ->where('active', true)
+                ->exists(),
             'pending_decrease' => $pendingDecrease,
         ];
 

@@ -13,6 +13,8 @@ import {
   getDiscovery,
   getStore,
   listCustomerClaims,
+  getCustomerPayout,
+  listCustomerPayouts,
   listCustomerTransactions,
   registerCustomer,
   requestCustomerOtp,
@@ -44,6 +46,8 @@ export const queryKeys = {
   me: ['customer', 'me'] as const,
   balance: ['customer', 'balance'] as const,
   transactions: (page: number) => ['customer', 'transactions', page] as const,
+  payouts: (page: number) => ['customer', 'payouts', page] as const,
+  payout: (id: number) => ['customer', 'payout', id] as const,
   payoutAccount: ['customer', 'payout-account'] as const,
   claims: (page: number) => ['customer', 'claims', page] as const,
   discovery: (coords: { lat: number; lng: number } | null) =>
@@ -186,6 +190,25 @@ export function useTransactions(page: number) {
   return useQuery({
     queryKey: queryKeys.transactions(page),
     queryFn: ({ signal }) => listCustomerTransactions({ page }, { signal }),
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Payouts
+// ---------------------------------------------------------------------------
+
+export function usePayouts(page: number) {
+  return useQuery({
+    queryKey: queryKeys.payouts(page),
+    queryFn: ({ signal }) => listCustomerPayouts({ page }, { signal }),
+  });
+}
+
+export function usePayout(id: number) {
+  return useQuery({
+    queryKey: queryKeys.payout(id),
+    queryFn: ({ signal }) => getCustomerPayout(id, { signal }),
+    select: (response) => response.data,
   });
 }
 

@@ -6,6 +6,7 @@ use App\Http\Controllers\Customer\ClaimsController;
 use App\Http\Controllers\Customer\DiscoveryController;
 use App\Http\Controllers\Customer\OtpAuthController;
 use App\Http\Controllers\Customer\PayoutAccountController;
+use App\Http\Controllers\Customer\PayoutsController;
 use App\Http\Controllers\Customer\TransactionsController;
 use Illuminate\Support\Facades\Route;
 
@@ -28,6 +29,11 @@ Route::prefix('customer')->middleware('auth:customer')->group(function () {
 
     Route::get('payout-account', [PayoutAccountController::class, 'show']);
     Route::post('payout-account', [PayoutAccountController::class, 'store']);
+
+    // The money that actually reached the bank, and what each payment
+    // covered. Scoped to the authenticated customer inside the controller.
+    Route::get('payouts', [PayoutsController::class, 'index']);
+    Route::get('payouts/{id}', [PayoutsController::class, 'show'])->whereNumber('id');
 
     // Self-serve claims are feature-flagged OFF (config/features.php):
     // customers contact the merchant, who credits the missed sale manually.

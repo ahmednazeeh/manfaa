@@ -120,6 +120,30 @@ final class Percent
     }
 
     /**
+     * The rate a sale ACTUALLY earned: `part / whole`, as a 2-decimal
+     * percent string. Unlike format(), which renders a rate that was
+     * CHOSEN, this derives one that was OBSERVED — which is the only
+     * honest single number for a mixed basket, where every line priced at
+     * its own rate and the row's base rate applied to none of the basket.
+     *
+     * Integer math throughout, rounded HALF-UP to the nearest basis point,
+     * so a caller never has to guess how we rounded. `null` when the whole
+     * is zero: a rate on nothing is not 0%, it is undefined — and a zeroed
+     * row (suspended merchant, below minimum) is exactly where a bare "0.00"
+     * would read as "this store pays nothing".
+     */
+    public static function effectiveRate(int $part, int $whole): ?string
+    {
+        if ($whole <= 0) {
+            return null;
+        }
+
+        // +$whole/2 before the divide is the half-up rounding; both operands
+        // are laari, so this stays in integers at every step.
+        return self::format(intdiv($part * 10000 + intdiv($whole, 2), $whole));
+    }
+
+    /**
      * format() for the many nullable rate fields (an excluded product
      * category, an unpriced legacy rate, a settlement with no discount).
      */
