@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Admin\StoreCategoriesController;
+use App\Http\Controllers\Admin\StoreOffersController;
 use App\Http\Controllers\Admin\StoreReviewController;
 use App\Http\Middleware\EnsureSuperadmin;
 use Illuminate\Support\Facades\Route;
@@ -29,4 +30,14 @@ Route::prefix('admin')->middleware('auth:admin')->group(function () {
     // and clearing an icon has to be distinguishable from not sending one.
     Route::post('store-categories/{id}/icon', [StoreCategoriesController::class, 'uploadIcon'])->whereNumber('id');
     Route::delete('store-categories/{id}/icon', [StoreCategoriesController::class, 'destroyIcon'])->whereNumber('id');
+
+    // Curated featured offers — editorial placement on the storefront, so
+    // superadmin only, like the approval queue and the platform's own bank
+    // accounts. Any admin may still read the list.
+    Route::get('store-offers', [StoreOffersController::class, 'index']);
+    Route::middleware(EnsureSuperadmin::class)->group(function () {
+        Route::post('store-offers', [StoreOffersController::class, 'store']);
+        Route::patch('store-offers/{id}', [StoreOffersController::class, 'update'])->whereNumber('id');
+        Route::post('store-offers/{id}/image', [StoreOffersController::class, 'uploadImage'])->whereNumber('id');
+    });
 });

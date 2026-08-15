@@ -75,6 +75,39 @@ export const DiscoveryCategorySchema = z.object({
 });
 export type DiscoveryCategory = z.infer<typeof DiscoveryCategorySchema>;
 
+/**
+ * One curated featured offer — the image banner at the top of Discover.
+ *
+ * The offer owns artwork, words and a schedule; every merchant fact is read
+ * live by the API, so `merchant.cashback_rate_percent` is what the store is
+ * paying RIGHT NOW and never a figure frozen when the banner was made.
+ * Offers whose store has stopped trading, whose window has closed, or which
+ * have no artwork simply never arrive.
+ */
+export const DiscoveryOfferSchema = z.object({
+  id: z.number().int(),
+  title: z.string(),
+  title_dv: z.string().nullable().catch(null),
+  blurb: z.string().nullable().catch(null),
+  blurb_dv: z.string().nullable().catch(null),
+  /** The pill above the title — "Limited time". */
+  badge: z.string().nullable().catch(null),
+  badge_dv: z.string().nullable().catch(null),
+  /** Always present: an offer without artwork is not published. */
+  image_url: z.string(),
+  ends_at: z.string().nullable().catch(null),
+  merchant: z.object({
+    name: z.string(),
+    name_dv: z.string().nullable().catch(null),
+    slug: z.string(),
+    logo_url: z.string().nullable(),
+    category: z.string().nullable(),
+    channel: MerchantChannelSchema,
+    cashback_rate_percent: PercentSchema,
+  }),
+});
+export type DiscoveryOffer = z.infer<typeof DiscoveryOfferSchema>;
+
 export const DiscoverySectionsSchema = z.object({
   featured: z.array(DiscoveryEntrySchema),
   /** Live promo rate above the standing rate. */
@@ -115,6 +148,8 @@ export const DiscoverySectionsSchema = z.object({
    * deploy-window degrade as `recently_added`.
    */
   categories: z.array(DiscoveryCategorySchema).catch([]),
+  /** Curated image banners, already in the admin's own order. */
+  offers: z.array(DiscoveryOfferSchema).catch([]),
 });
 export type DiscoverySections = z.infer<typeof DiscoverySectionsSchema>;
 

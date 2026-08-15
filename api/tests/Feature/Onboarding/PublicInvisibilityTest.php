@@ -62,6 +62,7 @@ it('hides every non-active status from every public surface', function (string $
         'recently_added' => [],
         'top_cashback' => [],
         'categories' => [],
+        'offers' => [],
     ]);
 
     // Store page: 404, byte-identical to a slug that never existed. Debug

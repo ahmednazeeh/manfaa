@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\MerchantLogoController;
 use App\Http\Controllers\StoreCategoryIconController;
+use App\Http\Controllers\StoreOfferImageController;
 use Illuminate\Support\Facades\Route;
 
 // Store logos. Not under /discover: the same URL answers the public
@@ -29,4 +30,10 @@ Route::get('merchants/{slug}/logo', MerchantLogoController::class)
 // category on the landing page, hence the same generous per-IP throttle.
 Route::get('store-categories/{slug}/icon', StoreCategoryIconController::class)
     ->where('slug', '[a-z0-9-]{1,80}')
+    ->middleware('throttle:240,1');
+
+// Featured-offer banners — the carousel at the top of Discover. Same
+// reasoning as the icons above: public, unconditional, cacheable.
+Route::get('store-offers/{id}/image', StoreOfferImageController::class)
+    ->whereNumber('id')
     ->middleware('throttle:240,1');

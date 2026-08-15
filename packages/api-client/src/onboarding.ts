@@ -553,6 +553,124 @@ export type StoreCategoryListResponse = z.infer<
   typeof StoreCategoryListResponseSchema
 >;
 
+// ---------------------------------------------------------------------------
+// Curated featured offers — the image banners at the top of Discover
+// ---------------------------------------------------------------------------
+
+/**
+ * Why an offer is or is not on the storefront right now. Computed by the
+ * API, never stored: it answers the question an admin has when a banner
+ * they just saved is nowhere to be seen.
+ */
+export const OfferLiveStateSchema = z.enum([
+  'live',
+  'inactive',
+  'no_image',
+  'scheduled',
+  'ended',
+  'store_not_trading',
+]);
+export type OfferLiveState = z.infer<typeof OfferLiveStateSchema>;
+
+export const StoreOfferSchema = z.object({
+  id: z.number().int(),
+  merchant_id: z.number().int(),
+  merchant: z
+    .object({
+      name: z.string(),
+      name_dv: z.string().nullable().catch(null),
+      slug: z.string(),
+      status: z.string(),
+    })
+    .nullable(),
+  title: z.string(),
+  title_dv: z.string().nullable(),
+  blurb: z.string().nullable(),
+  blurb_dv: z.string().nullable(),
+  badge: z.string().nullable(),
+  badge_dv: z.string().nullable(),
+  /** Null until artwork is uploaded — an offer without it never publishes. */
+  image_url: z.string().nullable(),
+  starts_at: z.string().nullable(),
+  ends_at: z.string().nullable(),
+  sort: z.number().int(),
+  active: z.boolean(),
+  live: OfferLiveStateSchema,
+});
+export type StoreOffer = z.infer<typeof StoreOfferSchema>;
+
+export const StoreOfferListResponseSchema = z.object({
+  data: z.array(StoreOfferSchema),
+});
+export type StoreOfferListResponse = z.infer<
+  typeof StoreOfferListResponseSchema
+>;
+
+export const StoreOfferResponseSchema = dataWrapped(StoreOfferSchema);
+export type StoreOfferResponse = z.infer<typeof StoreOfferResponseSchema>;
+
+/** GET /api/admin/store-offers — every offer, curated order. */
+export function listStoreOffers(
+  options: RequestOptions = {},
+): Promise<StoreOfferListResponse> {
+  return apiFetch('/api/admin/store-offers', StoreOfferListResponseSchema, {
+    signal: options.signal,
+  });
+}
+
+export interface StoreOfferInput {
+  merchant_id?: number;
+  title?: string;
+  title_dv?: string | null;
+  blurb?: string | null;
+  blurb_dv?: string | null;
+  badge?: string | null;
+  badge_dv?: string | null;
+  starts_at?: string | null;
+  ends_at?: string | null;
+  sort?: number;
+  active?: boolean;
+}
+
+export function createStoreOffer(
+  body: StoreOfferInput,
+  options: RequestOptions = {},
+): Promise<StoreOfferResponse> {
+  return apiFetch('/api/admin/store-offers', StoreOfferResponseSchema, {
+    method: 'POST',
+    body,
+    signal: options.signal,
+  });
+}
+
+export function updateStoreOffer(
+  id: number,
+  body: StoreOfferInput,
+  options: RequestOptions = {},
+): Promise<StoreOfferResponse> {
+  return apiFetch(`/api/admin/store-offers/${id}`, StoreOfferResponseSchema, {
+    method: 'PATCH',
+    body,
+    signal: options.signal,
+  });
+}
+
+/** Replaces the banner artwork. Raster only, at least 600×200. */
+export function uploadStoreOfferImage(
+  id: number,
+  file: File,
+  options: RequestOptions = {},
+): Promise<StoreOfferResponse> {
+  const body = new FormData();
+  body.append('image', file);
+
+  return apiFetch(
+    `/api/admin/store-offers/${id}/image`,
+    StoreOfferResponseSchema,
+    { method: 'POST', body, signal: options.signal },
+  );
+}
+
 export const StoreCategoryResponseSchema = dataWrapped(StoreCategorySchema);
 export type StoreCategoryResponse = z.infer<typeof StoreCategoryResponseSchema>;
 

@@ -6,6 +6,7 @@ namespace App\Domain\Discovery;
 
 use App\Domain\Money\Percent;
 use App\Domain\Onboarding\MerchantLogo;
+use App\Domain\Storefront\OfferImage;
 use App\Domain\Storefront\StoreCategoryIcon;
 use App\Models\Merchant;
 use App\Models\MerchantBranch;
@@ -13,6 +14,7 @@ use App\Models\MerchantProductCategory;
 use App\Models\MerchantRate;
 use App\Models\Promotion;
 use App\Models\StoreCategory;
+use App\Models\StoreOffer;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Cache;
 
@@ -58,7 +60,8 @@ final class DiscoveryService
     // v5: the cached rail rows gained `icon` (admin-chosen lucide name).
     // (The top-cashback shelf needed no bump: it is a re-sort of entries
     // that already carry rate_bp, done at the presentation boundary.)
-    public const string CACHE_KEY = 'discovery:entries:v5';
+    // v6: the cached dataset gained the featured-offer banners.
+    public const string CACHE_KEY = 'discovery:entries:v6';
 
     // v4: store detail gained category_rates (Task #25).
     public const string STORE_CACHE_PREFIX = 'discovery:store:v4:';
@@ -111,7 +114,7 @@ final class DiscoveryService
     }
 
     /**
-     * @return array{featured: list<array<string, mixed>>, increased: list<array<string, mixed>>, nearby: list<array<string, mixed>>, in_store: list<array<string, mixed>>, online: list<array<string, mixed>>, recently_added: list<array<string, mixed>>, top_cashback: list<array<string, mixed>>, categories: list<array{slug: string, name_en: string, name_dv: string|null, icon: string|null, icon_url: string|null, merchant_count: int}>}
+     * @return array{featured: list<array<string, mixed>>, increased: list<array<string, mixed>>, nearby: list<array<string, mixed>>, in_store: list<array<string, mixed>>, online: list<array<string, mixed>>, recently_added: list<array<string, mixed>>, top_cashback: list<array<string, mixed>>, categories: list<array{slug: string, name_en: string, name_dv: string|null, icon: string|null, icon_url: string|null, merchant_count: int}>, offers: list<array<string, mixed>>}
      */
     public function sections(?float $lat, ?float $lng): array
     {
@@ -207,6 +210,9 @@ final class DiscoveryService
             // buildCuratedCategories() for how it differs from the
             // directory's flat meta.categories.
             'categories' => $dataset['categories'],
+            // Also not a shelf — the curated image banners above everything,
+            // in the admin's own order. See buildOffers().
+            'offers' => $dataset['offers'],
         ];
     }
 
@@ -316,8 +322,76 @@ final class DiscoveryService
             return [
                 'entries' => $entries,
                 'categories' => $this->buildCuratedCategories($entries),
+                'offers' => $this->buildOffers($entries),
             ];
         });
+    }
+
+    /**
+     * The curated featured offers — the image banners at the top of
+     * Discover — joined to the LISTED entries they advertise.
+     *
+     * An offer carries artwork, words and a schedule; every merchant fact
+     * on the banner (logo, the rate NOW, category, channel) is taken from
+     * the entry, so a banner can never quote a rate the store has moved off
+     * or advertise a shop that has been suspended. An offer whose merchant
+     * is not listed is simply absent — the same gate that hides the store.
+     *
+     * An offer with no image is also absent: the banner IS the image, and
+     * half a banner is worse than none.
+     *
+     * @param  list<array<string, mixed>>  $entries
+     * @return list<array<string, mixed>>
+     */
+    private function buildOffers(array $entries): array
+    {
+        $now = CarbonImmutable::now('UTC');
+
+        $byMerchantId = [];
+
+        foreach ($entries as $entry) {
+            $byMerchantId[$entry['merchant_id']] = $entry;
+        }
+
+        if ($byMerchantId === []) {
+            return [];
+        }
+
+        return StoreOffer::query()
+            ->live($now)
+            ->whereNotNull('image_path')
+            ->whereIn('merchant_id', array_keys($byMerchantId))
+            ->orderBy('sort')
+            ->orderByDesc('id')
+            ->get()
+            ->map(function (StoreOffer $offer) use ($byMerchantId): array {
+                $entry = $byMerchantId[$offer->merchant_id];
+
+                return [
+                    'id' => $offer->id,
+                    'title' => $offer->title,
+                    'title_dv' => $offer->title_dv,
+                    'blurb' => $offer->blurb,
+                    'blurb_dv' => $offer->blurb_dv,
+                    'badge' => $offer->badge,
+                    'badge_dv' => $offer->badge_dv,
+                    'image_url' => OfferImage::url($offer->id, $offer->image_path),
+                    'ends_at' => $offer->ends_at?->toIso8601String(),
+                    // The store, exactly as every other surface states it —
+                    // read live, never copied onto the offer row.
+                    'merchant' => [
+                        'name' => $entry['name'],
+                        'name_dv' => $entry['name_dv'],
+                        'slug' => $entry['slug'],
+                        'logo_url' => $entry['logo_url'],
+                        'category' => $entry['category'],
+                        'channel' => $entry['channel'],
+                        'cashback_rate_percent' => Percent::format($entry['rate_bp']),
+                    ],
+                ];
+            })
+            ->values()
+            ->all();
     }
 
     /**
@@ -522,6 +596,10 @@ final class DiscoveryService
             $boosted = $promo !== null && $promo->rate_bp > $standing->rate_bp;
 
             $entries[] = [
+                // INTERNAL working key, stripped by presentEntry: the
+                // featured-offer join needs to match an offer to its store
+                // without a second query, and no id may reach the wire.
+                'merchant_id' => $merchant->id,
                 'name' => $merchant->name,
                 'name_dv' => $merchant->name_dv,
                 'slug' => $merchant->slug,

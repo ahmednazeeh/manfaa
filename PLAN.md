@@ -527,7 +527,7 @@ No integrations. The riskiest logic, built first and in isolation.
 ## 13b. Build queue (status — 2026-08-15, autonomous run complete)
 
 Phases 0–3 plus the post-launch rounds are BUILT, DEPLOYED and LIVE at
-manfaa.app / merchant. / admin. / api. — **959 tests, 20,905 assertions green**,
+manfaa.app / merchant. / admin. / api. — **1005 tests, 21,164 assertions green**,
 twelve adversarial review rounds (50+ serious findings confirmed and fixed).
 
 ### Done beyond the phases
@@ -608,6 +608,49 @@ rate, the rate endpoint flags `has_category_overrides`, every money field
 carries its `*_mvr` twin, and the docs work the categorised call end to end
 inline — Scalar's request and response selectors are independent, so an
 example pair could otherwise be read as a mismatch.
+
+### The correction / signed-in round — DONE
+
+Merchants can fix a sale while it is still in the validation window:
+**Correct amount** (AmendmentService reverses the accrual with the STORED
+integers, then posts fresh against the FROZEN rate — a correction never
+re-prices a sale) and **Cancel sale**, both manager-and-above, both refused
+on a backdated credit because that path is irreversible by design. Lined
+sales amend line by line. A new merchant's validation window now defaults to
+2 days (`new_merchant_validation_window_days`, clamped by the platform
+ceiling — the `Merchant::creating` hook applies the setting, so the column
+default never fires and lowering the shared ceiling would have moved every
+existing store).
+
+The credit form HIDES the eligible-amount field entirely under Split by
+category and fills it behind the scenes from the typed rows — a derived
+number that is also editable is a number two people will disagree about.
+The till shows the customer's **real name**, unmasked: masking never was the
+enumeration defence (the miss budget and the identical blocked-vs-missing
+responses are), and a cashier who cannot read the name cannot check it.
+
+Signed-in customers get a banner (earned, pending, the buttons they actually
+use) instead of the visitor hero, then the category rail, then shelves —
+Highest cashback and Recently added among them. The merchant panel menu is
+regrouped Till / Money / Marketing / Store / Account.
+
+### Featured offers — DONE
+
+Curated image banners at the top of /discover (admin.manfaa.app › Settings ›
+Featured offers), ready for the app to reuse. An offer carries **artwork,
+words and a schedule and nothing else**: the percentage, logo and category on
+the rendered banner are read live from the store, so a banner can never
+advertise a rate the shop has moved off, and an offer for a suspended store
+never reaches the storefront. Headline, blurb and badge each take a Thaana
+twin and the card mirrors under RTL.
+
+Artwork uploads to a private disk and is served from
+`/api/store-offers/{id}/image?v=…` with a content hash, raster only. The admin
+list states WHY each offer is or is not visible — live / switched off / needs
+artwork / scheduled / ended / store not trading — because "saved but
+invisible" is the normal state of a new offer and an admin should not have to
+guess which. There is no delete; deactivation retires a campaign and keeps it
+on the record.
 
 ### Queue: EMPTY. Next work needs a product decision — see below.
 

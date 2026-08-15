@@ -84,6 +84,16 @@ return [
             'report' => false,
         ],
 
+        // Featured-offer banner artwork. Public like the category icons
+        // above and served the same way — see App\Domain\Storefront\OfferImage.
+        'offer-images' => [
+            'driver' => 'local',
+            'root' => storage_path('app/offer-images'),
+            'serve' => false,
+            'throw' => false,
+            'report' => false,
+        ],
+
         'public' => [
             'driver' => 'local',
             'root' => storage_path('app/public'),

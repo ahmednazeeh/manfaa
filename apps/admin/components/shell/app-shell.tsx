@@ -11,6 +11,7 @@ import {
   CreditCard,
   Landmark,
   LogOut,
+  Megaphone,
   Percent,
   Scale,
   ShieldAlert,
@@ -116,6 +117,7 @@ const SETTINGS_ITEMS: NavItem[] = [
   { href: '/settings/fee-tiers', label: 'Fee tiers', icon: Percent },
   { href: '/settings/bank-accounts', label: 'Bank accounts', icon: CreditCard },
   { href: '/settings/store-categories', label: 'Store categories', icon: Tags },
+  { href: '/settings/offers', label: 'Featured offers', icon: Megaphone },
   {
     href: '/settings/admins',
     label: 'Admins',

@@ -29,6 +29,7 @@ import {
   useLocationRequest,
   type GeoState,
 } from '@/components/app/discovery';
+import { FeaturedOffers } from '@/components/app/featured-offers';
 import { ListPagination } from '@/components/app/list-pagination';
 import { PublicFooter, PublicHeader } from '@/components/app/public-header';
 import { useCategoryLabel } from '@/components/app/store-labels';
@@ -352,6 +353,16 @@ function CuratedShelves() {
 
   return (
     <div className="flex flex-col gap-8">
+      {/* The banners lead: they are the one part of this page an admin has
+          hand-placed, and the reason a shopper opens Discover before
+          deciding where to go. The -mx/-px pair lets them use the full
+          width while the shelves below keep the container's gutters. */}
+      {data.offers.length > 0 && (
+        <div className="-mx-[calc(var(--spacing)*4)] -mt-3">
+          <FeaturedOffers offers={data.offers} />
+        </div>
+      )}
+
       {/* A curated shelf nobody asked for says nothing when it is empty, and
           a column of "Nothing here right now" boxes reads as a broken page
           rather than a young catalogue — so an empty one is simply absent.

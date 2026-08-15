@@ -225,7 +225,8 @@
     "categoryLabel": "Categories",
     "storesLabel": "Stores",
     "topCashback": "Highest cashback",
-    "newStores": "New stores"
+    "newStores": "New stores",
+    "featuredOffers": "Featured offers"
   },
   "categories": {
     "grocery": "Grocery",
