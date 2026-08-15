@@ -1,7 +1,9 @@
 'use client';
 
 import { MoneyText } from '@manfaa/ui';
+import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/utils';
+import { walletMovementLabel } from '@/lib/labels';
 import { useWallet } from '@/lib/queries';
 import {
   Card,
@@ -33,6 +35,7 @@ import {
 } from '@/components/app/async-states';
 
 export default function WalletPage() {
+  const { t } = useTranslation();
   const wallet = useWallet();
 
   return (
@@ -99,8 +102,8 @@ export default function WalletPage() {
                               'dd MMM yyyy, HH:mm',
                             )}
                           </TableCell>
-                          <TableCell className="capitalize">
-                            {movement.type.replaceAll('_', ' ')}
+                          <TableCell>
+                            {walletMovementLabel(t, movement.type)}
                           </TableCell>
                           <TableCell className="text-secondary-foreground">
                             {movement.description ?? '—'}

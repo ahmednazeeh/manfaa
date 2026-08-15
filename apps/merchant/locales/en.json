@@ -439,5 +439,70 @@
     "scanned": "Scanned code {{code}}",
     "scanManualHint": "You can always type the code by hand.",
     "close": "Close"
+  },
+  "labels": {
+    "state": {
+      "tracked": "Recorded",
+      "awaiting_validation": "In refund window",
+      "payable_unfunded": "Payable to Manfaa",
+      "on_hold": "Under review",
+      "confirmed": "Confirmed",
+      "paid": "Paid to customer",
+      "reversed": "Reversed",
+      "written_off": "Written off — unpaid"
+    },
+    "origin": {
+      "pos": "Till (POS)",
+      "manual": "Entered by staff",
+      "online_link": "Online checkout",
+      "api_phone": "Phone lookup (API)",
+      "card_linked": "Linked card",
+      "claim": "Customer claim"
+    },
+    "reason": {
+      "auto_validation_window": "Validated automatically",
+      "backdated_final": "Backdated — cannot be reversed",
+      "below_minimum": "Below minimum sale",
+      "merchant_suspended": "Store suspended",
+      "settlement_allocated": "Paid by store",
+      "payout_completed": "Paid out",
+      "merchant_default_90d": "Written off — store never paid",
+      "claim_approved": "From an approved customer claim",
+      "customer_refund": "Refunded",
+      "till_void": "Voided at the till",
+      "duplicate": "Duplicate sale",
+      "other": "Corrected — other reason",
+      "admin_release": "Released by Manfaa",
+      "admin_reject": "Rejected by Manfaa",
+      "stale_timestamp": "Held — sale was backdated",
+      "admin_release_stale": "Released by Manfaa after review",
+      "unknown": "Updated by Manfaa"
+    },
+    "settlementState": {
+      "draft": "Draft",
+      "awaiting_payment": "Awaiting your transfer",
+      "payment_review": "Receipt under review",
+      "settled": "Settled",
+      "partially_settled": "Partly settled",
+      "cancelled": "Cancelled"
+    },
+    "promotionStatus": {
+      "draft": "Draft",
+      "published": "Published",
+      "ended": "Ended",
+      "cancelled": "Cancelled",
+      "live": "Live"
+    },
+    "fundingMethod": {
+      "bank": "Bank transfer",
+      "wallet": "Store wallet",
+      "unknown": "Other"
+    },
+    "walletMovement": {
+      "top_up": "Top-up",
+      "settlement": "Spent on a settlement",
+      "settlement_credit": "Credit from a settlement",
+      "unknown": "Adjustment"
+    }
   }
 }

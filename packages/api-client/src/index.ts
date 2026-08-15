@@ -31,6 +31,10 @@ export * from './merchant';
 // claims queue, promotions listing, platform bank accounts, fee tier
 // schedules, platform settings, admin users.
 export * from './admin';
+// Admin hold-review queue (Task #22): the on_hold list with its filters and
+// counts, plus the two decisions — release (clock stamped) and reject
+// (accrual mirrored).
+export * from './holds';
 // Customer surface: auth + OTP signup, balance, transactions, payout
 // account, claims.
 export * from './customer';

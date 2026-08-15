@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Domain\Onboarding;
 
+use App\Models\Merchant;
 use DomainException;
 
 /**
@@ -29,7 +30,7 @@ final class OnboardingException extends DomainException
     public static function notEditable(string $status): self
     {
         return new self(
-            sprintf('The store setup is not editable while the account is %s.', $status),
+            sprintf('The store setup is not editable while the account is %s.', Merchant::statusLabel($status)),
             'setup_not_editable',
             409,
         );
@@ -52,7 +53,7 @@ final class OnboardingException extends DomainException
     public static function notPendingReview(string $status): self
     {
         return new self(
-            sprintf('The store is %s — only a pending_review submission can be approved or rejected.', $status),
+            sprintf('The store is %s — only a submission awaiting review can be approved or rejected.', Merchant::statusLabel($status)),
             'not_pending_review',
             409,
         );

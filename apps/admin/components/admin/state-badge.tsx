@@ -1,15 +1,27 @@
 import type {
+  MerchantStatus,
   PayoutBatchState,
   PayoutItemState,
   SettlementPaymentState,
   SettlementState,
   TransactionState,
 } from '@manfaa/api-client';
+import {
+  merchantStatusLabel,
+  payoutBatchStateLabel,
+  payoutItemStateLabel,
+  reasonCodeLabel,
+  settlementPaymentStateLabel,
+  settlementStateLabel,
+  transactionStateLabel,
+} from '@/lib/labels';
 import { Badge, BadgeDot, type BadgeProps } from '@/components/ui/badge';
 
 /**
  * State chips for every Phase 1 state machine. One mapping per machine so a
- * screen can never render a state the API cannot produce.
+ * screen can never render a state the API cannot produce — and the WORDS
+ * come from lib/labels.ts (exhaustive per union), so only the colour is
+ * decided here.
  */
 
 type ChipStyle = Pick<BadgeProps, 'variant' | 'appearance'>;
@@ -23,154 +35,136 @@ function StateChip({ label, style }: { label: string; style: ChipStyle }) {
   );
 }
 
-const SETTLEMENT_STATES: Record<
-  SettlementState,
-  { label: string } & ChipStyle
-> = {
-  draft: { label: 'Draft', variant: 'secondary', appearance: 'light' },
-  awaiting_payment: {
-    label: 'Awaiting payment',
-    variant: 'warning',
-    appearance: 'light',
-  },
-  payment_review: {
-    label: 'Payment review',
-    variant: 'info',
-    appearance: 'light',
-  },
-  settled: { label: 'Settled', variant: 'success', appearance: 'light' },
-  partially_settled: {
-    label: 'Partially settled',
-    variant: 'warning',
-    appearance: 'light',
-  },
-  cancelled: {
-    label: 'Cancelled',
-    variant: 'secondary',
-    appearance: 'light',
-  },
+const SETTLEMENT_VARIANTS: Record<SettlementState, BadgeProps['variant']> = {
+  draft: 'secondary',
+  awaiting_payment: 'warning',
+  payment_review: 'info',
+  settled: 'success',
+  partially_settled: 'warning',
+  cancelled: 'secondary',
 };
 
 export function SettlementStateBadge({ state }: { state: SettlementState }) {
-  const { label, ...style } = SETTLEMENT_STATES[state];
-  return <StateChip label={label} style={style} />;
+  return (
+    <StateChip
+      label={settlementStateLabel(state)}
+      style={{ variant: SETTLEMENT_VARIANTS[state], appearance: 'light' }}
+    />
+  );
 }
 
-const PAYMENT_STATES: Record<
-  SettlementPaymentState,
-  { label: string } & ChipStyle
-> = {
-  pending: { label: 'Pending match', variant: 'warning', appearance: 'light' },
-  matched: { label: 'Matched', variant: 'success', appearance: 'light' },
-  rejected: {
-    label: 'Rejected',
-    variant: 'destructive',
-    appearance: 'light',
-  },
-};
+const PAYMENT_VARIANTS: Record<SettlementPaymentState, BadgeProps['variant']> =
+  {
+    pending: 'warning',
+    matched: 'success',
+    rejected: 'destructive',
+  };
 
 export function PaymentStateBadge({
   state,
 }: {
   state: SettlementPaymentState;
 }) {
-  const { label, ...style } = PAYMENT_STATES[state];
-  return <StateChip label={label} style={style} />;
+  return (
+    <StateChip
+      label={settlementPaymentStateLabel(state)}
+      style={{ variant: PAYMENT_VARIANTS[state], appearance: 'light' }}
+    />
+  );
 }
 
-const TRANSACTION_STATES: Record<
-  TransactionState,
-  { label: string } & ChipStyle
-> = {
-  tracked: { label: 'Tracked', variant: 'secondary', appearance: 'light' },
-  awaiting_validation: {
-    label: 'Awaiting validation',
-    variant: 'secondary',
-    appearance: 'light',
-  },
-  payable_unfunded: {
-    label: 'Payable (unfunded)',
-    variant: 'warning',
-    appearance: 'light',
-  },
-  on_hold: { label: 'On hold', variant: 'destructive', appearance: 'light' },
-  confirmed: { label: 'Confirmed', variant: 'success', appearance: 'light' },
-  paid: { label: 'Paid', variant: 'success', appearance: 'light' },
-  reversed: { label: 'Reversed', variant: 'secondary', appearance: 'light' },
-  written_off: {
-    label: 'Written off',
-    variant: 'destructive',
-    appearance: 'light',
-  },
+const TRANSACTION_VARIANTS: Record<TransactionState, BadgeProps['variant']> = {
+  tracked: 'secondary',
+  awaiting_validation: 'secondary',
+  payable_unfunded: 'warning',
+  on_hold: 'destructive',
+  confirmed: 'success',
+  paid: 'success',
+  reversed: 'secondary',
+  written_off: 'destructive',
 };
 
 export function TransactionStateBadge({ state }: { state: TransactionState }) {
-  const { label, ...style } = TRANSACTION_STATES[state];
-  return <StateChip label={label} style={style} />;
+  return (
+    <StateChip
+      label={transactionStateLabel(state)}
+      style={{ variant: TRANSACTION_VARIANTS[state], appearance: 'light' }}
+    />
+  );
 }
 
-const PAYOUT_BATCH_STATES: Record<
-  PayoutBatchState,
-  { label: string } & ChipStyle
-> = {
-  draft: { label: 'Draft', variant: 'secondary', appearance: 'light' },
-  approved: { label: 'Approved', variant: 'info', appearance: 'light' },
-  processing: { label: 'Processing', variant: 'warning', appearance: 'light' },
-  sent: { label: 'Sent', variant: 'info', appearance: 'light' },
-  completed: { label: 'Completed', variant: 'success', appearance: 'light' },
-  partially_failed: {
-    label: 'Partially failed',
-    variant: 'destructive',
-    appearance: 'light',
-  },
-  cancelled: { label: 'Cancelled', variant: 'secondary', appearance: 'light' },
+/**
+ * The state qualifier that sits beside the chip ("Paid by store", "Backdated
+ * — cannot be reversed"). Renders nothing when the row carries no
+ * reason_code: a clean pending sale has no qualifier (§9.2).
+ */
+export function TransactionReasonLine({
+  code,
+  className,
+}: {
+  code: string | null;
+  className?: string;
+}) {
+  const label = reasonCodeLabel(code);
+  return label === null ? null : <span className={className}>{label}</span>;
+}
+
+const PAYOUT_BATCH_VARIANTS: Record<PayoutBatchState, BadgeProps['variant']> = {
+  draft: 'secondary',
+  approved: 'info',
+  processing: 'warning',
+  sent: 'info',
+  completed: 'success',
+  partially_failed: 'destructive',
+  cancelled: 'secondary',
 };
 
 export function PayoutBatchStateBadge({ state }: { state: PayoutBatchState }) {
-  const { label, ...style } = PAYOUT_BATCH_STATES[state];
-  return <StateChip label={label} style={style} />;
+  return (
+    <StateChip
+      label={payoutBatchStateLabel(state)}
+      style={{ variant: PAYOUT_BATCH_VARIANTS[state], appearance: 'light' }}
+    />
+  );
 }
 
-const PAYOUT_ITEM_STATES: Record<
-  PayoutItemState,
-  { label: string } & ChipStyle
-> = {
-  pending: { label: 'Pending', variant: 'secondary', appearance: 'light' },
-  sent: { label: 'Sent', variant: 'info', appearance: 'light' },
-  paid: { label: 'Paid', variant: 'success', appearance: 'light' },
-  failed: { label: 'Failed', variant: 'destructive', appearance: 'light' },
+const PAYOUT_ITEM_VARIANTS: Record<PayoutItemState, BadgeProps['variant']> = {
+  pending: 'secondary',
+  sent: 'info',
+  paid: 'success',
+  failed: 'destructive',
 };
 
 export function PayoutItemStateBadge({ state }: { state: PayoutItemState }) {
-  const { label, ...style } = PAYOUT_ITEM_STATES[state];
-  return <StateChip label={label} style={style} />;
+  return (
+    <StateChip
+      label={payoutItemStateLabel(state)}
+      style={{ variant: PAYOUT_ITEM_VARIANTS[state], appearance: 'light' }}
+    />
+  );
 }
 
-const MERCHANT_STATUSES: Record<string, { label: string } & ChipStyle> = {
-  draft: { label: 'Draft', variant: 'secondary', appearance: 'light' },
-  pending_review: {
-    label: 'Pending review',
-    variant: 'warning',
-    appearance: 'light',
-  },
-  rejected: { label: 'Rejected', variant: 'destructive', appearance: 'light' },
-  active: { label: 'Active', variant: 'success', appearance: 'light' },
-  suspended: {
-    label: 'Suspended',
-    variant: 'destructive',
-    appearance: 'light',
-  },
-  closed: { label: 'Closed', variant: 'secondary', appearance: 'light' },
+const MERCHANT_VARIANTS: Record<MerchantStatus, BadgeProps['variant']> = {
+  draft: 'secondary',
+  pending_review: 'warning',
+  rejected: 'destructive',
+  active: 'success',
+  suspended: 'destructive',
+  closed: 'secondary',
 };
 
-export function MerchantStatusBadge({ status }: { status: string }) {
-  const entry = MERCHANT_STATUSES[status] ?? {
-    label: status,
-    variant: 'secondary' as const,
-    appearance: 'light' as const,
-  };
-  const { label, ...style } = entry;
-  return <StateChip label={label} style={style} />;
+/**
+ * Typed against MerchantStatus rather than `string`: the old signature fell
+ * back to rendering the raw status when it did not recognise one, which is
+ * exactly the leak this pass exists to remove.
+ */
+export function MerchantStatusBadge({ status }: { status: MerchantStatus }) {
+  return (
+    <StateChip
+      label={merchantStatusLabel(status)}
+      style={{ variant: MERCHANT_VARIANTS[status], appearance: 'light' }}
+    />
+  );
 }
 
 export function ReconciliationStatusBadge({

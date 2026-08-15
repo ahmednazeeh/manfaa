@@ -20,7 +20,7 @@ final class SettlementLockedException extends DomainException
         return new self(sprintf(
             'Settlement %s is %s — lines are frozen once a settlement leaves draft.',
             $settlement->reference,
-            $settlement->state->value,
+            $settlement->state->label(),
         ));
     }
 
@@ -30,7 +30,7 @@ final class SettlementLockedException extends DomainException
             'Transaction #%d sits on settlement %s (%s) and is locked — a reversal must become a credit adjustment on the next batch.',
             $transaction->getKey(),
             $settlement->reference,
-            $settlement->state->value,
+            $settlement->state->label(),
         ));
     }
 }

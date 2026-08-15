@@ -16,6 +16,7 @@ import {
   useUpdateProfile,
   useUploadSettingsLogo,
 } from '@/lib/queries';
+import { merchantChannelLabel, merchantStatusLabel } from '@/lib/labels';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -144,7 +145,7 @@ function ProfileForm({
         <CardHeader>
           <CardTitle>{t('settings.identityTitle')}</CardTitle>
           <Badge variant={STATUS_VARIANT[profile.status]} appearance="light">
-            {t(`settings.status.${profile.status}`)}
+            {merchantStatusLabel(t, profile.status)}
           </Badge>
         </CardHeader>
         <CardContent className="grid grid-cols-2 gap-x-6 gap-y-1.5 text-sm">
@@ -218,7 +219,7 @@ function ProfileForm({
                 <SelectContent>
                   {CHANNELS.map((option) => (
                     <SelectItem key={option} value={option}>
-                      {t(`channel.${option}`)}
+                      {merchantChannelLabel(t, option)}
                     </SelectItem>
                   ))}
                 </SelectContent>

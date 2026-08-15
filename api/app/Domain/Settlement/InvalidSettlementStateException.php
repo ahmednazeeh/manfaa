@@ -8,6 +8,13 @@ use App\Models\Settlement;
 use App\Models\SettlementPayment;
 use DomainException;
 
+/**
+ * Every message here is echoed verbatim by the merchant and admin panels
+ * (`abort(409, $e->getMessage())`), so the state is named with
+ * SettlementState::label() rather than `->value` — PLAN §13b task #22, no
+ * raw snake_case in rendered output. The same applies to the `$expected`
+ * phrase callers pass: it is prose ("a submitted batch"), never a state key.
+ */
 final class InvalidSettlementStateException extends DomainException
 {
     public static function forAction(Settlement $settlement, string $action, string $expected): self
@@ -15,7 +22,7 @@ final class InvalidSettlementStateException extends DomainException
         return new self(sprintf(
             'Settlement %s is %s — %s requires %s.',
             $settlement->reference,
-            $settlement->state->value,
+            $settlement->state->label(),
             $action,
             $expected,
         ));

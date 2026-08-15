@@ -3,7 +3,7 @@
 import { ComponentType, ReactNode } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { listStoreReviews } from '@manfaa/api-client';
+import { listHolds, listStoreReviews } from '@manfaa/api-client';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Banknote,
@@ -13,6 +13,7 @@ import {
   LogOut,
   Percent,
   Scale,
+  ShieldAlert,
   ShieldCheck,
   SlidersHorizontal,
   Store,
@@ -22,6 +23,7 @@ import {
 import { toast } from 'sonner';
 import { adminLogout } from '@/lib/admin-auth';
 import { apiErrorMessage } from '@/lib/api-error';
+import { adminRoleLabel } from '@/lib/labels';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -64,9 +66,41 @@ function PendingStoreReviewsBadge() {
   );
 }
 
+/**
+ * How many transactions are sitting under fraud or dispute review. A hold is
+ * inert — the customer's cashback stays Pending and the store's settlement
+ * clock does not run — so the count belongs where an admin sees it without
+ * going looking. Counts EVERY hold, not the filtered page, so the badge stays
+ * honest while somebody works inside a filter. Nothing renders at zero.
+ */
+function OpenHoldsBadge() {
+  const query = useQuery({
+    queryKey: ['admin', 'holds', 'count'],
+    queryFn: ({ signal }) => listHolds({}, { signal }),
+    refetchInterval: 60_000,
+    staleTime: 30_000,
+  });
+
+  const count = query.data?.summary.total ?? 0;
+  if (count === 0) {
+    return null;
+  }
+  return (
+    <Badge variant="warning" size="sm" shape="circle">
+      {count}
+    </Badge>
+  );
+}
+
 const NAV_ITEMS: NavItem[] = [
   { href: '/settlements', label: 'Settlements', icon: Landmark },
   { href: '/merchants', label: 'Merchants', icon: Store },
+  {
+    href: '/holds',
+    label: 'Holds',
+    icon: ShieldAlert,
+    badge: OpenHoldsBadge,
+  },
   {
     href: '/store-reviews',
     label: 'Store reviews',
@@ -191,7 +225,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             <div className="flex items-center gap-2 text-sm">
               <span className="font-medium">{user.name}</span>
               <Badge variant="secondary" appearance="light" size="sm">
-                {user.role}
+                {adminRoleLabel(user.role)}
               </Badge>
             </div>
             <Button

@@ -26,7 +26,7 @@ final class InvalidReversalStateException extends DomainException
         return new self($transaction, sprintf(
             'Transaction %d is %s and cannot be reversed.',
             $transaction->getKey(),
-            $transaction->state->value,
+            $transaction->state->label(),
         ));
     }
 }

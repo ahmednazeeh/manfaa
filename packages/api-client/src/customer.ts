@@ -1,6 +1,12 @@
 import { z } from 'zod';
 import { apiFetch } from './client';
-import { ClaimStateSchema, dataWrapped, paginated } from './resources';
+import {
+  ClaimStateSchema,
+  dataWrapped,
+  paginated,
+  TRANSACTION_REASON_CODES,
+  type TransactionReasonCode,
+} from './resources';
 
 /**
  * Typed contracts for the customer surface (Phase 3): password login, the
@@ -236,19 +242,41 @@ export type CustomerTransactionStatus = z.infer<
 >;
 
 /**
- * Reason keys the API is known to emit for `status_reason`. Reversed rows
- * echo their stored `reason_code` (e.g. `customer_refund`), so translation
- * tables need a fallback for keys outside this list.
+ * The reason keys CustomerFacingStatus::reasonKey derives from the §6 state
+ * alone — one per pending/terminal state, independent of the row's stored
+ * reason_code.
  */
-export const KNOWN_STATUS_REASON_KEYS = [
+export const CUSTOMER_STATE_REASON_KEYS = [
   'validation_window',
   'merchant_settlement_window',
   'under_review',
   'merchant_not_settled',
   'reversed',
-  'customer_refund',
 ] as const;
-export type KnownStatusReasonKey = (typeof KNOWN_STATUS_REASON_KEYS)[number];
+export type CustomerStateReasonKey =
+  (typeof CUSTOMER_STATE_REASON_KEYS)[number];
+
+/**
+ * Everything `status_reason` can be. A reversed row echoes its stored
+ * `reason_code` instead of a state key (CustomerFacingStatus::reasonKey), so
+ * the customer app must be able to say every §6 reason code in plain words
+ * too — hence the union with TRANSACTION_REASON_CODES rather than a
+ * hand-kept shortlist that silently fell behind the API.
+ */
+export const CUSTOMER_STATUS_REASON_KEYS = [
+  ...CUSTOMER_STATE_REASON_KEYS,
+  ...TRANSACTION_REASON_CODES,
+] as const;
+export type CustomerStatusReasonKey =
+  | CustomerStateReasonKey
+  | TransactionReasonCode;
+
+/** Narrows a `status_reason` string from the wire onto the union above. */
+export function isCustomerStatusReasonKey(
+  value: string,
+): value is CustomerStatusReasonKey {
+  return (CUSTOMER_STATUS_REASON_KEYS as readonly string[]).includes(value);
+}
 
 /**
  * A transaction as the CUSTOMER sees it: no internal state, no merchant

@@ -229,7 +229,7 @@ final class SettlementBuilder
             $payments = $this->lockedPayments($settlement);
 
             if ($settlement->state !== SettlementState::PaymentReview) {
-                throw InvalidSettlementStateException::forAction($settlement, 'rejecting the receipt', 'a batch in payment_review');
+                throw InvalidSettlementStateException::forAction($settlement, 'rejecting the receipt', 'a batch in payment review');
             }
 
             if ($settlement->amount_received_laari !== 0 || $payments->contains(fn (SettlementPayment $payment): bool => $payment->state === 'matched')) {
@@ -425,7 +425,7 @@ final class SettlementBuilder
             $settlement = $this->locked($settlement);
 
             if (! in_array($settlement->state, [SettlementState::Draft, SettlementState::AwaitingPayment], true)) {
-                throw InvalidSettlementStateException::forAction($settlement, 'cancel', 'a draft or an unpaid awaiting_payment batch');
+                throw InvalidSettlementStateException::forAction($settlement, 'cancel', 'a draft, or a batch awaiting payment that has received nothing');
             }
 
             // Defensive: awaiting_payment cannot hold payments (recording one

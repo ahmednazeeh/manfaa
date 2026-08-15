@@ -97,14 +97,93 @@ export const TransactionStateSchema = z.enum([
 ]);
 export type TransactionState = z.infer<typeof TransactionStateSchema>;
 
+/**
+ * How the sale reached us. `claim` is written by ClaimApprovalService when an
+ * admin approves a missing-transaction claim — it is a real value of the
+ * transactions.origin CHECK constraint, so it must live here or a single
+ * claim-originated row would fail the response parse and blank the screen.
+ */
 export const TransactionOriginSchema = z.enum([
   'pos',
   'manual',
   'online_link',
   'api_phone',
   'card_linked',
+  'claim',
 ]);
 export type TransactionOrigin = z.infer<typeof TransactionOriginSchema>;
+
+/**
+ * Every `reason_code` the API writes onto a transaction row or one of its
+ * append-only events — the state QUALIFIER that answers "why is this row
+ * where it is". Codes are machine keys; no UI may render one raw (PLAN §13b
+ * task #22), so each app keeps an EXHAUSTIVE label map typed against this
+ * union and a new entry here fails every app's typecheck until it is
+ * labelled.
+ *
+ * Where each one is written:
+ *
+ *   auto_validation_window  CreditRecorder — clean credit enters the refund
+ *                           window (event only; the row's reason stays null)
+ *   backdated_final         CreditRecorder — PLAN §1 backdated credit: never
+ *                           sat in the refund window, payable now, merchant-
+ *                           irreversible (row + event)
+ *   below_minimum           CreditRecorder — under the store's minimum
+ *                           eligible sale; recorded, zeroed, closed
+ *   merchant_suspended      ApiCreditService — §7 suspended store; ingested
+ *                           and recorded ineligible so the till sees truth
+ *   settlement_allocated    LineAllocator — the store's payment covered this
+ *                           line, so the reward confirmed
+ *   payout_completed        ResultImporter — the bank confirmed the customer
+ *                           transfer
+ *   merchant_default_90d    WriteOffService — 90 days past due, never settled
+ *   claim_approved          ClaimApprovalService — created from an approved
+ *                           missing-transaction claim
+ *   customer_refund         reversal reason (POS /v1 + admin adjustment)
+ *   till_void               reversal reason
+ *   duplicate               reversal reason
+ *   other                   reversal reason
+ *   admin_release           hold queue — a human cleared the review
+ *   admin_reject            hold queue — a human refused the sale
+ *
+ * LEGACY — no code writes these any more (task #23 removed the staleness
+ * hold), but production rows and event history still carry them, so the
+ * labels stay:
+ *
+ *   stale_timestamp         the old staleness hold
+ *   admin_release_stale     an admin releasing one of those holds
+ */
+export const TRANSACTION_REASON_CODES = [
+  'auto_validation_window',
+  'backdated_final',
+  'below_minimum',
+  'merchant_suspended',
+  'settlement_allocated',
+  'payout_completed',
+  'merchant_default_90d',
+  'claim_approved',
+  'customer_refund',
+  'till_void',
+  'duplicate',
+  'other',
+  'admin_release',
+  'admin_reject',
+  'stale_timestamp',
+  'admin_release_stale',
+] as const;
+export const TransactionReasonCodeSchema = z.enum(TRANSACTION_REASON_CODES);
+export type TransactionReasonCode = (typeof TRANSACTION_REASON_CODES)[number];
+
+/**
+ * Narrows an arbitrary `reason_code` from the wire. The column is a plain
+ * string on purpose — an older row may carry a code this build predates — so
+ * label helpers test with this and fall back to prose, never to the code.
+ */
+export function isTransactionReasonCode(
+  value: string,
+): value is TransactionReasonCode {
+  return (TRANSACTION_REASON_CODES as readonly string[]).includes(value);
+}
 
 // ---------------------------------------------------------------------------
 // Product categories + line-item pricing (Task #25)
@@ -494,11 +573,31 @@ export type Settlement = z.infer<typeof SettlementSchema>;
 // Merchant wallet
 // ---------------------------------------------------------------------------
 
+/**
+ * What moved the merchant wallet: `top_up` (bank transfer in), `settlement`
+ * (wallet balance spent on a batch) and `settlement_credit` (an overpayment
+ * or unallocated remainder parked for the next batch) — WalletFunding and
+ * SettlementAllocator write no others.
+ */
+export const WALLET_MOVEMENT_TYPES = [
+  'top_up',
+  'settlement',
+  'settlement_credit',
+] as const;
+export type WalletMovementType = (typeof WALLET_MOVEMENT_TYPES)[number];
+
+export function isWalletMovementType(
+  value: string,
+): value is WalletMovementType {
+  return (WALLET_MOVEMENT_TYPES as readonly string[]).includes(value);
+}
+
 export const WalletMovementSchema = z.object({
   id: z.number().int(),
   amount_laari: z.number().int(),
   amount_mvr: z.string(),
   balance_after_laari: z.number().int(),
+  /** Kept a free string on the wire; narrow with isWalletMovementType. */
   type: z.string(),
   reference_type: z.string().nullable(),
   reference_id: z.number().int().nullable(),

@@ -18,7 +18,7 @@ final class MerchantNotActiveException extends DomainException
         return new self(sprintf(
             'Merchant %s is %s — credits require an active merchant.',
             $merchant->name,
-            $merchant->status,
+            Merchant::statusLabel($merchant->status),
         ));
     }
 }

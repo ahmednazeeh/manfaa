@@ -16,7 +16,7 @@ final class NotEligibleForSettlementException extends DomainException
     public static function forTransactions(array $transactionIds): self
     {
         return new self(sprintf(
-            'Transactions [%s] are not eligible for settlement — a transaction must be payable_unfunded and not already on a non-cancelled settlement.',
+            'Transactions [%s] are not eligible for settlement — a transaction must be payable and unfunded, and not already on a settlement that has not been cancelled.',
             implode(', ', $transactionIds),
         ));
     }

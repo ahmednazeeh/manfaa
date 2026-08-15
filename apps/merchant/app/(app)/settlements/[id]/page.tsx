@@ -16,6 +16,10 @@ import {
   ShieldQuestion,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import {
+  fundingMethodLabel,
+  settlementPaymentStateLabel,
+} from '@/lib/labels';
 import { toast } from 'sonner';
 import type { MerchantSettlement, ReceiptPayment } from '@/lib/api';
 import { useAddSettlementReceipt, useSettlement } from '@/lib/queries';
@@ -171,18 +175,13 @@ function StatusCard({ settlement }: { settlement: MerchantSettlement }) {
 
 function PaymentRow({ payment }: { payment: ReceiptPayment }) {
   const { t } = useTranslation();
-  const stateLabel =
-    payment.state === 'matched'
-      ? t('settlement.paymentMatched')
-      : payment.state === 'rejected'
-        ? t('settlement.paymentRejected')
-        : t('settlement.paymentPending');
+  const stateLabel = settlementPaymentStateLabel(t, payment.state);
 
   return (
     <div className="flex flex-col gap-1 border-b border-border pb-3 last:border-0 last:pb-0">
       <div className="flex items-center justify-between gap-3 text-sm">
         <span className="font-medium text-mono" dir="ltr">
-          {payment.bank_ref ?? payment.method}
+          {payment.bank_ref ?? fundingMethodLabel(t, payment.method)}
         </span>
         <MoneyText laari={payment.amount_laari} className="font-medium" />
       </div>

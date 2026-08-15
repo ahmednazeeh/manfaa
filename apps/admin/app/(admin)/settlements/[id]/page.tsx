@@ -39,10 +39,12 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { fundingMethodLabel, settlementStateLabel } from '@/lib/labels';
 import { PageHeader } from '@/components/admin/page-header';
 import {
   PaymentStateBadge,
   SettlementStateBadge,
+  TransactionReasonLine,
   TransactionStateBadge,
 } from '@/components/admin/state-badge';
 import {
@@ -133,7 +135,11 @@ function MatchOutcomeAlert({
               </li>
             ) : null}
             <li>
-              Batch is now <span className="font-medium">{outcome.state}</span>.
+              Batch is now{' '}
+              <span className="font-medium">
+                {settlementStateLabel(outcome.state)}
+              </span>
+              .
             </li>
           </ul>
         </AlertDescription>
@@ -223,8 +229,7 @@ export default function SettlementDetailPage() {
         description={
           <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
             <span>
-              Funding:{' '}
-              <span className="capitalize">{settlement.funding_method}</span>
+              Funding: {fundingMethodLabel(settlement.funding_method)}
             </span>
             <span>Due {formatDateTime(settlement.due_at)}</span>
             <span>Created {formatDateTime(settlement.created_at)}</span>
@@ -320,8 +325,8 @@ export default function SettlementDetailPage() {
                       <TableCell className="text-end font-medium">
                         <MoneyText laari={payment.amount_laari} />
                       </TableCell>
-                      <TableCell className="capitalize">
-                        {payment.method}
+                      <TableCell>
+                        {fundingMethodLabel(payment.method)}
                       </TableCell>
                       <TableCell className="font-mono text-xs">
                         {payment.bank_ref ?? '—'}
@@ -416,9 +421,15 @@ export default function SettlementDetailPage() {
                       </TableCell>
                       <TableCell>
                         {line.transaction ? (
-                          <TransactionStateBadge
-                            state={line.transaction.state}
-                          />
+                          <>
+                            <TransactionStateBadge
+                              state={line.transaction.state}
+                            />
+                            <TransactionReasonLine
+                              code={line.transaction.reason_code}
+                              className="mt-1 block text-xs text-muted-foreground"
+                            />
+                          </>
                         ) : (
                           '—'
                         )}

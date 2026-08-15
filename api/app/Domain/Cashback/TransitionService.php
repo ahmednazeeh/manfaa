@@ -121,12 +121,36 @@ final class TransitionService
      * $reasonCode qualifies the resulting payable state and is stamped on the
      * row — used by the backdated-credit path (PLAN §1), where a sale older
      * than the validation window becomes payable IMMEDIATELY and the row must
-     * say so (`backdated_final`). The ordinary window-close path passes null:
-     * a clean payable sale has no state qualifier.
+     * say so (`backdated_final`), and by the hold-review release (§13b), where
+     * it says `admin_release`. The ordinary window-close path passes null: a
+     * clean payable sale has no state qualifier.
+     *
+     * $meta is merged UNDER the clock evidence, so a caller can attach its own
+     * context (the releasing admin's note, say) but can never overwrite the
+     * recorded clock_start_at/due_at with a value it made up. This is the only
+     * way into payable_unfunded that stamps the clock, and every caller must
+     * use it: a payable row with a null clock_start_at is invisible to the §7
+     * escalation ladder, the write-off sweep and the due-date columns — the
+     * exact defect PLAN §13b records against an earlier manual hold release.
+     *
+     * $clockStartAt RESUMES a clock instead of starting one: the hold-review
+     * release passes the pre-hold clock_start_at advanced by the frozen
+     * interval, so a row that was already overdue when a fraud review opened
+     * is still overdue when it closes (§13b). Null — every other caller —
+     * means day 0 is NOW. It is not a way to invent a start date: the only
+     * legitimate value is a clock this row was already on, and the caller
+     * must never pass a future instant.
+     *
+     * @param  array<string, mixed>  $meta
      */
-    public function makePayable(Transaction $transaction, Actor $actor, ?string $reasonCode = null): TransactionEvent
-    {
-        $clockStart = CarbonImmutable::now('UTC');
+    public function makePayable(
+        Transaction $transaction,
+        Actor $actor,
+        ?string $reasonCode = null,
+        array $meta = [],
+        ?CarbonImmutable $clockStartAt = null,
+    ): TransactionEvent {
+        $clockStart = $clockStartAt ?? CarbonImmutable::now('UTC');
         $dueAt = $clockStart
             ->setTimezone($this->businessTimezone())
             ->addDays(($this->platformConfig ?? new PlatformConfig)->settlementDueDays())
@@ -137,7 +161,7 @@ final class TransitionService
             TransactionState::PayableUnfunded,
             $actor,
             $reasonCode,
-            meta: ['clock_start_at' => $clockStart->toIso8601String(), 'due_at' => $dueAt->toIso8601String()],
+            meta: [...$meta, 'clock_start_at' => $clockStart->toIso8601String(), 'due_at' => $dueAt->toIso8601String()],
             attributes: ['clock_start_at' => $clockStart, 'due_at' => $dueAt],
         );
     }

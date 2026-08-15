@@ -10,6 +10,7 @@ import { useQuery } from '@tanstack/react-query';
 import { BellRing, TriangleAlert } from 'lucide-react';
 import { apiErrorMessage } from '@/lib/api-error';
 import { formatDateTime } from '@/lib/format';
+import { noticeChannelLabel, noticeTypeLabel } from '@/lib/labels';
 import { Alert, AlertDescription, AlertIcon } from '@/components/ui/alert';
 import { Badge, type BadgeProps } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -25,16 +26,14 @@ import {
 } from '@/components/ui/sheet';
 import { Skeleton } from '@/components/ui/skeleton';
 
-const NOTICE_TYPES: Record<
-  MerchantNoticeType,
-  { label: string; variant: BadgeProps['variant'] }
-> = {
-  reminder_day10: { label: 'Day 10 reminder', variant: 'info' },
-  urgent_day13: { label: 'Day 13 urgent', variant: 'warning' },
-  due_day15: { label: 'Day 15 due', variant: 'warning' },
-  suspended: { label: 'Suspended', variant: 'destructive' },
-  reinstated: { label: 'Reinstated', variant: 'success' },
-  write_off: { label: 'Write-off', variant: 'destructive' },
+/** Colour only — the words live in lib/labels.ts with the rest. */
+const NOTICE_VARIANTS: Record<MerchantNoticeType, BadgeProps['variant']> = {
+  reminder_day10: 'info',
+  urgent_day13: 'warning',
+  due_day15: 'warning',
+  suspended: 'destructive',
+  reinstated: 'success',
+  write_off: 'destructive',
 };
 
 /**
@@ -90,7 +89,7 @@ export function NoticesSheet({ merchant }: { merchant: MerchantStanding }) {
             ) : (
               <ol className="flex flex-col gap-3">
                 {query.data.data.map((notice) => {
-                  const type = NOTICE_TYPES[notice.type];
+                  const noticeVariant = NOTICE_VARIANTS[notice.type];
                   return (
                     <li
                       key={notice.id}
@@ -98,19 +97,18 @@ export function NoticesSheet({ merchant }: { merchant: MerchantStanding }) {
                     >
                       <div className="flex items-center justify-between gap-2">
                         <Badge
-                          variant={type.variant}
+                          variant={noticeVariant}
                           appearance="light"
                           size="sm"
                         >
-                          {type.label}
+                          {noticeTypeLabel(notice.type)}
                         </Badge>
                         <span className="text-xs text-muted-foreground">
                           {formatDateTime(notice.sent_at)}
                         </span>
                       </div>
                       <div className="mt-2 text-xs text-muted-foreground">
-                        Channel:{' '}
-                        <span className="capitalize">{notice.channel}</span>
+                        Channel: {noticeChannelLabel(notice.channel)}
                       </div>
                       {notice.payload &&
                       Object.keys(notice.payload).length > 0 ? (

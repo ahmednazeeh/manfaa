@@ -32,6 +32,30 @@ class Merchant extends Model
         ];
     }
 
+    /**
+     * The lifecycle status in words (PLAN §13b task #22 — no raw snake_case
+     * in rendered output).
+     *
+     * `status` is a plain string column, not an enum, because the check
+     * constraint is the authority (see the onboarding-lifecycle migration).
+     * Refusal messages that name the status are echoed verbatim by both
+     * panels, so `pending_review` would otherwise reach a shopkeeper's
+     * screen. An unrecognised value degrades to neutral prose rather than
+     * printing itself — the one thing this must never do.
+     */
+    public static function statusLabel(?string $status): string
+    {
+        return match ($status) {
+            'draft' => 'still being set up',
+            'pending_review' => 'awaiting review',
+            'rejected' => 'not approved',
+            'active' => 'active',
+            'suspended' => 'suspended',
+            'closed' => 'closed',
+            default => 'not active',
+        };
+    }
+
     public function branches(): HasMany
     {
         return $this->hasMany(MerchantBranch::class);

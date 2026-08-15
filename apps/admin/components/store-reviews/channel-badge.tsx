@@ -1,20 +1,16 @@
 import type { MerchantChannel } from '@manfaa/api-client';
+import { merchantChannelLabel } from '@/lib/labels';
 import { Badge } from '@/components/ui/badge';
 
 /**
  * Display copy for the store channel enum. NEVER the literal "both" — the
- * §1 decision spells it "In Store & Online".
+ * §1 decision spells it "In Store & Online". The words live in lib/labels.ts
+ * with the rest of the console's machine-code vocabulary.
  */
-export const CHANNEL_LABELS: Record<MerchantChannel, string> = {
-  in_store: 'In Store',
-  online: 'Online',
-  both: 'In Store & Online',
-};
-
 export function ChannelBadge({ channel }: { channel: MerchantChannel }) {
   return (
     <Badge variant="secondary" appearance="light" size="sm">
-      {CHANNEL_LABELS[channel]}
+      {merchantChannelLabel(channel)}
     </Badge>
   );
 }

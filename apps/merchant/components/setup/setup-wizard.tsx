@@ -18,6 +18,13 @@ import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { formatBp } from '@/lib/estimate';
 import {
+  merchantChannelHint,
+  merchantChannelLabel,
+  SETUP_MISSING_KEYS,
+  setupMissingLabel,
+  type SetupMissingKey,
+} from '@/lib/labels';
+import {
   apiErrorMessage,
   onboardingErrorCode,
   setupMissingKeys,
@@ -288,10 +295,10 @@ function ProfileStep({
                 <RadioGroupItem value={option} className="mt-0.5" />
                 <span className="flex flex-col gap-0.5">
                   <span className="text-sm font-medium">
-                    {t(`channel.${option}`)}
+                    {merchantChannelLabel(t, option)}
                   </span>
                   <span className="text-xs text-muted-foreground">
-                    {t(`channelHint.${option}`)}
+                    {merchantChannelHint(t, option)}
                   </span>
                 </span>
               </label>
@@ -780,7 +787,7 @@ function TermsStep({
 // Step 5 — review & submit
 // ---------------------------------------------------------------------------
 
-const MISSING_KEYS = ['category', 'channel', 'rate', 'terms'] as const;
+const MISSING_KEYS = SETUP_MISSING_KEYS;
 
 function ReviewStep({
   state,
@@ -821,7 +828,7 @@ function ReviewStep({
   };
 
   /** The wizard step that fixes a missing requirement key. */
-  const stepForMissing: Record<string, number> = {
+  const stepForMissing: Record<SetupMissingKey, number> = {
     category: 0,
     channel: 0,
     rate: 2,
@@ -868,7 +875,11 @@ function ReviewStep({
             ),
             0,
           )}
-          {row(t('setup.reviewChannel'), t(`channel.${values.channel}`), 0)}
+          {row(
+            t('setup.reviewChannel'),
+            merchantChannelLabel(t, values.channel),
+            0,
+          )}
           {row(
             t('setup.reviewLogo'),
             values.logo_url !== null ? (
@@ -930,7 +941,7 @@ function ReviewStep({
                           className="underline cursor-pointer"
                           onClick={() => onNavigate(stepForMissing[key])}
                         >
-                          {t(`setup.missing.${key}`)}
+                          {setupMissingLabel(t, key)}
                         </button>
                       </li>
                     ),

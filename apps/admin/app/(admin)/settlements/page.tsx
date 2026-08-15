@@ -13,6 +13,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Paperclip, TriangleAlert } from 'lucide-react';
 import { apiErrorMessage } from '@/lib/api-error';
 import { formatDateTime } from '@/lib/format';
+import { fundingMethodLabel } from '@/lib/labels';
 import { Alert, AlertDescription, AlertIcon } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardTable } from '@/components/ui/card';
@@ -242,9 +243,7 @@ export default function SettlementsPage() {
         <TableCell>
           <SettlementStateBadge state={settlement.state} />
         </TableCell>
-        <TableCell className="capitalize">
-          {settlement.funding_method}
-        </TableCell>
+        <TableCell>{fundingMethodLabel(settlement.funding_method)}</TableCell>
         <TableCell className="text-end">
           <MoneyText laari={settlement.amount_due_laari} />
         </TableCell>

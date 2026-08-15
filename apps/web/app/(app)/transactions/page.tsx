@@ -5,6 +5,7 @@ import { type CustomerTransaction } from '@manfaa/api-client';
 import { formatMoney, MoneyText } from '@manfaa/ui';
 import { useTranslation } from 'react-i18next';
 import { formatDate } from '@/lib/format';
+import { statusReasonLabel } from '@/lib/labels';
 import { useTransactions } from '@/lib/queries';
 import { Card, CardContent, CardFooter } from '@/components/ui/card';
 import {
@@ -31,13 +32,7 @@ function TransactionRow({ transaction }: { transaction: CustomerTransaction }) {
   const { t } = useTranslation();
   const merchant = transaction.merchant.name;
 
-  const reasonLine =
-    transaction.status_reason === null
-      ? null
-      : t(`reasons.${transaction.status_reason}`, {
-          merchant,
-          defaultValue: t('reasons.fallback', { merchant }),
-        });
+  const reasonLine = statusReasonLabel(t, transaction.status_reason, merchant);
 
   return (
     <div className="flex flex-wrap items-start justify-between gap-3 py-4">

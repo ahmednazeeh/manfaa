@@ -6,6 +6,11 @@ import {
   type TransactionState,
 } from '@manfaa/api-client';
 import { MoneyText } from '@manfaa/ui';
+import { useTranslation } from 'react-i18next';
+import {
+  transactionOriginLabel,
+  transactionStateLabel,
+} from '@/lib/labels';
 import { useTransactions } from '@/lib/queries';
 import {
   Card,
@@ -42,20 +47,13 @@ import {
   LoadingBlock,
 } from '@/components/app/async-states';
 import { ListPagination } from '@/components/app/list-pagination';
-import { TransactionStateBadge } from '@/components/app/state-badge';
-
-const STATE_LABELS: Record<TransactionState, string> = {
-  tracked: 'Tracked',
-  awaiting_validation: 'Awaiting validation',
-  payable_unfunded: 'Payable',
-  on_hold: 'On hold',
-  confirmed: 'Confirmed',
-  paid: 'Paid',
-  reversed: 'Reversed',
-  written_off: 'Written off',
-};
+import {
+  TransactionReasonLine,
+  TransactionStateBadge,
+} from '@/components/app/state-badge';
 
 export default function TransactionsPage() {
+  const { t } = useTranslation();
   const [state, setState] = useState<TransactionState | 'all'>('all');
   const [page, setPage] = useState(1);
   const transactions = useTransactions(state, page);
@@ -89,7 +87,7 @@ export default function TransactionsPage() {
               <SelectItem value="all">All states</SelectItem>
               {TransactionStateSchema.options.map((option) => (
                 <SelectItem key={option} value={option}>
-                  {STATE_LABELS[option]}
+                  {transactionStateLabel(t, option)}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -122,8 +120,8 @@ export default function TransactionsPage() {
                       <TableRow key={transaction.id}>
                         <TableCell className="font-medium text-mono">
                           {transaction.invoice_no}
-                          <div className="text-xs font-normal text-muted-foreground capitalize">
-                            {transaction.origin.replaceAll('_', ' ')}
+                          <div className="text-xs font-normal text-muted-foreground">
+                            {transactionOriginLabel(t, transaction.origin)}
                           </div>
                         </TableCell>
                         <TableCell className="text-secondary-foreground whitespace-nowrap">
@@ -134,11 +132,10 @@ export default function TransactionsPage() {
                         </TableCell>
                         <TableCell>
                           <TransactionStateBadge state={transaction.state} />
-                          {transaction.reason_code && (
-                            <div className="text-xs text-muted-foreground mt-1">
-                              {transaction.reason_code}
-                            </div>
-                          )}
+                          <TransactionReasonLine
+                            code={transaction.reason_code}
+                            className="mt-1 block text-xs text-muted-foreground"
+                          />
                         </TableCell>
                         <TableCell className="text-end">
                           <MoneyText laari={transaction.eligible_laari} />

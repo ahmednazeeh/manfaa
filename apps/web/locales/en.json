@@ -116,6 +116,18 @@
     "merchant_not_settled": "{{merchant}} has not settled this transaction. Their cashback offers are suspended and we are pursuing the amount.",
     "reversed": "This purchase was reversed at the store, so its cashback was cancelled.",
     "customer_refund": "This purchase was refunded, so its cashback was cancelled.",
+    "backdated_final": "{{merchant}} recorded this purchase after the fact, so it skipped the refund window.",
+    "below_minimum": "This purchase is below {{merchant}}'s minimum for cashback, so it earned nothing.",
+    "merchant_suspended": "{{merchant}}'s cashback was paused when this purchase was made, so it earned nothing.",
+    "settlement_allocated": "{{merchant}} has paid for this purchase.",
+    "payout_completed": "This cashback has been paid out to you.",
+    "claim_approved": "Added from a claim you raised about {{merchant}}.",
+    "till_void": "This purchase was voided at the till, so its cashback was cancelled.",
+    "duplicate": "This purchase was recorded twice — the duplicate was removed.",
+    "other": "{{merchant}} corrected this purchase, so its cashback was cancelled.",
+    "admin_release": "Manfaa reviewed this purchase and cleared it.",
+    "admin_reject": "Manfaa could not approve this purchase, so its cashback was cancelled.",
+    "stale_timestamp": "This purchase was recorded late, so Manfaa reviewed it first.",
     "fallback": "Awaiting an update from {{merchant}}."
   },
   "payout": {

@@ -3,6 +3,7 @@ import { apiBaseUrl, apiFetch, apiFetchBlob, apiFetchText } from './client';
 import {
   ClaimStateSchema,
   dataWrapped,
+  MerchantStatusSchema,
   paginated,
   PayoutBatchSchema,
   PromotionSchema,
@@ -206,7 +207,12 @@ export const MerchantStandingSchema = z.object({
   id: z.number().int(),
   name: z.string(),
   slug: z.string(),
-  status: z.string(),
+  /**
+   * The §1 merchant lifecycle, not a free string — the console renders it as
+   * a chip, and an exhaustive label map only proves anything if the type it
+   * is exhaustive OVER is the same one the database constrains.
+   */
+  status: MerchantStatusSchema,
   open_payable_count: z.number().int(),
   outstanding_laari: z.number().int(),
   overdue_laari: z.number().int(),

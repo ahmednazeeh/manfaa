@@ -78,7 +78,7 @@ final class WalletFunding
             $settlement = Settlement::query()->whereKey($settlement->getKey())->lockForUpdate()->firstOrFail();
 
             if ($settlement->state !== SettlementState::AwaitingPayment || $settlement->amount_received_laari !== 0) {
-                throw InvalidSettlementStateException::forAction($settlement, 'wallet settlement', 'an awaiting_payment batch with nothing received');
+                throw InvalidSettlementStateException::forAction($settlement, 'wallet settlement', 'a batch awaiting payment with nothing received');
             }
 
             $required = $settlement->amount_due_laari;

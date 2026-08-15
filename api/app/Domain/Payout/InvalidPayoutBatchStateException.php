@@ -19,7 +19,7 @@ final class InvalidPayoutBatchStateException extends DomainException
         return new self(sprintf(
             'Payout batch %s is %s and cannot be exported — only an approved batch, or a processing batch whose results have not started arriving, can.',
             $batch->reference,
-            $batch->state->value,
+            $batch->state->label(),
         ));
     }
 
@@ -28,7 +28,7 @@ final class InvalidPayoutBatchStateException extends DomainException
         return new self(sprintf(
             'Payout batch %s is %s and cannot take a result import — the bank file must be exported first.',
             $batch->reference,
-            $batch->state->value,
+            $batch->state->label(),
         ));
     }
 
@@ -42,9 +42,9 @@ final class InvalidPayoutBatchStateException extends DomainException
         return new self(sprintf(
             'Payout batch %s is %s and cannot be %s — only a %s batch can.',
             $batch->reference,
-            $batch->state->value,
+            $batch->state->label(),
             $verb,
-            $required->value,
+            $required->label(),
         ));
     }
 }

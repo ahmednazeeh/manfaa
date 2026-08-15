@@ -26,4 +26,26 @@ enum PayoutBatchState: string
     case Completed = 'completed';
     case PartiallyFailed = 'partially_failed';
     case Cancelled = 'cancelled';
+
+    /**
+     * The state in words, for a sentence a person reads (PLAN §13b task #22 —
+     * no raw snake_case in rendered output). The payout screens echo a
+     * refusal message verbatim, so `partially_failed` must not be what an
+     * admin sees when a batch refuses an action.
+     *
+     * Plain phrases, no article: callers compose them into their own
+     * sentences ("... is partially failed", "only a draft batch can").
+     */
+    public function label(): string
+    {
+        return match ($this) {
+            self::Draft => 'draft',
+            self::Approved => 'approved',
+            self::Processing => 'processing',
+            self::Sent => 'sent',
+            self::Completed => 'completed',
+            self::PartiallyFailed => 'partially failed',
+            self::Cancelled => 'cancelled',
+        };
+    }
 }

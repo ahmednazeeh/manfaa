@@ -62,7 +62,10 @@ import {
   type SplitRow,
 } from '@/components/app/credit-split';
 import { QrScanButton } from '@/components/app/qr-scanner';
-import { TransactionStateBadge } from '@/components/app/state-badge';
+import {
+  TransactionReasonLine,
+  TransactionStateBadge,
+} from '@/components/app/state-badge';
 
 /**
  * The counter screen (§10, original-spec §8 manual credit path): a staff
@@ -307,11 +310,10 @@ function ResultCard({
           <span className="text-muted-foreground">State</span>
           <span className="sm:col-span-2">
             <TransactionStateBadge state={transaction.state} />
-            {transaction.reason_code && (
-              <span className="ms-2 text-xs text-muted-foreground">
-                {transaction.reason_code}
-              </span>
-            )}
+            <TransactionReasonLine
+              code={transaction.reason_code}
+              className="ms-2 text-xs text-muted-foreground"
+            />
           </span>
           <span className="text-muted-foreground">Eligible amount</span>
           <MoneyText

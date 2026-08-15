@@ -5,12 +5,17 @@ import {
   type CustomerTransactionStatus,
 } from '@manfaa/api-client';
 import { useTranslation } from 'react-i18next';
+import { claimStateLabel, transactionStatusLabel } from '@/lib/labels';
 import { Badge } from '@/components/ui/badge';
 
 type BadgeVariant =
   'primary' | 'secondary' | 'success' | 'warning' | 'info' | 'destructive';
 
-/** §6 customer status mapping — colours match what each state means to the customer. */
+/**
+ * §6 customer status mapping — colours match what each state means to the
+ * customer. The WORDS come from lib/labels.ts (en + dv, exhaustive per
+ * union), never from the code itself.
+ */
 const STATUS_VARIANTS: Record<CustomerTransactionStatus, BadgeVariant> = {
   pending: 'warning',
   confirmed: 'success',
@@ -27,7 +32,7 @@ export function TransactionStatusChip({
   const { t } = useTranslation();
   return (
     <Badge variant={STATUS_VARIANTS[status]} appearance="light" size="sm">
-      {t(`status.${status}`)}
+      {transactionStatusLabel(t, status)}
     </Badge>
   );
 }
@@ -43,7 +48,7 @@ export function ClaimStateChip({ state }: { state: ClaimState }) {
   const { t } = useTranslation();
   return (
     <Badge variant={CLAIM_VARIANTS[state]} appearance="light" size="sm">
-      {t(`claims.state.${state}`)}
+      {claimStateLabel(t, state)}
     </Badge>
   );
 }

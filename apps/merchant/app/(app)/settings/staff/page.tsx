@@ -9,6 +9,7 @@ import {
 import { Copy, KeyRound, LoaderCircle, Plus, UserRound } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
+import { merchantRoleHint, merchantRoleLabel } from '@/lib/labels';
 import {
   apiErrorMessage,
   useCreateStaff,
@@ -93,7 +94,7 @@ function RoleOptions() {
     <>
       {ROLE_OPTIONS.map((role) => (
         <SelectItem key={role} value={role}>
-          {t(`roles.${role}`)}
+          {merchantRoleLabel(t, role)}
         </SelectItem>
       ))}
     </>
@@ -176,7 +177,7 @@ function CreateStaffDialog({
               </SelectContent>
             </Select>
             <p className="text-xs text-muted-foreground">
-              {t(`roles.${role}Hint`)} {t('roles.inviteHint')}
+              {merchantRoleHint(t, role)} {t('roles.inviteHint')}
             </p>
           </div>
         </DialogBody>
@@ -399,7 +400,7 @@ export default function StaffSettingsPage() {
                             appearance="light"
                             size="sm"
                           >
-                            {t(`roles.${user.role}`)}
+                            {merchantRoleLabel(t, user.role)}
                           </Badge>
                         </TableCell>
                         <TableCell>
@@ -422,7 +423,10 @@ export default function StaffSettingsPage() {
                                   { role: value as MerchantStaffRole },
                                   t('roles.changed', {
                                     name: user.name,
-                                    role: t(`roles.${value}`),
+                                    role: merchantRoleLabel(
+                                      t,
+                                      value as MerchantStaffRole,
+                                    ),
                                   }),
                                 )
                               }
@@ -461,7 +465,7 @@ export default function StaffSettingsPage() {
                             </div>
                           </div>
                           <div className="text-xs text-muted-foreground mt-1">
-                            {t(`roles.${user.role}Hint`)}
+                            {merchantRoleHint(t, user.role)}
                           </div>
                           {locked && (
                             <div className="text-xs text-muted-foreground mt-1">
