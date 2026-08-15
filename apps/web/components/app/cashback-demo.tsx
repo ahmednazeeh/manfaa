@@ -63,7 +63,7 @@ export function CashbackDemo({ className }: { className?: string }) {
           of colour, kept well under the old three-stop gradient. */}
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute inset-x-4 top-8 bottom-4 rounded-[3rem] bg-primary/10 blur-2xl"
+        className="pointer-events-none absolute inset-x-4 top-8 bottom-4 rounded-[3rem] bg-brand/15 blur-2xl"
       />
 
       <div
@@ -88,7 +88,7 @@ export function CashbackDemo({ className }: { className?: string }) {
               laari={credited ? BALANCE_BEFORE + CASHBACK : BALANCE_BEFORE}
               className={cn(
                 'text-sm font-semibold transition-colors duration-500',
-                credited ? 'text-primary' : 'text-mono',
+                credited ? 'text-brand' : 'text-mono',
               )}
             />
           </div>
@@ -135,7 +135,7 @@ export function CashbackDemo({ className }: { className?: string }) {
             <span
               className={cn(
                 'ms-auto shrink-0 text-2xs font-semibold transition-colors duration-500',
-                credited ? 'text-primary' : 'text-muted-foreground',
+                credited ? 'text-brand' : 'text-muted-foreground',
               )}
             >
               {credited ? t('landing.demoEarned') : t('landing.demoPending')}
@@ -152,7 +152,7 @@ export function CashbackDemo({ className }: { className?: string }) {
               : 'translate-y-3 opacity-0',
           )}
         >
-          <BadgeCheck className="mt-0.5 size-4 shrink-0 text-primary" />
+          <BadgeCheck className="mt-0.5 size-4 shrink-0 text-brand" />
           <span className="flex flex-col gap-0.5">
             <span className="text-xs font-semibold text-mono">
               {t('landing.demoToastTitle')}

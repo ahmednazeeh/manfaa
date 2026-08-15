@@ -199,7 +199,7 @@ function RailItem({
             // a full-bleed image only muddies it.
             hasArtwork
               ? 'border border-border bg-card'
-              : 'bg-secondary text-secondary-foreground group-hover:bg-primary group-hover:text-primary-foreground',
+              : 'bg-brand-soft text-brand group-hover:bg-brand group-hover:text-brand-foreground',
           )}
         >
           {hasArtwork ? (

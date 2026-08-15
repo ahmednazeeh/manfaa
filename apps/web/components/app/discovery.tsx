@@ -174,7 +174,7 @@ export function MerchantCard({ entry }: { entry: DiscoveryEntry }) {
   const name = storeName(entry);
 
   return (
-    <Card className="group relative h-full transition-colors focus-within:border-primary/40 hover:border-primary/40">
+    <Card className="group relative h-full transition-colors focus-within:border-brand/40 hover:border-brand/40">
       {/* The stretched link: covers the card, sits under the Terms link. */}
       <Link
         href={`/store/${entry.slug}`}
@@ -201,7 +201,7 @@ export function MerchantCard({ entry }: { entry: DiscoveryEntry }) {
         </span>
 
         <div className="flex flex-wrap items-baseline gap-x-2">
-          <span className="text-2xl font-bold tracking-tight text-primary">
+          <span className="text-2xl font-bold tracking-tight text-brand">
             {t('discover.rate', {
               rate: formatRate(entry.cashback_rate_percent),
             })}
@@ -275,7 +275,7 @@ function ShelfHeader({
         {viewAllHref !== undefined && (
           <Link
             href={viewAllHref}
-            className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
+            className="inline-flex items-center gap-1 text-sm font-medium text-brand hover:underline"
           >
             {t('discover.viewAll')}
             <ArrowRight className="size-3.5 rtl:rotate-180" />

@@ -90,7 +90,7 @@ function CashbackHero({ store }: { store: StoreDetail }) {
     <Card>
       <CardContent className="flex flex-col gap-3 p-6">
         <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-          <span className="text-4xl font-bold tracking-tight text-primary">
+          <span className="text-4xl font-bold tracking-tight text-brand">
             {formatRate(store.cashback_rate_percent)}
           </span>
           <span className="text-base text-muted-foreground">
@@ -137,7 +137,7 @@ function EarnStep({
 }) {
   return (
     <li className="flex items-start gap-3">
-      <span className="relative mt-0.5 flex size-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+      <span className="relative mt-0.5 flex size-10 shrink-0 items-center justify-center rounded-full bg-brand-soft text-brand">
         <Icon className="size-4.5" />
         <span className="absolute -top-1 -end-1 flex size-4.5 items-center justify-center rounded-full bg-primary text-[0.625rem] font-semibold text-primary-foreground">
           {step}
@@ -304,7 +304,7 @@ function CashbackDetails({ store }: { store: StoreDetail }) {
                     date: formatDate(promo.ends_at),
                   })}
                 </dt>
-                <dd className="font-medium text-primary">
+                <dd className="font-medium text-brand">
                   {formatRate(promo.cashback_rate_percent)}
                 </dd>
               </div>

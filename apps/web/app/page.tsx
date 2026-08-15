@@ -17,6 +17,7 @@ import type { LucideIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { formatDate, formatRate } from '@/lib/format';
 import { useDiscovery, useMe, useSignedIn } from '@/lib/queries';
+import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -77,7 +78,11 @@ function PrimaryCta({ className }: { className?: string }) {
   const { data: me } = useMe();
 
   return (
-    <Button size="lg" asChild className={className}>
+    <Button
+      size="lg"
+      asChild
+      className={cn('bg-brand text-brand-foreground hover:bg-brand/90', className)}
+    >
       {me ? (
         <Link href="/dashboard">{t('landing.openDashboard')}</Link>
       ) : (
@@ -200,7 +205,7 @@ function Hero({ promoted }: { promoted: DiscoveryEntry | null }) {
           <h1 className="font-display text-3xl leading-[1.08] text-mono sm:text-4xl lg:text-5xl">
             <span className="block">{t('landing.heroTitleLead')}</span>
             <span className="block">{t('landing.heroTitleWhenYou')}</span>
-            <RotatingWords words={channels} className="text-primary" />
+            <RotatingWords words={channels} className="text-brand" />
           </h1>
           <p className="text-sm/relaxed text-pretty text-muted-foreground sm:text-base/relaxed">
             {t('landing.heroSubtitle')}
@@ -241,7 +246,7 @@ function AllEmptyBlock() {
     <section className="container pb-14">
       <Card className="mx-auto w-full max-w-xl">
         <CardContent className="flex flex-col items-center gap-4 p-8 text-center">
-          <span className="flex size-12 items-center justify-center rounded-full bg-primary/10 text-primary">
+          <span className="flex size-12 items-center justify-center rounded-full bg-brand-soft text-brand">
             <Store className="size-5" />
           </span>
           <div className="flex flex-col gap-1.5">
@@ -380,9 +385,9 @@ function Step({
 }) {
   return (
     <li className="flex items-start gap-3">
-      <span className="relative flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+      <span className="relative flex size-9 shrink-0 items-center justify-center rounded-lg bg-brand-soft text-brand">
         <Icon className="size-4" />
-        <span className="absolute -top-1.5 -end-1.5 flex size-4 items-center justify-center rounded-full bg-primary text-[0.625rem] font-semibold text-primary-foreground">
+        <span className="absolute -top-1.5 -end-1.5 flex size-4 items-center justify-center rounded-full bg-brand text-[0.625rem] font-semibold text-brand-foreground">
           {step}
         </span>
       </span>
@@ -446,7 +451,7 @@ function MarketplaceTeaser() {
     <section className="container py-14">
       <Card className="mx-auto w-full max-w-3xl">
         <CardContent className="flex flex-col items-center gap-4 p-8 text-center">
-          <span className="flex size-12 items-center justify-center rounded-full bg-primary/10 text-primary">
+          <span className="flex size-12 items-center justify-center rounded-full bg-brand-soft text-brand">
             <ShoppingBag className="size-5" />
           </span>
           <div className="flex flex-col items-center gap-1.5">
@@ -493,9 +498,9 @@ function RealMoney() {
   const { t } = useTranslation();
 
   return (
-    <section className="border-b border-border bg-secondary/30">
+    <section className="border-b border-border bg-brand-soft">
       <div className="container flex flex-col items-center gap-3 py-10 text-center lg:py-14">
-        <Banknote className="size-7 text-primary" />
+        <Banknote className="size-7 text-brand" />
         <h2 className="font-display text-2xl text-balance text-mono sm:text-3xl">
           {t('landing.realMoneyTitle')}
         </h2>

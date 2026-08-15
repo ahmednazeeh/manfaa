@@ -149,7 +149,7 @@ export function StoreSearch({
           <Button
             type="submit"
             size="sm"
-            className="absolute end-1.5 top-1/2 -translate-y-1/2"
+            className="absolute end-1.5 top-1/2 -translate-y-1/2 bg-brand text-brand-foreground hover:bg-brand/90"
           >
             {t('common.search')}
           </Button>

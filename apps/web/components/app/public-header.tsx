@@ -43,7 +43,7 @@ function NavLink({
         // border so the item appears to own that segment of it.
         'relative text-sm font-medium transition-colors hover:text-foreground',
         active
-          ? 'text-foreground after:absolute after:inset-x-0 after:-bottom-[1.3rem] after:h-0.5 after:rounded-full after:bg-primary after:content-[""]'
+          ? 'text-foreground after:absolute after:inset-x-0 after:-bottom-[1.3rem] after:h-0.5 after:rounded-full after:bg-brand after:content-[""]'
           : 'text-muted-foreground',
       )}
     >

@@ -53,6 +53,30 @@
   /* Light enough that --panel-to reads on it at ≥ 4.5:1 — the promoted-store
      panel is accent-on-ink, not white-on-accent. */
   --panel-accent: oklch(0.88 0.13 88);
+
+  /*
+   * The BRAND accent — the storefront's one hue.
+   *
+   * Every other colour in this theme is a zinc: --primary is zinc-900,
+   * --secondary/--muted/--accent are all zinc-100. That is right for a
+   * dense admin panel and wrong for a shop window, where the page ends up
+   * black type on white with grey chips and nothing to look at. This token
+   * exists so the storefront can carry a hue WITHOUT repainting --primary,
+   * which the merchant and admin panels share.
+   *
+   * A lagoon teal, continuing the --panel-from line the old hero gradient
+   * used. Spent on exactly two things: the cashback figure — the number
+   * people came to read — and the navigation that leads to it. Buttons,
+   * text and borders elsewhere stay zinc, so the accent never has to
+   * compete with itself.
+   *
+   * L 0.48 puts it at ~4.8:1 on white, so it is safe for small text and
+   * icons, and white on it clears the same bar for a filled button.
+   */
+  --brand: oklch(0.48 0.12 195);
+  --brand-foreground: oklch(0.99 0.01 195);
+  /* A wash for tinted bands and icon tiles — a whisper, not a fill. */
+  --brand-soft: oklch(0.96 0.025 195);
 }
 
 .dark {
@@ -88,6 +112,12 @@
   --panel-to: oklch(0.28 0.11 268);
   --panel-foreground: oklch(0.98 0.01 210);
   --panel-accent: oklch(0.82 0.13 88);
+
+  /* Inverted for a dark ground: the accent LIGHTENS so it still reads as
+     the brightest thing on the page, and its own foreground goes dark. */
+  --brand: oklch(0.78 0.11 195);
+  --brand-foreground: oklch(0.22 0.04 195);
+  --brand-soft: oklch(0.27 0.045 195);
 }
 
 /** Theme Setup **/
@@ -116,6 +146,11 @@
   --color-panel-to: var(--panel-to);
   --color-panel-foreground: var(--panel-foreground);
   --color-panel-accent: var(--panel-accent);
+
+  /** The storefront accent (see :root) — text-brand / bg-brand / bg-brand-soft **/
+  --color-brand: var(--brand);
+  --color-brand-foreground: var(--brand-foreground);
+  --color-brand-soft: var(--brand-soft);
 
   /** Base Styles **/
   --color-border: var(--border);
