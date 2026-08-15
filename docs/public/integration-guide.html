@@ -422,7 +422,7 @@ export MANFAA_API=&quot;https://sandbox.api.manfaa.app/api&quot;</code></pre>
 <p>Ability: <code>customers:lookup</code>. The customer shows a 6-digit code (digits or QR); confirm the masked name <strong>with the person at the till</strong> before crediting — phone numbers get recycled in the Maldives, and a typo credits a stranger.</p>
 <pre><code>curl -s &quot;$MANFAA_API/v1/customers/lookup?ref=111111&quot; \
   -H &quot;Authorization: Bearer $MANFAA_TOKEN&quot;</code></pre>
-<pre><code>{ &quot;ref&quot;: &quot;111111&quot;, &quot;valid&quot;: true, &quot;masked_name&quot;: &quot;Ais*** Moh***&quot; }</code></pre>
+<pre><code>{ &quot;ref&quot;: &quot;111111&quot;, &quot;valid&quot;: true, &quot;name&quot;: &quot;Aisha Mohamed&quot;, &quot;masked_name&quot;: &quot;Ais*** Moh***&quot; }</code></pre>
 <p>The mask keeps the first three characters of each name part — enough to confirm, nothing more. No balance, phone number, or other customer data ever crosses this API.</p>
 <p>A known code that cannot currently earn (sandbox: <code>333333</code>) still answers <code>200</code>, with <code>valid: false</code> — show the cashier &quot;code exists but is blocked&quot;. An unknown code answers <code>404 customer_not_found</code>; re-read it with the customer (this is almost always a mistyped digit).</p>
 <h3 id="45-product-categories-get-v1merchantsmeproduct-categories">4.5 Product categories — <code>GET /v1/merchants/me/product-categories</code></h3>
@@ -494,7 +494,7 @@ const valid = crypto.timingSafeEqual(Buffer.from(computed), Buffer.from(signatur
 <li>[ ] <strong>Reversal sent for every refund/void/duplicate</strong> (contractual — §4.2)</li>
 <li>[ ] <code>below_minimum</code> / <code>recorded_ineligible</code> handled as recorded-no-cashback, not errors</li>
 <li>[ ] <code>adjustment_created</code> handled as success, adjustment id recorded</li>
-<li>[ ] Customer masked name confirmed at the till before crediting</li>
+<li>[ ] Customer name confirmed at the till before crediting</li>
 <li>[ ] Webhook signature verified over raw bytes, events deduped by <code>id</code></li>
 <li>[ ] Rate cache refreshed on <code>merchant.rate_changed</code>, advertising stopped on <code>merchant.suspended</code></li>
 </ul>

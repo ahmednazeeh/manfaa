@@ -700,7 +700,7 @@ curl -s "$MANFAA_API/v1/customers/lookup?ref=111111" \
 ```
 
 ```json
-{ "ref": "111111", "valid": true, "masked_name": "Ais*** Moh***" }
+{ "ref": "111111", "valid": true, "name": "Aisha Mohamed", "masked_name": "Ais*** Moh***" }
 ```
 
 The mask keeps the first three characters of each name part — enough to
@@ -901,7 +901,7 @@ that: monitor your endpoint's availability.
 - [ ] **Reversal sent for every refund/void/duplicate** (contractual — §4.2)
 - [ ] `below_minimum` / `recorded_ineligible` handled as recorded-no-cashback, not errors
 - [ ] `adjustment_created` handled as success, adjustment id recorded
-- [ ] Customer masked name confirmed at the till before crediting
+- [ ] Customer name confirmed at the till before crediting
 - [ ] Webhook signature verified over raw bytes, events deduped by `id`
 - [ ] Rate cache refreshed on `merchant.rate_changed`, advertising stopped on `merchant.suspended`
 

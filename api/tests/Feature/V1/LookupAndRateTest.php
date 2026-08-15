@@ -91,6 +91,9 @@ it('resolves a customer ref to a masked name for cashier confirmation', function
         ->assertExactJson([
             'ref' => '482917',
             'valid' => true,
+            // The field a till should confirm against; masked_name stays
+            // for integrations already built on it.
+            'name' => 'Aisha Mohamed',
             'masked_name' => 'Ais*** Moh***',
         ]);
 });

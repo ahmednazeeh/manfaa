@@ -337,19 +337,19 @@ info:
     \ name **with the person at the till** before crediting\n— phone numbers get recycled in the Maldives,\
     \ and a typo credits a stranger.\n\n```sh\ncurl -s \"$MANFAA_API/v1/customers/lookup?ref=111111\"\
     \ \\\n  -H \"Authorization: Bearer $MANFAA_TOKEN\"\n```\n\n```json\n{ \"ref\": \"111111\", \"valid\"\
-    : true, \"masked_name\": \"Ais*** Moh***\" }\n```\n\nThe mask keeps the first three characters of\
-    \ each name part — enough to\nconfirm, nothing more. No balance, phone number, or other customer data\
-    \ ever\ncrosses this API.\n\nA known code that cannot currently earn (sandbox: `333333`) still answers\n\
-    `200`, with `valid: false` — show the cashier \"code exists but is blocked\".\nAn unknown code answers\
-    \ `404 customer_not_found`; re-read it with the\ncustomer (this is almost always a mistyped digit).\n\
-    \n### 4.5 Product categories — `GET /v1/merchants/me/product-categories`\n\nAbility: `rates:read`.\
-    \ The merchant's **active** product categories — the\nallowed `lines[].category` values for line-item\
-    \ pricing (§4.1):\n\n```sh\ncurl -s $MANFAA_API/v1/merchants/me/product-categories \\\n  -H \"Authorization:\
-    \ Bearer $MANFAA_TOKEN\"\n```\n\n```json\n{\n  \"data\": [\n    { \"category\": \"fruits\",  \"name_en\"\
-    : \"Fruits\",  \"name_dv\": \"މޭވާ\",     \"mode\": \"excluded\", \"cashback_rate_percent\": null\
-    \ },\n    { \"category\": \"veggies\", \"name_en\": \"Veggies\", \"name_dv\": \"ތަރުކާރީ\", \"mode\"\
-    : \"rate\",     \"cashback_rate_percent\": \"2.00\" }\n  ]\n}\n```\n\n`category` is the exact string\
-    \ to submit. `mode: \"excluded\"` lines earn\nnothing; `mode: \"rate\"` lines earn their `cashback_rate_percent`\
+    : true, \"name\": \"Aisha Mohamed\", \"masked_name\": \"Ais*** Moh***\" }\n```\n\nThe mask keeps the\
+    \ first three characters of each name part — enough to\nconfirm, nothing more. No balance, phone number,\
+    \ or other customer data ever\ncrosses this API.\n\nA known code that cannot currently earn (sandbox:\
+    \ `333333`) still answers\n`200`, with `valid: false` — show the cashier \"code exists but is blocked\"\
+    .\nAn unknown code answers `404 customer_not_found`; re-read it with the\ncustomer (this is almost\
+    \ always a mistyped digit).\n\n### 4.5 Product categories — `GET /v1/merchants/me/product-categories`\n\
+    \nAbility: `rates:read`. The merchant's **active** product categories — the\nallowed `lines[].category`\
+    \ values for line-item pricing (§4.1):\n\n```sh\ncurl -s $MANFAA_API/v1/merchants/me/product-categories\
+    \ \\\n  -H \"Authorization: Bearer $MANFAA_TOKEN\"\n```\n\n```json\n{\n  \"data\": [\n    { \"category\"\
+    : \"fruits\",  \"name_en\": \"Fruits\",  \"name_dv\": \"މޭވާ\",     \"mode\": \"excluded\", \"cashback_rate_percent\"\
+    : null },\n    { \"category\": \"veggies\", \"name_en\": \"Veggies\", \"name_dv\": \"ތަރުކާރީ\", \"\
+    mode\": \"rate\",     \"cashback_rate_percent\": \"2.00\" }\n  ]\n}\n```\n\n`category` is the exact\
+    \ string to submit. `mode: \"excluded\"` lines earn\nnothing; `mode: \"rate\"` lines earn their `cashback_rate_percent`\
     \ instead of\nthe standing rate (`null` exactly when the category is excluded);\nanything else goes\
     \ on the `category: null` default line. The merchant can\nchange this list at any time — refresh it\
     \ when a POST answers\n`unknown_category` or `inactive_category` rather than caching forever. A\n\
@@ -406,10 +406,9 @@ info:
     \ clock — and the till clock is NTP-synced\n- [ ] `transaction.id` stored against the invoice for\
     \ reversals\n- [ ] **Reversal sent for every refund/void/duplicate** (contractual — §4.2)\n- [ ] `below_minimum`\
     \ / `recorded_ineligible` handled as recorded-no-cashback, not errors\n- [ ] `adjustment_created`\
-    \ handled as success, adjustment id recorded\n- [ ] Customer masked name confirmed at the till before\
-    \ crediting\n- [ ] Webhook signature verified over raw bytes, events deduped by `id`\n- [ ] Rate cache\
-    \ refreshed on `merchant.rate_changed`, advertising stopped on `merchant.suspended`\n\nQuestions:\
-    \ **integrations@manfaa.app**.\n"
+    \ handled as success, adjustment id recorded\n- [ ] Customer name confirmed at the till before crediting\n\
+    - [ ] Webhook signature verified over raw bytes, events deduped by `id`\n- [ ] Rate cache refreshed\
+    \ on `merchant.rate_changed`, advertising stopped on `merchant.suspended`\n\nQuestions: **integrations@manfaa.app**.\n"
   contact:
     name: Manfaa integrations
     email: integrations@manfaa.app
@@ -1774,7 +1773,7 @@ paths:
             value: '+9607712345'
       responses:
         '200':
-          description: The ref resolves; confirm the masked name with the customer.
+          description: The ref resolves; confirm the name with the customer.
           content:
             application/json:
               schema:
@@ -1784,12 +1783,14 @@ paths:
                   value:
                     ref: '482917'
                     valid: true
+                    name: Aisha Mohamed
                     masked_name: Ais*** Moh***
                 blocked:
                   summary: Known ref that cannot currently earn
                   value:
                     ref: '104433'
                     valid: false
+                    name: Hussain Adam
                     masked_name: Hus*** Ada***
         '401':
           $ref: '#/components/responses/Unauthorized'
@@ -3243,6 +3244,7 @@ components:
       required:
       - ref
       - valid
+      - name
       - masked_name
       properties:
         ref:
@@ -3252,13 +3254,36 @@ components:
         valid:
           type: boolean
           description: Whether this customer can currently earn cashback.
+        name:
+          type: string
+          description: 'The customer''s name. **Confirm against this** — the cashier is
+
+            checking it against the person at the counter, and a partial
+
+            name cannot do that: in the Maldives `Ahm*** Naz***` fits an
+
+            enormous number of people, so a mis-keyed digit still credits a
+
+            stranger.
+
+
+            This is not a bulk read. A lookup needs the 6-digit code the
+
+            customer has just chosen to show the cashier, answers one
+
+            customer, and misses are budgeted per merchant per day and
+
+            logged.
+
+            '
         masked_name:
           type: string
-          description: 'The customer''s name with only the first three characters of each
+          deprecated: true
+          description: 'The same name with only the first three characters of each part
 
-            part visible (e.g. `Ais*** Moh***`) — enough for the cashier to
+            visible (e.g. `Ais*** Moh***`). Retained so tills already built
 
-            confirm with the person present, nothing more.
+            against it keep working; use `name` instead.
 
             '
     WebhookEvent:

@@ -141,6 +141,9 @@ it('resolves a phone ref at lookup to the masked name, in both accepted forms', 
         ->assertExactJson([
             'ref' => '+9607712345',
             'valid' => true,
+            // The field a till should confirm against; masked_name stays
+            // for integrations already built on it.
+            'name' => 'Aisha Mohamed',
             'masked_name' => 'Ais*** Moh***',
         ]);
 

@@ -15,8 +15,20 @@ use Illuminate\Support\Facades\RateLimiter;
 /**
  * GET /merchant/customers/lookup?code=NNNNNN — the credit screen's cashier
  * confirmation (§11 phone-recycling control): resolves a 6-digit customer
- * code to a MASKED name so the right person is credited before a manual
- * credit is posted. Staff-accessible — posting credits is staff work.
+ * code to the customer's NAME, so the right person is credited before a
+ * manual credit is posted. Staff-accessible — posting credits is staff work.
+ *
+ * The name is returned in FULL. It used to be masked to a three-letter
+ * fragment per part ("Ahm*** Naz***"), which defeated the check it exists
+ * for: in the Maldives that fragment matches an enormous number of people,
+ * so a cashier confirming "Ahm*** Naz***" against the person at the counter
+ * learns almost nothing, and a mis-keyed digit credits a stranger anyway.
+ *
+ * Masking was never what protected the customer base — the two controls
+ * below are, and they are untouched. A successful lookup requires the
+ * 6-digit code the customer has just chosen to show this cashier, and it
+ * returns one name at a time; there is no bulk read here and no other
+ * customer field crosses this endpoint.
  *
  * Enumeration posture, two layers (mirroring the V1 vendor lookup):
  *
@@ -86,23 +98,7 @@ class CustomerLookupController extends Controller
 
         return new JsonResponse([
             'valid' => true,
-            'masked_name' => $this->maskName((string) $customer->name),
+            'name' => (string) $customer->name,
         ]);
-    }
-
-    /**
-     * The V1 lookup's masking idiom (V1\CustomerLookupController): keep a
-     * short leading fragment, star the rest — per name part, e.g.
-     * "Aisha Mohamed" → "Ais*** Moh***". Enough to confirm with the person
-     * present; nothing else about the customer crosses this endpoint.
-     */
-    private function maskName(string $name): string
-    {
-        $parts = preg_split('/\s+/', trim($name)) ?: [];
-
-        return implode(' ', array_map(
-            fn (string $part): string => mb_substr($part, 0, 3).'***',
-            $parts,
-        ));
     }
 }

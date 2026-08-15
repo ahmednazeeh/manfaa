@@ -48,7 +48,7 @@ it('lets a staff user run lookup, credit, and duplicate 409 as the UI does', fun
         ->assertOk()
         ->assertExactJson([
             'valid' => true,
-            'masked_name' => 'Ais*** Moh***',
+            'name' => 'Aisha Mohamed',
         ]);
 
     // Step 2 — the credit POST. The UI's toBusinessIso() sends the

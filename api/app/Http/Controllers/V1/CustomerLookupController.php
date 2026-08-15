@@ -87,14 +87,25 @@ class CustomerLookupController extends V1Controller
             // A known ref that cannot currently earn is 200 valid:false —
             // the cashier needs "this code exists but is blocked", not 404.
             'valid' => $customer->status === 'active',
+            // Confirm against THIS. `masked_name` below is the original
+            // field, kept so tills built against it keep working, but it
+            // masks to a three-letter fragment per part — which in the
+            // Maldives matches an enormous number of people and so fails
+            // the check it exists for.
+            'name' => (string) $customer->name,
             'masked_name' => $this->maskName((string) $customer->name),
         ]);
     }
 
     /**
-     * Same idiom as the panel's phone masking: keep a short leading
-     * fragment, star the rest — per name part, e.g. "Aisha Mohamed" →
-     * "Ais*** Moh***". Enough to confirm with the person present.
+     * DEPRECATED presentation, retained for tills already built against it:
+     * keep a short leading fragment, star the rest — "Aisha Mohamed" →
+     * "Ais*** Moh***". New integrations confirm against `name`.
+     *
+     * Masking was never what protects the customer base here: a lookup
+     * needs the 6-digit code the customer has just shown the cashier,
+     * returns one customer at a time, and misses are budgeted per merchant
+     * per day (see below) and logged. Those controls are untouched.
      */
     private function maskName(string $name): string
     {

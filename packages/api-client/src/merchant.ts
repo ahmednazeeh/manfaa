@@ -1319,15 +1319,17 @@ export function updateMerchantPreferences(
 
 /**
  * The credit screen's cashier confirmation (§11 phone-recycling control):
- * resolves a 6-digit customer code to a MASKED name (e.g. "Ais*** Moh***")
- * so the right person is credited before a manual credit is posted.
+ * resolves a 6-digit customer code to the customer's NAME, so the right
+ * person is credited before a manual credit is posted. Returned in full:
+ * confirming a masked fragment against the person at the counter is not a
+ * confirmation, and crediting a stranger is the failure it exists to stop.
  *
  * An unknown code and a known-but-blocked customer answer identically —
  * a plain 200 `{valid: false}` — so the endpoint is no existence oracle.
  * Throttled 30/min per user, matching the credit POST.
  */
 export const CustomerLookupResponseSchema = z.discriminatedUnion('valid', [
-  z.object({ valid: z.literal(true), masked_name: z.string() }),
+  z.object({ valid: z.literal(true), name: z.string() }),
   z.object({ valid: z.literal(false) }),
 ]);
 export type CustomerLookupResponse = z.infer<

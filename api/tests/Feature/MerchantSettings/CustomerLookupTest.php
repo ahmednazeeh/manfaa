@@ -17,7 +17,7 @@ beforeEach(function () {
     $this->actingAs($this->staff, 'merchant');
 });
 
-it('resolves a known active customer to a masked name for staff', function () {
+it('resolves a known active customer to their name for staff', function () {
     Customer::factory()->create([
         'customer_code' => '482917',
         'name' => 'Aisha Mohamed',
@@ -28,7 +28,7 @@ it('resolves a known active customer to a masked name for staff', function () {
         ->assertOk()
         ->assertExactJson([
             'valid' => true,
-            'masked_name' => 'Ais*** Moh***',
+            'name' => 'Aisha Mohamed',
         ]);
 });
 
@@ -110,4 +110,48 @@ it('caps non-creditable lookups per MERCHANT per day — staff accounts share on
         ->getJson('/api/merchant/customers/lookup?code=482917')
         ->assertOk()
         ->assertJsonPath('valid', true);
+});
+
+/**
+ * The lookup answers a real name because the cashier is confirming it
+ * against the person at the counter. A three-letter fragment cannot do
+ * that in the Maldives — "Ahm*** Naz***" fits an enormous number of people
+ * — so masking here bought no privacy and cost the check its purpose.
+ *
+ * What actually protects the customer base is unchanged and asserted
+ * below: a lookup needs the code the customer just showed, answers one
+ * customer, and misses are budgeted per merchant.
+ */
+it('answers the full name, never a masked fragment', function () {
+    Customer::factory()->create([
+        'customer_code' => '771234',
+        'name' => 'Ahmed Nazeeh',
+        'status' => 'active',
+    ]);
+
+    $response = $this->getJson('/api/merchant/customers/lookup?code=771234')
+        ->assertOk()
+        ->assertJsonPath('valid', true)
+        ->assertJsonPath('name', 'Ahmed Nazeeh');
+
+    expect($response->getContent())->not->toContain('***');
+
+    // One customer, and nothing else about them.
+    expect(array_keys($response->json()))->toBe(['valid', 'name']);
+});
+
+it('still refuses to be an enumeration oracle', function () {
+    Customer::factory()->create([
+        'customer_code' => '771235',
+        'name' => 'Blocked Person',
+        'status' => 'suspended',
+    ]);
+
+    // A blocked customer and a code that does not exist answer identically:
+    // knowing a name requires a code that can actually be credited.
+    $blocked = $this->getJson('/api/merchant/customers/lookup?code=771235')->assertOk();
+    $missing = $this->getJson('/api/merchant/customers/lookup?code=771236')->assertOk();
+
+    expect($blocked->getContent())->toBe($missing->getContent())
+        ->and($blocked->json())->toBe(['valid' => false]);
 });

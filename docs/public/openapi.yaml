@@ -1504,7 +1504,7 @@ paths:
               value: '+9607712345'
       responses:
         '200':
-          description: The ref resolves; confirm the masked name with the customer.
+          description: The ref resolves; confirm the name with the customer.
           content:
             application/json:
               schema:
@@ -1514,12 +1514,14 @@ paths:
                   value:
                     ref: '482917'
                     valid: true
+                    name: Aisha Mohamed
                     masked_name: Ais*** Moh***
                 blocked:
                   summary: Known ref that cannot currently earn
                   value:
                     ref: '104433'
                     valid: false
+                    name: Hussain Adam
                     masked_name: Hus*** Ada***
         '401':
           $ref: '#/components/responses/Unauthorized'
@@ -2636,7 +2638,7 @@ components:
 
     CustomerLookupResult:
       type: object
-      required: [ref, valid, masked_name]
+      required: [ref, valid, name, masked_name]
       properties:
         ref:
           type: string
@@ -2645,12 +2647,26 @@ components:
         valid:
           type: boolean
           description: Whether this customer can currently earn cashback.
-        masked_name:
+        name:
           type: string
           description: |
-            The customer's name with only the first three characters of each
-            part visible (e.g. `Ais*** Moh***`) — enough for the cashier to
-            confirm with the person present, nothing more.
+            The customer's name. **Confirm against this** — the cashier is
+            checking it against the person at the counter, and a partial
+            name cannot do that: in the Maldives `Ahm*** Naz***` fits an
+            enormous number of people, so a mis-keyed digit still credits a
+            stranger.
+
+            This is not a bulk read. A lookup needs the 6-digit code the
+            customer has just chosen to show the cashier, answers one
+            customer, and misses are budgeted per merchant per day and
+            logged.
+        masked_name:
+          type: string
+          deprecated: true
+          description: |
+            The same name with only the first three characters of each part
+            visible (e.g. `Ais*** Moh***`). Retained so tills already built
+            against it keep working; use `name` instead.
 
     WebhookEvent:
       type: object

@@ -163,7 +163,7 @@ function safeParseMvr(input: string): number | null {
 
 interface CreditResult {
   transaction: Transaction;
-  maskedName: string;
+  customerName: string;
 }
 
 function LookupCard({ code }: { code: string }) {
@@ -225,7 +225,7 @@ function LookupCard({ code }: { code: string }) {
         <BadgeCheck />
       </AlertIcon>
       <AlertContent>
-        <AlertTitle>Crediting {lookup.data.masked_name}</AlertTitle>
+        <AlertTitle>Crediting {lookup.data.name}</AlertTitle>
         <AlertDescription>
           Confirm this is the person in front of you before submitting.
         </AlertDescription>
@@ -335,7 +335,7 @@ function ResultCard({
 
         <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 sm:grid-cols-3">
           <span className="text-muted-foreground">Customer</span>
-          <span className="sm:col-span-2">{result.maskedName}</span>
+          <span className="sm:col-span-2">{result.customerName}</span>
           <span className="text-muted-foreground">Invoice</span>
           <span className="sm:col-span-2 text-mono">
             {transaction.invoice_no}
@@ -710,7 +710,7 @@ export default function CreditPage() {
 
   const submit = () => {
     if (!canSubmit || lookup.data?.valid !== true) return;
-    const maskedName = lookup.data.masked_name;
+    const customerName = lookup.data.name;
     createCredit.mutate(
       {
         customer_code: code,
@@ -740,7 +740,7 @@ export default function CreditPage() {
       },
       {
         onSuccess: (response) => {
-          setResult({ transaction: response.data, maskedName });
+          setResult({ transaction: response.data, customerName });
           resetForm();
         },
       },

@@ -82,6 +82,7 @@ it('prints the plaintext token from the command, and the token works against /v1
         ->getJson('/api/v1/customers/lookup?ref=111111')
         ->assertOk()
         ->assertJsonPath('valid', true)
+        ->assertJsonPath('name', 'Aisha Mohamed')
         ->assertJsonPath('masked_name', 'Ais*** Moh***');
 
     $this->withHeaders(['Authorization' => 'Bearer '.$token])
