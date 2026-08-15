@@ -3,11 +3,12 @@
 import { useState } from 'react';
 import {
   listStoreOffers,
+  OFFER_ARTWORK,
   type OfferLiveState,
   type StoreOffer,
 } from '@manfaa/api-client';
 import { useQuery } from '@tanstack/react-query';
-import { ImageOff, Pencil, Plus } from 'lucide-react';
+import { Pencil, Plus, Type } from 'lucide-react';
 import { format } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -24,23 +25,23 @@ import {
 import { StoreOfferDialog } from '@/components/settings/store-offer-dialog';
 
 /**
- * Featured offers — the image banners at the top of the customer's Discover
+ * Featured offers — the banners at the top of the customer's Discover
  * screen, and later the app's.
  *
- * An offer carries artwork, words and a schedule. It carries no merchant
- * FACTS: the cashback percentage, logo and category on the rendered banner
- * are read live from the store, so a banner can never advertise a rate the
- * store has moved off or a shop that has been suspended.
+ * Two kinds, and the Kind column says which. An IMAGE banner is the
+ * uploaded artwork edge to edge, at one fixed ratio, with nothing printed
+ * over it. A TEXT banner has no artwork: the storefront lays it out from
+ * the words here, and its logo and cashback percentage are read live from
+ * the store, so that kind can never advertise a rate the shop has moved off.
  *
- * The `live` column is the point of this screen. "Saved but invisible" is
- * the normal state of a new offer — no artwork yet, or scheduled for next
- * week — and an admin should never have to guess which.
+ * The Status column is the other point of this screen. "Saved but
+ * invisible" is a normal state — switched off, or scheduled for next week —
+ * and an admin should never have to guess which.
  */
 
 const LIVE_LABEL: Record<OfferLiveState, string> = {
   live: 'On the storefront',
   inactive: 'Switched off',
-  no_image: 'Needs artwork',
   scheduled: 'Scheduled',
   ended: 'Ended',
   store_not_trading: 'Store not trading',
@@ -52,7 +53,6 @@ const LIVE_VARIANT: Record<
 > = {
   live: 'success',
   inactive: 'secondary',
-  no_image: 'warning',
   scheduled: 'warning',
   ended: 'secondary',
   store_not_trading: 'destructive',
@@ -65,9 +65,9 @@ function OfferRow({ offer }: { offer: StoreOffer }) {
         {offer.sort}
       </TableCell>
       <TableCell>
-        <span className="flex h-10 w-16 items-center justify-center overflow-hidden rounded-md border border-border bg-card">
+        <span className="flex aspect-video w-20 items-center justify-center overflow-hidden rounded-md border border-border bg-card">
           {offer.image_url === null ? (
-            <ImageOff className="size-4 text-muted-foreground" />
+            <Type className="size-4 text-muted-foreground" />
           ) : (
             <img
               src={offer.image_url}
@@ -86,6 +86,11 @@ function OfferRow({ offer }: { offer: StoreOffer }) {
             </span>
           )}
         </div>
+      </TableCell>
+      <TableCell>
+        <Badge variant="secondary" appearance="light" size="sm">
+          {offer.kind === 'image' ? 'Image' : 'Text'}
+        </Badge>
       </TableCell>
       <TableCell>
         <span className="text-sm">{offer.merchant?.name ?? '—'}</span>
@@ -144,9 +149,11 @@ export default function OffersPage() {
         <div className="flex flex-col gap-1">
           <h1 className="text-xl font-semibold text-mono">Featured offers</h1>
           <p className="text-sm text-muted-foreground">
-            The image banners at the top of Discover. The cashback percentage,
-            logo and category shown on each banner are read live from the
-            store — only the artwork, words and schedule live here.
+            The banners at the top of Discover. An offer with artwork IS the
+            artwork, edge to edge at {OFFER_ARTWORK.width}&nbsp;×&nbsp;
+            {OFFER_ARTWORK.height}&nbsp;px; one without is a designed text
+            card whose logo and cashback percentage are read live from the
+            store.
           </p>
         </div>
         <StoreOfferDialog
@@ -167,8 +174,9 @@ export default function OffersPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-16 text-end">Sort</TableHead>
-                  <TableHead className="w-20">Banner</TableHead>
+                  <TableHead className="w-24">Banner</TableHead>
                   <TableHead>Offer</TableHead>
+                  <TableHead>Kind</TableHead>
                   <TableHead>Store</TableHead>
                   <TableHead>Badge</TableHead>
                   <TableHead>Runs</TableHead>
@@ -180,7 +188,7 @@ export default function OffersPage() {
                 {query.isPending ? (
                   Array.from({ length: 3 }).map((_, index) => (
                     <TableRow key={index}>
-                      <TableCell colSpan={8}>
+                      <TableCell colSpan={9}>
                         <Skeleton className="h-8 w-full" />
                       </TableCell>
                     </TableRow>
@@ -188,7 +196,7 @@ export default function OffersPage() {
                 ) : offers.length === 0 ? (
                   <TableRow>
                     <TableCell
-                      colSpan={8}
+                      colSpan={9}
                       className="py-10 text-center text-muted-foreground"
                     >
                       No offers yet. Add one to put a store on the front of

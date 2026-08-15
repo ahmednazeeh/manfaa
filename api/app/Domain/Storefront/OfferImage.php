@@ -29,6 +29,54 @@ final class OfferImage
      */
     public const int MAX_KB = 2048;
 
+    /**
+     * The one artwork shape: 16:9, 1200×675 the size to supply.
+     *
+     * An image banner IS the card — the storefront prints nothing over it —
+     * so the uploaded picture and the slot it lands in are the same shape
+     * and the artwork is shown whole. One fixed ratio is the difference
+     * between an admin who knows what to hand a designer and one who
+     * uploads whatever came back and watches the storefront eat its edges.
+     */
+    public const int TARGET_WIDTH = 1200;
+
+    public const int TARGET_HEIGHT = 675;
+
+    /** How the shape is said out loud, wherever it is said. */
+    public const string RATIO_LABEL = '16:9';
+
+    /** Smallest supply that still stays sharp on a 2x phone. */
+    public const int MIN_WIDTH = 800;
+
+    public const int MIN_HEIGHT = 450;
+
+    /** A print-sized original is a page-weight problem, not a quality win. */
+    public const int MAX_WIDTH = 3200;
+
+    public const int MAX_HEIGHT = 1800;
+
+    /**
+     * How far from 16:9 an upload may sit. Wide enough that an export
+     * rounded to whole pixels (1200×676) passes, narrow enough that 16:10
+     * and 2:1 — the shapes that actually arrive by mistake — do not.
+     */
+    public const float RATIO_TOLERANCE = 0.06;
+
+    public static function ratio(): float
+    {
+        return self::TARGET_WIDTH / self::TARGET_HEIGHT;
+    }
+
+    /** Is this upload the offer-artwork shape? */
+    public static function ratioAccepted(int $width, int $height): bool
+    {
+        if ($height <= 0) {
+            return false;
+        }
+
+        return abs($width / $height - self::ratio()) <= self::RATIO_TOLERANCE;
+    }
+
     public static function url(int $offerId, ?string $path): ?string
     {
         if ($path === null || $path === '') {

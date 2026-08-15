@@ -3,7 +3,9 @@
 import { ReactNode, useRef, useState } from 'react';
 import {
   createStoreOffer,
+  deleteStoreOfferImage,
   listAdminMerchants,
+  OFFER_ARTWORK,
   updateStoreOffer,
   uploadStoreOfferImage,
   type StoreOffer,
@@ -130,7 +132,16 @@ export function StoreOfferDialog({
     mutationFn: (file: File) => uploadStoreOfferImage(offer!.id, file),
     onSuccess: () => {
       invalidate();
-      toast.success('Banner updated.');
+      toast.success('Artwork updated — this is now an image banner.');
+    },
+    onError: (error) => toast.error(apiErrorMessage(error)),
+  });
+
+  const remove = useMutation({
+    mutationFn: () => deleteStoreOfferImage(offer!.id),
+    onSuccess: () => {
+      invalidate();
+      toast.success('Artwork removed — this is now a text banner.');
     },
     onError: (error) => toast.error(apiErrorMessage(error)),
   });
@@ -150,9 +161,11 @@ export function StoreOfferDialog({
             {editing ? 'Edit featured offer' : 'Add a featured offer'}
           </DialogTitle>
           <DialogDescription>
-            The cashback percentage, logo and category on the banner come from
-            the store itself and stay current on their own — only the artwork,
-            words and schedule are set here.
+            A banner is one of two kinds. Attach artwork and the picture IS
+            the banner, edge to edge, with nothing printed over it. Leave it
+            off and the storefront lays out a designed card from the words
+            below, with the store&apos;s logo and live cashback percentage
+            read fresh every time it renders.
           </DialogDescription>
         </DialogHeader>
         <DialogBody className="flex flex-col gap-4">
@@ -180,8 +193,8 @@ export function StoreOfferDialog({
           {editing && (
             <div className="flex flex-col gap-2.5">
               <Label>Banner artwork</Label>
-              <div className="flex items-center gap-3">
-                <span className="flex h-16 w-28 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-border bg-card">
+              <div className="flex items-start gap-3">
+                <span className="flex aspect-video w-32 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-border bg-card">
                   {offer.image_url === null ? (
                     <ImagePlus className="size-5 text-muted-foreground" />
                   ) : (
@@ -192,16 +205,34 @@ export function StoreOfferDialog({
                     />
                   )}
                 </span>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  disabled={upload.isPending}
-                  onClick={() => inputRef.current?.click()}
-                >
-                  {upload.isPending && <LoaderCircle className="animate-spin" />}
-                  {offer.image_url === null ? 'Upload banner' : 'Replace'}
-                </Button>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={upload.isPending || remove.isPending}
+                    onClick={() => inputRef.current?.click()}
+                  >
+                    {upload.isPending && (
+                      <LoaderCircle className="animate-spin" />
+                    )}
+                    {offer.image_url === null ? 'Upload artwork' : 'Replace'}
+                  </Button>
+                  {offer.image_url !== null && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={upload.isPending || remove.isPending}
+                      onClick={() => remove.mutate()}
+                    >
+                      {remove.isPending && (
+                        <LoaderCircle className="animate-spin" />
+                      )}
+                      Remove
+                    </Button>
+                  )}
+                </div>
               </div>
               <input
                 ref={inputRef}
@@ -215,13 +246,28 @@ export function StoreOfferDialog({
                 }}
               />
               <p className="text-xs text-muted-foreground">
-                PNG, JPG or WEBP, at least 600×200 and up to 2&nbsp;MB. The
-                card shows it as a tall panel beside the words and crops from
-                the centre, so keep the subject centred — a wide banner loses
-                its edges. Applied immediately, it does not wait for Save.
-                Without it the offer stays off the storefront.
+                PNG, JPG or WEBP at exactly{' '}
+                <strong className="font-semibold text-foreground">
+                  {OFFER_ARTWORK.width}&nbsp;×&nbsp;{OFFER_ARTWORK.height}
+                  &nbsp;px ({OFFER_ARTWORK.ratio})
+                </strong>
+                , up to {OFFER_ARTWORK.maxKb / 1024}&nbsp;MB. Another shape is
+                refused rather than cropped. The card shows the artwork at
+                this exact ratio, so design to the full frame — anything the
+                banner needs to say has to be IN the picture, including the
+                cashback percentage. Applied immediately; it does not wait
+                for Save.
               </p>
             </div>
+          )}
+
+          {editing && offer.image_url !== null && (
+            <p className="rounded-lg border border-border bg-muted/40 p-3 text-xs text-muted-foreground">
+              This is an <strong className="font-semibold">image banner</strong>
+              , so the words below are not printed on the storefront. They
+              still name the offer in this list and are read aloud by screen
+              readers, so keep the headline accurate.
+            </p>
           )}
 
           <div className="flex flex-col gap-2.5">

@@ -527,7 +527,7 @@ No integrations. The riskiest logic, built first and in isolation.
 ## 13b. Build queue (status — 2026-08-15, autonomous run complete)
 
 Phases 0–3 plus the post-launch rounds are BUILT, DEPLOYED and LIVE at
-manfaa.app / merchant. / admin. / api. — **1005 tests, 21,164 assertions green**,
+manfaa.app / merchant. / admin. / api. — **1008 tests, 21,185 assertions green**,
 twelve adversarial review rounds (50+ serious findings confirmed and fixed).
 
 ### Done beyond the phases
@@ -636,21 +636,35 @@ regrouped Till / Money / Marketing / Store / Account.
 
 ### Featured offers — DONE
 
-Curated image banners at the top of /discover (admin.manfaa.app › Settings ›
-Featured offers), ready for the app to reuse. An offer carries **artwork,
-words and a schedule and nothing else**: the percentage, logo and category on
-the rendered banner are read live from the store, so a banner can never
-advertise a rate the shop has moved off, and an offer for a suspended store
-never reaches the storefront. Headline, blurb and badge each take a Thaana
-twin and the card mirrors under RTL.
+Curated banners at the top of /discover (admin.manfaa.app › Settings ›
+Featured offers), ready for the app to reuse. A banner is **one of two
+kinds, never a blend** — the blend was built first and failed on both
+counts, with the copy cutting into the artwork and the artwork cropping away
+the half of itself that carried the message:
 
-Artwork uploads to a private disk and is served from
-`/api/store-offers/{id}/image?v=…` with a content hash, raster only. The admin
-list states WHY each offer is or is not visible — live / switched off / needs
-artwork / scheduled / ended / store not trading — because "saved but
-invisible" is the normal state of a new offer and an admin should not have to
-guess which. There is no delete; deactivation retires a campaign and keeps it
-on the record.
+- **Image banner** — the uploaded picture is the whole card, edge to edge,
+  with nothing printed over it. Exactly **1200 × 675 px (16:9)**, stated in
+  the admin and enforced on upload: another shape is refused at the door
+  rather than centre-cropped, so what a designer hands over is what the
+  storefront shows. Whatever the artwork says is the admin's to keep
+  current, including the percentage — said plainly where it is uploaded.
+- **Text banner** — no artwork. The storefront lays out a designed card from
+  the words, with the store's logo and **live** cashback percentage read
+  fresh on every render, so this kind can never quote a rate the shop has
+  moved off.
+
+Uploading artwork makes an offer an image banner; removing it turns it back
+into a text one. Either kind carries Thaana twins for headline, blurb and
+badge, and mirrors under RTL. An offer for a suspended store never reaches
+the storefront under either kind.
+
+Artwork lands on a private disk and is served from
+`/api/store-offers/{id}/image?v=…` with a content hash, raster only. The
+admin list states the kind and WHY each offer is or is not visible — live /
+switched off / scheduled / ended / store not trading — because "saved but
+invisible" is a normal state and an admin should not have to guess which.
+There is no delete; deactivation retires a campaign and keeps it on the
+record.
 
 ### Queue: EMPTY. Next work needs a product decision — see below.
 

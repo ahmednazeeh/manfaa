@@ -109,13 +109,29 @@ it('respects the schedule and the active flag', function () {
     offerFor($merchant, ['title' => 'Scheduled', 'starts_at' => $now->addDay()]);
     offerFor($merchant, ['title' => 'Ended', 'ends_at' => $now->subHour()]);
     offerFor($merchant, ['title' => 'Switched off', 'active' => false]);
-    // The banner IS the image; half a banner is worse than none.
-    offerFor($merchant, ['title' => 'No artwork', 'image_path' => null]);
     offerFor($merchant, ['title' => 'Running', 'starts_at' => $now->subDay(), 'ends_at' => $now->addDay()]);
 
     $titles = collect($this->getJson('/api/discover')->json('data.offers'))->pluck('title')->all();
 
     expect($titles)->toBe(['Running']);
+});
+
+it('publishes an offer with no artwork as a text banner', function () {
+    $merchant = offerStore();
+    offerFor($merchant, ['title' => 'With artwork', 'sort' => 10]);
+    offerFor($merchant, ['title' => 'Words only', 'image_path' => null, 'sort' => 20]);
+
+    $offers = $this->getJson('/api/discover')->assertOk()->json('data.offers');
+
+    // Artwork is not a gate — it is the choice between two banners, and the
+    // storefront is told which to draw rather than left to infer it.
+    expect(collect($offers)->pluck('kind', 'title')->all())
+        ->toBe(['With artwork' => 'image', 'Words only' => 'text']);
+
+    expect($offers[1]['image_url'])->toBeNull()
+        // A text banner still carries the live rate: it is the kind the
+        // platform lays out, so the platform stands behind the number.
+        ->and($offers[1]['merchant']['cashback_rate_percent'])->toBe('10.00');
 });
 
 it('orders offers the way the admin curated them', function () {
@@ -158,17 +174,23 @@ it('lets a superadmin create, schedule and illustrate an offer', function () {
             'sort' => 5,
         ])
         ->assertCreated()
-        // Nothing renders without artwork, and the admin is told so rather
-        // than left wondering where the banner went.
-        ->assertJsonPath('data.live', 'no_image')
+        // Live from the moment it is saved: with no artwork it is a text
+        // banner, which the storefront lays out itself.
+        ->assertJsonPath('data.live', 'live')
+        ->assertJsonPath('data.kind', 'text')
         ->json('data.id');
 
     $this->actingAs($admin, 'admin')
         ->post("/api/admin/store-offers/{$id}/image", [
-            'image' => UploadedFile::fake()->image('banner.png', 1200, 600),
+            'image' => UploadedFile::fake()->image(
+                'banner.png',
+                OfferImage::TARGET_WIDTH,
+                OfferImage::TARGET_HEIGHT,
+            ),
         ])
         ->assertOk()
-        ->assertJsonPath('data.live', 'live');
+        ->assertJsonPath('data.live', 'live')
+        ->assertJsonPath('data.kind', 'image');
 
     Cache::flush();
 
@@ -208,6 +230,68 @@ it('refuses an end date before the start, and a non-raster upload', function () 
         ])
         ->assertStatus(422)
         ->assertJsonValidationErrors('image');
+});
+
+it('takes only artwork of the one published shape', function () {
+    Storage::fake(OfferImage::DISK);
+
+    $offer = offerFor(offerStore());
+    $admin = AdminUser::factory()->create(['role' => 'superadmin']);
+
+    // Right ratio, wrong shape entirely: a square is refused at the door
+    // rather than centre-cropped into something the designer never saw.
+    $this->actingAs($admin, 'admin')
+        ->post("/api/admin/store-offers/{$offer->id}/image", [
+            'image' => UploadedFile::fake()->image('square.png', 1000, 1000),
+        ])
+        ->assertStatus(422)
+        ->assertJsonValidationErrors('image');
+
+    // 16:9 but too small to stay sharp on a 2x phone.
+    $this->actingAs($admin, 'admin')
+        ->post("/api/admin/store-offers/{$offer->id}/image", [
+            'image' => UploadedFile::fake()->image('tiny.png', 320, 180),
+        ])
+        ->assertStatus(422)
+        ->assertJsonValidationErrors('image');
+
+    // A whole-pixel rounding of 16:9 is still 16:9 to a human, so it passes.
+    $this->actingAs($admin, 'admin')
+        ->post("/api/admin/store-offers/{$offer->id}/image", [
+            'image' => UploadedFile::fake()->image('close.png', 1200, 676),
+        ])
+        ->assertOk()
+        ->assertJsonPath('data.kind', 'image');
+});
+
+it('turns an image banner back into a text one', function () {
+    Storage::fake(OfferImage::DISK);
+
+    $offer = offerFor(offerStore(), ['image_path' => null]);
+    $admin = AdminUser::factory()->create(['role' => 'superadmin']);
+
+    $this->actingAs($admin, 'admin')
+        ->post("/api/admin/store-offers/{$offer->id}/image", [
+            'image' => UploadedFile::fake()->image(
+                'banner.png',
+                OfferImage::TARGET_WIDTH,
+                OfferImage::TARGET_HEIGHT,
+            ),
+        ])
+        ->assertOk();
+
+    $stored = $offer->refresh()->image_path;
+    expect($stored)->not->toBeNull();
+
+    $this->actingAs($admin, 'admin')
+        ->deleteJson("/api/admin/store-offers/{$offer->id}/image")
+        ->assertOk()
+        ->assertJsonPath('data.kind', 'text')
+        ->assertJsonPath('data.image_url', null)
+        // Still on the storefront: it is a text banner now, not a broken one.
+        ->assertJsonPath('data.live', 'live');
+
+    Storage::disk(OfferImage::DISK)->assertMissing($stored);
 });
 
 it('keeps offer writes to superadmins', function () {

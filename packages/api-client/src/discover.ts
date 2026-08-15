@@ -76,25 +76,33 @@ export const DiscoveryCategorySchema = z.object({
 export type DiscoveryCategory = z.infer<typeof DiscoveryCategorySchema>;
 
 /**
- * One curated featured offer — the image banner at the top of Discover.
+ * One curated featured offer — a banner at the top of Discover.
+ *
+ * Two kinds, never a blend: an `image` banner is the artwork edge to edge
+ * with nothing printed over it, a `text` banner is laid out by the client
+ * from the words and the live rate. `kind` says which; do not infer it from
+ * `image_url`.
  *
  * The offer owns artwork, words and a schedule; every merchant fact is read
  * live by the API, so `merchant.cashback_rate_percent` is what the store is
- * paying RIGHT NOW and never a figure frozen when the banner was made.
- * Offers whose store has stopped trading, whose window has closed, or which
- * have no artwork simply never arrive.
+ * paying RIGHT NOW and never a figure frozen when the banner was made. (On
+ * an image banner the artwork speaks for itself — whatever it says is the
+ * admin's to keep current.) Offers whose store has stopped trading or whose
+ * window has closed simply never arrive.
  */
 export const DiscoveryOfferSchema = z.object({
   id: z.number().int(),
+  /** Which banner to draw. Older builds sent only image banners. */
+  kind: z.enum(['text', 'image']).catch('image'),
   title: z.string(),
   title_dv: z.string().nullable().catch(null),
   blurb: z.string().nullable().catch(null),
   blurb_dv: z.string().nullable().catch(null),
-  /** The pill above the title — "Limited time". */
+  /** The pill beside the store mark — "Limited time". */
   badge: z.string().nullable().catch(null),
   badge_dv: z.string().nullable().catch(null),
-  /** Always present: an offer without artwork is not published. */
-  image_url: z.string(),
+  /** Null on a text banner. */
+  image_url: z.string().nullable().catch(null),
   ends_at: z.string().nullable().catch(null),
   merchant: z.object({
     name: z.string(),

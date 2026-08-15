@@ -10,8 +10,10 @@ use App\Http\Controllers\Controller;
 use App\Models\Merchant;
 use App\Models\StoreOffer;
 use Carbon\CarbonImmutable;
+use Closure;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -92,11 +94,23 @@ class StoreOffersController extends Controller
                 // Raster only — see OfferImage on why SVG is refused.
                 'mimes:jpg,jpeg,png,webp',
                 'max:'.OfferImage::MAX_KB,
-                // A banner is a wide card. The floor is what stays sharp on
-                // a 2x phone at full width; the ceiling stops a print-sized
-                // photograph becoming the heaviest asset on the page.
-                Rule::dimensions()->minWidth(600)->minHeight(200)->maxWidth(4000)->maxHeight(2500),
+                Rule::dimensions()
+                    ->minWidth(OfferImage::MIN_WIDTH)
+                    ->minHeight(OfferImage::MIN_HEIGHT)
+                    ->maxWidth(OfferImage::MAX_WIDTH)
+                    ->maxHeight(OfferImage::MAX_HEIGHT),
+                // The shape is checked separately from the size so the two
+                // failures read differently: "too small" and "wrong shape"
+                // are fixed by different people doing different things.
+                $this->artworkShape(...),
             ],
+        ], [
+            'image.dimensions' => sprintf(
+                'Artwork must be between %d×%d and %d×%d pixels. Supply %d×%d.',
+                OfferImage::MIN_WIDTH, OfferImage::MIN_HEIGHT,
+                OfferImage::MAX_WIDTH, OfferImage::MAX_HEIGHT,
+                OfferImage::TARGET_WIDTH, OfferImage::TARGET_HEIGHT,
+            ),
         ]);
 
         $file = $request->file('image');
@@ -128,6 +142,63 @@ class StoreOffersController extends Controller
         return response()->json([
             'data' => $this->present($offer->load('merchant:id,name,name_dv,slug,status')),
         ]);
+    }
+
+    /**
+     * Removes the artwork, which turns an image banner back into a text
+     * one. Without this an offer could only ever cross that line in one
+     * direction, and undoing a wrong upload would mean deleting the
+     * campaign and typing it again.
+     */
+    public function destroyImage(int $id): JsonResponse
+    {
+        $offer = StoreOffer::query()->findOrFail($id);
+        $previous = $offer->image_path;
+
+        $offer->image_path = null;
+        $offer->save();
+
+        if ($previous !== null && $previous !== '') {
+            Storage::disk(OfferImage::DISK)->delete($previous);
+        }
+
+        $this->forgetStorefront();
+
+        return response()->json([
+            'data' => $this->present($offer->load('merchant:id,name,name_dv,slug,status')),
+        ]);
+    }
+
+    /**
+     * Closure rule: the upload has to be the shape the card renders. Any
+     * other ratio would survive the size check and then lose its edges to
+     * the centre crop, which looks like a bug in the storefront rather
+     * than a mismatch at the door.
+     */
+    private function artworkShape(string $attribute, mixed $value, Closure $fail): void
+    {
+        if (! $value instanceof UploadedFile) {
+            return;
+        }
+
+        $size = @getimagesize($value->getPathname());
+
+        // Unreadable dimensions are the 'image' rule's business, not this
+        // rule's — staying quiet here keeps one failure to one message.
+        if ($size === false) {
+            return;
+        }
+
+        [$width, $height] = $size;
+
+        if (! OfferImage::ratioAccepted((int) $width, (int) $height)) {
+            $fail(sprintf(
+                'Artwork must be %s — %d×%d pixels. This one is %d×%d.',
+                OfferImage::RATIO_LABEL,
+                OfferImage::TARGET_WIDTH, OfferImage::TARGET_HEIGHT,
+                $width, $height,
+            ));
+        }
     }
 
     /**
@@ -182,6 +253,8 @@ class StoreOffersController extends Controller
             'badge' => $offer->badge,
             'badge_dv' => $offer->badge_dv,
             'image_url' => OfferImage::url($offer->id, $offer->image_path),
+            /** Which banner the storefront draws — see buildOffers(). */
+            'kind' => $offer->image_path === null || $offer->image_path === '' ? 'text' : 'image',
             'starts_at' => $offer->starts_at?->toIso8601String(),
             'ends_at' => $offer->ends_at?->toIso8601String(),
             'sort' => $offer->sort,
@@ -201,9 +274,8 @@ class StoreOffersController extends Controller
             return 'inactive';
         }
 
-        if ($offer->image_path === null || $offer->image_path === '') {
-            return 'no_image';
-        }
+        // Artwork is no longer a gate: an offer with none is a TEXT banner,
+        // which the storefront lays out itself and publishes on its own.
 
         if ($offer->starts_at !== null && $offer->starts_at->isAfter($now)) {
             return 'scheduled';

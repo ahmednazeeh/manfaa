@@ -39,5 +39,7 @@ Route::prefix('admin')->middleware('auth:admin')->group(function () {
         Route::post('store-offers', [StoreOffersController::class, 'store']);
         Route::patch('store-offers/{id}', [StoreOffersController::class, 'update'])->whereNumber('id');
         Route::post('store-offers/{id}/image', [StoreOffersController::class, 'uploadImage'])->whereNumber('id');
+        // Removing the artwork turns an image banner back into a text one.
+        Route::delete('store-offers/{id}/image', [StoreOffersController::class, 'destroyImage'])->whereNumber('id');
     });
 });

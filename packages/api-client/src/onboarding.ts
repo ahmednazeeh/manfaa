@@ -554,8 +554,26 @@ export type StoreCategoryListResponse = z.infer<
 >;
 
 // ---------------------------------------------------------------------------
-// Curated featured offers — the image banners at the top of Discover
+// Curated featured offers — the banners at the top of Discover
 // ---------------------------------------------------------------------------
+
+/** The exact artwork an image banner takes. Mirrors App\Domain\Storefront\OfferImage. */
+export const OFFER_ARTWORK = {
+  width: 1200,
+  height: 675,
+  ratio: '16:9',
+  minWidth: 800,
+  minHeight: 450,
+  maxKb: 2048,
+} as const;
+
+/**
+ * Which banner the storefront draws. An offer with artwork is the artwork,
+ * edge to edge; one without is laid out from its words and the store's live
+ * rate. Never a blend of the two.
+ */
+export const OfferKindSchema = z.enum(['text', 'image']);
+export type OfferKind = z.infer<typeof OfferKindSchema>;
 
 /**
  * Why an offer is or is not on the storefront right now. Computed by the
@@ -565,7 +583,6 @@ export type StoreCategoryListResponse = z.infer<
 export const OfferLiveStateSchema = z.enum([
   'live',
   'inactive',
-  'no_image',
   'scheduled',
   'ended',
   'store_not_trading',
@@ -589,8 +606,9 @@ export const StoreOfferSchema = z.object({
   blurb_dv: z.string().nullable(),
   badge: z.string().nullable(),
   badge_dv: z.string().nullable(),
-  /** Null until artwork is uploaded — an offer without it never publishes. */
+  /** Null on a text banner. */
   image_url: z.string().nullable(),
+  kind: OfferKindSchema,
   starts_at: z.string().nullable(),
   ends_at: z.string().nullable(),
   sort: z.number().int(),
@@ -655,7 +673,10 @@ export function updateStoreOffer(
   });
 }
 
-/** Replaces the banner artwork. Raster only, at least 600×200. */
+/**
+ * Attaches or replaces the banner artwork, which also makes the offer an
+ * IMAGE banner. Raster only, and exactly 16:9 — see OFFER_ARTWORK.
+ */
 export function uploadStoreOfferImage(
   id: number,
   file: File,
@@ -668,6 +689,18 @@ export function uploadStoreOfferImage(
     `/api/admin/store-offers/${id}/image`,
     StoreOfferResponseSchema,
     { method: 'POST', body, signal: options.signal },
+  );
+}
+
+/** Removes the artwork, turning an image banner back into a text one. */
+export function deleteStoreOfferImage(
+  id: number,
+  options: RequestOptions = {},
+): Promise<StoreOfferResponse> {
+  return apiFetch(
+    `/api/admin/store-offers/${id}/image`,
+    StoreOfferResponseSchema,
+    { method: 'DELETE', signal: options.signal },
   );
 }
 

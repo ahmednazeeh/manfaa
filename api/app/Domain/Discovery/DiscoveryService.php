@@ -61,7 +61,7 @@ final class DiscoveryService
     // (The top-cashback shelf needed no bump: it is a re-sort of entries
     // that already carry rate_bp, done at the presentation boundary.)
     // v6: the cached dataset gained the featured-offer banners.
-    public const string CACHE_KEY = 'discovery:entries:v6';
+    public const string CACHE_KEY = 'discovery:entries:v7';
 
     // v4: store detail gained category_rates (Task #25).
     public const string STORE_CACHE_PREFIX = 'discovery:store:v4:';
@@ -337,8 +337,12 @@ final class DiscoveryService
      * or advertise a shop that has been suspended. An offer whose merchant
      * is not listed is simply absent — the same gate that hides the store.
      *
-     * An offer with no image is also absent: the banner IS the image, and
-     * half a banner is worse than none.
+     * An offer is one of two KINDS, and never a blend of the two. With
+     * artwork it is an image banner: the picture is the whole card and the
+     * platform prints nothing over it. Without artwork it is a text banner,
+     * laid out by the storefront from the words and the live rate. Words
+     * crowded into the margin of a picture was the shape that failed — the
+     * copy cut into the artwork and neither one could be read.
      *
      * @param  list<array<string, mixed>>  $entries
      * @return list<array<string, mixed>>
@@ -359,7 +363,6 @@ final class DiscoveryService
 
         return StoreOffer::query()
             ->live($now)
-            ->whereNotNull('image_path')
             ->whereIn('merchant_id', array_keys($byMerchantId))
             ->orderBy('sort')
             ->orderByDesc('id')
@@ -369,6 +372,10 @@ final class DiscoveryService
 
                 return [
                     'id' => $offer->id,
+                    // Which of the two banners to draw. Sent explicitly
+                    // rather than inferred from image_url being null, so a
+                    // client never has to guess what a missing picture means.
+                    'kind' => $offer->image_path === null || $offer->image_path === '' ? 'text' : 'image',
                     'title' => $offer->title,
                     'title_dv' => $offer->title_dv,
                     'blurb' => $offer->blurb,
