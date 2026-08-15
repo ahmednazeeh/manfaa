@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Domain\Standing;
 
 use App\Domain\Cashback\TransactionState;
+use App\Domain\Discovery\DiscoveryService;
 use App\Domain\Settlement\SettlementState;
 use App\Domain\Webhooks\WebhookDispatcher;
 use App\Domain\Webhooks\WebhookEvents;
@@ -23,6 +24,14 @@ use Illuminate\Support\Facades\DB;
  * no event table, so the status column is written directly; the merchant
  * notice row is the recorded outcome. Suspension stops cashback CREATION —
  * ManualCreditService already refuses non-active merchants.
+ *
+ * Every status write here also drops the public discovery read model
+ * (DiscoveryService::forgetMerchant). The storefront lists ACTIVE merchants
+ * only, so a status flip changes what it renders as surely as a rate change
+ * does: without the invalidation a just-suspended store keeps sitting on the
+ * shelves — and inside the rail's merchant counts — for up to 60 seconds
+ * while the uncached directory already answers that it is gone, and its
+ * store page keeps quoting a percentage the till now refuses.
  *
  * Reinstatement runs frequently (every 30 minutes) so settlement allocation
  * needs no coupling to it: once the overdue debt clears, the next run flips
@@ -59,6 +68,10 @@ final readonly class SuspensionService
 
         foreach ($merchants as $merchant) {
             $merchant->update(['status' => 'suspended']);
+
+            // The storefront advertises ACTIVE stores only — drop the cached
+            // shelves, rail counts and store page now, not 60 seconds from now.
+            DiscoveryService::forgetMerchant($merchant);
 
             $this->notices->record($merchant->id, 'suspended', [
                 ...$this->overdueSummary($merchant->id, $now),
@@ -110,6 +123,10 @@ final readonly class SuspensionService
         foreach ($merchants as $merchant) {
             $merchant->update(['status' => 'active']);
 
+            // Mirror of suspension: the store is listable again this second,
+            // not once the 60-second read model happens to expire.
+            DiscoveryService::forgetMerchant($merchant);
+
             $this->notices->record($merchant->id, 'reinstated', [
                 'reinstated_at' => $now->toIso8601String(),
             ]);
@@ -144,6 +161,8 @@ final readonly class SuspensionService
         $now = CarbonImmutable::now('UTC');
 
         $merchant->update(['status' => 'active']);
+
+        DiscoveryService::forgetMerchant($merchant);
 
         $this->notices->record($merchant->id, 'reinstated', [
             'manual' => true,

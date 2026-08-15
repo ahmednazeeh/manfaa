@@ -66,6 +66,16 @@ export const DiscoverySectionsSchema = z.object({
   increased: z.array(DiscoveryEntrySchema),
   /** Within 10 km, nearest first; empty without coordinates. */
   nearby: z.array(DiscoveryEntrySchema),
+  /**
+   * Stores you walk into — channel `in_store` or `both`. The mirror of
+   * `online`: both are filtered over the complete listed set and only then
+   * capped, so a store is never missing from one because another shelf's
+   * ceiling cut it. Never derive this by filtering another shelf.
+   *
+   * Same deploy-window degrade as `recently_added` below.
+   */
+  in_store: z.array(DiscoveryEntrySchema).catch([]),
+  /** Stores you shop from a browser — channel `online` or `both`. */
   online: z.array(DiscoveryEntrySchema),
   /**
    * Newest listing first — when the store was approved onto the platform,

@@ -458,10 +458,30 @@ export default function CreditPage() {
     );
   }, [promotionsQuery.data]);
 
-  const eligibleLaari = useMemo(
+  const typedEligibleLaari = useMemo(
     () => (eligibleInput.trim() === '' ? null : safeParseMvr(eligibleInput)),
     [eligibleInput],
   );
+
+  /**
+   * When the sale is itemised, the eligible total IS the sum of the lines, so
+   * the cashier should not have to type it twice and then reconcile the two.
+   * Leaving the field blank derives it from the split; typing a figure keeps
+   * it authoritative and the mismatch check still guards a mistyped line.
+   */
+  const derivedFromSplitLaari = useMemo(() => {
+    if (!splitEnabled) return null;
+    const amounts = splitRows.map((row) =>
+      row.amount.trim() === '' ? null : safeParseMvr(row.amount),
+    );
+    if (amounts.length === 0) return null;
+    if (amounts.some((amount) => amount === null || amount < 0)) return null;
+    return amounts.reduce<number>((sum, amount) => sum + (amount as number), 0);
+  }, [splitEnabled, splitRows]);
+
+  const eligibleIsDerived =
+    typedEligibleLaari === null && derivedFromSplitLaari !== null;
+  const eligibleLaari = typedEligibleLaari ?? derivedFromSplitLaari;
   const saleLaari = useMemo(
     () => (saleInput.trim() === '' ? null : safeParseMvr(saleInput)),
     [saleInput],
@@ -469,7 +489,7 @@ export default function CreditPage() {
 
   const eligibleInvalid =
     eligibleInput.trim() !== '' &&
-    (eligibleLaari === null || eligibleLaari < 0);
+    (typedEligibleLaari === null || typedEligibleLaari < 0);
   const saleInvalid =
     saleInput.trim() !== '' &&
     (saleLaari === null ||
@@ -856,10 +876,23 @@ export default function CreditPage() {
                   <p className="text-xs text-destructive">
                     Enter a valid amount, e.g. 1,250.00.
                   </p>
+                ) : eligibleIsDerived ? (
+                  /* Itemised sale, total left blank: say out loud what is
+                     being sent rather than submitting a figure the cashier
+                     never saw. */
+                  <p className="text-xs text-muted-foreground">
+                    Adding up to{' '}
+                    <MoneyText
+                      laari={eligibleLaari as number}
+                      className="font-medium text-mono"
+                    />{' '}
+                    from the categories below.
+                  </p>
                 ) : (
                   <p className="text-xs text-muted-foreground">
                     The part of the bill cashback is computed on, per your
-                    agreement.
+                    agreement. Leave blank when splitting by category and it
+                    adds up for you.
                   </p>
                 )}
               </div>

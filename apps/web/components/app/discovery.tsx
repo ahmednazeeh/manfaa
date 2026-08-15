@@ -92,19 +92,20 @@ export function isBoosted(entry: {
 }
 
 /**
- * The in-store facet of the read model.
+ * The in-store facet of the read model: the API's own `in_store` shelf, the
+ * exact mirror of `online` (both filter the complete listed set, then cap).
  *
- * The API ships an `online` shelf but no in-store one, so this derives it
- * from `recently_added` — the one shelf built from the COMPLETE listed set
- * (every listed merchant, newest first) rather than from a filter. It
- * therefore carries exactly the same per-section ceiling as the `online`
- * shelf it mirrors, and like every shelf it is a teaser: the authoritative,
- * unbounded list of stores is the paginated directory behind "All stores".
+ * This used to be derived here by filtering `recently_added`, which was
+ * wrong: that shelf is itself capped at the per-section ceiling, so once the
+ * newest capped-many listings were all online, the "In store" rail chip and
+ * shelf vanished while the directory grid on the same screen still listed
+ * every in-store store. Never re-derive one facet from another shelf — ask
+ * the server for the facet. Like every shelf it is a teaser: the
+ * authoritative, unbounded list is the paginated directory behind
+ * "All stores".
  */
 export function inStoreEntries(sections: DiscoverySections): DiscoveryEntry[] {
-  return sections.recently_added.filter(
-    (entry) => entry.channel === 'in_store' || entry.channel === 'both',
-  );
+  return sections.in_store;
 }
 
 /**
@@ -120,6 +121,7 @@ export function hasListedStores(sections: DiscoverySections): boolean {
     sections.recently_added.length > 0 ||
     sections.featured.length > 0 ||
     sections.increased.length > 0 ||
+    sections.in_store.length > 0 ||
     sections.online.length > 0
   );
 }

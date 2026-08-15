@@ -191,7 +191,7 @@ it('leaks nothing: no internal ids, no PII, no commercial terms', function () {
 
     // The full public contract of an entry — nothing else. Every shelf
     // carries the identical shape, the newest one included.
-    foreach (['featured', 'increased', 'nearby', 'online', 'recently_added'] as $shelf) {
+    foreach (['featured', 'increased', 'nearby', 'in_store', 'online', 'recently_added'] as $shelf) {
         foreach ($data[$shelf] as $entry) {
             expect(array_keys($entry))->toBe([
                 'name', 'slug', 'category', 'logo_url', 'channel', 'cashback_rate_percent', 'standing_cashback_rate_percent', 'promo_ends_at', 'distance_m',
@@ -257,6 +257,53 @@ it('caps every section and computes distance only inside the nearby bounding box
 
     expect(count($data['online']))->toBe(DiscoveryService::SECTION_LIMIT);
     expect(count($data['nearby']))->toBe(DiscoveryService::SECTION_LIMIT);
+    // The bulk rows are channel `both`, so they fill the in-store shelf too:
+    // it obeys the identical ceiling, being the exact mirror of `online`.
+    expect(count($data['in_store']))->toBe(DiscoveryService::SECTION_LIMIT);
+});
+
+it('builds the in-store shelf from the whole listed set, never from another capped shelf', function () {
+    // The regression: the client used to derive "in store" by filtering
+    // `recently_added`, which is itself capped at SECTION_LIMIT. Fill that
+    // shelf entirely with ONLINE stores and the derived facet went empty
+    // while the directory grid on the same screen still listed every
+    // in-store store — the rail chip vanished and /discover?view=in-store
+    // read "nothing here yet".
+    foreach (range(1, DiscoveryService::SECTION_LIMIT) as $i) {
+        discoveryMerchant([
+            'name' => sprintf('Online %02d', $i),
+            'slug' => "online-{$i}",
+            'channel' => 'online',
+            'approved_at' => now()->subMinutes($i),
+        ], 100);
+    }
+
+    discoveryMerchant([
+        'name' => 'Walk In',
+        'slug' => 'walk-in',
+        'channel' => 'in_store',
+        'approved_at' => now()->subYear(),
+    ], 200);
+
+    // `both` earns on either channel, so it belongs to both shelves.
+    discoveryMerchant([
+        'name' => 'Both Ways',
+        'slug' => 'both-ways',
+        'channel' => 'both',
+        'approved_at' => now()->subYear(),
+    ], 300);
+
+    $data = $this->getJson('/api/discover')->assertOk()->json('data');
+
+    // The newest SECTION_LIMIT listings really are all online...
+    expect(count($data['recently_added']))->toBe(DiscoveryService::SECTION_LIMIT);
+    expect(collect($data['recently_added'])->pluck('slug'))
+        ->not->toContain('walk-in')
+        ->not->toContain('both-ways');
+
+    // ...and the facet is complete regardless, alphabetical like `online`.
+    expect(collect($data['in_store'])->pluck('slug')->all())->toBe(['both-ways', 'walk-in']);
+    expect(collect($data['online'])->pluck('slug'))->toContain('both-ways');
 });
 
 // ------------------------------------------------------- recently added

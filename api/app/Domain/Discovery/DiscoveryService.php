@@ -17,9 +17,9 @@ use Illuminate\Support\Facades\Cache;
 
 /**
  * The public merchant discovery read model (§10 apps/web): featured /
- * increased / nearby / online / recently-added sections over ACTIVE
- * merchants with a live standing rate, the curated category rail that sits
- * above them, plus the Rakuten-style storefront reads — the paginated
+ * increased / nearby / in-store / online / recently-added sections over
+ * ACTIVE merchants with a live standing rate, the curated category rail that
+ * sits above them, plus the Rakuten-style storefront reads — the paginated
  * directory and the per-slug store page.
  *
  * Privacy contract: entries expose merchant name, slug, category, logo URL,
@@ -82,11 +82,15 @@ final class DiscoveryService
      *
      * EVERY write that changes what the storefront renders for a live store
      * must call this — the logo, the profile (category / channel / terms),
-     * the standing rate, and the promotion lifecycle. Without it the card and
-     * the store page keep serving the previous values for up to
+     * the standing rate, the promotion lifecycle, and the STATUS itself
+     * (approval, the §7 day-16 suspension, both reinstatement paths), since
+     * status decides whether the store is rendered at all. Without it the
+     * card and the store page keep serving the previous values for up to
      * CACHE_SECONDS, which for a rate change means quoting a cashback
-     * percentage the merchant has already moved off. One entry point so the
-     * two keys can never drift apart between call sites.
+     * percentage the merchant has already moved off, and for a suspension
+     * means advertising a store the till now refuses — while the uncached
+     * directory on the same screen already answers that it is gone. One
+     * entry point so the two keys can never drift apart between call sites.
      */
     public static function forgetMerchant(Merchant $merchant): void
     {
@@ -95,7 +99,7 @@ final class DiscoveryService
     }
 
     /**
-     * @return array{featured: list<array<string, mixed>>, increased: list<array<string, mixed>>, nearby: list<array<string, mixed>>, online: list<array<string, mixed>>, recently_added: list<array<string, mixed>>, categories: list<array{slug: string, name_en: string, name_dv: string|null, merchant_count: int}>}
+     * @return array{featured: list<array<string, mixed>>, increased: list<array<string, mixed>>, nearby: list<array<string, mixed>>, in_store: list<array<string, mixed>>, online: list<array<string, mixed>>, recently_added: list<array<string, mixed>>, categories: list<array{slug: string, name_en: string, name_dv: string|null, merchant_count: int}>}
      */
     public function sections(?float $lat, ?float $lng): array
     {
@@ -163,6 +167,14 @@ final class DiscoveryService
             'featured' => $present(array_values(array_filter($entries, fn (array $e): bool => $e['featured']))),
             'increased' => $present(array_values(array_filter($entries, fn (array $e): bool => $e['rate_bp'] > $e['standing_rate_bp']))),
             'nearby' => $present($nearby),
+            // The channel pair. Both filter the FULL entry set and only then
+            // cap, so neither can lose a store to another shelf's ceiling —
+            // a client deriving "in store" by filtering `recently_added`
+            // instead saw only whatever survived that shelf's own cap, and
+            // went empty the moment the newest SECTION_LIMIT listings were
+            // all online. `both` belongs to both shelves: such a store really
+            // does earn on either channel.
+            'in_store' => $present(array_values(array_filter($entries, fn (array $e): bool => in_array($e['channel'], ['in_store', 'both'], true)))),
             'online' => $present(array_values(array_filter($entries, fn (array $e): bool => in_array($e['channel'], ['online', 'both'], true)))),
             // Same entry shape and the same SECTION_LIMIT cap as the shelves
             // above; only the ordering differs.
