@@ -49,6 +49,22 @@ final class OnboardingException extends DomainException
         );
     }
 
+    /**
+     * The `logos` disk refused the write. It is configured throw=false (and
+     * report=false), so storeAs answers FALSE instead of raising — and
+     * swallowing that would point logo_path at a file that does not exist,
+     * leaving the store with a 404 where its branding should be. 503: the
+     * upload is worth retrying, the request was not wrong.
+     */
+    public static function logoWriteFailed(): self
+    {
+        return new self(
+            'The logo could not be stored. Please try again.',
+            'logo_write_failed',
+            503,
+        );
+    }
+
     /** Approve/reject act on pending_review submissions only. */
     public static function notPendingReview(string $status): self
     {

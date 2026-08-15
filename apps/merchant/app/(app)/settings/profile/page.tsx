@@ -9,6 +9,7 @@ import {
 import { LoaderCircle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
+import { merchantChannelLabel, merchantStatusLabel } from '@/lib/labels';
 import {
   apiErrorMessage,
   useProfile,
@@ -16,7 +17,6 @@ import {
   useUpdateProfile,
   useUploadSettingsLogo,
 } from '@/lib/queries';
-import { merchantChannelLabel, merchantStatusLabel } from '@/lib/labels';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -109,10 +109,25 @@ function ProfileForm({
       ? [category, ...categorySlugs]
       : categorySlugs;
 
+  // The superadmin retired the category this store is on. The save still
+  // goes through (the server accepts the unchanged value), but the picker
+  // cannot offer it any more, so say so where the picker is rather than
+  // letting a 422 explain it after the fact.
+  const showRetiredHint =
+    profile.category_retired && category === profile.category;
+
   const save = () => {
+    // Send `category` only when it actually changed. A retired category is
+    // still accepted by the server when unchanged, so this is belt and
+    // braces — but it also keeps the PATCH honest: an edit to a phone
+    // number should not carry a category write at all.
+    const categoryChanged = category !== (profile.category ?? '');
+
     updateProfile.mutate(
       {
-        category: category === '' ? null : category,
+        ...(categoryChanged
+          ? { category: category === '' ? null : category }
+          : {}),
         channel,
         eligibility_basis:
           eligibilityBasis.trim() === '' ? null : eligibilityBasis,
@@ -203,8 +218,16 @@ function ProfileForm({
                   ))}
                 </SelectContent>
               </Select>
-              <p className="text-xs text-muted-foreground">
-                {t('settings.categoryHint')}
+              <p
+                className={
+                  showRetiredHint
+                    ? 'text-xs text-warning'
+                    : 'text-xs text-muted-foreground'
+                }
+              >
+                {showRetiredHint
+                  ? t('settings.categoryRetired')
+                  : t('settings.categoryHint')}
               </p>
             </div>
             <div className="flex flex-col gap-2.5">

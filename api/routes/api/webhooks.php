@@ -17,11 +17,14 @@ Route::prefix('admin')->middleware('auth:admin')->group(function () {
 
 // Merchant panel: read the standing rate (any merchant user) and change it
 // (MANAGER or above — PLAN §1 puts rates in the manager tier; also enforced
-// in the controller, §7 increase/decrease semantics; approved stores only —
+// in the controller, §7 increase/decrease semantics; TRADING stores only —
 // pre-approval the wizard's rate step is the sole write path, with
-// replace-the-initial-row semantics this endpoint lacks, and a
-// pending_review store must not reprice what the queue reviewed).
+// replace-the-initial-row semantics this endpoint lacks, a pending_review
+// store must not reprice what the queue reviewed, and a SUSPENDED store
+// creates no cashback at all, so a change here would only fire
+// merchant.rate_changed and move the till's quoted rate to a number that
+// accrues nothing).
 Route::prefix('merchant')->middleware('auth:merchant')->group(function () {
     Route::get('rate', [RateController::class, 'show']);
-    Route::post('rate', [RateController::class, 'store'])->middleware(['merchant.role:manager', EnsureMerchantApproved::class]);
+    Route::post('rate', [RateController::class, 'store'])->middleware(['merchant.role:manager', EnsureMerchantApproved::class.':trading']);
 });

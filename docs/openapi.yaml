@@ -172,9 +172,16 @@ paths:
         | `409` | `duplicate_invoice`. |
         | `422` | Validation failure — including offsetless or future-dated `occurred_at`, unknown `customer_ref`, missing or mismatched `Idempotency-Key`. |
 
-        A **closed** (not merely suspended) merchant account is refused
-        `403 forbidden_ability` in the error envelope — the credential
-        should already be revoked; stop sending and contact the platform.
+        A merchant account that is **not trading** is refused
+        `403 forbidden_ability` in the error envelope, with the message
+        *"This merchant account is not active on the platform."* That covers
+        every status except `active` and `suspended`: a **closed** account,
+        and one that has not completed onboarding (a self-signed-up store
+        still in setup, awaiting review, or sent back). **Suspended is NOT
+        one of them** — a suspended merchant's sales are still accepted, as
+        `200 recorded_ineligible` above. The credential should already be
+        revoked in the refused cases; stop sending and contact the platform.
+        Retrying cannot help until the account is reinstated.
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
@@ -908,6 +915,15 @@ paths:
 
         Only the masked name is ever exposed. No balance, phone number, or
         any other customer data crosses this API.
+
+        **Failed lookups are budgeted.** Because the ref space is small, a
+        walk of it is treated as enumeration: unresolved refs are counted
+        **per merchant per rolling day** — shared across every credential
+        the store holds — and beyond the daily allowance every lookup for
+        that merchant answers `429` `{"message": "Too Many Attempts."}`
+        with `Retry-After` until the window rolls. Successful lookups are
+        never counted. A till confirming refs a customer is standing there
+        reading out will never approach it; a script iterating refs will.
       parameters:
         - name: ref
           in: query
@@ -1159,10 +1175,18 @@ components:
       type: http
       scheme: bearer
       description: |
-        Per-merchant Sanctum personal access token, issued at onboarding —
-        one token per merchant per POS vendor, independently revocable, so a
-        merchant switching POS vendor never forces rotation across other
-        merchants.
+        Per-merchant Sanctum personal access token — one token per merchant
+        per POS vendor, independently revocable, so a merchant switching POS
+        vendor never forces rotation across other merchants.
+
+        Two ways a token comes into existence, both producing the same
+        credential: Manfaa issues one at onboarding, or the **merchant's own
+        owner** issues one themselves from Settings › API access in the
+        merchant panel, choosing the abilities below. Either way the
+        plaintext is shown exactly once at issuance and never again — only
+        its SHA-256 digest is stored, so a lost token is replaced, never
+        recovered. The merchant can revoke any of their tokens at any time
+        from the same screen; the next request with it answers `401`.
 
         Each token carries **abilities**; every operation declares the one
         it requires as `x-required-ability`:
@@ -1282,8 +1306,9 @@ components:
         The token is valid but does not carry the ability this operation
         requires (see `x-required-ability`). Raised by the auth layer, so
         the body is the bare `{"message"}` shape, not the error envelope.
-        (The one enveloped `403` is the closed-merchant refusal on
-        `POST /v1/transactions`, code `forbidden_ability`.)
+        (The one enveloped `403` is the not-active-merchant refusal on
+        `POST /v1/transactions` — closed, or never approved — code
+        `forbidden_ability`.)
       content:
         application/json:
           schema:
@@ -1324,7 +1349,7 @@ components:
         | Code | Appears as | HTTP | Retry? |
         |---|---|---|---|
         | `unauthorized` | error (edge paths; the usual 401 body is `{"message": "Unauthenticated."}`) | 401 | After fixing credentials |
-        | `forbidden_ability` | error (closed-merchant refusal; the usual missing-ability 403 body is `{"message": "Invalid ability provided."}`) | 403 | After fixing token abilities |
+        | `forbidden_ability` | error (merchant not active — closed, or never approved; the usual missing-ability 403 body is `{"message": "Invalid ability provided."}`) | 403 | After fixing token abilities; never while the merchant is not active |
         | `validation_failed` | error | 422 | Fix request; resend with a **fresh** key |
         | `idempotency_key_required` | error | 422 | Add the header; resend |
         | `idempotency_key_reuse_mismatch` | error | 422 | Never — fix key generation |

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Merchant;
 
+use App\Domain\Discovery\DiscoveryService;
 use App\Domain\Platform\FeeTierScheduleResolver;
 use App\Domain\Platform\RateNotPricedException;
 use App\Domain\Platform\TierScheduleService;
@@ -188,6 +189,13 @@ class RateController extends Controller
                     ->toIso8601String(),
             ]);
         }
+
+        // The standing rate is the headline number on the public card and
+        // store page, both read models cached for 60s. An INCREASE applies
+        // immediately, so without this the storefront would keep quoting the
+        // old percentage for up to a minute after the merchant raised it
+        // (DiscoveryService::forgetMerchant).
+        DiscoveryService::forgetMerchant($merchant);
 
         return new JsonResponse([
             'data' => [

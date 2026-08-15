@@ -25,7 +25,7 @@ export {
 export * from './resources';
 // Merchant surface: outstanding, settlements, wallet, credits, promotions,
 // and the settings module (profile, bank account, branches, staff,
-// preferences, customer lookup).
+// preferences, customer lookup, self-serve API credentials).
 export * from './merchant';
 // Admin surface: settlement queue, merchants, reconciliation, payout batches,
 // claims queue, promotions listing, platform bank accounts, fee tier

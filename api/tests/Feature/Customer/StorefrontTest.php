@@ -343,19 +343,23 @@ it('returns an identical 404 for missing, suspended, closed and offer-less slugs
     expect($offerless->getContent())->toBe($missing->getContent());
 });
 
-it('serves an absolute public-disk logo url when a logo is set', function () {
+it('serves an absolute logo url through the authorising controller when a logo is set', function () {
     storefrontMerchant([
         'name' => 'Cafe Alpha',
         'slug' => 'cafe-alpha',
-        'logo_path' => 'merchants/cafe-alpha/logo.png',
+        'logo_path' => 'merchants/9/6f1a0c2e-1111-2222-3333-444455556666.png',
     ]);
     storefrontMerchant(['name' => 'Grocer Bravo', 'slug' => 'grocer-bravo', 'logo_path' => null]);
 
-    // Directory entry: absolute /storage/ URL for the set logo, null for the rest.
+    // Directory entry: absolute controller URL for the set logo, null for
+    // the rest. Never a /storage/ path — logos are off the public disk
+    // entirely, and the storage path itself is not in the URL.
     $data = $this->getJson('/api/discover/merchants')->assertOk()->json('data');
     $alpha = collect($data)->firstWhere('slug', 'cafe-alpha');
     expect($alpha['logo_url'])->toStartWith('http');
-    expect($alpha['logo_url'])->toContain('/storage/merchants/cafe-alpha/logo.png');
+    expect($alpha['logo_url'])->toContain('/api/merchants/cafe-alpha/logo?v=');
+    expect($alpha['logo_url'])->not->toContain('/storage/');
+    expect($alpha['logo_url'])->not->toContain('6f1a0c2e');
     expect(collect($data)->firstWhere('slug', 'grocer-bravo')['logo_url'])->toBeNull();
 
     // Store page carries the same URL; the raw storage path never leaks.

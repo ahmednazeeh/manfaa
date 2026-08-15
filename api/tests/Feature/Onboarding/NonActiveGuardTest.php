@@ -67,7 +67,7 @@ it('refuses manual credits for draft, pending and rejected merchants', function 
     expect(Transaction::query()->count())->toBe(0);
 })->with(['draft', 'pending_review', 'rejected']);
 
-it('refuses /v1 ingestion outright for never-approved merchants — no record-as-ineligible leniency', function (string $status) {
+it('refuses /v1 ingestion outright for every non-trading status — no record-as-ineligible leniency', function (string $status) {
     $owner = pendingMerchantOwner();
     $merchant = $owner->merchant;
     $merchant->update(['status' => $status]);
@@ -85,10 +85,15 @@ it('refuses /v1 ingestion outright for never-approved merchants — no record-as
         'eligible_amount' => 100000,
         'occurred_at' => now()->subHour()->toIso8601String(),
     ])->assertForbidden()
-        ->assertJsonPath('error.code', 'forbidden_ability');
+        ->assertJsonPath('error.code', 'forbidden_ability')
+        // The exact wording is quoted in docs/openapi.yaml and the
+        // integration guide: the refusal covers CLOSED as well as the three
+        // never-approved statuses, and says so — the contract used to
+        // describe it as closed-merchant-only.
+        ->assertJsonPath('error.message', 'This merchant account is not active on the platform.');
 
     expect(Transaction::query()->count())->toBe(0);
-})->with(['draft', 'pending_review', 'rejected']);
+})->with(['draft', 'pending_review', 'rejected', 'closed']);
 
 it('still records a SUSPENDED merchant sale as ineligible — §7 leniency is for suspension only', function () {
     $owner = pendingMerchantOwner();

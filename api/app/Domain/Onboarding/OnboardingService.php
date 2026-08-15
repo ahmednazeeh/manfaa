@@ -14,9 +14,9 @@ use App\Models\StoreCategory;
 use App\Models\Transaction;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\UploadedFile;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 /**
  * The resumable store setup wizard (§1 decision 2026-08-15): profile
@@ -109,14 +109,21 @@ final class OnboardingService
     }
 
     /**
-     * Stores the (already-validated) logo on the public disk at
-     * merchants/{id}/logo.{ext}, deleting any previous file first so a
-     * replace with a different extension never strands the old image.
+     * Stores the (already-validated) logo on the PRIVATE `logos` disk at
+     * merchants/{id}/{uuid}.{ext} (MerchantLogo), deleting any previous file
+     * first so a replace never strands the old image.
+     *
+     * Nothing under that disk is reachable over HTTP: the logo is read only
+     * through MerchantLogoController, which serves it publicly while the
+     * store is active and to the store's own users or an admin otherwise.
+     * That is what keeps an unapproved store's branding off the open web —
+     * the old public-disk path (/storage/merchants/{id}/logo.png) was
+     * world-readable and guessable from the merchant id alone.
      *
      * Allowed for active merchants too (post-approval logo change) — the
      * caller gates on LOGO_STATUSES.
      *
-     * @return string the public logo URL
+     * @return string the logo URL (content-versioned; see MerchantLogo)
      */
     public function storeLogo(Merchant $merchant, UploadedFile $file): string
     {
@@ -126,13 +133,25 @@ final class OnboardingService
             $extension = 'jpg';
         }
 
-        $disk = Storage::disk('public');
+        $disk = Storage::disk(MerchantLogo::DISK);
 
-        if ($merchant->logo_path !== null && $merchant->logo_path !== '') {
-            $disk->delete($merchant->logo_path);
+        $previous = $merchant->logo_path;
+
+        $path = $file->storeAs(
+            'merchants/'.$merchant->id,
+            Str::uuid()->toString().'.'.$extension,
+            MerchantLogo::DISK,
+        );
+
+        if ($path === false) {
+            throw OnboardingException::logoWriteFailed();
         }
 
-        $path = $file->storeAs('merchants/'.$merchant->id, 'logo.'.$extension, 'public');
+        // Only after the replacement is safely on disk: a failed write must
+        // never leave the store with no logo at all.
+        if ($previous !== null && $previous !== '' && $previous !== $path) {
+            $disk->delete($previous);
+        }
 
         $merchant->logo_path = $path;
         $this->markStep($merchant, 'logo');
@@ -141,11 +160,10 @@ final class OnboardingService
         // An active merchant's logo is public the moment it changes; the
         // 60s read-model cache would otherwise keep serving the old URL.
         if ($merchant->status === 'active') {
-            Cache::forget(DiscoveryService::CACHE_KEY);
-            Cache::forget(DiscoveryService::STORE_CACHE_PREFIX.$merchant->slug);
+            DiscoveryService::forgetMerchant($merchant);
         }
 
-        return $disk->url($path);
+        return (string) MerchantLogo::url($merchant->slug, $path);
     }
 
     /**
@@ -261,7 +279,7 @@ final class OnboardingService
             ])->save();
         });
 
-        Cache::forget(DiscoveryService::CACHE_KEY);
+        DiscoveryService::forgetMerchant($merchant);
 
         return $merchant->refresh();
     }
@@ -291,11 +309,7 @@ final class OnboardingService
 
     public function logoUrl(Merchant $merchant): ?string
     {
-        if ($merchant->logo_path === null || $merchant->logo_path === '') {
-            return null;
-        }
-
-        return Storage::disk('public')->url($merchant->logo_path);
+        return MerchantLogo::url($merchant->slug, $merchant->logo_path);
     }
 
     /**

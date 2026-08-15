@@ -12,6 +12,7 @@ use App\Models\Merchant;
 use App\Models\MerchantOtpCode;
 use App\Models\MerchantUser;
 use Carbon\CarbonImmutable;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
@@ -36,6 +37,15 @@ final readonly class MerchantOtpService
     public const int MAX_ATTEMPTS = 5;
 
     public const int SIGNUP_TOKEN_TTL_MINUTES = 15;
+
+    /** Slug candidates tried before the insert is treated as a real failure. */
+    private const int SLUG_ATTEMPTS = 4;
+
+    private const string OUTCOME_VERIFIED = 'verified';
+
+    private const string OUTCOME_INVALID = 'invalid';
+
+    private const string OUTCOME_EXHAUSTED = 'exhausted';
 
     public function __construct(private SmsSender $sms) {}
 
@@ -76,45 +86,63 @@ final readonly class MerchantOtpService
     /**
      * Verifies the code and mints the signup token the register step redeems.
      *
+     * Concurrency stance mirrors the customer flow exactly: the read, the
+     * cap check, the increment and the consumption run in ONE transaction
+     * with the code row locked FOR UPDATE, so parallel guesses queue behind
+     * each other instead of all passing the cap pre-check on the same stale
+     * `attempts` read. The outcome is returned and thrown after commit —
+     * throwing inside would roll the increment back and make the cap free.
+     *
      * @return string the plaintext signup token (never stored)
      */
     public function verify(string $phone, string $code): string
     {
         $now = CarbonImmutable::now('UTC');
 
-        $otp = MerchantOtpCode::query()
-            ->where('phone', $phone)
-            ->whereNull('consumed_at')
-            ->orderByDesc('id')
-            ->first();
+        /** @var array{0: string, 1: string|null} $result */
+        $result = DB::transaction(function () use ($phone, $code, $now): array {
+            $otp = MerchantOtpCode::query()
+                ->where('phone', $phone)
+                ->whereNull('consumed_at')
+                ->orderByDesc('id')
+                ->lockForUpdate()
+                ->first();
 
-        if ($otp === null || $otp->expires_at->isBefore($now)) {
-            throw InvalidOtpException::forPhone($phone);
-        }
-
-        if ($otp->attempts >= self::MAX_ATTEMPTS) {
-            throw TooManyOtpAttemptsException::forPhone($phone);
-        }
-
-        if (! Hash::check($code, $otp->code_hash)) {
-            $otp->increment('attempts');
-
-            if ($otp->attempts >= self::MAX_ATTEMPTS) {
-                throw TooManyOtpAttemptsException::forPhone($phone);
+            if ($otp === null || $otp->expires_at->isBefore($now)) {
+                return [self::OUTCOME_INVALID, null];
             }
 
-            throw InvalidOtpException::forPhone($phone);
-        }
+            // Re-read under the lock: a concurrent request may have burned
+            // the last attempt while this one was queued behind it.
+            if ($otp->attempts >= self::MAX_ATTEMPTS) {
+                return [self::OUTCOME_EXHAUSTED, null];
+            }
 
-        $token = Str::random(48);
+            if (! Hash::check($code, $otp->code_hash)) {
+                $otp->increment('attempts');
 
-        $otp->forceFill([
-            'consumed_at' => $now,
-            'signup_token_hash' => hash('sha256', $token),
-            'signup_token_expires_at' => $now->addMinutes(self::SIGNUP_TOKEN_TTL_MINUTES),
-        ])->save();
+                return [
+                    $otp->attempts >= self::MAX_ATTEMPTS ? self::OUTCOME_EXHAUSTED : self::OUTCOME_INVALID,
+                    null,
+                ];
+            }
 
-        return $token;
+            $token = Str::random(48);
+
+            $otp->forceFill([
+                'consumed_at' => $now,
+                'signup_token_hash' => hash('sha256', $token),
+                'signup_token_expires_at' => $now->addMinutes(self::SIGNUP_TOKEN_TTL_MINUTES),
+            ])->save();
+
+            return [self::OUTCOME_VERIFIED, $token];
+        });
+
+        return match ($result[0]) {
+            self::OUTCOME_VERIFIED => (string) $result[1],
+            self::OUTCOME_EXHAUSTED => throw TooManyOtpAttemptsException::forPhone($phone),
+            default => throw InvalidOtpException::forPhone($phone),
+        };
     }
 
     /**
@@ -127,62 +155,116 @@ final readonly class MerchantOtpService
     public function register(string $signupToken, string $businessName, string $email, string $password): MerchantUser
     {
         $now = CarbonImmutable::now('UTC');
+        $tokenHash = hash('sha256', $signupToken);
 
-        $otp = MerchantOtpCode::query()
-            ->where('signup_token_hash', hash('sha256', $signupToken))
-            ->first();
+        return DB::transaction(function () use ($tokenHash, $businessName, $email, $password, $now): MerchantUser {
+            // Lock the code row and re-assert the token INSIDE the lock: a
+            // double-submitted register would otherwise have both requests
+            // read the same live token and mint two stores (two different
+            // emails clear the unique index) from one phone verification.
+            $otp = MerchantOtpCode::query()
+                ->where('signup_token_hash', $tokenHash)
+                ->lockForUpdate()
+                ->first();
 
-        if ($otp === null || $otp->signup_token_expires_at === null || $otp->signup_token_expires_at->isBefore($now)) {
-            throw InvalidSignupTokenException::make();
-        }
+            if ($otp === null || $otp->signup_token_expires_at === null || $otp->signup_token_expires_at->isBefore($now)) {
+                throw InvalidSignupTokenException::make();
+            }
 
-        if (MerchantUser::query()->where('email', $email)->exists()) {
-            throw EmailAlreadyRegisteredException::forEmail($email);
-        }
+            if (MerchantUser::query()->where('email', $email)->exists()) {
+                throw EmailAlreadyRegisteredException::forEmail($email);
+            }
 
-        return DB::transaction(function () use ($otp, $businessName, $email, $password): MerchantUser {
             $otp->forceFill([
                 'signup_token_hash' => null,
                 'signup_token_expires_at' => null,
             ])->save();
 
-            $merchant = Merchant::query()->create([
-                'name' => $businessName,
-                'slug' => $this->uniqueSlug($businessName),
-                'status' => 'draft',
-                'channel' => 'in_store',
-                'contact_email' => $email,
-                'contact_phone' => $otp->phone,
-                'setup_state' => (object) [],
-            ]);
+            $merchant = $this->createMerchant($businessName, $email, (string) $otp->phone);
 
-            $owner = MerchantUser::query()->create([
-                'merchant_id' => $merchant->id,
-                'name' => $businessName,
-                'email' => $email,
-                'password' => $password,
-                'role' => 'owner',
-                'is_active' => true,
-            ]);
+            try {
+                $owner = MerchantUser::query()->create([
+                    'merchant_id' => $merchant->id,
+                    'name' => $businessName,
+                    'email' => $email,
+                    'password' => $password,
+                    'role' => 'owner',
+                    'is_active' => true,
+                ]);
+            } catch (UniqueConstraintViolationException $e) {
+                // The unique index is the real check; the exists() above only
+                // catches what was already committed when this request read.
+                // Two signups racing on one email must both get the clean 422,
+                // never a 500 (and the whole store creation rolls back).
+                if (str_contains($e->getMessage(), 'merchant_users_email_unique')) {
+                    throw EmailAlreadyRegisteredException::forEmail($email);
+                }
+
+                throw $e;
+            }
 
             return $owner->setRelation('merchant', $merchant);
         });
     }
 
     /**
-     * Slug from the business name, uniquified with a numeric suffix. A name
-     * that slugs to nothing (e.g. a fully Thaana name) falls back to
-     * 'store'. Kept within the public route's [a-z0-9-]{1,80} pattern; the
-     * unique index is the backstop for the create/create race.
+     * Creates the DRAFT store, retrying the slug when the unique index
+     * refuses it.
+     *
+     * The probe-then-insert in slugCandidate() cannot be atomic — between the
+     * probe and the INSERT another signup with the same business name can
+     * commit the very slug it picked. Each insert therefore runs in a nested
+     * transaction (Laravel emits a SAVEPOINT), so a collision rolls back only
+     * the failed INSERT and the next probe — which now SEES the winner's
+     * committed row — picks the next free suffix. A last resort appends a
+     * random suffix so a pathological loop still terminates with a usable
+     * store rather than a 500.
      */
-    private function uniqueSlug(string $businessName): string
+    private function createMerchant(string $businessName, string $email, string $phone): Merchant
+    {
+        $base = $this->slugBase($businessName);
+        $attempt = 1;
+
+        while (true) {
+            $slug = $attempt < self::SLUG_ATTEMPTS
+                ? $this->slugCandidate($base)
+                : $base.'-'.Str::lower(Str::random(6));
+
+            try {
+                return DB::transaction(fn (): Merchant => Merchant::query()->create([
+                    'name' => $businessName,
+                    'slug' => $slug,
+                    'status' => 'draft',
+                    'channel' => 'in_store',
+                    'contact_email' => $email,
+                    'contact_phone' => $phone,
+                    'setup_state' => (object) [],
+                ]));
+            } catch (UniqueConstraintViolationException $e) {
+                if (! str_contains($e->getMessage(), 'merchants_slug_unique') || $attempt >= self::SLUG_ATTEMPTS) {
+                    throw $e;
+                }
+
+                $attempt++;
+            }
+        }
+    }
+
+    /**
+     * Slug stem from the business name. A name that slugs to nothing (e.g. a
+     * fully Thaana name) falls back to 'store'. Kept short enough that the
+     * suffix still fits the public route's [a-z0-9-]{1,80} pattern.
+     */
+    private function slugBase(string $businessName): string
     {
         $base = Str::limit(Str::slug($businessName), 60, '');
 
-        if ($base === '') {
-            $base = 'store';
-        }
+        return $base === '' ? 'store' : $base;
+    }
 
+    /** First slug not currently taken: the stem, then -2, -3, … */
+    private function slugCandidate(string $base): string
+    {
         $slug = $base;
         $suffix = 2;
 

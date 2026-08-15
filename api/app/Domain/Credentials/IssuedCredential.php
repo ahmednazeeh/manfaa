@@ -8,8 +8,9 @@ use App\Models\ApiCredential;
 
 /**
  * The result of issuing a vendor credential. `$plainTextToken` exists only
- * here, in memory, on the request that issued it — it is returned to the
- * admin once and is never derivable again from anything we store.
+ * here, in memory, on the request that issued it — it is returned once, to
+ * whoever issued it (an admin at onboarding, or the merchant's own owner
+ * from the panel), and is never derivable again from anything we store.
  */
 final readonly class IssuedCredential
 {

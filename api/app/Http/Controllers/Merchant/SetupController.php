@@ -80,7 +80,11 @@ class SetupController extends Controller
             ],
         ]);
 
-        $url = $this->onboarding->storeLogo($merchant, $request->file('logo'));
+        try {
+            $url = $this->onboarding->storeLogo($merchant, $request->file('logo'));
+        } catch (OnboardingException $e) {
+            return $this->onboardingError($e);
+        }
 
         return response()->json(['data' => ['logo_url' => $url]]);
     }

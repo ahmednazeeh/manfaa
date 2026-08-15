@@ -2,11 +2,13 @@
 
 declare(strict_types=1);
 
+use App\Domain\Discovery\DiscoveryService;
 use App\Domain\Platform\PlatformConfig;
 use App\Models\Merchant;
 use App\Models\MerchantUser;
 use App\Models\StoreCategory;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Tests\TestCase;
 
 uses(TestCase::class, RefreshDatabase::class);
@@ -71,6 +73,72 @@ it('never lets the profile rename the business — identity is admin-only', func
         ->assertOk();
 
     expect($this->merchant->refresh()->name)->toBe('Original Name');
+});
+
+it('drops the discovery read model so the storefront never serves a stale card', function () {
+    // Both keys warm, as a live storefront read would leave them.
+    Cache::put(DiscoveryService::CACHE_KEY, [['slug' => $this->merchant->slug]], 60);
+    Cache::put(DiscoveryService::STORE_CACHE_PREFIX.$this->merchant->slug, ['name' => 'stale'], 60);
+
+    $this->patchJson('/api/merchant/profile', [
+        'category' => 'cafe',
+        'channel' => 'online',
+        'eligibility_basis' => 'New terms.',
+    ])->assertOk();
+
+    // The card (category, channel) and the store page (terms) both render
+    // these — a 60s stale window would show the previous values. The logo
+    // path has always dropped them; the profile save now does too.
+    expect(Cache::has(DiscoveryService::CACHE_KEY))->toBeFalse()
+        ->and(Cache::has(DiscoveryService::STORE_CACHE_PREFIX.$this->merchant->slug))->toBeFalse();
+});
+
+it('keeps saving when the store holds a category the superadmin has since retired', function () {
+    $this->merchant->update(['category' => 'beauty']);
+    StoreCategory::query()->where('slug', 'beauty')->update(['active' => false]);
+
+    // The panel PATCHes the whole form, so before this fix editing a phone
+    // number 422'd on `category` until the owner re-picked one — a save trap
+    // triggered by an admin action the merchant never saw.
+    $this->patchJson('/api/merchant/profile', [
+        'category' => 'beauty',
+        'contact_phone' => '+9607779999',
+    ])->assertOk()
+        ->assertJsonPath('data.category', 'beauty')
+        ->assertJsonPath('data.category_retired', true)
+        ->assertJsonPath('data.contact_phone', '+9607779999');
+
+    // Omitting it entirely — what the panel now sends — works too.
+    $this->patchJson('/api/merchant/profile', ['contact_phone' => '+9607778888'])
+        ->assertOk()
+        ->assertJsonPath('data.category', 'beauty')
+        ->assertJsonPath('data.category_retired', true);
+
+    // But it stays a one-way door: moving to a DIFFERENT retired category is
+    // still refused, and the flag clears once an active one is picked.
+    StoreCategory::query()->where('slug', 'grocery')->update(['active' => false]);
+    $this->patchJson('/api/merchant/profile', ['category' => 'grocery'])->assertUnprocessable();
+
+    $this->patchJson('/api/merchant/profile', ['category' => 'cafe'])
+        ->assertOk()
+        ->assertJsonPath('data.category_retired', false);
+});
+
+it('reports category_retired on the profile read so the panel can prompt a re-pick', function () {
+    $this->merchant->update(['category' => 'cafe']);
+
+    $this->getJson('/api/merchant/profile')->assertOk()->assertJsonPath('data.category_retired', false);
+
+    StoreCategory::query()->where('slug', 'cafe')->update(['active' => false]);
+
+    $this->getJson('/api/merchant/profile')->assertOk()->assertJsonPath('data.category_retired', true);
+
+    // A store with no category set is not "retired", it is simply unset.
+    // (actingAs holds one user instance for the whole test, so its merchant
+    // relation must be re-resolved after a direct DB write.)
+    $this->merchant->update(['category' => null]);
+    $this->actingAs($this->owner->fresh(), 'merchant');
+    $this->getJson('/api/merchant/profile')->assertOk()->assertJsonPath('data.category_retired', false);
 });
 
 it('rejects an invalid contact email', function () {

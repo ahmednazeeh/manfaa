@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Domain\Onboarding\MerchantLogo;
 use App\Models\Merchant;
 use App\Models\MerchantUser;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -13,6 +14,9 @@ uses(TestCase::class, RefreshDatabase::class);
 
 beforeEach(function () {
     $this->withHeader('Referer', 'http://localhost');
+    // Logos live on the PRIVATE disk now — nothing merchant-uploaded ever
+    // touches the public one.
+    Storage::fake(MerchantLogo::DISK);
     Storage::fake('public');
 });
 
@@ -25,7 +29,7 @@ function logoOwner(string $status = 'draft'): MerchantUser
     return $owner;
 }
 
-it('stores a png logo and returns its public URL', function () {
+it('stores a png logo on the private disk and returns the controller URL', function () {
     $owner = logoOwner();
     $merchant = $owner->merchant;
 
@@ -34,16 +38,20 @@ it('stores a png logo and returns its public URL', function () {
     ], ['Accept' => 'application/json'])->assertOk();
 
     $url = $response->json('data.logo_url');
-    expect($url)->toContain('/storage/merchants/'.$merchant->id.'/logo.png');
-
-    Storage::disk('public')->assertExists('merchants/'.$merchant->id.'/logo.png');
+    expect($url)->toContain('/api/merchants/'.$merchant->slug.'/logo?v=');
 
     $merchant->refresh();
-    expect($merchant->logo_path)->toBe('merchants/'.$merchant->id.'/logo.png')
+
+    // merchants/{id}/{uuid}.png on the private disk — never /storage.
+    expect($merchant->logo_path)->toStartWith('merchants/'.$merchant->id.'/')
+        ->and($merchant->logo_path)->toEndWith('.png')
         ->and((array) $merchant->setup_state)->toHaveKey('logo');
+
+    Storage::disk(MerchantLogo::DISK)->assertExists($merchant->logo_path);
+    expect(Storage::disk('public')->allFiles())->toBe([]);
 });
 
-it('rejects SVG outright — scriptable content never lands on the public disk', function () {
+it('rejects SVG outright — scriptable content is never stored at all', function () {
     $owner = logoOwner();
 
     $svg = UploadedFile::fake()->createWithContent(
@@ -55,7 +63,7 @@ it('rejects SVG outright — scriptable content never lands on the public disk',
         ->assertUnprocessable()
         ->assertJsonValidationErrors(['logo']);
 
-    expect(Storage::disk('public')->allFiles())->toBe([])
+    expect(Storage::disk(MerchantLogo::DISK)->allFiles())->toBe([])
         ->and($owner->merchant->refresh()->logo_path)->toBeNull();
 });
 
@@ -89,22 +97,30 @@ it('rejects a non-image file with an image extension', function () {
         ->assertJsonValidationErrors(['logo']);
 });
 
-it('deletes the old file when the logo is replaced with a different extension', function () {
+it('deletes the old file when the logo is replaced, and changes the URL', function () {
     $owner = logoOwner();
-    $id = $owner->merchant->id;
 
-    $this->post('/api/merchant/setup/logo', [
+    $first = $this->post('/api/merchant/setup/logo', [
         'logo' => UploadedFile::fake()->image('logo.png', 400, 400),
-    ], ['Accept' => 'application/json'])->assertOk();
+    ], ['Accept' => 'application/json'])->assertOk()->json('data.logo_url');
 
-    $this->post('/api/merchant/setup/logo', [
+    $firstPath = $owner->merchant->refresh()->logo_path;
+
+    $second = $this->post('/api/merchant/setup/logo', [
         'logo' => UploadedFile::fake()->image('logo.jpg', 400, 400),
-    ], ['Accept' => 'application/json'])->assertOk();
+    ], ['Accept' => 'application/json'])->assertOk()->json('data.logo_url');
 
-    Storage::disk('public')->assertMissing("merchants/{$id}/logo.png");
-    Storage::disk('public')->assertExists("merchants/{$id}/logo.jpg");
+    $secondPath = $owner->merchant->refresh()->logo_path;
 
-    expect($owner->merchant->refresh()->logo_path)->toBe("merchants/{$id}/logo.jpg");
+    Storage::disk(MerchantLogo::DISK)->assertMissing($firstPath);
+    Storage::disk(MerchantLogo::DISK)->assertExists($secondPath);
+
+    // Exactly one file survives — a replace must not accumulate orphans.
+    expect(Storage::disk(MerchantLogo::DISK)->allFiles())->toHaveCount(1);
+
+    // The uuid filename means the URL changes, so no cache anywhere can
+    // keep serving the replaced image.
+    expect($second)->not->toBe($first);
 });
 
 it('lets an ACTIVE merchant change its logo under settings', function () {
@@ -114,7 +130,10 @@ it('lets an ACTIVE merchant change its logo under settings', function () {
         'logo' => UploadedFile::fake()->image('logo.webp', 300, 300),
     ], ['Accept' => 'application/json'])->assertOk();
 
-    Storage::disk('public')->assertExists('merchants/'.$owner->merchant->id.'/logo.webp');
+    $path = $owner->merchant->refresh()->logo_path;
+
+    expect($path)->toEndWith('.webp');
+    Storage::disk(MerchantLogo::DISK)->assertExists($path);
 });
 
 it('refuses logo changes while the store is pending review', function () {

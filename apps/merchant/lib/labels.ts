@@ -1,5 +1,6 @@
 import {
   isTransactionReasonCode,
+  isVendorAbility,
   isWalletMovementType,
   type MerchantChannel,
   type MerchantStaffRole,
@@ -11,6 +12,7 @@ import {
   type TransactionOrigin,
   type TransactionReasonCode,
   type TransactionState,
+  type VendorAbility,
   type WalletMovementType,
 } from '@manfaa/api-client';
 import type { TFunction } from 'i18next';
@@ -157,6 +159,26 @@ const MERCHANT_ROLE_HINT_KEYS: Record<MerchantStaffRole, string> = {
   staff: 'roles.staffHint',
 };
 
+/**
+ * The four vendor-token abilities (PLAN §9.1) in PLAIN LANGUAGE. The wire
+ * values are developer strings — `transactions:write` means nothing to a
+ * shopkeeper deciding what to hand a POS company — so the wizard shows
+ * these words and the codes appear nowhere in the UI.
+ */
+const VENDOR_ABILITY_KEYS: Record<VendorAbility, string> = {
+  'transactions:write': 'apiAccess.abilities.transactionsWrite.label',
+  'transactions:reverse': 'apiAccess.abilities.transactionsReverse.label',
+  'rates:read': 'apiAccess.abilities.ratesRead.label',
+  'customers:lookup': 'apiAccess.abilities.customersLookup.label',
+};
+
+const VENDOR_ABILITY_HINT_KEYS: Record<VendorAbility, string> = {
+  'transactions:write': 'apiAccess.abilities.transactionsWrite.hint',
+  'transactions:reverse': 'apiAccess.abilities.transactionsReverse.hint',
+  'rates:read': 'apiAccess.abilities.ratesRead.hint',
+  'customers:lookup': 'apiAccess.abilities.customersLookup.hint',
+};
+
 /** What moved the store's wallet balance. */
 const WALLET_MOVEMENT_KEYS: Record<WalletMovementType, string> = {
   top_up: 'labels.walletMovement.top_up',
@@ -281,6 +303,21 @@ export function merchantRoleHint(
   role: MerchantStaffRole,
 ): string {
   return t(MERCHANT_ROLE_HINT_KEYS[role]);
+}
+
+/**
+ * A stored credential's abilities are plain strings — a row issued by an
+ * older build may name an ability this one predates — so an unrecognised
+ * value degrades to neutral prose rather than printing itself.
+ */
+export function vendorAbilityLabel(t: TFunction, ability: string): string {
+  return isVendorAbility(ability)
+    ? t(VENDOR_ABILITY_KEYS[ability])
+    : t('apiAccess.abilities.unknown');
+}
+
+export function vendorAbilityHint(t: TFunction, ability: VendorAbility): string {
+  return t(VENDOR_ABILITY_HINT_KEYS[ability]);
 }
 
 /**

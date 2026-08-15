@@ -5,6 +5,7 @@ import {
   bootstrapCsrf,
   cancelMerchantPromotion,
   createMerchantBranch,
+  createMerchantCredential,
   createMerchantCredit,
   createMerchantProductCategory,
   createMerchantPromotion,
@@ -15,6 +16,7 @@ import {
   getMerchantSetup,
   getMerchantWallet,
   listMerchantBranches,
+  listMerchantCredentials,
   listMerchantProductCategories,
   listMerchantPromotions,
   listMerchantStaff,
@@ -22,6 +24,7 @@ import {
   publishMerchantPromotion,
   registerMerchantSignup,
   requestMerchantSignupOtp,
+  revokeMerchantCredential,
   submitMerchantSetup,
   updateMerchantBankAccount,
   updateMerchantBranch,
@@ -36,6 +39,7 @@ import {
   verifyMerchantSignupOtp,
   type CreateCreditRequest,
   type CreateMerchantBranchRequest,
+  type CreateMerchantCredentialRequest,
   type CreateMerchantStaffRequest,
   type CreateProductCategoryRequest,
   type CreatePromotionRequest,
@@ -103,6 +107,7 @@ export const queryKeys = {
   profile: ['merchant', 'profile'] as const,
   branches: ['merchant', 'branches'] as const,
   staff: ['merchant', 'staff'] as const,
+  credentials: ['merchant', 'credentials'] as const,
   preferences: ['merchant', 'preferences'] as const,
   promotions: ['merchant', 'promotions'] as const,
   productCategories: ['merchant', 'product-categories'] as const,
@@ -586,6 +591,45 @@ export function useUpdateStaff() {
     }) => updateMerchantStaff(id, body),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.staff });
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Settings — API access (owner only)
+// ---------------------------------------------------------------------------
+
+export function useCredentials() {
+  return useQuery({
+    queryKey: queryKeys.credentials,
+    queryFn: ({ signal }) => listMerchantCredentials({ signal }),
+    select: (response) => response.data,
+    retry: false,
+  });
+}
+
+/**
+ * The response carries the plaintext token EXACTLY once — it is handed to
+ * the caller and deliberately never written into the query cache, so no
+ * later render, refetch or devtools panel can resurrect it.
+ */
+export function useCreateCredential() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: CreateMerchantCredentialRequest) =>
+      createMerchantCredential(body),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.credentials });
+    },
+  });
+}
+
+export function useRevokeCredential() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => revokeMerchantCredential(id),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.credentials });
     },
   });
 }

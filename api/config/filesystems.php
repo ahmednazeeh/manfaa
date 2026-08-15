@@ -51,6 +51,25 @@ return [
             'report' => false,
         ],
 
+        // Merchant store logos. PRIVATE by construction for the same reason
+        // as `slips`: no `url`, `serve` off, its own root outside
+        // storage/app/public — so there is no path, signed or otherwise,
+        // that reaches a logo file directly.
+        //
+        // A logo is public information ONLY while its store is (PLAN §1:
+        // "the store is invisible publicly until approved"). That is a
+        // question about the merchant row, not about the file, so every
+        // logo — pre-approval and live alike — is answered by
+        // MerchantLogoController, which reads the status and decides. See
+        // App\Domain\Onboarding\MerchantLogo.
+        'logos' => [
+            'driver' => 'local',
+            'root' => storage_path('app/logos'),
+            'serve' => false,
+            'throw' => false,
+            'report' => false,
+        ],
+
         'public' => [
             'driver' => 'local',
             'root' => storage_path('app/public'),

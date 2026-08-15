@@ -65,11 +65,26 @@ Every request carries a bearer token:
 Authorization: Bearer <token>
 ```
 
-Tokens are issued by Manfaa at onboarding, **one per merchant per POS
-vendor**, and are independently revocable — a merchant switching vendors
-never invalidates your tokens for other merchants. Store the token
-server-side or in the till's secure storage; it is shown to you exactly once
-(sandbox excepted).
+Tokens are **one per merchant per POS vendor** and independently revocable —
+a merchant switching vendors never invalidates your tokens for other
+merchants. Store the token server-side or in the till's secure storage; it
+is shown exactly once (sandbox excepted).
+
+There are two ways to get one, and they produce the same credential:
+
+- **Manfaa issues it at onboarding** — the usual path when our team does the
+  integration work for a physical store.
+- **The merchant issues it themselves** — the store's account OWNER opens
+  Settings › API access in the merchant panel, names you as the integration
+  partner, ticks the permissions you need, and hands you the token. This is
+  the fastest route when the store already has a POS provider: no ticket, no
+  waiting on us.
+
+Ask the merchant for exactly the abilities you use, no more — the token
+cannot be widened later, and a narrower one is a shorter conversation when
+something goes wrong. If a token leaks, the merchant revokes it on that same
+screen and issues a replacement; revocation takes effect on the very next
+request and never touches their other credentials.
 
 Each token carries **abilities**, and every endpoint requires exactly one:
 
@@ -266,8 +281,14 @@ ordinary sales into irreversible ones. Branch on the `backdated` boolean, not
 on `reason_code` — later transitions rewrite `reason_code`, but `backdated`
 is permanent.
 
-A closed (not merely suspended) merchant account answers
-`403 forbidden_ability` in the error envelope — stop sending and contact us.
+**A merchant account that is not trading answers `403 forbidden_ability`** in
+the error envelope, with the message *"This merchant account is not active on
+the platform."* — every status except `active` and `suspended`: a closed
+account, and a self-signed-up store that has not completed onboarding (still
+in setup, awaiting review, or sent back for changes). Suspended is not one of
+them: a suspended merchant's sales are still accepted, as
+`200 recorded_ineligible` above. Stop sending and contact us — retrying
+cannot succeed until the account is reinstated.
 
 #### Online stores
 
@@ -577,7 +598,7 @@ The complete code registry (also in `openapi.yaml` → `MachineCode`):
 | Code | Where | HTTP | Retry? |
 |---|---|---|---|
 | `unauthorized` | error envelope (auth edge cases; the usual 401 body is `{"message": "Unauthenticated."}`) | 401 | After fixing credentials |
-| `forbidden_ability` | error envelope (closed merchant; the usual missing-ability 403 body is `{"message": "Invalid ability provided."}`) | 403 | After fixing token abilities |
+| `forbidden_ability` | error envelope (merchant not active — closed, or never approved; the usual missing-ability 403 body is `{"message": "Invalid ability provided."}`) | 403 | After fixing token abilities; never while the merchant is not active |
 | `validation_failed` | error envelope, with per-field `errors` | 422 | Fix request; resend with a **fresh** key |
 | `idempotency_key_required` | error envelope — write sent without the header | 422 | Add the header and resend |
 | `idempotency_key_reuse_mismatch` | error envelope — same key, different body | 422 | Never — fix key generation |
@@ -709,6 +730,7 @@ that: monitor your endpoint's availability.
 
 ## 8. Go-live checklist
 
+- [ ] Production token held per merchant (from us, or from the merchant's own Settings › API access), stored server-side, never in a client bundle
 - [ ] Fresh UUID per sale, persisted before send; same key reused on retry
 - [ ] `occurred_at` always carries the UTC offset; till clock NTP-synced
 - [ ] `transaction.id` stored against the invoice for reversals

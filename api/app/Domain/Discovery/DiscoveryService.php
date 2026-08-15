@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Domain\Discovery;
 
+use App\Domain\Onboarding\MerchantLogo;
 use App\Models\Merchant;
 use App\Models\MerchantBranch;
 use App\Models\MerchantProductCategory;
@@ -11,7 +12,6 @@ use App\Models\MerchantRate;
 use App\Models\Promotion;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Storage;
 
 /**
  * The public merchant discovery read model (§10 apps/web): featured /
@@ -69,6 +69,24 @@ final class DiscoveryService
      * the box only spares the trigonometry.
      */
     private const float METERS_PER_DEGREE = 111000.0;
+
+    /**
+     * Drop the read model for one merchant: the shared sections/directory
+     * dataset and that store's own page.
+     *
+     * EVERY write that changes what the storefront renders for a live store
+     * must call this — the logo, the profile (category / channel / terms),
+     * the standing rate, and the promotion lifecycle. Without it the card and
+     * the store page keep serving the previous values for up to
+     * CACHE_SECONDS, which for a rate change means quoting a cashback
+     * percentage the merchant has already moved off. One entry point so the
+     * two keys can never drift apart between call sites.
+     */
+    public static function forgetMerchant(Merchant $merchant): void
+    {
+        Cache::forget(self::CACHE_KEY);
+        Cache::forget(self::STORE_CACHE_PREFIX.$merchant->slug);
+    }
 
     /**
      * @return array{featured: list<array<string, mixed>>, increased: list<array<string, mixed>>, nearby: list<array<string, mixed>>, online: list<array<string, mixed>>}
@@ -341,7 +359,7 @@ final class DiscoveryService
                 'name' => $merchant->name,
                 'slug' => $merchant->slug,
                 'category' => $merchant->category,
-                'logo_url' => $this->logoUrl($merchant->logo_path),
+                'logo_url' => $this->logoUrl($merchant->slug, $merchant->logo_path),
                 // The rate the customer gets NOW; "usually" is the standing rate.
                 'rate_bp' => $boosted ? $promo->rate_bp : $standing->rate_bp,
                 'standing_rate_bp' => $standing->rate_bp,
@@ -429,7 +447,7 @@ final class DiscoveryService
             'name' => $merchant->name,
             'slug' => $merchant->slug,
             'category' => $merchant->category,
-            'logo_url' => $this->logoUrl($merchant->logo_path),
+            'logo_url' => $this->logoUrl($merchant->slug, $merchant->logo_path),
             'channel' => $merchant->channel,
             'featured' => (bool) $merchant->featured,
             'rate_bp' => $promo?->rate_bp ?? $standing->rate_bp,
@@ -464,15 +482,13 @@ final class DiscoveryService
     }
 
     /**
-     * Absolute URL for a merchant logo stored on the public disk; null when
-     * no logo is set. The raw storage path never leaves the API.
+     * Absolute URL for a merchant logo. Logos live on the PRIVATE `logos`
+     * disk and are answered by MerchantLogoController — public while the
+     * store is active, owner/admin-only otherwise (MerchantLogo). Null when
+     * no logo is set; the raw storage path never leaves the API.
      */
-    private function logoUrl(?string $logoPath): ?string
+    private function logoUrl(string $slug, ?string $logoPath): ?string
     {
-        if ($logoPath === null || $logoPath === '') {
-            return null;
-        }
-
-        return Storage::disk('public')->url($logoPath);
+        return MerchantLogo::url($slug, $logoPath);
     }
 }

@@ -9,6 +9,7 @@ import {
   MapPin,
   Megaphone,
   Percent,
+  Plug,
   ReceiptText,
   SlidersHorizontal,
   Store,
@@ -44,7 +45,8 @@ export interface AppMenuSection {
  *  - staff    the counter: credit entry, plus every read screen;
  *  - manager  + cashback rate, product categories, promotions writes,
  *             settlement builder, branches;
- *  - owner    + store profile, bank account, staff accounts, preferences.
+ *  - owner    + store profile, bank account, staff accounts, API access,
+ *             preferences.
  *
  * Cosmetic only — the API enforces the same split server-side (403
  * `owner_required` / `manager_required`) on every route.
@@ -63,7 +65,7 @@ export const APP_MENU: AppMenuSection[] = [
   {
     label: 'Settings',
     // The whole section is hidden from staff; managers see the three
-    // operating screens, owners see all seven.
+    // operating screens, owners see all eight.
     minRole: 'manager',
     items: [
       { title: 'Cashback rate', path: '/settings/rate', icon: Percent },
@@ -81,6 +83,12 @@ export const APP_MENU: AppMenuSection[] = [
         minRole: 'owner',
       },
       { title: 'Staff', path: '/settings/staff', icon: Users, minRole: 'owner' },
+      {
+        title: 'API access',
+        path: '/settings/api-access',
+        icon: Plug,
+        minRole: 'owner',
+      },
       {
         title: 'Preferences',
         path: '/settings/preferences',

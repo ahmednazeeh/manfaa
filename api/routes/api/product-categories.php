@@ -11,12 +11,14 @@ use Laravel\Sanctum\Http\Middleware\CheckAbilities;
 // feeds the credit form, and posting credits is staff work — while creating
 // and changing categories reprices future sales and needs MANAGER or above
 // (PLAN §1: the line-item rate card is a manager's pricing surface), on
-// APPROVED stores only (pre-approval the setup wizard is the sole write
-// path).
+// TRADING stores only (EnsureMerchantApproved:trading — pre-approval the
+// setup wizard is the sole write path, and a suspended store's offer is
+// frozen with its rate and promotions: the rate card is the same commercial
+// surface, priced per line).
 Route::prefix('merchant')->middleware('auth:merchant')->group(function () {
     Route::get('product-categories', [ProductCategoriesController::class, 'index']);
 
-    Route::middleware(['merchant.role:manager', EnsureMerchantApproved::class])->group(function () {
+    Route::middleware(['merchant.role:manager', EnsureMerchantApproved::class.':trading'])->group(function () {
         Route::post('product-categories', [ProductCategoriesController::class, 'store']);
         Route::patch('product-categories/{id}', [ProductCategoriesController::class, 'update'])->whereNumber('id');
     });

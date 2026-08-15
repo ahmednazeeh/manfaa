@@ -180,6 +180,7 @@
     "categoryHint": "Curated list — customers browse stores by category.",
     "categoryPlaceholder": "Pick a category",
     "categoryInactive": "{{name}} (no longer offered)",
+    "categoryRetired": "This category was retired — please choose a new one. Your other changes still save.",
     "channelLabel": "Channel",
     "channelHint": "Controls where you appear in the customer app's discovery sections.",
     "contactEmail": "Contact email",
@@ -197,6 +198,82 @@
       "suspended": "Suspended",
       "closed": "Closed"
     }
+  },
+  "apiAccess": {
+    "title": "API access",
+    "subtitle": "Connect your till or online shop so sales reach Manfaa automatically",
+    "newCredential": "New credential",
+    "activeCount": "{{active}} of {{cap}} active credentials",
+    "empty": "No credentials yet. Create one when your POS company is ready to connect.",
+    "columnPartner": "Partner",
+    "columnPermissions": "Can do",
+    "columnCreated": "Created",
+    "columnLastUsed": "Last used",
+    "neverUsed": "Not used yet",
+    "issuedByStore": "Created by {{name}}",
+    "issuedByStoreUnknown": "your store",
+    "issuedByManfaa": "Issued by Manfaa",
+    "revoke": "Revoke",
+    "revokeTitle": "Revoke {{partner}}?",
+    "revokeBody": "This credential stops working immediately and cannot be restored. Sales already recorded with it are unaffected, and your other credentials keep working. Create a new one to reconnect.",
+    "revoked": "{{partner}} revoked",
+    "revokeFailed": "Could not revoke this credential.",
+    "revokedOn": "Revoked {{when}}",
+    "capTitle": "You have {{cap}} active credentials",
+    "capBody": "That is the maximum. Revoke one you no longer use, then create the new one.",
+    "wizardTitle": "New API credential",
+    "stepProgress": "Step {{current}} of {{total}}",
+    "step": {
+      "partner": "Who is connecting",
+      "permissions": "What they can do",
+      "review": "Check and create"
+    },
+    "partnerLabel": "Integration partner",
+    "partnerPlaceholder": "Your POS system or developer",
+    "partnerHint": "A name you will recognise later — it is how this credential is listed, and what you revoke if you change providers.",
+    "permissionsLabel": "Permissions",
+    "permissionsIntro": "Give only what this partner needs. You can revoke the credential at any time, but permissions cannot be changed afterwards — create a new one instead.",
+    "abilities": {
+      "transactionsWrite": {
+        "label": "Record sales",
+        "hint": "Send completed sales so your customers earn cashback."
+      },
+      "transactionsReverse": {
+        "label": "Reverse sales",
+        "hint": "Cancel the cashback on a sale that was refunded or voided at the till."
+      },
+      "ratesRead": {
+        "label": "Read your current rate",
+        "hint": "Show today's cashback percentage on the till or checkout screen."
+      },
+      "customersLookup": {
+        "label": "Look up customer codes",
+        "hint": "Check a 6-digit customer code and see a masked name before crediting."
+      },
+      "unknown": "Other permission"
+    },
+    "reversalsTitle": "Most tills need reversals",
+    "reversalsBody": "Without this, a refunded sale keeps its cashback and you still pay for it. Sending reversals is part of your integration agreement.",
+    "reviewNote": "This will be credential {{active}} of {{cap}}.",
+    "create": "Create credential",
+    "createFailed": "Could not create the credential.",
+    "rateLimited": "You have created several credentials in the last hour. Wait a little, then try again — or revoke and reuse an existing one.",
+    "storeNotTrading": "Your store is not active right now, so new credentials cannot be created. Revoking an existing one still works.",
+    "tokenTitle": "Token for {{partner}}",
+    "tokenOnceTitle": "Shown exactly once.",
+    "tokenOnceBody": "We keep only a scrambled copy, so you will not see this again. Copy it now and hand it to your partner over a channel you trust. If it is lost, revoke this credential and create another.",
+    "copyToken": "Copy token",
+    "tokenCopied": "Token copied",
+    "handoverHeading": "Your partner also needs",
+    "tokenAcknowledge": "I have copied this token and understand it will not be shown again.",
+    "tokenDone": "Done",
+    "guideTitle": "Connecting your till",
+    "guideBody": "Your POS company does the technical work: they send each eligible sale with the customer's 6-digit code, and Manfaa computes the cashback. Test everything against the sandbox first — nothing there is real.",
+    "baseUrlLabel": "Live address",
+    "sandboxUrlLabel": "Sandbox address",
+    "guideLink": "Integration guide",
+    "sandboxLink": "Sandbox instructions",
+    "sandboxNote": "Sandbox credentials are issued by us — ask for a set at"
   },
   "productCategories": {
     "title": "Product categories",

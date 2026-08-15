@@ -31,4 +31,20 @@ class ApiCredential extends Model
     {
         return $this->belongsTo(PosVendor::class);
     }
+
+    /**
+     * The merchant OWNER who self-issued this credential from the panel
+     * (§13b task #21), null for the admin-issued path — where `issued_by`
+     * names an admin_users row instead. The two are mutually exclusive by
+     * check constraint.
+     */
+    public function issuedByMerchantUser(): BelongsTo
+    {
+        return $this->belongsTo(MerchantUser::class, 'issued_by_merchant_user');
+    }
+
+    public function revokedByMerchantUser(): BelongsTo
+    {
+        return $this->belongsTo(MerchantUser::class, 'revoked_by_merchant_user');
+    }
 }

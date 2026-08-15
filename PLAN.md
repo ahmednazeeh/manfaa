@@ -35,6 +35,8 @@ Settled. Treat as constraints, not proposals.
 | Store categories | **Superadmin-curated list** — admin CRUD on store categories; stores pick from the list only (no free text). Distinct from per-store PRODUCT categories below. |
 | Product-category rates | **Line-item pricing** (decision 2026-08-15): stores define their own product categories with per-category overrides (excluded, or a rate). Credit form and /v1 accept optional `lines: [{category, amount}]`; each line prices at its category's rate (excluded → 0, unlisted → standing rate), per-line ceiling rounding then sum per §4; the split is stored on the transaction. Lines must sum to the eligible amount. No lines supplied → whole amount at the standing rate (back-compatible). |
 | Staff roles | Three tiers (decision 2026-08-15): **Owner** (everything), **Manager** (rates, promotions, settlements, branches — NOT bank account, staff management, or API credentials), **Staff** (credit entry + read-only). |
+| Store logos | **Every logo is served through an authorising controller** (decision 2026-08-15): files live on a private disk, and `GET /api/merchants/{slug}/logo` serves one publicly while the store is `active`, or to the store's own users / any admin otherwise — everyone else gets the same 404 an unknown slug gets. Rejected the alternative (private before approval, republished to the public disk on activation) as the more complex of the two correct options: it needs a publish step on every transition and lets a file's location and the store's status disagree. Previously logos sat on the public disk at the guessable `/storage/merchants/{id}/logo.png`, publishing the branding of every store that had merely started the wizard. |
+| Suspended-store writes | **Suspension freezes the commercial offer** (decision 2026-08-15, follows §7): a suspended (or closed) store cannot change its standing rate, create or publish promotions, or edit the product-category rate card — 409 `store_not_trading`. It creates no cashback, so any offer it set would be unhonourable, and a published promotion is immutable (§7) and would spring live on reinstatement. Everything that ENDS a suspension stays open: settling, receipts, profile, branches, staff, and every read. |
 
 **Open decision (category-terms resolution instant):** product-category
 overrides currently resolve at SUBMISSION time from the mutable category row,
@@ -301,6 +303,8 @@ Every step is a scheduled job writing a recorded outcome, so notice can be evide
 
 Suspension stops cashback **creation**, not ingestion. A suspended merchant's till keeps POSTing; accept and record those as ineligible with a reason code and a distinct response so the cashier sees something truthful.
 
+It also **freezes the offer** (decision 2026-08-15): while suspended or closed, a store cannot change its standing rate, create or publish a promotion, or edit its product-category rate card — the panel answers 409 `store_not_trading`. A store that cannot create cashback cannot honour a rate, a rate change would still fire `merchant.rate_changed` and move the till's quoted percentage, and a promotion is immutable once published (§7) so it would go live the moment the store is reinstated — after, and because of, the settlement conversation that reinstatement turns on. Everything a suspended merchant needs in order to STOP being suspended is deliberately untouched: settle, upload receipts, fix the profile, run branches and staff, read every screen.
+
 ---
 
 ## 8. Ledger postings
@@ -565,6 +569,14 @@ not overlap on the same app directory.
    CredentialService (pick partner + abilities, token shown once, list/
    revoke own credentials, integration-guide links, issuance rate-limited
    and audited).
+   **API-wizard half DONE** (2026-08-15): POST/DELETE /merchant/credentials
+   owner-only behind EnsureMerchantApproved, free-text partner `label` (the
+   pos_vendors registry stays admin-curated), merchant-user issuance audit
+   in its own columns, 5 issuances/hour per merchant (429) + 10 live
+   credentials (422 credential_cap_reached), suspended stores refused (409
+   store_not_trading) while revocation stays open; Settings › API access
+   wizard with plain-language abilities and the acknowledge-locked one-time
+   token panel. Branding half still open.
 4. **Task #17 — Phase 3 minors**: customer-code range excluding 7xxxxx/9xxxxx
    (truncated-phone collision), OTP register/verify races, LogSmsSender
    masking (MsgOwl now primary in prod — log driver is dev-only), claims-

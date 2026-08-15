@@ -22,14 +22,14 @@ use Illuminate\Support\Facades\RateLimiter;
  * refs exist and harvest name fragments. A till's legitimate misses are
  * typos by a customer standing at the counter, so failed lookups — code and
  * phone alike, one shared counter — are (a) written to the log as an audit
- * trail and (b) counted per credential — past MISS_LIMIT misses in a day,
- * every lookup on that credential answers 429 until the window rolls, and
- * the trip itself is logged loudly for operations. Successful lookups are
- * never throttled here (the shared vendor-api limit still applies).
+ * trail and (b) counted per MERCHANT — past MISS_LIMIT misses in a day,
+ * every lookup for that store answers 429 until the window rolls, and the
+ * trip itself is logged loudly for operations. Successful lookups are never
+ * throttled here (the shared vendor-api limit still applies).
  */
 class CustomerLookupController extends V1Controller
 {
-    /** Failed lookups tolerated per credential per rolling day. */
+    /** Failed lookups tolerated per merchant per rolling day. */
     public const int MISS_LIMIT = 60;
 
     private const int MISS_DECAY_SECONDS = 86_400;
@@ -107,12 +107,27 @@ class CustomerLookupController extends V1Controller
     }
 
     /**
-     * Misses are counted per CREDENTIAL (EnsureVendorCredential guarantees a
-     * real personal access token on every /v1 request), mirroring the
-     * vendor-api throttle's keying.
+     * Misses are counted per MERCHANT (EnsureVendorCredential guarantees the
+     * /v1 caller is a Merchant holding a real personal access token, so
+     * user()->getKey() is the merchant id).
+     *
+     * Deliberately NOT the vendor-api throttle's per-token keying. Since
+     * owners self-issue their own credentials (§13b task #21 — up to
+     * CredentialService::MAX_ACTIVE_PER_MERCHANT live at once, and freely
+     * revocable-and-reissuable), a per-token budget is one the store can
+     * multiply on demand: ten tokens would be ten times the misses, and a
+     * revoke/issue loop would make the ceiling unbounded. Keyed on the
+     * store, extra credentials share one allowance and buy an attacker
+     * nothing — the same reasoning the panel lookup already applies to extra
+     * staff accounts (Merchant\CustomerLookupController). The 120/min
+     * vendor-api throttle stays per token, where that keying is right: one
+     * flooding till must never starve its siblings.
+     *
+     * The `merchant:` segment keeps the namespace disjoint from the old
+     * per-token keys, so no live counter is inherited by an unrelated id.
      */
     private function missKey(Request $request): string
     {
-        return 'v1-lookup-miss:'.$request->user()->currentAccessToken()->getKey();
+        return 'v1-lookup-miss:merchant:'.$request->user()->getKey();
     }
 }

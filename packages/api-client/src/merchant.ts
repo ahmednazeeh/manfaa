@@ -714,12 +714,38 @@ export function cancelMerchantPromotion(
  * curated store-category list (no free text); `channel` replaces the former
  * `is_online` boolean.
  */
+/**
+ * The two lifecycle refusals the merchant panel can meet on a write, both
+ * `409` with `code` (read them with `apiErrorCode`):
+ *
+ *  - `store_not_approved` — the store has not passed review. Route the
+ *    owner back to the setup wizard.
+ *  - `store_not_trading` — the store is approved but SUSPENDED or CLOSED,
+ *    so it is not creating cashback (PLAN §7) and its commercial offer is
+ *    frozen: the standing rate, promotions and the product-category rate
+ *    card all refuse. Everything needed to END a suspension — settling,
+ *    receipts, profile, branches, staff, every read — stays open, so never
+ *    treat this as "the panel is locked".
+ */
+export const MerchantWriteGateCodeSchema = z.enum([
+  'store_not_approved',
+  'store_not_trading',
+]);
+export type MerchantWriteGateCode = z.infer<typeof MerchantWriteGateCodeSchema>;
+
 export const MerchantProfileSchema = z.object({
   id: z.number().int(),
   name: z.string(),
   slug: z.string(),
   status: MerchantStatusSchema,
   category: z.string().nullable(),
+  /**
+   * True when the store still holds a curated category the superadmin has
+   * since deactivated. Saving is NOT blocked by it — re-sending the
+   * unchanged value is accepted — but the picker cannot offer it any more,
+   * so the screen must say why and ask for a new pick.
+   */
+  category_retired: z.boolean(),
   /** Never rendered as the literal "both" — display "In Store & Online". */
   channel: MerchantChannelSchema,
   eligibility_basis: z.string().nullable(),
@@ -734,7 +760,12 @@ export type MerchantProfileResponse = z.infer<
 >;
 
 export const UpdateMerchantProfileRequestSchema = z.object({
-  /** An ACTIVE curated store-category slug (422 otherwise), or null. */
+  /**
+   * An ACTIVE curated store-category slug (422 otherwise), or null — with
+   * one exception: the value the store already holds is always accepted,
+   * even after the superadmin retires it, so a retired category can never
+   * block an edit to an unrelated field. Omit the key to leave it alone.
+   */
   category: z.string().max(80).nullable().optional(),
   channel: MerchantChannelSchema.optional(),
   eligibility_basis: z.string().max(2000).nullable().optional(),
@@ -1113,5 +1144,151 @@ export function lookupMerchantCustomer(
     `/api/merchant/customers/lookup?code=${encodeURIComponent(code)}`,
     CustomerLookupResponseSchema,
     { signal: options.signal },
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Settings — API access (owner only)
+// ---------------------------------------------------------------------------
+
+/**
+ * The closed set of abilities a vendor token can carry (PLAN §9.1). Every
+ * /v1 operation requires exactly one; a valid token lacking it answers 403.
+ * Mirrors App\Domain\Credentials\VendorAbility — the server rejects anything
+ * outside this list with a 422 on `abilities.*`.
+ */
+export const VENDOR_ABILITIES = [
+  'transactions:write',
+  'transactions:reverse',
+  'rates:read',
+  'customers:lookup',
+] as const;
+export const VendorAbilitySchema = z.enum(VENDOR_ABILITIES);
+export type VendorAbility = (typeof VENDOR_ABILITIES)[number];
+
+/**
+ * Narrows an ability string off the wire. Stored rows carry plain strings,
+ * so an older credential may name an ability this build predates — label
+ * helpers test with this and fall back to prose, never to the raw code.
+ */
+export function isVendorAbility(value: string): value is VendorAbility {
+  return (VENDOR_ABILITIES as readonly string[]).includes(value);
+}
+
+/**
+ * One issued credential, as both panels see it. There is deliberately no
+ * token material here — not the plaintext, not its digest, not the Sanctum
+ * token id. The plaintext exists exactly once, in the create response.
+ */
+export const MerchantCredentialSchema = z.object({
+  id: z.number().int(),
+  merchant_id: z.number().int(),
+  /** Set when Manfaa issued the credential against a curated POS vendor. */
+  pos_vendor: z.object({ id: z.number().int(), name: z.string() }).nullable(),
+  /** The partner name the merchant typed on the self-serve path. */
+  label: z.string().nullable(),
+  /** `pos_vendor.name ?? label`, resolved server-side so panels agree. */
+  display_name: z.string(),
+  abilities: z.array(z.string()),
+  issued_by: z.number().int().nullable(),
+  /**
+   * WHO minted it: `merchant_user` (this store, self-serve — `name` is the
+   * owner who did it) or `admin` (Manfaa at onboarding — no name is exposed
+   * to the merchant panel).
+   */
+  issuer: z.object({
+    type: z.enum(['merchant_user', 'admin', 'unknown']),
+    name: z.string().nullable(),
+  }),
+  revoked_by_type: z.enum(['merchant_user', 'admin', 'unknown']).nullable(),
+  /** Last time this token authenticated against /v1 — the "in use" signal. */
+  last_used_at: z.string().nullable(),
+  revoked_at: z.string().nullable(),
+  revoked_by: z.number().int().nullable(),
+  created_at: z.string().nullable(),
+});
+export type MerchantCredential = z.infer<typeof MerchantCredentialSchema>;
+
+export const MerchantCredentialListResponseSchema = z.object({
+  data: z.array(MerchantCredentialSchema),
+});
+export type MerchantCredentialListResponse = z.infer<
+  typeof MerchantCredentialListResponseSchema
+>;
+
+export const MerchantCredentialResponseSchema = dataWrapped(
+  MerchantCredentialSchema,
+);
+export type MerchantCredentialResponse = z.infer<
+  typeof MerchantCredentialResponseSchema
+>;
+
+export const CreateMerchantCredentialRequestSchema = z.object({
+  /** The integration partner, as the owner names it. 2–80 characters. */
+  label: z.string().min(2).max(80),
+  /** At least one, each from the closed set. */
+  abilities: z.array(VendorAbilitySchema).min(1),
+});
+export type CreateMerchantCredentialRequest = z.infer<
+  typeof CreateMerchantCredentialRequestSchema
+>;
+
+export const CreateMerchantCredentialResponseSchema = z.object({
+  /**
+   * The bearer token, returned EXACTLY once — only its SHA-256 digest is
+   * stored, so it is never recoverable. Show it immediately, then let the
+   * owner acknowledge that it is gone.
+   */
+  plaintext_token: z.string(),
+  credential: MerchantCredentialSchema,
+});
+export type CreateMerchantCredentialResponse = z.infer<
+  typeof CreateMerchantCredentialResponseSchema
+>;
+
+/** GET /api/merchant/credentials — newest first, revoked rows included. */
+export function listMerchantCredentials(
+  options: RequestOptions = {},
+): Promise<MerchantCredentialListResponse> {
+  return apiFetch(
+    '/api/merchant/credentials',
+    MerchantCredentialListResponseSchema,
+    { signal: options.signal },
+  );
+}
+
+/**
+ * POST /api/merchant/credentials — mints a vendor token (201) plus the
+ * one-time plaintext. Owner only. Refusals worth handling by code:
+ *
+ *  - `store_not_approved` (409) — the store has not passed review yet;
+ *  - `store_not_trading` (409) — suspended or closed; revocation still works;
+ *  - `credential_cap_reached` (422) — 10 live credentials already; revoke one;
+ *  - `issuance_rate_limited` (429) — 5 per hour per store, with Retry-After.
+ */
+export function createMerchantCredential(
+  body: CreateMerchantCredentialRequest,
+  options: RequestOptions = {},
+): Promise<CreateMerchantCredentialResponse> {
+  return apiFetch(
+    '/api/merchant/credentials',
+    CreateMerchantCredentialResponseSchema,
+    { method: 'POST', body, signal: options.signal },
+  );
+}
+
+/**
+ * DELETE /api/merchant/credentials/{id} — revokes ONE credential: the token
+ * stops authenticating on its next request, siblings are untouched, and the
+ * row survives as audit history. Another store's id answers 404.
+ */
+export function revokeMerchantCredential(
+  id: number,
+  options: RequestOptions = {},
+): Promise<MerchantCredentialResponse> {
+  return apiFetch(
+    `/api/merchant/credentials/${id}`,
+    MerchantCredentialResponseSchema,
+    { method: 'DELETE', signal: options.signal },
   );
 }

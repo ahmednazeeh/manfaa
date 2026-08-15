@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Merchant;
 
+use App\Domain\Discovery\DiscoveryService;
 use App\Domain\Platform\RateNotPricedException;
 use App\Domain\Platform\TierScheduleService;
 use App\Http\Controllers\Controller;
@@ -90,6 +91,11 @@ class ProductCategoriesController extends Controller
             ], 422);
         }
 
+        // The store page renders the per-category rate table
+        // (category_rates), cached 60s with the rest of the store read
+        // model — a new category must not take a minute to appear.
+        DiscoveryService::forgetMerchant($merchant);
+
         return (new ProductCategoryResource($category))->response($request)->setStatusCode(201);
     }
 
@@ -162,6 +168,8 @@ class ProductCategoriesController extends Controller
                 'code' => RateNotPricedException::CODE,
             ], 422);
         }
+
+        DiscoveryService::forgetMerchant($merchant);
 
         return (new ProductCategoryResource($category->refresh()))->response($request);
     }

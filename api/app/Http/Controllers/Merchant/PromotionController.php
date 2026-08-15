@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Merchant;
 
+use App\Domain\Discovery\DiscoveryService;
 use App\Domain\Platform\RateNotPricedException;
 use App\Domain\Promotions\BranchNotOwnedException;
 use App\Domain\Promotions\InvalidPromotionWindowException;
@@ -108,6 +109,13 @@ class PromotionController extends Controller
         } catch (InvalidPromotionWindowException|NoStandingRateException|PromotionRateNotBoostException $e) {
             abort(422, $e->getMessage());
         }
+
+        // A promotion that is already inside its window becomes the rate the
+        // storefront quotes the moment it publishes; drop the 60s read model
+        // so the card and store page do not keep advertising the standing
+        // rate (DiscoveryService::forgetMerchant). A future-dated window is
+        // dropped too — the entry simply rebuilds identically.
+        DiscoveryService::forgetMerchant($this->merchant($request));
 
         return new JsonResponse([
             'data' => (new PromotionResource($promotion))->resolve(),
