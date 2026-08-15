@@ -361,6 +361,7 @@ export function SplitEditor({
   categories,
   analysis,
   eligibleLaari,
+  onUseLinesTotal,
 }: {
   rows: SplitRow[];
   onRowsChange: (rows: SplitRow[]) => void;
@@ -368,6 +369,8 @@ export function SplitEditor({
   categories: ProductCategory[];
   analysis: SplitAnalysis;
   eligibleLaari: number | null;
+  /** Adopts the lines' own sum as the eligible amount, clearing a mismatch. */
+  onUseLinesTotal: () => void;
 }) {
   const { t, i18n } = useTranslation();
 
@@ -542,6 +545,19 @@ export function SplitEditor({
                   )}`,
                 })}
               </AlertDescription>
+              {/* The overwhelmingly common cause is a total typed before the
+                  split was itemised — usually the earning part only, with an
+                  excluded category left out. One click adopts the lines. */}
+              <Button
+                variant="outline"
+                size="sm"
+                className="mt-2 self-start"
+                onClick={onUseLinesTotal}
+              >
+                {t('creditSplit.useLinesTotal', {
+                  amount: formatMoney(analysis.sumLaari),
+                })}
+              </Button>
             </AlertContent>
           </Alert>
         )}

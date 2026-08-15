@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ApiError,
   bpToPercentString,
@@ -506,6 +506,15 @@ export default function CreditPage() {
         : (derivedFromSplitLaari / 100).toFixed(2);
     setEligibleInput((current) => (current === next ? current : next));
   }, [derivedFromSplitLaari, eligibleTouched]);
+
+  /**
+   * Resolve a mismatch the other way round: hand the field back to the split
+   * instead of retyping the total. Releasing `touched` is enough — the effect
+   * above writes the sum in and keeps it there as the lines change. The
+   * mismatch alert only shows when every row parses, so the sum it offers and
+   * the sum written here are the same number.
+   */
+  const handleUseLinesTotal = useCallback(() => setEligibleTouched(false), []);
   const saleLaari = useMemo(
     () => (saleInput.trim() === '' ? null : safeParseMvr(saleInput)),
     [saleInput],
@@ -915,6 +924,17 @@ export default function CreditPage() {
                     />{' '}
                     from the categories below.
                   </p>
+                ) : splitEnabled ? (
+                  /* Split mode changes what this figure means, and saying
+                     "the part cashback is computed on" here is what sends a
+                     cashier to type the earning part and then fail the sum:
+                     an excluded category is not eligible for cashback, yet it
+                     belongs in this total. */
+                  <p className="text-xs text-muted-foreground">
+                    Every part of the bill you are splitting below, including
+                    categories that earn nothing. Leave it blank and the lines
+                    add up for you.
+                  </p>
                 ) : (
                   <p className="text-xs text-muted-foreground">
                     The part of the bill cashback is computed on, per your
@@ -1051,6 +1071,7 @@ export default function CreditPage() {
                           ? eligibleLaari
                           : null
                       }
+                      onUseLinesTotal={handleUseLinesTotal}
                     />
                   </>
                 ) : (
