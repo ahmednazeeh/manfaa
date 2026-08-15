@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   ApiError,
   bpToPercentString,
@@ -410,6 +410,12 @@ export default function CreditPage() {
   const [code, setCode] = useState('');
   const [invoiceNo, setInvoiceNo] = useState('');
   const [eligibleInput, setEligibleInput] = useState('');
+  /**
+   * True once the cashier types in the total themselves. From then on their
+   * figure wins and the split stops writing into the field — clearing it
+   * hands control back.
+   */
+  const [eligibleTouched, setEligibleTouched] = useState(false);
   const [saleInput, setSaleInput] = useState('');
   const [occurredAt, setOccurredAt] = useState(nowLocalValue);
   const [result, setResult] = useState<CreditResult | null>(null);
@@ -471,17 +477,35 @@ export default function CreditPage() {
    */
   const derivedFromSplitLaari = useMemo(() => {
     if (!splitEnabled) return null;
-    const amounts = splitRows.map((row) =>
-      row.amount.trim() === '' ? null : safeParseMvr(row.amount),
-    );
-    if (amounts.length === 0) return null;
+    // A row still being filled in is skipped, not treated as a failure —
+    // "Add line" would otherwise blank the total the cashier just watched
+    // appear, until the new row is typed. A row with something UNPARSEABLE
+    // in it is a different matter: the sum would be a lie, so there is none.
+    const typed = splitRows.filter((row) => row.amount.trim() !== '');
+    if (typed.length === 0) return null;
+    const amounts = typed.map((row) => safeParseMvr(row.amount));
     if (amounts.some((amount) => amount === null || amount < 0)) return null;
     return amounts.reduce<number>((sum, amount) => sum + (amount as number), 0);
   }, [splitEnabled, splitRows]);
 
-  const eligibleIsDerived =
-    typedEligibleLaari === null && derivedFromSplitLaari !== null;
-  const eligibleLaari = typedEligibleLaari ?? derivedFromSplitLaari;
+  const eligibleIsDerived = !eligibleTouched && derivedFromSplitLaari !== null;
+  const eligibleLaari = eligibleTouched
+    ? typedEligibleLaari
+    : (derivedFromSplitLaari ?? typedEligibleLaari);
+
+  /**
+   * Keep the total field showing the split's sum so the cashier sees the
+   * figure being submitted in the box itself, not only in a hint. Plain
+   * digits, no separators, so re-parsing it is lossless.
+   */
+  useEffect(() => {
+    if (eligibleTouched) return;
+    const next =
+      derivedFromSplitLaari === null
+        ? ''
+        : (derivedFromSplitLaari / 100).toFixed(2);
+    setEligibleInput((current) => (current === next ? current : next));
+  }, [derivedFromSplitLaari, eligibleTouched]);
   const saleLaari = useMemo(
     () => (saleInput.trim() === '' ? null : safeParseMvr(saleInput)),
     [saleInput],
@@ -867,7 +891,10 @@ export default function CreditPage() {
                     id="eligible-amount"
                     inputMode="decimal"
                     value={eligibleInput}
-                    onChange={(event) => setEligibleInput(event.target.value)}
+                    onChange={(event) => {
+                      setEligibleInput(event.target.value);
+                      setEligibleTouched(event.target.value.trim() !== '');
+                    }}
                     placeholder="0.00"
                     aria-invalid={eligibleInvalid}
                   />
