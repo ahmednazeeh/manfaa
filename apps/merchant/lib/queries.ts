@@ -128,7 +128,12 @@ export function useMe() {
   return useQuery({
     queryKey: queryKeys.me,
     queryFn: ({ signal }) => fetchMe(signal),
-    retry: false,
+    // A rebuild or a restart makes this request fail for a second or two.
+    // Only a real 401 means the session is gone; anything else is the
+    // server being briefly unreachable, so retry rather than tell the
+    // user they are signed out.
+    retry: (failureCount, error) => !isUnauthorized(error) && failureCount < 3,
+    retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 4000),
     staleTime: 5 * 60 * 1000,
   });
 }
