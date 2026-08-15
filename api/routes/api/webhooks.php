@@ -3,7 +3,6 @@
 use App\Http\Controllers\Admin\WebhookEndpointController;
 use App\Http\Controllers\Merchant\RateController;
 use App\Http\Middleware\EnsureMerchantApproved;
-use App\Http\Middleware\EnsureMerchantOwner;
 use Illuminate\Support\Facades\Route;
 
 // §9.3 outbound webhooks + the §7 rate-change rules.
@@ -17,11 +16,12 @@ Route::prefix('admin')->middleware('auth:admin')->group(function () {
 });
 
 // Merchant panel: read the standing rate (any merchant user) and change it
-// (owner only — enforced in the controller, §7 increase/decrease semantics;
-// approved stores only — pre-approval the wizard's rate step is the sole
-// write path, with replace-the-initial-row semantics this endpoint lacks,
-// and a pending_review store must not reprice what the queue reviewed).
+// (MANAGER or above — PLAN §1 puts rates in the manager tier; also enforced
+// in the controller, §7 increase/decrease semantics; approved stores only —
+// pre-approval the wizard's rate step is the sole write path, with
+// replace-the-initial-row semantics this endpoint lacks, and a
+// pending_review store must not reprice what the queue reviewed).
 Route::prefix('merchant')->middleware('auth:merchant')->group(function () {
     Route::get('rate', [RateController::class, 'show']);
-    Route::post('rate', [RateController::class, 'store'])->middleware([EnsureMerchantOwner::class, EnsureMerchantApproved::class]);
+    Route::post('rate', [RateController::class, 'store'])->middleware(['merchant.role:manager', EnsureMerchantApproved::class]);
 });

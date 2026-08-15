@@ -3,7 +3,6 @@
 use App\Http\Controllers\Admin\PromotionsController as AdminPromotionsController;
 use App\Http\Controllers\Merchant\PromotionController;
 use App\Http\Middleware\EnsureMerchantApproved;
-use App\Http\Middleware\EnsureMerchantOwner;
 use Illuminate\Support\Facades\Route;
 
 // Promotions engine (PLAN §12 Phase 3). The merchant surface exposes only
@@ -16,9 +15,9 @@ use Illuminate\Support\Facades\Route;
 // rejected is never stranded with an uncancellable draft.
 Route::prefix('merchant')->middleware('auth:merchant')->group(function () {
     Route::get('promotions', [PromotionController::class, 'index']);
-    Route::post('promotions', [PromotionController::class, 'store'])->middleware([EnsureMerchantOwner::class, EnsureMerchantApproved::class]);
-    Route::post('promotions/{id}/publish', [PromotionController::class, 'publish'])->whereNumber('id')->middleware([EnsureMerchantOwner::class, EnsureMerchantApproved::class]);
-    Route::post('promotions/{id}/cancel', [PromotionController::class, 'cancel'])->whereNumber('id')->middleware(EnsureMerchantOwner::class);
+    Route::post('promotions', [PromotionController::class, 'store'])->middleware(['merchant.role:manager', EnsureMerchantApproved::class]);
+    Route::post('promotions/{id}/publish', [PromotionController::class, 'publish'])->whereNumber('id')->middleware(['merchant.role:manager', EnsureMerchantApproved::class]);
+    Route::post('promotions/{id}/cancel', [PromotionController::class, 'cancel'])->whereNumber('id')->middleware('merchant.role:manager');
 });
 
 Route::prefix('admin')->middleware('auth:admin')->group(function () {

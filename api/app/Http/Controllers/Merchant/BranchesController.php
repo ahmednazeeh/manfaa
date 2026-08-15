@@ -18,7 +18,8 @@ use Illuminate\Http\Response;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Owner management of merchant branches. Every {id} resolves through the
+ * Manager-or-owner management of merchant branches (PLAN §1 puts branches
+ * in the manager tier). Every {id} resolves through the
  * authenticated merchant's own relation — another merchant's branch is
  * indistinguishable from a missing one.
  *

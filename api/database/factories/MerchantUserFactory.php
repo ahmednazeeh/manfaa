@@ -41,4 +41,19 @@ class MerchantUserFactory extends Factory
             'role' => 'owner',
         ]);
     }
+
+    /** The middle tier (PLAN §1): rates, promotions, settlements, branches. */
+    public function manager(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'role' => 'manager',
+        ]);
+    }
+
+    public function staff(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'role' => 'staff',
+        ]);
+    }
 }

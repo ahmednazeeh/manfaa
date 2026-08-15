@@ -2,7 +2,6 @@
 
 use App\Http\Controllers\Merchant\SetupController;
 use App\Http\Controllers\Merchant\SignupController;
-use App\Http\Middleware\EnsureMerchantOwner;
 use Illuminate\Support\Facades\Route;
 
 // Store self-signup + setup wizard (§1 decision 2026-08-15).
@@ -23,7 +22,7 @@ Route::prefix('merchant/signup')->group(function () {
 // waiting screen from it); writes are gated in the domain layer to draft or
 // rejected stores — except the logo, which stays open to ACTIVE merchants
 // for post-approval changes and is also exposed under /merchant/settings.
-Route::prefix('merchant')->middleware(['auth:merchant', EnsureMerchantOwner::class])->group(function () {
+Route::prefix('merchant')->middleware(['auth:merchant', 'merchant.role:owner'])->group(function () {
     Route::get('setup', [SetupController::class, 'show']);
     Route::patch('setup/profile', [SetupController::class, 'updateProfile']);
     Route::post('setup/logo', [SetupController::class, 'storeLogo'])->middleware('throttle:20,1');

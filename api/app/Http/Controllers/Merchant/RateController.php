@@ -63,9 +63,10 @@ class RateController extends Controller
         $merchant = $this->merchant($request);
         $user = $request->user();
 
-        // Owner role only: staff can read the rate, never reprice the shop.
-        if (! $user instanceof MerchantUser || $user->role !== 'owner') {
-            abort(403, 'Only the merchant owner can change the cashback rate.');
+        // Manager or owner (PLAN §1): staff can read the rate, never
+        // reprice the shop. Belt-and-braces behind merchant.role:manager.
+        if (! $user instanceof MerchantUser || ! $user->hasRoleAtLeast('manager')) {
+            abort(403, 'Only a merchant owner or manager can change the cashback rate.');
         }
 
         // §4: integer basis points 50–2000 (the structural cap), or 4.995%

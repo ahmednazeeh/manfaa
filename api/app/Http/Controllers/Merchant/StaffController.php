@@ -16,8 +16,8 @@ use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Validation\Rule;
 
 /**
- * Owner management of merchant panel accounts (EnsureMerchantOwner gates
- * the routes). No DELETE — deactivation is the only removal. The generated
+ * Owner management of merchant panel accounts (merchant.role:owner gates
+ * the routes — a MANAGER cannot reach this surface at all). No DELETE — deactivation is the only removal. The generated
  * temporary password is returned exactly once, on creation, and never
  * again; every {id} resolves through the authenticated merchant's own
  * users relation.
@@ -36,12 +36,16 @@ class StaffController extends Controller
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'string', 'email', 'max:255', Rule::unique('merchant_users', 'email')],
+            // Optional tier; omitted means the back-compatible staff invite.
+            // An owner may assign any of the three (PLAN §1).
+            'role' => ['sometimes', 'string', Rule::in(MerchantUser::ROLES)],
         ]);
 
         [$user, $tempPassword] = $service->create(
             $this->merchant($request),
             $validated['name'],
             $validated['email'],
+            $validated['role'] ?? 'staff',
         );
 
         return new JsonResponse([
@@ -57,7 +61,7 @@ class StaffController extends Controller
         $target = $this->merchant($request)->users()->findOrFail($id);
 
         $validated = $request->validate([
-            'role' => ['sometimes', 'string', Rule::in(['owner', 'staff'])],
+            'role' => ['sometimes', 'string', Rule::in(MerchantUser::ROLES)],
             'is_active' => ['sometimes', 'boolean'],
         ]);
 

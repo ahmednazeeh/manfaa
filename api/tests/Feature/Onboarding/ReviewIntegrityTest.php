@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Models\AdminUser;
 use App\Models\Merchant;
+use App\Models\MerchantBranch;
 use App\Models\MerchantRate;
 use App\Models\MerchantUser;
 use App\Models\StoreCategory;
@@ -106,6 +107,79 @@ it('keeps the wizard as the only write path before approval', function (string $
 
     expect(MerchantRate::query()->where('merchant_id', $owner->merchant->id)->count())->toBe(1);
 })->with(['draft', 'rejected']);
+
+it('freezes the branch estate before approval, for the manager tier too', function (string $status) {
+    $owner = reviewFrozenOwner();
+    $merchant = $owner->merchant;
+    $merchant->update(['status' => $status]);
+
+    $branch = MerchantBranch::factory()->for($merchant)->create(['name' => 'Reviewed Branch']);
+    $manager = MerchantUser::factory()->for($merchant)->manager()->create();
+
+    // The manager tier widened WHO may touch branches; it must not widen
+    // WHEN. A store the queue is looking at cannot grow, rename or drop the
+    // estate behind the review — nor may a draft store build one outside
+    // the wizard.
+    foreach ([$owner, $manager] as $actor) {
+        $this->actingAs($actor, 'merchant');
+
+        // The read stays open — the panel renders it while the store waits.
+        $this->getJson('/api/merchant/branches')->assertOk();
+
+        $this->postJson('/api/merchant/branches', ['name' => 'Smuggled Outlet'])
+            ->assertStatus(409)->assertJsonPath('code', 'store_not_approved');
+        $this->patchJson("/api/merchant/branches/{$branch->id}", ['name' => 'Renamed'])
+            ->assertStatus(409)->assertJsonPath('code', 'store_not_approved');
+        $this->deleteJson("/api/merchant/branches/{$branch->id}")
+            ->assertStatus(409)->assertJsonPath('code', 'store_not_approved');
+    }
+
+    expect(MerchantBranch::query()->where('merchant_id', $merchant->id)->pluck('name')->all())
+        ->toBe(['Reviewed Branch']);
+})->with(['draft', 'pending_review', 'rejected']);
+
+it('refuses to mint a panel account the store cannot let anyone use yet', function (string $status) {
+    $owner = reviewFrozenOwner();
+    $owner->merchant->update(['status' => $status]);
+
+    $this->actingAs($owner, 'merchant');
+
+    // Pre-approval the panel is off-limits and the only screen is the
+    // owner-only wizard, so an invited manager or staff account would land
+    // on a permissions wall with nothing but logout. Refuse the invite
+    // instead of creating the dead end.
+    foreach (['staff', 'manager', 'owner'] as $role) {
+        $this->postJson('/api/merchant/staff', [
+            'name' => 'Too Early',
+            'email' => "too.early.{$role}@example.com",
+            'role' => $role,
+        ])->assertStatus(409)->assertJsonPath('code', 'store_not_approved');
+    }
+
+    // The roster is still the founding owner alone; the read stays open.
+    $this->getJson('/api/merchant/staff')->assertOk()->assertJsonCount(1, 'data');
+
+    expect(MerchantUser::query()->where('merchant_id', $owner->merchant->id)->count())->toBe(1);
+})->with(['draft', 'pending_review', 'rejected']);
+
+it('opens branch writes and staff invites the moment the store is approved', function () {
+    $merchant = reviewFrozenOwner()->merchant;
+
+    $this->actingAs(AdminUser::factory()->create(['role' => 'superadmin']), 'admin')
+        ->postJson("/api/admin/store-reviews/{$merchant->id}/approve")
+        ->assertOk()
+        ->assertJsonPath('data.status', 'active');
+
+    $owner = MerchantUser::query()->where('merchant_id', $merchant->id)->firstOrFail();
+    $this->actingAs($owner, 'merchant');
+
+    $this->postJson('/api/merchant/branches', ['name' => 'Now Allowed'])->assertCreated();
+    $this->postJson('/api/merchant/staff', [
+        'name' => 'Now Allowed',
+        'email' => 'now.allowed@example.com',
+        'role' => 'manager',
+    ])->assertCreated();
+});
 
 it('re-validates completeness at approval instead of activating a gutted store', function () {
     $merchant = reviewFrozenOwner()->merchant;

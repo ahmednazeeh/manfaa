@@ -5,6 +5,8 @@ import { MoneyText } from '@manfaa/ui';
 import { HandCoins } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useOutstanding, useWallet } from '@/lib/queries';
+import { hasRoleAtLeast } from '@/lib/roles';
+import { useLayout } from '@/components/app-layout/context';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -68,6 +70,10 @@ function BucketCard({
 }
 
 export default function DashboardPage() {
+  const { me } = useLayout();
+  // Staff read the ageing but never open the settlement builder — creating
+  // a batch is manager work (PLAN §1), and the API refuses the POST anyway.
+  const canManage = hasRoleAtLeast(me.role, 'manager');
   const outstanding = useOutstanding();
   const wallet = useWallet();
 
@@ -80,14 +86,16 @@ export default function DashboardPage() {
             Outstanding cashback and fees by age — settle within 15 days
           </ToolbarDescription>
         </ToolbarHeading>
-        <ToolbarActions>
-          <Button asChild disabled={outstanding.data?.total.count === 0}>
-            <Link href="/settlements/new">
-              <HandCoins />
-              Settle now
-            </Link>
-          </Button>
-        </ToolbarActions>
+        {canManage && (
+          <ToolbarActions>
+            <Button asChild disabled={outstanding.data?.total.count === 0}>
+              <Link href="/settlements/new">
+                <HandCoins />
+                Settle now
+              </Link>
+            </Button>
+          </ToolbarActions>
+        )}
       </Toolbar>
 
       {outstanding.error ? (

@@ -37,13 +37,26 @@ import {
   LoadingBlock,
 } from '@/components/app/async-states';
 import { ListPagination } from '@/components/app/list-pagination';
+import { RoleGate } from '@/components/app/role-gate';
 
 /**
  * Settlement builder (§10): pick outstanding (payable) transactions or
  * settle everything at once. Creates a draft batch, then hands over to the
  * settlement detail screen for submit + payment instructions.
  */
+/**
+ * Creating a batch is manager-or-owner work (PLAN §1) — the whole screen
+ * is a settlement mutation, so it is gated rather than merely read-only.
+ */
 export default function NewSettlementPage() {
+  return (
+    <RoleGate min="manager">
+      <NewSettlementScreen />
+    </RoleGate>
+  );
+}
+
+function NewSettlementScreen() {
   const router = useRouter();
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<Set<number>>(new Set());

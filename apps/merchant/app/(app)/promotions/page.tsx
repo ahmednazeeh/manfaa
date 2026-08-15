@@ -13,6 +13,7 @@ import { MoneyText } from '@manfaa/ui';
 import { format } from 'date-fns';
 import { LoaderCircle, Plus, TriangleAlert, X } from 'lucide-react';
 import { formatBp } from '@/lib/estimate';
+import { hasRoleAtLeast } from '@/lib/roles';
 import {
   apiErrorMessage,
   isRateNotPriced,
@@ -502,11 +503,13 @@ function DraftActions({
 
 export default function PromotionsPage() {
   const { me } = useLayout();
-  const isOwner = me.role === 'owner';
+  // Promotions are manager work (PLAN §1) — staff read the list, managers
+  // and owners build them.
+  const canManage = hasRoleAtLeast(me.role, 'manager');
 
   const promotions = usePromotions();
   const rate = useRate();
-  const branches = useBranches(isOwner);
+  const branches = useBranches(canManage);
 
   const [builderOpen, setBuilderOpen] = useState(false);
   const [preview, setPreview] = useState<PromotionCostPreview | null>(null);
@@ -530,7 +533,7 @@ export default function PromotionsPage() {
             Time-boxed cashback boosts above your standing rate
           </ToolbarDescription>
         </ToolbarHeading>
-        {isOwner && (
+        {canManage && (
           <ToolbarActions>
             <Button
               onClick={() => setBuilderOpen(true)}
@@ -544,7 +547,7 @@ export default function PromotionsPage() {
       </Toolbar>
 
       <div className="flex flex-col gap-5 pb-7.5">
-        {isOwner && builderOpen && (
+        {canManage && builderOpen && (
           <PromotionBuilder
             standingRateBp={standingRateBp}
             onCreated={setPreview}
@@ -562,7 +565,7 @@ export default function PromotionsPage() {
           <Card>
             <EmptyBlock>
               No promotions yet.
-              {isOwner && ' Create one to boost your cashback for a while.'}
+              {canManage && ' Create one to boost your cashback for a while.'}
             </EmptyBlock>
           </Card>
         ) : (
@@ -581,7 +584,7 @@ export default function PromotionsPage() {
                     <TableHead>Per-customer cap</TableHead>
                     <TableHead>Branch</TableHead>
                     <TableHead>Status</TableHead>
-                    {isOwner && <TableHead className="text-end" />}
+                    {canManage && <TableHead className="text-end" />}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -641,7 +644,7 @@ export default function PromotionsPage() {
                           live={promotion.is_live}
                         />
                       </TableCell>
-                      {isOwner && (
+                      {canManage && (
                         <TableCell>
                           {promotion.status === 'draft' && (
                             <DraftActions

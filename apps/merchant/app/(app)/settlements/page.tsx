@@ -4,6 +4,8 @@ import { useState } from 'react';
 import { MoneyText } from '@manfaa/ui';
 import { Plus } from 'lucide-react';
 import { useSettlements } from '@/lib/queries';
+import { hasRoleAtLeast } from '@/lib/roles';
+import { useLayout } from '@/components/app-layout/context';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -38,6 +40,8 @@ import { ListPagination } from '@/components/app/list-pagination';
 import { SettlementStateBadge } from '@/components/app/state-badge';
 
 export default function SettlementsPage() {
+  const { me } = useLayout();
+  const canManage = hasRoleAtLeast(me.role, 'manager');
   const [page, setPage] = useState(1);
   const settlements = useSettlements(page);
 
@@ -51,14 +55,18 @@ export default function SettlementsPage() {
             settling
           </ToolbarDescription>
         </ToolbarHeading>
-        <ToolbarActions>
-          <Button asChild>
-            <Link href="/settlements/new">
-              <Plus />
-              New settlement
-            </Link>
-          </Button>
-        </ToolbarActions>
+        {/* Building a batch is manager work (PLAN §1); staff read the
+            list. The API gates the POST identically. */}
+        {canManage && (
+          <ToolbarActions>
+            <Button asChild>
+              <Link href="/settlements/new">
+                <Plus />
+                New settlement
+              </Link>
+            </Button>
+          </ToolbarActions>
+        )}
       </Toolbar>
 
       <Card className="mb-7.5">

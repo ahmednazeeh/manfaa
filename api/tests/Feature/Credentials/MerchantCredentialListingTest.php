@@ -28,7 +28,9 @@ it('lists only the merchant\'s own credentials with vendor, abilities, last_used
         'last_used_at' => CarbonImmutable::parse('2026-08-14T09:30:00+00:00'),
     ])->save();
 
-    $merchantUser = MerchantUser::factory()->for($merchant)->create();
+    // Owner-only surface (PLAN §1: API credentials sit outside the manager
+    // tier) — the listing names every POS vendor holding a write token.
+    $merchantUser = MerchantUser::factory()->for($merchant)->owner()->create();
 
     $response = $this->actingAs($merchantUser, 'merchant')
         ->getJson('/api/merchant/credentials')
@@ -60,4 +62,17 @@ it('lists only the merchant\'s own credentials with vendor, abilities, last_used
 
 it('requires a merchant session', function () {
     $this->getJson('/api/merchant/credentials')->assertUnauthorized();
+});
+
+it('hides the credential listing from managers and staff', function () {
+    $merchant = Merchant::factory()->create();
+
+    foreach (['manager', 'staff'] as $role) {
+        $user = MerchantUser::factory()->for($merchant)->create(['role' => $role]);
+
+        $this->actingAs($user, 'merchant')
+            ->getJson('/api/merchant/credentials')
+            ->assertForbidden()
+            ->assertJsonPath('code', 'owner_required');
+    }
 });

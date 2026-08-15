@@ -21,8 +21,8 @@ use Illuminate\Validation\ValidationException;
  * Merchant CRUD for per-store product categories (Task #25).
  *
  * - GET is STAFF-readable — it feeds the credit form (staff key in manual
- *   credits); POST/PATCH are owner-only behind EnsureMerchantOwner +
- *   EnsureMerchantApproved (route-level split).
+ *   credits); POST/PATCH need MANAGER or above behind
+ *   merchant.role:manager + EnsureMerchantApproved (route-level split).
  * - The slug is generated from name_en at creation and is IMMUTABLE:
  *   renames never touch it (it is the public line key vendors integrate
  *   against, and transaction_lines snapshot it).

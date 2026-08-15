@@ -149,6 +149,23 @@
     "editAndResubmit": "Edit and resubmit",
     "notEditable": "The setup can't be changed right now — refresh to see the latest status."
   },
+  "roles": {
+    "owner": "Owner",
+    "manager": "Manager",
+    "staff": "Staff",
+    "ownerHint": "Everything — including the bank account, staff accounts and API access.",
+    "managerHint": "Runs the shop — cashback rate, promotions, settlements, branches and product categories. No bank account, staff accounts or API access.",
+    "staffHint": "Credits customers at the counter and reads the screens — changes no settings.",
+    "pickerLabel": "Role",
+    "inviteHint": "You can change this later on this screen.",
+    "changed": "{{name}} is now {{role}}",
+    "gate": {
+      "ownerTitle": "Owner access only",
+      "ownerBody": "Only the account owner can change this. Ask the owner of {{store}} if something here needs to change.",
+      "managerTitle": "Managers and owners only",
+      "managerBody": "This screen is for managers and the account owner. Ask a manager at {{store}} if something here needs to change."
+    }
+  },
   "settings": {
     "profileTitle": "Profile",
     "profileSubtitle": "What customers see about your store",

@@ -20,8 +20,10 @@ import {
   useWallet,
   useWalletSettle,
 } from '@/lib/queries';
+import { hasRoleAtLeast } from '@/lib/roles';
 import { cn } from '@/lib/utils';
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
+import { useLayout } from '@/components/app-layout/context';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -253,6 +255,10 @@ export default function SettlementDetailPage({
 }) {
   const { id: idParam } = use(params);
   const id = Number(idParam);
+  const { me } = useLayout();
+  // Submit and wallet-settle are settlement MUTATIONS — manager or owner
+  // (PLAN §1). Staff keep the read-only view of the batch.
+  const canManage = hasRoleAtLeast(me.role, 'manager');
   const settlementQuery = useSettlement(id);
   const wallet = useWallet();
   const submitMutation = useSubmitSettlement(id);
@@ -315,7 +321,7 @@ export default function SettlementDetailPage({
           </ToolbarDescription>
         </ToolbarHeading>
         <ToolbarActions>
-          {settlement.state === 'draft' && (
+          {settlement.state === 'draft' && canManage && (
             <Button onClick={handleSubmit} disabled={submitMutation.isPending}>
               {submitMutation.isPending ? (
                 <LoaderCircle className="animate-spin" />
@@ -361,7 +367,9 @@ export default function SettlementDetailPage({
                   <Button
                     variant="outline"
                     disabled={
-                      !walletSufficient || walletSettleMutation.isPending
+                      !canManage ||
+                      !walletSufficient ||
+                      walletSettleMutation.isPending
                     }
                     onClick={handleWalletSettle}
                   >

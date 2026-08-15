@@ -13,7 +13,9 @@ use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
 /**
- * Owner-editable merchant profile (EnsureMerchantOwner gates the routes).
+ * The merchant profile: readable by a manager, editable by the owner
+ * alone (the route gates are merchant.role:manager on GET,
+ * merchant.role:owner on PATCH).
  * Deliberately excluded: `name` — renaming the business is an identity
  * change and stays admin-only; unknown keys are simply not validated in,
  * so a POSTed `name` is dropped on the floor.

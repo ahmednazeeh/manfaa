@@ -12,8 +12,9 @@ import {
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
+import { hasRoleAtLeast } from '@/lib/roles';
 import { useLayout } from './context';
-import { APP_MENU } from './menu';
+import { APP_MENU, itemMinRole } from './menu';
 
 const classNames: AccordionMenuClassNames = {
   root: 'lg:ps-1 space-y-3',
@@ -32,11 +33,16 @@ export function SidebarMenu({ className }: { className?: string }) {
     [pathname],
   );
 
-  // Owner-only sections are hidden from staff. Navigation cosmetics only —
-  // the API's owner gate (403 owner_required) is the actual enforcement.
-  const sections = APP_MENU.filter(
-    (section) => !section.ownerOnly || me.role === 'owner',
-  );
+  // Each entry is hidden below its tier — staff never see Settings at all,
+  // managers see the operating three, owners see everything (PLAN §1).
+  // Navigation cosmetics only: the API's role gate (403 owner_required /
+  // manager_required) is the actual enforcement.
+  const sections = APP_MENU.map((section) => ({
+    ...section,
+    items: section.items.filter((item) =>
+      hasRoleAtLeast(me.role, itemMinRole(section, item)),
+    ),
+  })).filter((section) => section.items.length > 0);
 
   return (
     <ScrollArea

@@ -2,6 +2,7 @@ import {
   apiFetch,
   bootstrapCsrf,
   dataWrapped,
+  MerchantStaffRoleSchema,
   MerchantStatusSchema,
   paginated,
   RateDescriptionSchema,
@@ -21,7 +22,8 @@ export const MerchantMeSchema = z.object({
   id: z.number().int(),
   name: z.string(),
   email: z.email(),
-  role: z.string(),
+  /** owner | manager | staff — the panel gates its nav and screens on it. */
+  role: MerchantStaffRoleSchema,
   merchant: z.object({
     id: z.number().int(),
     name: z.string(),

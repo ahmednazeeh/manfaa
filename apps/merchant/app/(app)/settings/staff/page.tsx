@@ -4,8 +4,10 @@ import { useState } from 'react';
 import {
   type CreateMerchantStaffResponse,
   type MerchantStaff,
+  type MerchantStaffRole,
 } from '@manfaa/api-client';
 import { Copy, KeyRound, LoaderCircle, Plus, UserRound } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
 import {
   apiErrorMessage,
@@ -76,6 +78,28 @@ import {
  * here as disabled controls so the dead end is visible before the request.
  */
 
+/**
+ * The three tiers, highest first. The picker lists the names only — the
+ * selected tier's one-line description is rendered under the control, the
+ * pattern the rest of the panel uses (profile channel, setup wizard), and
+ * the one that keeps the closed trigger to a single word.
+ */
+const ROLE_OPTIONS: MerchantStaffRole[] = ['owner', 'manager', 'staff'];
+
+function RoleOptions() {
+  const { t } = useTranslation();
+
+  return (
+    <>
+      {ROLE_OPTIONS.map((role) => (
+        <SelectItem key={role} value={role}>
+          {t(`roles.${role}`)}
+        </SelectItem>
+      ))}
+    </>
+  );
+}
+
 function CreateStaffDialog({
   open,
   onOpenChange,
@@ -85,16 +109,18 @@ function CreateStaffDialog({
   onOpenChange: (open: boolean) => void;
   onCreated: (response: CreateMerchantStaffResponse) => void;
 }) {
+  const { t } = useTranslation();
   const createStaff = useCreateStaff();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
+  const [role, setRole] = useState<MerchantStaffRole>('staff');
 
   const canSubmit =
     name.trim() !== '' && email.trim() !== '' && !createStaff.isPending;
 
   const submit = () => {
     createStaff.mutate(
-      { name: name.trim(), email: email.trim() },
+      { name: name.trim(), email: email.trim(), role },
       {
         onSuccess: (response) => {
           onCreated(response);
@@ -111,7 +137,7 @@ function CreateStaffDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>New staff account</DialogTitle>
+          <DialogTitle>New account</DialogTitle>
         </DialogHeader>
         <DialogBody className="flex flex-col gap-5">
           <div className="flex flex-col gap-2.5">
@@ -133,8 +159,24 @@ function CreateStaffDialog({
               onChange={(event) => setEmail(event.target.value)}
             />
             <p className="text-xs text-muted-foreground">
-              They log in with this email. New accounts start as staff — they
-              can credit customers and read screens, not change settings.
+              They log in with this email.
+            </p>
+          </div>
+          <div className="flex flex-col gap-2.5">
+            <Label htmlFor="staff-role">{t('roles.pickerLabel')}</Label>
+            <Select
+              value={role}
+              onValueChange={(value) => setRole(value as MerchantStaffRole)}
+            >
+              <SelectTrigger id="staff-role">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <RoleOptions />
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              {t(`roles.${role}Hint`)} {t('roles.inviteHint')}
             </p>
           </div>
         </DialogBody>
@@ -246,6 +288,7 @@ function TempPasswordDialog({
 }
 
 export default function StaffSettingsPage() {
+  const { t } = useTranslation();
   const { me } = useLayout();
   const staff = useStaff();
   const updateStaff = useUpdateStaff();
@@ -260,7 +303,7 @@ export default function StaffSettingsPage() {
 
   const mutate = (
     user: MerchantStaff,
-    body: { role?: 'owner' | 'staff'; is_active?: boolean },
+    body: { role?: MerchantStaffRole; is_active?: boolean },
     success: string,
   ) => {
     updateStaff.mutate(
@@ -281,8 +324,8 @@ export default function StaffSettingsPage() {
         <ToolbarHeading>
           <ToolbarPageTitle>Staff</ToolbarPageTitle>
           <ToolbarDescription>
-            Panel accounts for your store — owners change settings, staff
-            credit customers
+            Panel accounts for your store — owners change everything,
+            managers run the shop, staff credit customers
           </ToolbarDescription>
         </ToolbarHeading>
         <ToolbarActions>
@@ -347,12 +390,16 @@ export default function StaffSettingsPage() {
                         <TableCell>
                           <Badge
                             variant={
-                              user.role === 'owner' ? 'primary' : 'secondary'
+                              user.role === 'owner'
+                                ? 'primary'
+                                : user.role === 'manager'
+                                  ? 'info'
+                                  : 'secondary'
                             }
                             appearance="light"
                             size="sm"
                           >
-                            {user.role}
+                            {t(`roles.${user.role}`)}
                           </Badge>
                         </TableCell>
                         <TableCell>
@@ -372,21 +419,23 @@ export default function StaffSettingsPage() {
                               onValueChange={(value) =>
                                 mutate(
                                   user,
-                                  { role: value as 'owner' | 'staff' },
-                                  `${user.name} is now ${value}`,
+                                  { role: value as MerchantStaffRole },
+                                  t('roles.changed', {
+                                    name: user.name,
+                                    role: t(`roles.${value}`),
+                                  }),
                                 )
                               }
                             >
                               <SelectTrigger
-                                className="w-28"
+                                className="w-32"
                                 size="sm"
                                 aria-label={`Role of ${user.name}`}
                               >
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="owner">Owner</SelectItem>
-                                <SelectItem value="staff">Staff</SelectItem>
+                                <RoleOptions />
                               </SelectContent>
                             </Select>
                             <div className="flex items-center gap-2">
@@ -410,6 +459,9 @@ export default function StaffSettingsPage() {
                                 }
                               />
                             </div>
+                          </div>
+                          <div className="text-xs text-muted-foreground mt-1">
+                            {t(`roles.${user.role}Hint`)}
                           </div>
                           {locked && (
                             <div className="text-xs text-muted-foreground mt-1">

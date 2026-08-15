@@ -1,45 +1,22 @@
 'use client';
 
 import { ReactNode } from 'react';
-import { ShieldAlert } from 'lucide-react';
-import { useLayout } from '@/components/app-layout/context';
-import {
-  Alert,
-  AlertContent,
-  AlertDescription,
-  AlertIcon,
-  AlertTitle,
-} from '@/components/ui/alert';
+import { usePathname } from 'next/navigation';
+import { minRoleForPath } from '@/components/app-layout/menu';
+import { RoleGate } from '@/components/app/role-gate';
 
 /**
- * Settings are owner-only. This client-side gate is a courtesy for staff
- * who deep-link in — the sidebar already hides the section — while the API
- * enforces the same rule server-side (403 owner_required) on every route.
+ * Settings screens split across the tiers (PLAN §1): cashback rate, product
+ * categories and branches are manager work; profile, bank account, staff
+ * accounts and preferences stay with the owner. The required tier comes
+ * from the menu, so the sidebar and this gate can never disagree.
+ *
+ * Client-side courtesy for anyone who deep-links past a hidden nav entry —
+ * the API enforces the same split server-side (403 owner_required /
+ * manager_required) on every route.
  */
 export default function SettingsLayout({ children }: { children: ReactNode }) {
-  const { me } = useLayout();
+  const pathname = usePathname();
 
-  if (me.role !== 'owner') {
-    return (
-      <div className="container">
-        <div className="max-w-lg pt-10">
-          <Alert variant="warning" appearance="light">
-            <AlertIcon>
-              <ShieldAlert />
-            </AlertIcon>
-            <AlertContent>
-              <AlertTitle>Owner access only</AlertTitle>
-              <AlertDescription>
-                Store settings can only be changed by the account owner. Ask
-                the owner of {me.merchant.name} if something here needs to
-                change.
-              </AlertDescription>
-            </AlertContent>
-          </Alert>
-        </div>
-      </div>
-    );
-  }
-
-  return <>{children}</>;
+  return <RoleGate min={minRoleForPath(pathname)}>{children}</RoleGate>;
 }

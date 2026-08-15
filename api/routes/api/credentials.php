@@ -16,6 +16,10 @@ Route::prefix('admin')->middleware('auth:admin')->group(function () {
     Route::delete('credentials/{credential}', [CredentialController::class, 'destroy']);
 });
 
-Route::prefix('merchant')->middleware('auth:merchant')->group(function () {
+// The merchant's own credential read model is OWNER-only (PLAN §1: API
+// credentials are explicitly outside the manager tier) — it names the POS
+// vendors holding write tokens against the store, which is integration
+// governance, not shop-floor work.
+Route::prefix('merchant')->middleware(['auth:merchant', 'merchant.role:owner'])->group(function () {
     Route::get('credentials', [MerchantCredentialController::class, 'index']);
 });

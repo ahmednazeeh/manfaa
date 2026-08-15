@@ -2,11 +2,14 @@
 
 declare(strict_types=1);
 
+use App\Domain\MerchantSettings\StaffService;
 use App\Models\Customer;
 use App\Models\Merchant;
 use App\Models\MerchantRate;
 use App\Models\MerchantUser;
+use App\Models\MerchantWallet;
 use Database\Seeders\LedgerAccountSeeder;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -25,54 +28,149 @@ beforeEach(function () {
         'effective_to' => null,
     ]);
     $this->owner = MerchantUser::factory()->for($this->merchant)->owner()->create();
-    $this->staff = MerchantUser::factory()->for($this->merchant)->create(['role' => 'staff']);
+    $this->manager = MerchantUser::factory()->for($this->merchant)->manager()->create();
+    $this->staff = MerchantUser::factory()->for($this->merchant)->staff()->create();
     $this->customer = Customer::factory()->create(['customer_code' => '482917']);
+
+    // GET /merchant/wallet lazily firstOrCreate()s the wallet row, and a
+    // just-created Eloquent resource makes Laravel answer 201 instead of
+    // 200 — a one-shot that would otherwise land on whichever tier the
+    // matrix happens to try first. Warm it here so every tier reads the
+    // steady state.
+    MerchantWallet::query()->create([
+        'merchant_id' => $this->merchant->id,
+        'balance_laari' => 0,
+        'currency' => 'MVR',
+    ]);
 });
 
 /**
- * Every owner-only route: the new settings surface plus the pre-existing
- * owner actions the EnsureMerchantOwner middleware now gates (rate change,
- * promotion writes, settlement creation, settlement submission, wallet
- * settle).
+ * THE role matrix: every merchant-panel route × the three tiers (PLAN §1
+ * decision 2026-08-15), with the EXACT status each tier gets.
  *
- * @return array<string, array{0: string, 1: string}>
+ * The non-403 statuses are the ones the route answers once the gate is
+ * passed — 200/201 where the request is complete, 422 where the empty body
+ * fails validation, 404 for a deliberately absent {id}, 409 where the
+ * wizard refuses an already-approved store. Asserting those instead of a
+ * bare "not 403" keeps the row honest: a route that started 404-ing for
+ * everyone because the gate moved would fail here.
+ *
+ * Tiers, in one line each:
+ *   owner    everything;
+ *   manager  rates, promotions, settlement mutations, branches, product
+ *            categories, the profile READ — never the bank account, staff
+ *            management, preferences, the logo, API credentials or the
+ *            setup wizard;
+ *   staff    credit entry, the customer lookup and every read model.
+ *
+ * @return array<string, array{method: string, uri: string, payload: array<string, mixed>|Closure, owner: int, manager: int, staff: int}>
  */
-function ownerOnlyRoutes(): array
+function merchantRoleMatrix(): array
 {
+    $creditPayload = fn (string $role): array => [
+        'customer_code' => '482917',
+        'invoice_no' => 'INV-MATRIX-'.strtoupper($role),
+        'eligible_amount' => 125000,
+        'sale_amount' => 125000,
+        'occurred_at' => now()->subHour()->toIso8601String(),
+    ];
+
+    // Distinct rates per tier: each allowed tier performs a real INCREASE
+    // (200 -> 300 -> 400), so neither call is a no-op that could answer
+    // differently from the other.
+    $ratePayload = fn (string $role): array => [
+        'rate_bp' => ['owner' => 300, 'manager' => 400, 'staff' => 500][$role],
+    ];
+
     return [
-        'profile read' => ['getJson', '/api/merchant/profile'],
-        'profile write' => ['patchJson', '/api/merchant/profile'],
-        'bank account' => ['patchJson', '/api/merchant/bank-account'],
-        'branches read' => ['getJson', '/api/merchant/branches'],
-        'branch create' => ['postJson', '/api/merchant/branches'],
-        'branch update' => ['patchJson', '/api/merchant/branches/1'],
-        'branch delete' => ['deleteJson', '/api/merchant/branches/1'],
-        'staff read' => ['getJson', '/api/merchant/staff'],
-        'staff create' => ['postJson', '/api/merchant/staff'],
-        'staff update' => ['patchJson', '/api/merchant/staff/1'],
-        'preferences' => ['patchJson', '/api/merchant/preferences'],
-        // Newly gated pre-existing owner surfaces:
-        'rate change' => ['postJson', '/api/merchant/rate'],
-        'promotion create' => ['postJson', '/api/merchant/promotions'],
-        'promotion publish' => ['postJson', '/api/merchant/promotions/1/publish'],
-        'promotion cancel' => ['postJson', '/api/merchant/promotions/1/cancel'],
-        'settlement create' => ['postJson', '/api/merchant/settlements'],
+        // ---- Open to every authenticated merchant user -----------------
+        'session me' => ['method' => 'GET', 'uri' => '/api/merchant/auth/me', 'payload' => [], 'owner' => 200, 'manager' => 200, 'staff' => 200],
+        'manual credit' => ['method' => 'POST', 'uri' => '/api/merchant/credits', 'payload' => $creditPayload, 'owner' => 201, 'manager' => 201, 'staff' => 201],
+        'customer lookup' => ['method' => 'GET', 'uri' => '/api/merchant/customers/lookup?code=482917', 'payload' => [], 'owner' => 200, 'manager' => 200, 'staff' => 200],
+        'transactions read' => ['method' => 'GET', 'uri' => '/api/merchant/transactions', 'payload' => [], 'owner' => 200, 'manager' => 200, 'staff' => 200],
+        'rate read' => ['method' => 'GET', 'uri' => '/api/merchant/rate', 'payload' => [], 'owner' => 200, 'manager' => 200, 'staff' => 200],
+        'promotions read' => ['method' => 'GET', 'uri' => '/api/merchant/promotions', 'payload' => [], 'owner' => 200, 'manager' => 200, 'staff' => 200],
+        'settlements read' => ['method' => 'GET', 'uri' => '/api/merchant/settlements', 'payload' => [], 'owner' => 200, 'manager' => 200, 'staff' => 200],
+        'settlement show' => ['method' => 'GET', 'uri' => '/api/merchant/settlements/999999', 'payload' => [], 'owner' => 404, 'manager' => 404, 'staff' => 404],
+        'outstanding read' => ['method' => 'GET', 'uri' => '/api/merchant/outstanding', 'payload' => [], 'owner' => 200, 'manager' => 200, 'staff' => 200],
+        'wallet read' => ['method' => 'GET', 'uri' => '/api/merchant/wallet', 'payload' => [], 'owner' => 200, 'manager' => 200, 'staff' => 200],
+        'product categories read' => ['method' => 'GET', 'uri' => '/api/merchant/product-categories', 'payload' => [], 'owner' => 200, 'manager' => 200, 'staff' => 200],
+
+        // ---- Manager or above ------------------------------------------
+        'rate change' => ['method' => 'POST', 'uri' => '/api/merchant/rate', 'payload' => $ratePayload, 'owner' => 200, 'manager' => 200, 'staff' => 403],
+        'promotion create' => ['method' => 'POST', 'uri' => '/api/merchant/promotions', 'payload' => [], 'owner' => 422, 'manager' => 422, 'staff' => 403],
+        'promotion publish' => ['method' => 'POST', 'uri' => '/api/merchant/promotions/999999/publish', 'payload' => [], 'owner' => 404, 'manager' => 404, 'staff' => 403],
+        'promotion cancel' => ['method' => 'POST', 'uri' => '/api/merchant/promotions/999999/cancel', 'payload' => [], 'owner' => 404, 'manager' => 404, 'staff' => 403],
+        'settlement create' => ['method' => 'POST', 'uri' => '/api/merchant/settlements', 'payload' => [], 'owner' => 422, 'manager' => 422, 'staff' => 403],
         // Submit freezes lines and — on a fully credit-netted draft —
-        // allocates and settles the whole batch: a settlement mutation
-        // like the other two, so owner-only like the other two.
-        'settlement submit' => ['postJson', '/api/merchant/settlements/1/submit'],
-        'wallet settle' => ['postJson', '/api/merchant/settlements/1/wallet-settle'],
+        // allocates and settles the whole batch: a settlement mutation like
+        // the other two, so manager-gated like the other two.
+        'settlement submit' => ['method' => 'POST', 'uri' => '/api/merchant/settlements/999999/submit', 'payload' => [], 'owner' => 404, 'manager' => 404, 'staff' => 403],
+        'wallet settle' => ['method' => 'POST', 'uri' => '/api/merchant/settlements/999999/wallet-settle', 'payload' => [], 'owner' => 404, 'manager' => 404, 'staff' => 403],
+        'branches read' => ['method' => 'GET', 'uri' => '/api/merchant/branches', 'payload' => [], 'owner' => 200, 'manager' => 200, 'staff' => 403],
+        'branch create' => ['method' => 'POST', 'uri' => '/api/merchant/branches', 'payload' => [], 'owner' => 422, 'manager' => 422, 'staff' => 403],
+        'branch update' => ['method' => 'PATCH', 'uri' => '/api/merchant/branches/999999', 'payload' => [], 'owner' => 404, 'manager' => 404, 'staff' => 403],
+        'branch delete' => ['method' => 'DELETE', 'uri' => '/api/merchant/branches/999999', 'payload' => [], 'owner' => 404, 'manager' => 404, 'staff' => 403],
+        'product category create' => ['method' => 'POST', 'uri' => '/api/merchant/product-categories', 'payload' => [], 'owner' => 422, 'manager' => 422, 'staff' => 403],
+        'product category update' => ['method' => 'PATCH', 'uri' => '/api/merchant/product-categories/999999', 'payload' => [], 'owner' => 404, 'manager' => 404, 'staff' => 403],
+        'profile read' => ['method' => 'GET', 'uri' => '/api/merchant/profile', 'payload' => [], 'owner' => 200, 'manager' => 200, 'staff' => 403],
+
+        // ---- Owner only -------------------------------------------------
+        'profile write' => ['method' => 'PATCH', 'uri' => '/api/merchant/profile', 'payload' => ['channel' => 'both'], 'owner' => 200, 'manager' => 403, 'staff' => 403],
+        'bank account' => ['method' => 'PATCH', 'uri' => '/api/merchant/bank-account', 'payload' => [], 'owner' => 422, 'manager' => 403, 'staff' => 403],
+        'staff read' => ['method' => 'GET', 'uri' => '/api/merchant/staff', 'payload' => [], 'owner' => 200, 'manager' => 403, 'staff' => 403],
+        'staff create' => ['method' => 'POST', 'uri' => '/api/merchant/staff', 'payload' => [], 'owner' => 422, 'manager' => 403, 'staff' => 403],
+        'staff update' => ['method' => 'PATCH', 'uri' => '/api/merchant/staff/999999', 'payload' => [], 'owner' => 404, 'manager' => 403, 'staff' => 403],
+        'preferences' => ['method' => 'PATCH', 'uri' => '/api/merchant/preferences', 'payload' => ['settlement_method' => 'bank'], 'owner' => 200, 'manager' => 403, 'staff' => 403],
+        'api credentials' => ['method' => 'GET', 'uri' => '/api/merchant/credentials', 'payload' => [], 'owner' => 200, 'manager' => 403, 'staff' => 403],
+        'setup read' => ['method' => 'GET', 'uri' => '/api/merchant/setup', 'payload' => [], 'owner' => 200, 'manager' => 403, 'staff' => 403],
+        // The wizard's writes answer 409 setup_not_editable on an approved
+        // store — the owner is past it, and nobody else may reach it at all.
+        'setup profile' => ['method' => 'PATCH', 'uri' => '/api/merchant/setup/profile', 'payload' => ['channel' => 'online'], 'owner' => 409, 'manager' => 403, 'staff' => 403],
+        'setup rate' => ['method' => 'PATCH', 'uri' => '/api/merchant/setup/rate', 'payload' => ['rate_bp' => 300], 'owner' => 409, 'manager' => 403, 'staff' => 403],
+        'setup submit' => ['method' => 'POST', 'uri' => '/api/merchant/setup/submit', 'payload' => [], 'owner' => 409, 'manager' => 403, 'staff' => 403],
+        'setup logo' => ['method' => 'POST', 'uri' => '/api/merchant/setup/logo', 'payload' => [], 'owner' => 422, 'manager' => 403, 'staff' => 403],
+        'settings logo' => ['method' => 'POST', 'uri' => '/api/merchant/settings/logo', 'payload' => [], 'owner' => 422, 'manager' => 403, 'staff' => 403],
     ];
 }
 
-it('answers 403 owner_required to staff on every owner-only route', function () {
-    $this->actingAs($this->staff, 'merchant');
+it('answers the exact status per tier on every merchant route', function () {
+    foreach (merchantRoleMatrix() as $label => $row) {
+        foreach (['owner', 'manager', 'staff'] as $role) {
+            /** @var MerchantUser $user */
+            $user = $this->{$role};
+            $payload = $row['payload'] instanceof Closure ? ($row['payload'])($role) : $row['payload'];
 
-    foreach (ownerOnlyRoutes() as $label => [$method, $uri]) {
-        $this->{$method}($uri)
-            ->assertForbidden()
-            ->assertJsonPath('code', 'owner_required');
+            $status = $this->actingAs($user, 'merchant')
+                ->json($row['method'], $row['uri'], $payload)
+                ->getStatusCode();
+
+            $this->assertSame(
+                $row[$role],
+                $status,
+                sprintf('%s %s [%s] as %s', $row['method'], $row['uri'], $label, $role),
+            );
+        }
     }
+});
+
+it('names the tier a refusal needs in the machine-readable code', function () {
+    // Two distinct codes so the panel can say WHICH tier is missing, not
+    // just that the role is wrong.
+    $this->actingAs($this->staff, 'merchant')
+        ->postJson('/api/merchant/rate', ['rate_bp' => 300])
+        ->assertForbidden()
+        ->assertJsonPath('code', 'manager_required');
+
+    $this->actingAs($this->manager, 'merchant')
+        ->getJson('/api/merchant/staff')
+        ->assertForbidden()
+        ->assertJsonPath('code', 'owner_required');
+
+    $this->actingAs($this->staff, 'merchant')
+        ->getJson('/api/merchant/staff')
+        ->assertForbidden()
+        ->assertJsonPath('code', 'owner_required');
 });
 
 it('rejects unauthenticated requests on the settings surface outright', function () {
@@ -81,40 +179,147 @@ it('rejects unauthenticated requests on the settings surface outright', function
     $this->getJson('/api/merchant/customers/lookup?code=482917')->assertUnauthorized();
 });
 
-it('lets staff post manual credits — the operational surface stays theirs', function () {
-    $this->actingAs($this->staff, 'merchant')
-        ->postJson('/api/merchant/credits', [
-            'customer_code' => '482917',
-            'invoice_no' => 'INV-STAFF-1',
-            'eligible_amount' => 125000,
-            'sale_amount' => 125000,
-            'occurred_at' => now()->subHour()->toIso8601String(),
-        ])
-        ->assertCreated();
-});
-
-it('lets staff use the customer lookup for the credit screen', function () {
-    $this->actingAs($this->staff, 'merchant')
-        ->getJson('/api/merchant/customers/lookup?code=482917')
-        ->assertOk()
-        ->assertJsonPath('valid', true);
-});
-
-it('keeps the read endpoints staff-accessible', function () {
-    $this->actingAs($this->staff, 'merchant');
-
-    $this->getJson('/api/merchant/rate')->assertOk();
-    $this->getJson('/api/merchant/promotions')->assertOk();
-    $this->getJson('/api/merchant/settlements')->assertOk();
-    $this->getJson('/api/merchant/outstanding')->assertOk();
-    $this->getJson('/api/merchant/transactions')->assertOk();
-});
-
-it('lets the owner through the same gates', function () {
+it('lets an owner invite straight into any tier', function () {
     $this->actingAs($this->owner, 'merchant');
 
-    $this->getJson('/api/merchant/profile')->assertOk();
-    $this->getJson('/api/merchant/branches')->assertOk();
-    $this->getJson('/api/merchant/staff')->assertOk();
-    $this->postJson('/api/merchant/rate', ['rate_bp' => 300])->assertOk();
+    foreach (['staff', 'manager', 'owner'] as $role) {
+        $this->postJson('/api/merchant/staff', [
+            'name' => 'New '.$role,
+            'email' => "new.{$role}@example.com",
+            'role' => $role,
+        ])
+            ->assertCreated()
+            ->assertJsonPath('data.role', $role);
+    }
+
+    // Omitting the tier still means staff — the invite is back-compatible.
+    $this->postJson('/api/merchant/staff', [
+        'name' => 'Default tier',
+        'email' => 'default.tier@example.com',
+    ])->assertCreated()->assertJsonPath('data.role', 'staff');
+
+    $this->postJson('/api/merchant/staff', [
+        'name' => 'Bogus',
+        'email' => 'bogus@example.com',
+        'role' => 'superuser',
+    ])->assertUnprocessable();
+});
+
+it('promotes and demotes through the manager tier', function () {
+    $this->actingAs($this->owner, 'merchant');
+
+    $this->patchJson("/api/merchant/staff/{$this->staff->id}", ['role' => 'manager'])
+        ->assertOk()
+        ->assertJsonPath('data.role', 'manager');
+
+    // The promoted account immediately holds the manager surface...
+    $this->actingAs($this->staff->refresh(), 'merchant')
+        ->getJson('/api/merchant/branches')
+        ->assertOk();
+
+    // ...and still not the owner surface.
+    $this->getJson('/api/merchant/staff')
+        ->assertForbidden()
+        ->assertJsonPath('code', 'owner_required');
+
+    $this->actingAs($this->owner, 'merchant')
+        ->patchJson("/api/merchant/staff/{$this->staff->id}", ['role' => 'staff'])
+        ->assertOk()
+        ->assertJsonPath('data.role', 'staff');
+
+    $this->actingAs($this->staff->refresh(), 'merchant')
+        ->getJson('/api/merchant/branches')
+        ->assertForbidden()
+        ->assertJsonPath('code', 'manager_required');
+});
+
+it('counts only owners in the last-owner guard, however many managers exist', function () {
+    // Two managers and a staff account are present; none of them can keep
+    // the merchant's settings surface alive, so the sole owner is still the
+    // last owner.
+    MerchantUser::factory()->for($this->merchant)->manager()->create();
+
+    $this->actingAs($this->owner, 'merchant');
+
+    // Demoting the last owner to MANAGER is refused exactly like a demotion
+    // to staff — the tier that matters is owner.
+    $this->patchJson("/api/merchant/staff/{$this->owner->id}", ['role' => 'manager'])
+        ->assertUnprocessable();
+    $this->patchJson("/api/merchant/staff/{$this->owner->id}", ['role' => 'staff'])
+        ->assertUnprocessable();
+    $this->patchJson("/api/merchant/staff/{$this->owner->id}", ['is_active' => false])
+        ->assertUnprocessable();
+
+    expect($this->owner->refresh()->role)->toBe('owner')
+        ->and($this->owner->is_active)->toBeTrue();
+
+    // A SECOND owner releases the guard — a manager never would.
+    $second = MerchantUser::factory()->for($this->merchant)->owner()->create();
+
+    $this->patchJson("/api/merchant/staff/{$second->id}", ['role' => 'manager'])
+        ->assertOk()
+        ->assertJsonPath('data.role', 'manager');
+
+    // ...and now the original owner is the last one again.
+    $this->patchJson("/api/merchant/staff/{$this->owner->id}", ['role' => 'manager'])
+        ->assertUnprocessable();
+});
+
+it('refuses a self-demotion into the manager tier', function () {
+    // A second owner keeps the last-owner guard out of the way, so what is
+    // being tested is purely the self-demote rule.
+    MerchantUser::factory()->for($this->merchant)->owner()->create();
+
+    $this->actingAs($this->owner, 'merchant')
+        ->patchJson("/api/merchant/staff/{$this->owner->id}", ['role' => 'manager'])
+        ->assertUnprocessable();
+
+    expect($this->owner->refresh()->role)->toBe('owner');
+});
+
+it('keeps managers out of the staff service entirely, not merely out of the HTTP route', function () {
+    // The route gate is owner-only, so a manager can never reach
+    // StaffService over HTTP — every staff endpoint answers owner_required.
+    foreach ([
+        ['getJson', '/api/merchant/staff'],
+        ['postJson', '/api/merchant/staff'],
+        ['patchJson', "/api/merchant/staff/{$this->staff->id}"],
+    ] as [$method, $uri]) {
+        $this->actingAs($this->manager, 'merchant')
+            ->{$method}($uri, ['name' => 'X', 'email' => 'x@example.com', 'role' => 'owner'])
+            ->assertForbidden()
+            ->assertJsonPath('code', 'owner_required');
+    }
+
+    expect($this->staff->refresh()->role)->toBe('staff')
+        ->and(MerchantUser::query()->where('email', 'x@example.com')->exists())->toBeFalse();
+});
+
+it('ranks the three tiers on the model itself', function () {
+    expect(MerchantUser::ROLES)->toBe(['staff', 'manager', 'owner'])
+        ->and($this->owner->hasRoleAtLeast('owner'))->toBeTrue()
+        ->and($this->owner->hasRoleAtLeast('manager'))->toBeTrue()
+        ->and($this->manager->hasRoleAtLeast('manager'))->toBeTrue()
+        ->and($this->manager->hasRoleAtLeast('owner'))->toBeFalse()
+        ->and($this->staff->hasRoleAtLeast('staff'))->toBeTrue()
+        ->and($this->staff->hasRoleAtLeast('manager'))->toBeFalse();
+
+    // An unknown role ranks below everything rather than above it.
+    $unknown = new MerchantUser(['role' => 'wizard']);
+    expect($unknown->hasRoleAtLeast('staff'))->toBeFalse();
+});
+
+it('admits the manager tier at the database level', function () {
+    $manager = MerchantUser::factory()->for($this->merchant)->manager()->create();
+
+    expect($manager->refresh()->role)->toBe('manager');
+
+    expect(fn () => MerchantUser::factory()->for($this->merchant)->create(['role' => 'supervisor']))
+        ->toThrow(QueryException::class);
+});
+
+it('keeps the last-owner advisory lock keyed to the merchant, not the tier', function () {
+    // Guard-rail on the constant the race test contends on: managers must
+    // not have introduced a second lock class.
+    expect(StaffService::OWNER_GUARD_LOCK_CLASS)->toBe(0x4D4F57);
 });

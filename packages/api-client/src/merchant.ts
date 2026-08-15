@@ -700,7 +700,22 @@ export async function deleteMerchantBranch(
 // Settings — staff (owner only)
 // ---------------------------------------------------------------------------
 
-export const MerchantStaffRoleSchema = z.enum(['owner', 'staff']);
+/**
+ * The three merchant panel tiers (PLAN §1, decision 2026-08-15), listed
+ * DESCENDING in authority:
+ *
+ *  - `owner`   everything, including the bank account, staff management,
+ *              preferences, the store profile, the logo and the API
+ *              credential listing;
+ *  - `manager` the operating surface — cashback rate, promotions,
+ *              settlements, branches and product categories — and nothing
+ *              that moves money out or mints accounts;
+ *  - `staff`   credit entry, the customer lookup and the read screens.
+ *
+ * Mirrors the merchant_users_role_check constraint; the API answers 403
+ * `owner_required` / `manager_required` naming the tier a route needs.
+ */
+export const MerchantStaffRoleSchema = z.enum(['owner', 'manager', 'staff']);
 export type MerchantStaffRole = z.infer<typeof MerchantStaffRoleSchema>;
 
 export const MerchantStaffSchema = z.object({
@@ -727,6 +742,12 @@ export const CreateMerchantStaffRequestSchema = z.object({
   name: z.string().min(1).max(255),
   /** Must be unique across all merchant panel accounts (422 otherwise). */
   email: z.email().max(255),
+  /**
+   * The tier the invite lands in. Omitted means `staff` — the invite is
+   * back-compatible with the two-tier API. Only an owner may send this
+   * (the whole staff surface is owner-gated).
+   */
+  role: MerchantStaffRoleSchema.optional(),
 });
 export type CreateMerchantStaffRequest = z.infer<
   typeof CreateMerchantStaffRequestSchema

@@ -57,14 +57,28 @@ it('lets the owner create excluded and rate categories with generated slugs', fu
         ->assertJsonPath('data.1.slug', 'veggies');
 });
 
-it('refuses category writes from staff with owner_required', function () {
+it('refuses category writes from staff with manager_required', function () {
     $this->actingAs($this->staff, 'merchant');
 
     $this->postJson('/api/merchant/product-categories', [
         'name_en' => 'Veggies', 'mode' => 'rate', 'rate_bp' => 200,
-    ])->assertForbidden()->assertJsonPath('code', 'owner_required');
+    ])->assertForbidden()->assertJsonPath('code', 'manager_required');
 
     expect(MerchantProductCategory::query()->count())->toBe(0);
+});
+
+it('lets a manager write categories — the line-item rate card is manager work', function () {
+    $manager = MerchantUser::factory()->for($this->merchant)->manager()->create();
+
+    $this->actingAs($manager, 'merchant');
+
+    $id = $this->postJson('/api/merchant/product-categories', [
+        'name_en' => 'Veggies', 'mode' => 'rate', 'rate_bp' => 200,
+    ])->assertCreated()->json('data.id');
+
+    $this->patchJson("/api/merchant/product-categories/{$id}", ['mode' => 'excluded'])
+        ->assertOk()
+        ->assertJsonPath('data.mode', 'excluded');
 });
 
 it('refuses category writes on a pending-review store with store_not_approved', function () {

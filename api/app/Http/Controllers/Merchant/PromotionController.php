@@ -22,9 +22,10 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 /**
- * Merchant promotion builder (§10). Mutations are OWNER-only — a promotion
- * reprices future sales and moves the platform fee tier, exactly like a
- * rate change. Staff may read the list.
+ * Merchant promotion builder (§10). Mutations need MANAGER or above — a
+ * promotion reprices future sales and moves the platform fee tier, exactly
+ * like a rate change, and both sit in the manager tier (PLAN §1). Staff may
+ * read the list.
  *
  * The lifecycle endpoints only expose what the domain offers: create draft,
  * publish, cancel DRAFT. There is deliberately no update and no early-end
@@ -55,7 +56,7 @@ class PromotionController extends Controller
     public function store(Request $request): JsonResponse
     {
         $merchant = $this->merchant($request);
-        $user = $this->ownerOnly($request);
+        $user = $this->managerOrAbove($request);
 
         // §4: integer basis points 50–2000 (structural cap), or 4.995%
         // falls into no tier. The domain additionally refuses any rate the
@@ -95,7 +96,7 @@ class PromotionController extends Controller
 
     public function publish(Request $request, int $id): JsonResponse
     {
-        $this->ownerOnly($request);
+        $this->managerOrAbove($request);
         $promotion = $this->find($request, $id);
 
         try {
@@ -116,7 +117,7 @@ class PromotionController extends Controller
 
     public function cancel(Request $request, int $id): JsonResponse
     {
-        $this->ownerOnly($request);
+        $this->managerOrAbove($request);
         $promotion = $this->find($request, $id);
 
         try {
@@ -186,15 +187,16 @@ class PromotionController extends Controller
     }
 
     /**
-     * Owner role only — mirrors the standing rate change: staff can read
-     * promotions, never reprice the shop.
+     * Manager or owner (PLAN §1) — mirrors the standing rate change: staff
+     * can read promotions, never reprice the shop. Belt-and-braces behind
+     * the merchant.role:manager route gate.
      */
-    private function ownerOnly(Request $request): MerchantUser
+    private function managerOrAbove(Request $request): MerchantUser
     {
         $user = $request->user();
 
-        if (! $user instanceof MerchantUser || $user->role !== 'owner') {
-            abort(403, 'Only the merchant owner can manage promotions.');
+        if (! $user instanceof MerchantUser || ! $user->hasRoleAtLeast('manager')) {
+            abort(403, 'Only a merchant owner or manager can manage promotions.');
         }
 
         return $user;
