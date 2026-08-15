@@ -30,16 +30,26 @@ export const SANDBOX_API_BASE_URL = orDefault(
   'https://sandbox.api.manfaa.app/api',
 );
 
-/** The vendor integration guide (docs/integration-guide.md, published). */
+/**
+ * The vendor documentation. The narrative guide is no longer a page of its
+ * own: scripts/merge-guide-into-spec.py folds it into the spec description,
+ * so /docs/ renders the guide and the endpoint reference as one document
+ * with a single sidebar.
+ */
 export const INTEGRATION_GUIDE_URL = orDefault(
   process.env.NEXT_PUBLIC_INTEGRATION_GUIDE_URL,
-  'https://manfaa.app/docs/integration-guide',
+  'https://manfaa.app/docs/',
 );
 
-/** Its sandbox section — fixtures, test customer codes, the go-live path. */
+/**
+ * Its sandbox section — fixtures, test customer codes, the go-live path.
+ * Scalar namespaces description anchors under `#description/`, and it is NOT
+ * derived from the URL above: a deployment that repoints the guide would
+ * otherwise synthesise an anchor its target does not have.
+ */
 export const SANDBOX_GUIDE_URL = orDefault(
   process.env.NEXT_PUBLIC_SANDBOX_GUIDE_URL,
-  `${INTEGRATION_GUIDE_URL}#sandbox-fixtures`,
+  'https://manfaa.app/docs/#description/sandbox-fixtures',
 );
 
 /**

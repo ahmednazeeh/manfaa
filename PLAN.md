@@ -526,8 +526,8 @@ No integrations. The riskiest logic, built first and in isolation.
 
 ## 13b. Build queue (status — 2026-08-15, autonomous run complete)
 
-Phases 0–3 plus TWELVE post-launch rounds are BUILT, DEPLOYED and LIVE at
-manfaa.app / merchant. / admin. / api. — **839 tests, 14,070 assertions green**,
+Phases 0–3 plus the post-launch rounds are BUILT, DEPLOYED and LIVE at
+manfaa.app / merchant. / admin. / api. — **959 tests, 20,905 assertions green**,
 twelve adversarial review rounds (50+ serious findings confirmed and fixed).
 
 ### Done beyond the phases
@@ -544,13 +544,26 @@ queue · human reason labels everywhere (typed exhaustive maps + audit script) �
 merchant self-serve API credential wizard · MsgOwl SMS · claims
 feature-flagged off (merchant-mediated).
 
-### Queue: EMPTY. Next work needs a product decision.
+Since the queue last emptied: settlement picker sums + age presets, the 5%
+prompt-payment fee discount (PLAN §1), and the developer documentation, built
+by scripts/build-docs.mjs and served statically by nginx so it survives an app
+or PHP outage. The narrative guide is folded into the spec description by
+scripts/merge-guide-into-spec.py, so **/docs/ is one document** — guide and
+endpoint reference under a single Scalar sidebar. The panel links there
+(lib/integration.ts); /docs/integration-guide redirects to it.
 
-Since the queue emptied: settlement picker sums + age presets, the 5%
-prompt-payment fee discount (PLAN §1), and developer documentation published
-at /docs/ (narrative guide) and api.manfaa.app/api/v1/docs (interactive
-Scalar reference rendered from openapi.yaml, built by scripts/build-docs.mjs,
-served statically so it survives an app or PHP outage).
+### The store/API batch (was #23–#30) — DONE
+
+Percent strings on the wire (basis points never appear in a request or a
+response) · per-sale cashback override, manager-and-above only · optional and
+normalised `occurred_at` · five named request examples and named response
+examples on POST /v1/transactions, integers hand-derived · the credit form's
+category split auto-sums into the eligible total · Rakuten-structure landing:
+public header search, curated category icon rail, graphic hero, store shelves
+including Recently added · empty curated shelves suppressed rather than shown
+as "nothing here" boxes.
+
+### Queue: EMPTY. Next work needs a product decision — see below.
 
 ### Open decisions awaiting the owner
 1. **Category-terms resolution instant** (documented above §1): product-category
@@ -572,9 +585,6 @@ served statically so it survives an app or PHP outage).
   apps/admin is intentionally English-only — no i18n runtime).
 - SPF/DKIM/DMARC before any outbound email.
 - Bank bulk payout file format (§14) — blocks real payout runs.
-- Publish docs/integration-guide.md at a served URL (the API wizard links to
-  https://manfaa.app/docs/integration-guide, currently unserved) or repoint
-  NEXT_PUBLIC_INTEGRATION_GUIDE_URL / NEXT_PUBLIC_SANDBOX_GUIDE_URL.
 - Consolidate the suspended-store refusal onto EnsureMerchantApproved:trading
   (CredentialController currently emits the same code independently).
 - Config caches stay OFF on this box (tests + production share the checkout;
