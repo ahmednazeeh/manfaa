@@ -7,6 +7,9 @@ import { Toaster } from '@/components/ui/sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { QueryProvider } from '@/components/providers';
 import '@/styles/globals.css';
+// After globals so the shared Thaana @font-face and [lang='dv'] rule win:
+// a Dhivehi field in this otherwise-English panel needs Faruma declared.
+import '@manfaa/ui/styles.css';
 
 const inter = Inter({ subsets: ['latin'] });
 

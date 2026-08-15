@@ -195,6 +195,7 @@ function CategoryDialog({
             <Input
               id="category-name-dv"
               dir="rtl"
+              lang="dv"
               value={form.nameDv}
               maxLength={120}
               onChange={(event) =>

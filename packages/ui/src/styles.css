@@ -47,7 +47,18 @@
  * remapping anywhere. Faruma carries Latin glyphs for exactly this case.
  */
 .font-thaana,
+[lang='dv'],
 html[lang='dv'] body {
+  font-family: 'Faruma', 'DAM Kalhi', system-ui, sans-serif;
+}
+
+/*
+ * Dhivehi input fields inside an English UI (a "Name (Dhivehi)" box in
+ * settings, say) mark themselves lang="dv" dir="rtl" and are picked up by
+ * the rule above — including their placeholder, which inherits the font
+ * only if we say so explicitly.
+ */
+[lang='dv']::placeholder {
   font-family: 'Faruma', 'DAM Kalhi', system-ui, sans-serif;
 }
 
