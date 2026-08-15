@@ -56,7 +56,13 @@ class ProductCategoriesController extends Controller
     {
         $validated = $request->validate([
             'name_en' => ['required', 'string', 'max:120'],
-            'name_dv' => ['nullable', 'string', 'max:120'],
+            // REQUIRED, unlike most Dhivehi fields on the platform: this
+            // name is shown to the customer on their own receipt lines, and
+            // a Dhivehi customer reading a Latin category name on an
+            // otherwise Dhivehi receipt is exactly the readability problem
+            // the requirement exists to prevent. The column stays nullable
+            // for rows written before this rule.
+            'name_dv' => ['required', 'string', 'max:120'],
             'mode' => ['required', 'in:excluded,rate'],
             'cashback_rate_percent' => ['required_if:mode,rate', 'prohibited_if:mode,excluded', 'nullable', PercentRate::cashback()],
             'sort' => ['nullable', 'integer', 'min:0', 'max:100000'],
@@ -83,7 +89,7 @@ class ProductCategoriesController extends Controller
                     'merchant_id' => $merchant->id,
                     'slug' => $this->uniqueSlug($merchant, $validated['name_en']),
                     'name_en' => $validated['name_en'],
-                    'name_dv' => $validated['name_dv'] ?? null,
+                    'name_dv' => $validated['name_dv'],
                     'mode' => $validated['mode'],
                     'rate_bp' => $rateBp,
                     'active' => true,
@@ -120,7 +126,9 @@ class ProductCategoriesController extends Controller
 
         $validated = $request->validate([
             'name_en' => ['sometimes', 'string', 'max:120'],
-            'name_dv' => ['sometimes', 'nullable', 'string', 'max:120'],
+            // `sometimes` + `required`: an edit that does not mention the
+            // Dhivehi name leaves it alone, but one that does may not blank it.
+            'name_dv' => ['sometimes', 'required', 'string', 'max:120'],
             'mode' => ['sometimes', 'in:excluded,rate'],
             'cashback_rate_percent' => ['sometimes', 'nullable', PercentRate::cashback()],
             'sort' => ['sometimes', 'integer', 'min:0', 'max:100000'],

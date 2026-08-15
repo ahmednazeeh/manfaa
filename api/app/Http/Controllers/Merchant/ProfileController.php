@@ -21,7 +21,10 @@ use Illuminate\Validation\Rule;
  * merchant.role:owner on PATCH).
  * Deliberately excluded: `name` — renaming the business is an identity
  * change and stays admin-only; unknown keys are simply not validated in,
- * so a POSTed `name` is dropped on the floor.
+ * so a POSTed `name` is dropped on the floor. `name_dv` IS editable: it is
+ * a translation of the display name rather than the identity, nothing is
+ * derived from it (the slug comes from the Latin name), and the store is
+ * the only party that knows how it spells itself in Thaana.
  */
 class ProfileController extends Controller
 {
@@ -37,6 +40,7 @@ class ProfileController extends Controller
         $validated = $request->validate([
             // Curated categories only (§1 decision 2026-08-15) — see
             // categoryRule() for the one deliberate exception.
+            'name_dv' => ['sometimes', 'nullable', 'string', 'max:120'],
             'category' => ['sometimes', 'nullable', 'string', 'max:80', $this->categoryRule($merchant)],
             'channel' => ['sometimes', 'string', Rule::in(OnboardingService::CHANNELS)],
             'eligibility_basis' => ['sometimes', 'nullable', 'string', 'max:2000'],

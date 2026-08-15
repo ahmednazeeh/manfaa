@@ -7,6 +7,23 @@ import { format, parseISO } from 'date-fns';
  */
 
 /**
+ * Unicode isolates. A run of digits and punctuation has no strong direction
+ * of its own, so inside a Dhivehi (RTL) sentence the bidi algorithm is free
+ * to reorder it — which is how "2%" reaches the screen as "%2" and how a
+ * leading minus jumps to the wrong end. Wrapping the run in
+ * LEFT-TO-RIGHT ISOLATE … POP DIRECTIONAL ISOLATE pins it, and works
+ * everywhere a string goes: inside a translated sentence, an attribute, or
+ * a bare text node, with no wrapper element to place.
+ */
+const LRI = '\u2066';
+const PDI = '\u2069';
+
+/** Pins a neutral run (digits, %, punctuation) to left-to-right order. */
+export function ltrIsolate(text: string): string {
+  return `${LRI}${text}${PDI}`;
+}
+
+/**
  * A rate as it arrives on the wire (PLAN §1: a 2-decimal percent STRING —
  * "2.00", "0.75", "12.50") rendered the way this storefront has always
  * rendered rates: trailing zeros dropped, so "2.00" reads "2%" and "5.50"
@@ -20,13 +37,13 @@ import { format, parseISO } from 'date-fns';
  * percent.
  */
 export function formatRate(percent: string): string {
-  return `${percent.replace(/\.?0+$/, '')}%`;
+  return ltrIsolate(`${percent.replace(/\.?0+$/, '')}%`);
 }
 
 /** Masks an account number to its last four digits: "•••• 1234". */
 export function maskAccountNo(accountNo: string): string {
   const tail = accountNo.slice(-4);
-  return `•••• ${tail}`;
+  return ltrIsolate(`•••• ${tail}`);
 }
 
 /** "2026-08-14" or ISO 8601 -> "14 Aug 2026". */

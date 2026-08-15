@@ -110,6 +110,12 @@ export function verifyMerchantSignupOtp(
 export const MerchantSignupRegisterRequestSchema = z.object({
   signup_token: z.string().min(1),
   business_name: z.string().min(2).max(120),
+  /**
+   * The store's own name in Thaana. Optional — a store that leaves it blank
+   * simply shows its Latin name to Dhivehi visitors — and never used for
+   * the slug, which stays ASCII off `business_name`.
+   */
+  business_name_dv: z.string().max(120).nullish(),
   email: z.email().max(255),
   password: z.string().min(8).max(255),
 });
@@ -529,6 +535,10 @@ export const StoreCategorySchema = z.object({
   slug: z.string(),
   name_en: z.string(),
   name_dv: z.string().nullable(),
+  /** Curated glyph name; the rail's fallback when no artwork is uploaded. */
+  icon: z.string().nullable().catch(null),
+  /** Absolute URL of the uploaded icon; null when none. */
+  icon_url: z.string().nullable().catch(null),
   sort: z.number().int(),
   active: z.boolean(),
   /** How many ACTIVE merchants currently carry this slug. */
@@ -608,5 +618,38 @@ export function updateStoreCategory(
     `/api/admin/store-categories/${id}`,
     StoreCategoryResponseSchema,
     { method: 'PATCH', body, signal: options.signal },
+  );
+}
+
+/**
+ * Replaces the category's icon artwork. Multipart, so it is its own call
+ * rather than a field on the PATCH above. Raster only (jpg/png/webp), at
+ * least 64x64 — the server rejects SVG, which would be a document served
+ * from our own origin.
+ */
+export function uploadStoreCategoryIcon(
+  id: number,
+  file: File,
+  options: RequestOptions = {},
+): Promise<StoreCategoryResponse> {
+  const body = new FormData();
+  body.append('icon', file);
+
+  return apiFetch(
+    `/api/admin/store-categories/${id}/icon`,
+    StoreCategoryResponseSchema,
+    { method: 'POST', body, signal: options.signal },
+  );
+}
+
+/** Removes the artwork; the category falls back to its curated glyph. */
+export function deleteStoreCategoryIcon(
+  id: number,
+  options: RequestOptions = {},
+): Promise<StoreCategoryResponse> {
+  return apiFetch(
+    `/api/admin/store-categories/${id}/icon`,
+    StoreCategoryResponseSchema,
+    { method: 'DELETE', signal: options.signal },
   );
 }

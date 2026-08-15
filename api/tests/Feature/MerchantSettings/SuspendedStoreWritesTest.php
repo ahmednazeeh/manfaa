@@ -96,13 +96,13 @@ it('freezes promotion creation and publication for a suspended store', function 
 
 it('freezes the product-category rate card for a suspended store', function () {
     $id = $this->postJson('/api/merchant/product-categories', [
-        'name_en' => 'Fruits',
+        'name_en' => 'Fruits', 'name_dv' => 'ދިވެހި',
         'mode' => 'excluded',
     ])->assertCreated()->json('data.id');
 
     ($this->suspend)();
 
-    $this->postJson('/api/merchant/product-categories', ['name_en' => 'Veg', 'mode' => 'excluded'])
+    $this->postJson('/api/merchant/product-categories', ['name_en' => 'Veg', 'name_dv' => 'ދިވެހި', 'mode' => 'excluded'])
         ->assertStatus(409)
         ->assertJsonPath('code', 'store_not_trading');
 

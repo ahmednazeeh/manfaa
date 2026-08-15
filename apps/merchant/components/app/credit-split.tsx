@@ -7,7 +7,7 @@ import {
   type ProductCategory,
   type TransactionLine,
 } from '@manfaa/api-client';
-import { formatMoney, MoneyText } from '@manfaa/ui';
+import { MoneyText, useFormatMoney } from '@manfaa/ui';
 import { Plus, Trash2, TriangleAlert } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -373,6 +373,7 @@ export function SplitEditor({
   onUseLinesTotal: () => void;
 }) {
   const { t, i18n } = useTranslation();
+  const formatMoney = useFormatMoney();
 
   const usedKeys = useMemo(
     () => new Set(rows.map((row) => row.category)),

@@ -23,6 +23,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import {
   Form,
   FormControl,
+  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -131,19 +132,32 @@ export default function SignupPage() {
       .trim()
       .min(2, t('signup.businessNameRequired'))
       .max(120),
+    // Optional: a store that leaves it blank keeps its Latin name for
+    // Dhivehi shoppers. Never touches the slug, which stays ASCII.
+    business_name_dv: z.string().trim().max(120),
     email: z.email(t('auth.emailInvalid')).max(255),
     password: z.string().min(8, t('signup.passwordTooShort')).max(255),
   });
   const detailsForm = useForm<z.infer<typeof DetailsSchema>>({
     resolver: zodResolver(DetailsSchema),
-    defaultValues: { business_name: '', email: '', password: '' },
+    defaultValues: {
+      business_name: '',
+      business_name_dv: '',
+      email: '',
+      password: '',
+    },
   });
   const [showPassword, setShowPassword] = useState(false);
 
   const finishSignup = (values: z.infer<typeof DetailsSchema>) => {
     setErrorMessage(null);
     registerMutation.mutate(
-      { signup_token: signupToken, ...values },
+      {
+        signup_token: signupToken,
+        ...values,
+        business_name_dv:
+          values.business_name_dv === '' ? null : values.business_name_dv,
+      },
       {
         onSuccess: () => {
           router.replace('/setup');
@@ -344,6 +358,32 @@ export default function SignupPage() {
                           {...field}
                         />
                       </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={detailsForm.control}
+                  name="business_name_dv"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>
+                        {t('signup.businessNameDvLabel')}{' '}
+                        <span className="font-normal text-muted-foreground">
+                          ({t('common.optional')})
+                        </span>
+                      </FormLabel>
+                      <FormControl>
+                        <Input
+                          dir="rtl"
+                          lang="dv"
+                          placeholder={t('signup.businessNameDvPlaceholder')}
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormDescription>
+                        {t('signup.businessNameDvHint')}
+                      </FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}

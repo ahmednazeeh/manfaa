@@ -73,6 +73,7 @@ function ProfileForm({
   const updateProfile = useUpdateProfile();
   const uploadLogo = useUploadSettingsLogo();
 
+  const [nameDv, setNameDv] = useState(profile.name_dv ?? '');
   const [category, setCategory] = useState(profile.category ?? '');
   const [channel, setChannel] = useState<MerchantChannel>(profile.channel);
   const [eligibilityBasis, setEligibilityBasis] = useState(
@@ -84,6 +85,7 @@ function ProfileForm({
 
   // Re-sync when a save comes back with the server's normalised values.
   useEffect(() => {
+    setNameDv(profile.name_dv ?? '');
     setCategory(profile.category ?? '');
     setChannel(profile.channel);
     setEligibilityBasis(profile.eligibility_basis ?? '');
@@ -128,6 +130,7 @@ function ProfileForm({
         ...(categoryChanged
           ? { category: category === '' ? null : category }
           : {}),
+        name_dv: nameDv.trim() === '' ? null : nameDv.trim(),
         channel,
         eligibility_basis:
           eligibilityBasis.trim() === '' ? null : eligibilityBasis,
@@ -202,6 +205,24 @@ function ProfileForm({
         </CardHeader>
         <CardContent className="flex flex-col gap-5">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+            <div className="flex flex-col gap-2.5">
+              <Label htmlFor="store-name-dv">
+                {t('settings.storeNameDvLabel')}
+              </Label>
+              <Input
+                id="store-name-dv"
+                dir="rtl"
+                lang="dv"
+                value={nameDv}
+                maxLength={120}
+                placeholder={t('settings.storeNameDvPlaceholder')}
+                onChange={(event) => setNameDv(event.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">
+                {t('settings.storeNameDvHint')}
+              </p>
+            </div>
+
             <div className="flex flex-col gap-2.5">
               <Label htmlFor="category">{t('settings.categoryLabel')}</Label>
               <Select value={category} onValueChange={setCategory}>

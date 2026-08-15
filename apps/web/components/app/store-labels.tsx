@@ -22,6 +22,27 @@ import { Badge } from '@/components/ui/badge';
  * a raw `kebab-case` string.
  */
 
+/**
+ * A store's name in the reader's language: its Thaana name when it has one
+ * and the page is Dhivehi, otherwise the Latin name.
+ *
+ * Every store surface goes through this, so a store that has not supplied a
+ * Thaana name is never a blank — it simply keeps its Latin name, which is
+ * also what the slug and every URL are built from.
+ */
+export function useStoreName(): (store: {
+  name: string;
+  name_dv: string | null;
+}) => string {
+  const { i18n } = useTranslation();
+  const dhivehi = i18n.language.startsWith('dv');
+
+  return (store) =>
+    dhivehi && store.name_dv !== null && store.name_dv.trim() !== ''
+      ? store.name_dv
+      : store.name;
+}
+
 /** The localised display label for a merchant channel. Never the raw enum. */
 export function useChannelLabel(): (channel: MerchantChannel) => string {
   const { t } = useTranslation();

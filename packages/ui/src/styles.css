@@ -8,6 +8,34 @@
  * Never use left/right physical properties in shared components.
  */
 
+/*
+ * Noto Sans Thaana is the PRIMARY Thaana face. Faruma is the traditional
+ * Maldivian font and stays as a fallback, but its glyphs sit small on the
+ * em and its fili (the marks above and below the letters) thin out badly at
+ * UI sizes — which is what made Dhivehi screens hard to read. Noto is
+ * drawn larger on the same em, hints properly at small sizes, and ships a
+ * real bold, so headings stop faking weight.
+ *
+ * Self-hosted, ~8 KB each: no CDN, and no dependence on the reader's device
+ * happening to have a Thaana font installed (most do not, which is how
+ * Dhivehi text ended up rendering in whatever the browser could find).
+ */
+@font-face {
+  font-family: 'Noto Sans Thaana';
+  src: url('../fonts/NotoSansThaana-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Noto Sans Thaana';
+  src: url('../fonts/NotoSansThaana-Bold.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
 @font-face {
   font-family: 'Faruma';
   src: url('../fonts/faruma.ttf') format('truetype');
@@ -26,7 +54,7 @@
 
 /* Thaana text block: self-hosted fonts, right-to-left. */
 .thaana {
-  font-family: 'Faruma', 'DAM Kalhi', sans-serif;
+  font-family: 'Noto Sans Thaana', 'Faruma', 'DAM Kalhi', sans-serif;
   direction: rtl;
   text-align: start;
 }
@@ -49,7 +77,44 @@
 .font-thaana,
 [lang='dv'],
 html[lang='dv'] body {
-  font-family: 'Faruma', 'DAM Kalhi', system-ui, sans-serif;
+  font-family: 'Noto Sans Thaana', 'Faruma', 'DAM Kalhi', system-ui, sans-serif;
+}
+
+/*
+ * A Thaana run sitting inside an ENGLISH screen — the "ދިވެހި" entry in a
+ * language menu, a Dhivehi name beside its Latin one — cannot lean on the
+ * document-wide scale below, and at the surrounding size it reads noticeably
+ * smaller than the Latin around it. `em` so it steps up relative to whatever
+ * it is nested in rather than pinning a size of its own.
+ */
+.font-thaana {
+  font-size: 1.1em;
+}
+
+/*
+ * Thaana needs more room than Latin at the same nominal size: the letters
+ * are shorter on the em and the fili stack above and below them, so a size
+ * that reads comfortably in English reads cramped in Dhivehi.
+ *
+ * Scaling the ROOT font size is the one change that fixes this everywhere
+ * at once. Tailwind expresses every size AND every line-height in rem, so a
+ * larger root scales type, leading, padding and gaps together — the page is
+ * the same design, rendered a step larger, rather than bigger text jammed
+ * into boxes built for smaller text.
+ */
+html[lang='dv'] {
+  font-size: 17.5px;
+}
+
+/*
+ * Latin runs inside Dhivehi text — a store's Latin name, a percentage, an
+ * invoice number — must not be reordered by the bidi algorithm. Marking
+ * them isolated keeps "2%" as "2%" instead of "%2", and keeps a leading
+ * minus attached to its number.
+ */
+.latin-run {
+  unicode-bidi: isolate;
+  direction: ltr;
 }
 
 /*
@@ -59,7 +124,7 @@ html[lang='dv'] body {
  * only if we say so explicitly.
  */
 [lang='dv']::placeholder {
-  font-family: 'Faruma', 'DAM Kalhi', system-ui, sans-serif;
+  font-family: 'Noto Sans Thaana', 'Faruma', 'DAM Kalhi', system-ui, sans-serif;
 }
 
 /* Money values align in columns regardless of theme or direction. */

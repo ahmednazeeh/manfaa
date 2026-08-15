@@ -99,6 +99,7 @@ class SignupController extends Controller
         $validated = $request->validate([
             'signup_token' => ['required', 'string'],
             'business_name' => ['required', 'string', 'min:2', 'max:120'],
+            'business_name_dv' => ['sometimes', 'nullable', 'string', 'max:120'],
             'email' => ['required', 'string', 'email', 'max:255'],
             'password' => ['required', 'string', 'min:8', 'max:255'],
         ]);
@@ -109,6 +110,7 @@ class SignupController extends Controller
                 $validated['business_name'],
                 $validated['email'],
                 $validated['password'],
+                blank($validated['business_name_dv'] ?? null) ? null : trim((string) $validated['business_name_dv']),
             );
         } catch (InvalidSignupTokenException) {
             throw ValidationException::withMessages(['signup_token' => 'signup_token_invalid']);

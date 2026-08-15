@@ -279,8 +279,7 @@
     "dashboard": "Dashboard",
     "openDashboard": "Open dashboard",
     "createAccount": "Create account",
-    "heroTitle": "Real cashback in MVR at Maldivian stores",
-    "heroSubtitle": "Join free with your phone number. When a store confirms your purchase, you'll earn a percentage back in MVR — paid to your bank account monthly.",
+    "heroSubtitle": "Join free with your phone number. Show your code when you pay, and a share of the bill comes back to you in MVR — paid to your bank account every month.",
     "heroSearchPlaceholder": "Search stores…",
     "railLabel": "Shop by category",
     "railCount": "{{count}} stores",
@@ -304,6 +303,19 @@
     "marketplaceCta": "Get notified",
     "marketplaceCtaHint": "Create a free account and we'll let you know when it opens.",
     "marketplaceSignedInHint": "You're all set — we'll let you know when it opens.",
-    "marketplaceFooter": "Marketplace (coming soon)"
+    "marketplaceFooter": "Marketplace (coming soon)",
+    "heroTitleLead": "Earn cash back in MVR when you",
+    "heroChannelInStore": "shop in store.",
+    "heroChannelOnline": "shop online.",
+    "heroChannelDineIn": "dine in.",
+    "heroChannelServices": "book services.",
+    "demoBalance": "Your cashback",
+    "demoCodeLabel": "Your Manfaa code",
+    "demoStore": "Island Mart",
+    "demoPending": "Confirming",
+    "demoEarned": "Earned",
+    "demoToastTitle": "Ka-ching!",
+    "demoToastBody": "You earned {{amount}} cashback at {{store}}.",
+    "demoAlt": "A demonstration of the app: you show your Manfaa code at the till, {{store}} records a {{sale}} sale, and {{amount}} cashback lands in your balance."
   }
 }

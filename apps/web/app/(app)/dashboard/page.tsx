@@ -2,7 +2,7 @@
 
 import { useMemo } from 'react';
 import Link from 'next/link';
-import { formatMoney, MoneyText } from '@manfaa/ui';
+import { MoneyText, useFormatMoney } from '@manfaa/ui';
 import { CalendarClock, HandCoins, Landmark } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { formatDate } from '@/lib/format';
@@ -35,6 +35,7 @@ export default function DashboardPage() {
   const { me } = useLayout();
   const { data: balance, isPending, error } = useBalance();
   const { t } = useTranslation();
+  const formatMoney = useFormatMoney();
 
   const qrAvailable = useMemo(
     () => encodeQr(me.customer_code) !== null,

@@ -4,34 +4,57 @@ import Link from 'next/link';
 import type { DiscoveryCategory, DiscoverySections } from '@manfaa/api-client';
 import {
   Baby,
+  BadgePercent,
+  Bike,
   BookOpen,
+  Briefcase,
+  Building2,
+  CakeSlice,
+  Camera,
+  Car,
   Coffee,
   Croissant,
   Dumbbell,
+  Fish,
   Flower2,
   Fuel,
+  Gamepad2,
   Gem,
+  Gift,
+  Glasses,
   Globe,
+  GraduationCap,
   Hammer,
+  Headphones,
   HeartPulse,
+  LampDesk,
+  Laptop,
   LayoutGrid,
   MapPin,
   Package,
+  Paintbrush,
   PawPrint,
   Pill,
   Plane,
+  Scissors,
+  Ship,
   Shirt,
+  ShoppingBag,
   ShoppingCart,
   Smartphone,
   Sofa,
+  Sparkles,
+  Stethoscope,
   Store,
   Tag,
   TrendingUp,
   UtensilsCrossed,
+  Watch,
   Wrench,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { cn } from '@/lib/utils';
 import { hasListedStores, inStoreEntries } from '@/components/app/discovery';
 import { ScrollRow } from '@/components/app/scroll-row';
 import { useCategoryLabel } from '@/components/app/store-labels';
@@ -49,6 +72,9 @@ import { useCategoryLabel } from '@/components/app/store-labels';
  *      payload's `name_en` / `name_dv`, so a category renamed in admin
  *      renames here without a deploy; the app's own `categories.*` locale
  *      map is only the fallback for a language the row has no name in.
+ *      Iconography likewise comes from the payload: uploaded artwork
+ *      (`icon_url`) first, then the curated glyph name (`icon`), then this
+ *      file's neutral tag — so admin changes any of it without a deploy.
  *
  *   2. The non-category entry points the read model genuinely supports —
  *      All stores, Boosted, In store, Online, Nearby. Each one is hidden
@@ -62,34 +88,57 @@ import { useCategoryLabel } from '@/components/app/store-labels';
  */
 
 /**
- * A lucide icon per curated slug. The curated list is admin-editable, so
- * this map deliberately covers more slugs than the current seed and any
- * unmapped slug degrades to a neutral tag — a new category added in admin
- * appears in the rail immediately, just without bespoke iconography.
+ * The glyphs an admin can pick, keyed by the lucide NAME the API stores in
+ * `icon`. Lucide cannot be looked up dynamically without shipping the whole
+ * icon set, so this map is the client half of the contract in
+ * App\Models\StoreCategory::ICONS — a name the API allows but this map has
+ * not got degrades to a neutral tag rather than a blank tile.
  */
-const CATEGORY_ICONS: Record<string, LucideIcon> = {
-  bakery: Croissant,
-  beauty: Flower2,
-  books: BookOpen,
-  cafe: Coffee,
-  electronics: Smartphone,
-  fashion: Shirt,
+const GLYPHS: Record<string, LucideIcon> = {
+  baby: Baby,
+  'badge-percent': BadgePercent,
+  bike: Bike,
+  'book-open': BookOpen,
+  briefcase: Briefcase,
+  'building-2': Building2,
+  'cake-slice': CakeSlice,
+  camera: Camera,
+  car: Car,
+  coffee: Coffee,
+  croissant: Croissant,
+  dumbbell: Dumbbell,
+  fish: Fish,
+  'flower-2': Flower2,
   fuel: Fuel,
-  furniture: Sofa,
-  grocery: ShoppingCart,
-  hardware: Hammer,
-  health: HeartPulse,
-  home: Sofa,
-  jewellery: Gem,
-  jewelry: Gem,
-  kids: Baby,
-  other: Package,
-  pets: PawPrint,
-  pharmacy: Pill,
-  restaurant: UtensilsCrossed,
-  services: Wrench,
-  sports: Dumbbell,
-  travel: Plane,
+  'gamepad-2': Gamepad2,
+  gem: Gem,
+  gift: Gift,
+  glasses: Glasses,
+  'graduation-cap': GraduationCap,
+  hammer: Hammer,
+  headphones: Headphones,
+  'heart-pulse': HeartPulse,
+  'lamp-desk': LampDesk,
+  laptop: Laptop,
+  package: Package,
+  paintbrush: Paintbrush,
+  'paw-print': PawPrint,
+  pill: Pill,
+  plane: Plane,
+  scissors: Scissors,
+  ship: Ship,
+  shirt: Shirt,
+  'shopping-bag': ShoppingBag,
+  'shopping-cart': ShoppingCart,
+  smartphone: Smartphone,
+  sofa: Sofa,
+  sparkles: Sparkles,
+  stethoscope: Stethoscope,
+  store: Store,
+  tag: Tag,
+  'utensils-crossed': UtensilsCrossed,
+  watch: Watch,
+  wrench: Wrench,
 };
 
 const DEFAULT_CATEGORY_ICON = Tag;
@@ -121,16 +170,20 @@ function useDiscoveryCategoryLabel(): (category: DiscoveryCategory) => string {
 function RailItem({
   href,
   icon: Icon,
+  iconUrl,
   label,
   count,
 }: {
   href: string;
   icon: LucideIcon;
+  /** Uploaded artwork; drawn instead of the glyph when present. */
+  iconUrl?: string | null;
   label: string;
   /** Merchants behind this entry; omitted for entries that are actions. */
   count?: number;
 }) {
   const { t } = useTranslation();
+  const hasArtwork = iconUrl !== undefined && iconUrl !== null;
 
   return (
     <li className="shrink-0 snap-start">
@@ -138,8 +191,30 @@ function RailItem({
         href={href}
         className="group flex w-20 flex-col items-center gap-2 rounded-lg py-1 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
       >
-        <span className="flex size-14 items-center justify-center rounded-2xl bg-secondary text-secondary-foreground transition-colors group-hover:bg-primary group-hover:text-primary-foreground">
-          <Icon className="size-6" strokeWidth={1.75} />
+        <span
+          className={cn(
+            'flex size-14 items-center justify-center overflow-hidden rounded-2xl transition-colors',
+            // Uploaded artwork brings its own colour, so the tile stays a
+            // neutral, unhovered frame around it — tinting the ground under
+            // a full-bleed image only muddies it.
+            hasArtwork
+              ? 'border border-border bg-card'
+              : 'bg-secondary text-secondary-foreground group-hover:bg-primary group-hover:text-primary-foreground',
+          )}
+        >
+          {hasArtwork ? (
+            // Plain img: category icons are served by the API origin, and
+            // next/image would need a remotePatterns allowlist for no gain
+            // at this size (same reasoning as StoreAvatar).
+            <img
+              src={iconUrl}
+              alt=""
+              loading="lazy"
+              className="size-full object-cover"
+            />
+          ) : (
+            <Icon className="size-6" strokeWidth={1.75} />
+          )}
         </span>
         <span className="flex flex-col items-center gap-0.5">
           <span className="line-clamp-2 text-center text-xs leading-tight font-medium text-mono">
@@ -220,7 +295,12 @@ export function CategoryRail({ sections }: { sections: DiscoverySections }) {
           <RailItem
             key={category.slug}
             href={`/discover?category=${encodeURIComponent(category.slug)}`}
-            icon={CATEGORY_ICONS[category.slug] ?? DEFAULT_CATEGORY_ICON}
+            icon={
+              (category.icon === null
+                ? undefined
+                : GLYPHS[category.icon]) ?? DEFAULT_CATEGORY_ICON
+            }
+            iconUrl={category.icon_url}
             label={categoryLabel(category)}
             count={category.merchant_count}
           />

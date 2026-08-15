@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\MerchantLogoController;
+use App\Http\Controllers\StoreCategoryIconController;
 use Illuminate\Support\Facades\Route;
 
 // Store logos. Not under /discover: the same URL answers the public
@@ -19,5 +20,13 @@ use Illuminate\Support\Facades\Route;
 // is immutable-cacheable (content-versioned URL) — a real browser fetches
 // each logo once.
 Route::get('merchants/{slug}/logo', MerchantLogoController::class)
+    ->where('slug', '[a-z0-9-]{1,80}')
+    ->middleware('throttle:240,1');
+
+// Curated store-category icons — the rail's artwork. Same reasoning as the
+// logos above, minus the authorisation: a category is public unconditionally,
+// so the handler has nothing to decide. The rail paints one image per
+// category on the landing page, hence the same generous per-IP throttle.
+Route::get('store-categories/{slug}/icon', StoreCategoryIconController::class)
     ->where('slug', '[a-z0-9-]{1,80}')
     ->middleware('throttle:240,1');

@@ -31,6 +31,7 @@ class MerchantProfileResource extends JsonResource
         return [
             'id' => $this->id,
             'name' => $this->name,
+            'name_dv' => $this->name_dv,
             'slug' => $this->slug,
             'status' => $this->status,
             'category' => $this->category,

@@ -21,11 +21,11 @@ import { useTranslation } from 'react-i18next';
 import { formatDate, formatRate } from '@/lib/format';
 import { useDiscovery, useMe } from '@/lib/queries';
 import { SEARCH_MAX_CHARS } from '@/lib/search';
-import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { CashbackDemo } from '@/components/app/cashback-demo';
 import {
   CategoryRail,
   CategoryRailSkeleton,
@@ -36,6 +36,8 @@ import {
   StoreShelf,
 } from '@/components/app/discovery';
 import { PublicFooter, PublicHeader } from '@/components/app/public-header';
+import { RotatingWords } from '@/components/app/rotating-words';
+import { useStoreName } from '@/components/app/store-labels';
 import { StoreAvatar } from '@/components/app/store-avatar';
 
 /**
@@ -46,16 +48,20 @@ import { StoreAvatar } from '@/components/app/store-avatar';
  * already present.
  *
  * Shape, top to bottom: the category rail (the storefront's navigation),
- * the hero panel, the store shelves, then how-it-works and the marketplace
- * teaser. Everything between the header and how-it-works is data-driven and
- * disappears cleanly when there is no data — with ONE live store the page
- * must still read as finished, so a shelf never renders empty, the rail
- * never offers a filter that leads nowhere, and the hero never becomes a
- * carousel with one slide in it.
+ * the hero, how-it-works, the store shelves, then the marketplace teaser.
+ * How-it-works sits directly under the hero on purpose — a visitor who has
+ * just read the headline is asking "how does this work?", and the answer
+ * belongs on screen before the shelves start competing for attention.
+ *
+ * Everything between the rail and the teaser is data-driven and disappears
+ * cleanly when there is no data — with ONE live store the page must still
+ * read as finished, so a shelf never renders empty, the rail never offers a
+ * filter that leads nowhere, and the hero never becomes a carousel with one
+ * slide in it.
  *
  * Authed visitors (the same silent me-probe the header uses; react-query
  * dedupes the request) never see a "Create account" CTA anywhere on this
- * page: the hero and how-it-works CTAs become "Open dashboard", and the
+ * page: the hero CTA becomes "Open dashboard", and the
  * marketplace teaser's get-notified CTA collapses to a you're-all-set line
  * (being notified just means having an account). While the probe is still
  * in flight — and always when it 401s — the signed-out page renders
@@ -132,25 +138,6 @@ function HeroSearch() {
 }
 
 /**
- * Flat geometric decoration for the hero panel: CSS shapes only — no
- * photography, no external images, nothing to load. All logical insets, so
- * the composition mirrors under RTL instead of tearing.
- */
-function PanelShapes() {
-  return (
-    <div
-      aria-hidden="true"
-      className="pointer-events-none absolute inset-0 overflow-hidden"
-    >
-      <div className="absolute -top-28 -end-20 size-80 rounded-full bg-panel-foreground/10" />
-      <div className="absolute -bottom-20 -start-16 size-56 rotate-12 rounded-[3rem] bg-panel-foreground/5" />
-      <div className="absolute top-14 end-36 hidden size-24 rounded-full border-4 border-panel-accent/40 lg:block" />
-      <div className="absolute bottom-10 end-16 hidden h-2 w-44 rounded-full bg-panel-accent/70 lg:block" />
-    </div>
-  );
-}
-
-/**
  * The promoted-store panel — the SECOND hero panel, and only when there is
  * genuinely something to promote (a store whose live promotion beats its
  * standing rate). With nothing boosted the hero is one calm panel; it is
@@ -158,6 +145,7 @@ function PanelShapes() {
  */
 function PromotedPanel({ entry }: { entry: DiscoveryEntry }) {
   const { t } = useTranslation();
+  const storeName = useStoreName();
 
   return (
     <Link
@@ -171,7 +159,7 @@ function PromotedPanel({ entry }: { entry: DiscoveryEntry }) {
 
       <div className="relative flex items-center gap-3">
         <StoreAvatar
-          name={entry.name}
+          name={storeName(entry)}
           slug={entry.slug}
           logoUrl={entry.logo_url}
           size="sm"
@@ -181,7 +169,9 @@ function PromotedPanel({ entry }: { entry: DiscoveryEntry }) {
             <TrendingUp className="size-3" />
             {t('discover.boosted')}
           </span>
-          <span className="truncate text-sm font-medium">{entry.name}</span>
+          <span className="truncate text-sm font-medium">
+            {storeName(entry)}
+          </span>
         </div>
       </div>
 
@@ -218,50 +208,60 @@ function PromotedPanel({ entry }: { entry: DiscoveryEntry }) {
   );
 }
 
-/** Headline, search and CTA on the Manfaa panel, plus the promoted store
- *  beside it when one exists. */
+/**
+ * The hero: what Manfaa is, in one sentence, next to a phone showing it
+ * happening.
+ *
+ * Deliberately NOT a saturated full-bleed panel any more. The previous
+ * version painted a three-stop teal→indigo gradient across the whole width,
+ * which fought every card below it; the page now opens on its own
+ * background with a single soft wash behind the phone, and the colour
+ * budget is spent on the one thing worth looking at — the cashback landing.
+ *
+ * Copy on one side, demonstration on the other. Under RTL the two swap
+ * automatically: the grid order is source order, which the browser mirrors,
+ * so a Dhivehi reader gets the text on the right where they start reading.
+ */
 function Hero({ promoted }: { promoted: DiscoveryEntry | null }) {
   const { t } = useTranslation();
 
+  const channels = [
+    t('landing.heroChannelInStore'),
+    t('landing.heroChannelOnline'),
+    t('landing.heroChannelDineIn'),
+    t('landing.heroChannelServices'),
+  ];
+
   return (
-    <section className="container pb-10 lg:pb-14">
-      <div
-        className={cn(
-          'grid gap-4',
-          promoted !== null && 'lg:grid-cols-3',
-        )}
-      >
-        <div
-          className={cn(
-            'relative isolate overflow-hidden rounded-2xl bg-linear-to-br from-panel-from via-panel-via to-panel-to px-6 py-12 text-panel-foreground sm:px-10 lg:py-16',
-            promoted !== null && 'lg:col-span-2',
-          )}
-        >
-          <PanelShapes />
-          <div className="relative flex max-w-xl flex-col gap-5">
-            <h1 className="text-3xl font-semibold tracking-tight text-balance sm:text-4xl lg:text-5xl">
-              {t('landing.heroTitle')}
-            </h1>
-            <p className="text-sm/relaxed text-pretty text-panel-foreground/90 sm:text-base/relaxed">
-              {t('landing.heroSubtitle')}
-            </p>
-            <HeroSearch />
-            <div className="flex flex-wrap items-center gap-3">
-              <PrimaryCta className="bg-panel-foreground text-panel-to hover:bg-panel-foreground/90" />
-              <Button
-                size="lg"
-                variant="ghost"
-                asChild
-                className="border border-panel-foreground/40 text-panel-foreground hover:bg-panel-foreground/10 hover:text-panel-foreground"
-              >
-                <a href="#how-it-works">{t('landing.howTitle')}</a>
-              </Button>
-            </div>
+    <section className="container pt-2 pb-10 lg:pb-14">
+      <div className="grid items-center gap-10 lg:grid-cols-2 lg:gap-12">
+        <div className="flex max-w-xl flex-col gap-5">
+          <h1 className="text-3xl font-semibold tracking-tight text-balance text-mono sm:text-4xl lg:text-5xl">
+            {t('landing.heroTitleLead')}{' '}
+            <RotatingWords words={channels} className="text-primary" />
+          </h1>
+          <p className="text-sm/relaxed text-pretty text-muted-foreground sm:text-base/relaxed">
+            {t('landing.heroSubtitle')}
+          </p>
+          <HeroSearch />
+          <div className="flex flex-wrap items-center gap-3">
+            <PrimaryCta />
+            <Button size="lg" variant="outline" asChild>
+              <a href="#how-it-works">{t('landing.howTitle')}</a>
+            </Button>
           </div>
         </div>
 
-        {promoted !== null && <PromotedPanel entry={promoted} />}
+        <CashbackDemo />
       </div>
+
+      {/* The boosted store, when there is one, reads as a card under the
+          hero rather than a second hero — it is one store, not the pitch. */}
+      {promoted !== null && (
+        <div className="mt-8 max-w-sm lg:mt-10">
+          <PromotedPanel entry={promoted} />
+        </div>
+      )}
     </section>
   );
 }
@@ -397,6 +397,10 @@ function Shelves({ sections }: { sections: DiscoverySections }) {
   );
 }
 
+/**
+ * One step of how-it-works, laid out icon-beside-text so three of them fit
+ * on one line instead of stacking into a tall centred column.
+ */
 function Step({
   icon: Icon,
   step,
@@ -409,55 +413,55 @@ function Step({
   body: string;
 }) {
   return (
-    <li className="flex flex-col items-center gap-3 text-center">
-      <span className="relative flex size-12 items-center justify-center rounded-full bg-primary/10 text-primary">
-        <Icon className="size-5" />
-        <span className="absolute -top-1 -end-1 flex size-5 items-center justify-center rounded-full bg-primary text-[0.6875rem] font-semibold text-primary-foreground">
+    <li className="flex items-start gap-3">
+      <span className="relative flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+        <Icon className="size-4" />
+        <span className="absolute -top-1.5 -end-1.5 flex size-4 items-center justify-center rounded-full bg-primary text-[0.625rem] font-semibold text-primary-foreground">
           {step}
         </span>
       </span>
-      <div className="flex flex-col gap-1">
-        <h3 className="text-base font-semibold text-mono">{title}</h3>
-        <p className="max-w-xs text-sm text-muted-foreground">{body}</p>
+      <div className="flex min-w-0 flex-col gap-0.5">
+        <h3 className="text-sm font-semibold text-mono">{title}</h3>
+        <p className="text-xs/relaxed text-muted-foreground">{body}</p>
       </div>
     </li>
   );
 }
 
+/**
+ * Three steps in a row, immediately under the hero: a visitor who has just
+ * read the headline is asking "how?", and the answer should be on screen
+ * before the store shelves start competing for attention. Compact on
+ * purpose — it is a reassurance, not a chapter.
+ */
 function HowItWorks() {
   const { t } = useTranslation();
 
   return (
     <section
       id="how-it-works"
-      className="scroll-mt-20 border-t border-border bg-muted/40"
+      className="scroll-mt-20 border-y border-border bg-muted/30"
     >
-      <div className="container flex flex-col items-center gap-10 py-14 lg:py-20">
-        <h2 className="text-2xl font-semibold tracking-tight text-mono">
-          {t('landing.howTitle')}
-        </h2>
-        <ol className="grid w-full gap-10 sm:grid-cols-3 sm:gap-6">
-          <Step
-            icon={UserRoundPlus}
-            step={1}
-            title={t('landing.step1Title')}
-            body={t('landing.step1Body')}
-          />
-          <Step
-            icon={QrCode}
-            step={2}
-            title={t('landing.step2Title')}
-            body={t('landing.step2Body')}
-          />
-          <Step
-            icon={Banknote}
-            step={3}
-            title={t('landing.step3Title')}
-            body={t('landing.step3Body')}
-          />
-        </ol>
-        <PrimaryCta />
-      </div>
+      <ol className="container grid gap-5 py-6 sm:grid-cols-3 sm:gap-8">
+        <Step
+          icon={UserRoundPlus}
+          step={1}
+          title={t('landing.step1Title')}
+          body={t('landing.step1Body')}
+        />
+        <Step
+          icon={QrCode}
+          step={2}
+          title={t('landing.step2Title')}
+          body={t('landing.step2Body')}
+        />
+        <Step
+          icon={Banknote}
+          step={3}
+          title={t('landing.step3Title')}
+          body={t('landing.step3Body')}
+        />
+      </ol>
     </section>
   );
 }
@@ -536,6 +540,8 @@ export default function LandingPage() {
 
         <Hero promoted={promoted} />
 
+        <HowItWorks />
+
         {data !== undefined &&
           (hasListedStores(data) ? (
             <Shelves sections={data} />
@@ -543,7 +549,6 @@ export default function LandingPage() {
             <AllEmptyBlock />
           ))}
 
-        <HowItWorks />
         <MarketplaceTeaser />
       </main>
       <PublicFooter />

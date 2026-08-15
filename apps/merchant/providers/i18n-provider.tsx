@@ -8,7 +8,11 @@ import {
   useEffect,
   useState,
 } from 'react';
-import { useDirection } from '@manfaa/ui';
+import {
+  MoneyLocaleProvider,
+  useDirection,
+  type MoneyLocale,
+} from '@manfaa/ui';
 import { I18nextProvider } from 'react-i18next';
 import i18n, {
   isAppLanguage,
@@ -24,6 +28,12 @@ interface LanguageContextValue {
 
 const LanguageContext = createContext<LanguageContextValue | null>(null);
 
+/** The currency word per language — see MoneyLocale in @manfaa/ui. */
+const MONEY_LOCALES: Record<AppLanguage, MoneyLocale> = {
+  en: { label: 'MVR', placement: 'before' },
+  dv: { label: 'ރުފިޔާ', placement: 'after' },
+};
+
 /** The active language + setter for the header's language switcher. */
 export function useLanguage(): LanguageContextValue {
   const context = useContext(LanguageContext);
@@ -37,6 +47,11 @@ export function useLanguage(): LanguageContextValue {
  * Makes the app's i18next instance available to every useTranslation(), and
  * owns the language choice: default English, persisted per browser, applied
  * after hydration (SSR always renders English so markup matches).
+ *
+ * It also fixes how money is spelled: Dhivehi reads "1,234.56 ރުފިޔާ", not
+ * "MVR 1,234.56" — the ISO code is a banking token, not a word a Thaana
+ * reader uses. MoneyText and useFormatMoney pick this up from context, so
+ * no call site has to know the language.
  *
  * When Dhivehi is active it also flips the document to RTL + Thaana:
  * useDirection (from @manfaa/ui) keeps <html dir> in sync, and setting
@@ -70,7 +85,9 @@ export function I18nProvider({ children }: { children: ReactNode }) {
 
   return (
     <LanguageContext.Provider value={{ language, setLanguage }}>
-      <I18nextProvider i18n={i18n}>{children}</I18nextProvider>
+      <MoneyLocaleProvider locale={MONEY_LOCALES[language]}>
+        <I18nextProvider i18n={i18n}>{children}</I18nextProvider>
+      </MoneyLocaleProvider>
     </LanguageContext.Provider>
   );
 }

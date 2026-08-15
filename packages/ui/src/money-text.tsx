@@ -1,48 +1,160 @@
-import type { HTMLAttributes } from 'react';
+'use client';
+
+import {
+  createContext,
+  useContext,
+  type HTMLAttributes,
+  type ReactNode,
+} from 'react';
+
+/**
+ * How money is spelled in the active language.
+ *
+ * The AMOUNT never varies — integer laari, grouped, two decimals, Western
+ * digits (the Maldives writes numerals that way in both languages). Only
+ * the currency word and its side change:
+ *
+ *   en  MVR 1,234.56
+ *   dv  1,234.56 ރުފިޔާ
+ *
+ * "MVR" is an ISO code for banking systems, not a word a Dhivehi reader
+ * uses; on a Thaana page it reads as untranslated UI.
+ */
+export interface MoneyLocale {
+  /** The currency word, e.g. "MVR" or "ރުފިޔާ". */
+  label: string;
+  /** Which side of the amount the label sits on. */
+  placement: 'before' | 'after';
+}
+
+export const DEFAULT_MONEY_LOCALE: MoneyLocale = {
+  label: 'MVR',
+  placement: 'before',
+};
+
+const MoneyLocaleContext = createContext<MoneyLocale>(DEFAULT_MONEY_LOCALE);
+
+/**
+ * Supplies the money spelling to every MoneyText below it. Apps mount this
+ * from their language provider; anything rendered outside one keeps the
+ * English default, so a component can never crash for want of a provider.
+ */
+export function MoneyLocaleProvider({
+  locale,
+  children,
+}: {
+  locale: MoneyLocale;
+  children: ReactNode;
+}) {
+  return (
+    <MoneyLocaleContext.Provider value={locale}>
+      {children}
+    </MoneyLocaleContext.Provider>
+  );
+}
+
+export function useMoneyLocale(): MoneyLocale {
+  return useContext(MoneyLocaleContext);
+}
 
 export interface MoneyTextProps extends HTMLAttributes<HTMLSpanElement> {
-  /** Amount as an integer count of laari (1 MVR = 100 laari). Never a float. */
+  /** Amount as an integer count of laari (1 rufiyaa = 100 laari). Never a float. */
   laari: number;
-  /** ISO currency code. v1 is MVR-only. */
+  /**
+   * The amount's ISO currency code, straight from the API. v1 is MVR-only,
+   * and for MVR the SPELLING is a language question, so the locale wins.
+   * Anything else wins over the locale instead — money in another currency
+   * must never be relabelled "ރުފިޔާ" just because the reader is Dhivehi.
+   */
   currency?: string;
+  /** Overrides the spelling outright — rarely needed. */
+  locale?: MoneyLocale;
+}
+
+/** MVR is spelled by the language; any other currency speaks for itself. */
+export function resolveMoneyLocale(
+  locale: MoneyLocale,
+  currency?: string,
+): MoneyLocale {
+  if (currency === undefined || currency === '' || currency === 'MVR') {
+    return locale;
+  }
+
+  return { label: currency, placement: 'before' };
 }
 
 /**
- * Formats integer laari as a currency string (e.g. 123456 -> "MVR 1,234.56")
- * using integer arithmetic only; Intl is used solely to group the rufiyaa part.
+ * Formats integer laari as a money string using integer arithmetic only;
+ * Intl is used solely to group the rufiyaa part.
+ *
+ * The second parameter accepts either a plain currency string (the original
+ * signature, still used by non-React callers) or a MoneyLocale.
  */
-export function formatMoney(laari: number, currency = 'MVR'): string {
+export function formatMoney(
+  laari: number,
+  locale: MoneyLocale | string = DEFAULT_MONEY_LOCALE,
+): string {
   if (!Number.isSafeInteger(laari)) {
     throw new TypeError(`laari must be a safe integer, got ${laari}`);
   }
+
+  const { label, placement }: MoneyLocale =
+    typeof locale === 'string' ? { label: locale, placement: 'before' } : locale;
+
   const sign = laari < 0 ? '-' : '';
   const abs = Math.abs(laari);
   const rufiyaa = Math.trunc(abs / 100);
   const remainder = abs % 100;
   const grouped = new Intl.NumberFormat('en-US').format(rufiyaa);
-  return `${sign}${currency} ${grouped}.${String(remainder).padStart(2, '0')}`;
+  // LEFT-TO-RIGHT ISOLATE … POP DIRECTIONAL ISOLATE around the digits. The
+  // amount is a directionally neutral run, so inside a Dhivehi sentence the
+  // bidi algorithm would otherwise be free to move the minus sign to the
+  // far end. The isolate travels with the STRING, so it survives being
+  // interpolated into a translated sentence where no wrapper element can
+  // reach — unlike MoneyText's dir="ltr", which only helps its own span.
+  // The currency word stays outside it and keeps its own direction.
+  const amount = `\u2066${sign}${grouped}.${String(remainder).padStart(2, '0')}\u2069`;
+
+  return placement === 'after' ? `${amount} ${label}` : `${label} ${amount}`;
 }
 
 /**
- * Renders an integer laari amount as MVR with tabular numerals so columns of
- * money line up. Display-only — arithmetic on money stays in integer laari.
+ * Formats money in the active language. Use this wherever the plain
+ * `formatMoney` would otherwise be called from a component — it is the only
+ * way a string built by hand picks up the Dhivehi spelling.
+ */
+export function useFormatMoney(): (laari: number, currency?: string) => string {
+  const locale = useMoneyLocale();
+  return (laari: number, currency?: string) =>
+    formatMoney(laari, resolveMoneyLocale(locale, currency));
+}
+
+/**
+ * Renders an integer laari amount with tabular numerals so columns of money
+ * line up. Display-only — arithmetic on money stays in integer laari.
  */
 export function MoneyText({
   laari,
-  currency = 'MVR',
+  currency,
+  locale,
   className,
   ...props
 }: MoneyTextProps) {
+  const contextLocale = useMoneyLocale();
+  const active = locale ?? resolveMoneyLocale(contextLocale, currency);
+
   return (
-    // dir="ltr" isolates the amount from an RTL (Dhivehi) paragraph: money
-    // always reads "MVR 1,234.56" / "-MVR 5.00" — without the isolate the
-    // bidi algorithm moves a leading minus to the other end under dir="rtl".
+    // dir="ltr" isolates the amount from an RTL (Dhivehi) paragraph so the
+    // digits, the decimal point and a leading minus keep their order — the
+    // bidi algorithm moves a leading "-" to the other end under dir="rtl".
+    // The Thaana currency word inside is itself an RTL run and still shapes
+    // correctly; only the sequence amount-then-word is being pinned here.
     <span
       dir="ltr"
       className={['tabular-nums', className].filter(Boolean).join(' ')}
       {...props}
     >
-      {formatMoney(laari, currency)}
+      {formatMoney(laari, active)}
     </span>
   );
 }

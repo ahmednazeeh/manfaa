@@ -673,7 +673,7 @@ export type ProductCategoryResponse = z.infer<
 
 const productCategoryRequestBase = z.object({
   name_en: z.string().min(1).max(120),
-  name_dv: z.string().max(120).nullable().optional(),
+  name_dv: z.string().min(1).max(120),
   sort: z.number().int().min(0).max(100000).optional(),
 });
 
@@ -705,7 +705,8 @@ export type CreateProductCategoryRequest = z.infer<
  */
 export const UpdateProductCategoryRequestSchema = z.object({
   name_en: z.string().min(1).max(120).optional(),
-  name_dv: z.string().max(120).nullable().optional(),
+  /** Omit to leave alone; it may not be blanked once set (server 422). */
+  name_dv: z.string().min(1).max(120).optional(),
   mode: ProductCategoryModeSchema.optional(),
   cashback_rate_percent: CashbackPercentInputSchema.nullable().optional(),
   sort: z.number().int().min(0).max(100000).optional(),
@@ -925,6 +926,8 @@ export type MerchantWriteGateCode = z.infer<typeof MerchantWriteGateCodeSchema>;
 export const MerchantProfileSchema = z.object({
   id: z.number().int(),
   name: z.string(),
+  /** The store's own name in Thaana; null when it has not supplied one. */
+  name_dv: z.string().nullable().catch(null),
   slug: z.string(),
   status: MerchantStatusSchema,
   category: z.string().nullable(),
@@ -949,6 +952,12 @@ export type MerchantProfileResponse = z.infer<
 >;
 
 export const UpdateMerchantProfileRequestSchema = z.object({
+  /**
+   * The Thaana name. Editable by the owner even though `name` is not: this
+   * is a translation of the display name rather than the store's identity,
+   * and nothing (the slug included) is derived from it.
+   */
+  name_dv: z.string().max(120).nullable().optional(),
   /**
    * An ACTIVE curated store-category slug (422 otherwise), or null — with
    * one exception: the value the store already holds is always accepted,

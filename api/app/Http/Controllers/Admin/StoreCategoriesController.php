@@ -4,11 +4,16 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Admin;
 
+use App\Domain\Discovery\DiscoveryService;
+use App\Domain\Storefront\StoreCategoryIcon;
 use App\Http\Controllers\Controller;
 use App\Models\Merchant;
 use App\Models\StoreCategory;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
 /**
@@ -49,6 +54,7 @@ class StoreCategoriesController extends Controller
             ],
             'name_en' => ['required', 'string', 'max:120'],
             'name_dv' => ['sometimes', 'nullable', 'string', 'max:120'],
+            'icon' => ['sometimes', 'nullable', 'string', Rule::in(StoreCategory::ICONS)],
             'sort' => ['sometimes', 'integer', 'min:0', 'max:100000'],
             'active' => ['sometimes', 'boolean'],
         ]);
@@ -57,6 +63,7 @@ class StoreCategoriesController extends Controller
             'slug' => $validated['slug'],
             'name_en' => $validated['name_en'],
             'name_dv' => $validated['name_dv'] ?? null,
+            'icon' => $validated['icon'] ?? null,
             'sort' => $validated['sort'] ?? 0,
             'active' => $validated['active'] ?? true,
         ]);
@@ -71,6 +78,7 @@ class StoreCategoriesController extends Controller
         $validated = $request->validate([
             'name_en' => ['sometimes', 'string', 'max:120'],
             'name_dv' => ['sometimes', 'nullable', 'string', 'max:120'],
+            'icon' => ['sometimes', 'nullable', 'string', Rule::in(StoreCategory::ICONS)],
             'sort' => ['sometimes', 'integer', 'min:0', 'max:100000'],
             'active' => ['sometimes', 'boolean'],
         ]);
@@ -99,6 +107,89 @@ class StoreCategoriesController extends Controller
     }
 
     /**
+     * Replaces the category's icon artwork. Multipart, so it cannot ride the
+     * JSON PATCH; the previous file is deleted only AFTER the replacement is
+     * safely on disk, so a failed write never leaves the rail iconless.
+     */
+    public function uploadIcon(Request $request, int $id): JsonResponse
+    {
+        $category = StoreCategory::query()->findOrFail($id);
+
+        $request->validate([
+            'icon' => [
+                'required', 'file', 'image',
+                // Raster only — see StoreCategoryIcon on why SVG is refused.
+                'mimes:jpg,jpeg,png,webp',
+                'max:'.StoreCategoryIcon::MAX_KB,
+                // 64px minimum keeps it crisp in the rail's tile on a 2x
+                // display. Aspect ratio is deliberately unconstrained — the
+                // tile centres and contains the artwork, so a non-square
+                // upload is letterboxed rather than rejected.
+                Rule::dimensions()->minWidth(64)->minHeight(64)->maxWidth(2048)->maxHeight(2048),
+            ],
+        ]);
+
+        $file = $request->file('icon');
+        $extension = strtolower($file->extension());
+
+        if ($extension === 'jpeg') {
+            $extension = 'jpg';
+        }
+
+        $previous = $category->icon_path;
+
+        $path = $file->storeAs(
+            'store-categories/'.$category->id,
+            Str::uuid()->toString().'.'.$extension,
+            StoreCategoryIcon::DISK,
+        );
+
+        abort_if($path === false, 500, 'Could not store the icon.');
+
+        if ($previous !== null && $previous !== '' && $previous !== $path) {
+            Storage::disk(StoreCategoryIcon::DISK)->delete($previous);
+        }
+
+        $category->icon_path = $path;
+        $category->save();
+
+        // The rail is served from the 60s discovery read model; without this
+        // the new artwork would not appear for up to a minute.
+        Cache::forget(DiscoveryService::CACHE_KEY);
+
+        return response()->json(['data' => $this->present($category, $this->activeMerchantCount($category))]);
+    }
+
+    /**
+     * Removes the uploaded artwork. The category then falls back to its
+     * curated glyph name, which is why this is a clean removal rather than
+     * something that can leave the rail blank.
+     */
+    public function destroyIcon(int $id): JsonResponse
+    {
+        $category = StoreCategory::query()->findOrFail($id);
+
+        if ($category->icon_path !== null && $category->icon_path !== '') {
+            Storage::disk(StoreCategoryIcon::DISK)->delete($category->icon_path);
+        }
+
+        $category->icon_path = null;
+        $category->save();
+
+        Cache::forget(DiscoveryService::CACHE_KEY);
+
+        return response()->json(['data' => $this->present($category, $this->activeMerchantCount($category))]);
+    }
+
+    private function activeMerchantCount(StoreCategory $category): int
+    {
+        return Merchant::query()
+            ->where('status', 'active')
+            ->where('category', $category->slug)
+            ->count();
+    }
+
+    /**
      * @return array<string, mixed>
      */
     private function present(StoreCategory $category, int $activeMerchantCount): array
@@ -108,6 +199,10 @@ class StoreCategoriesController extends Controller
             'slug' => $category->slug,
             'name_en' => $category->name_en,
             'name_dv' => $category->name_dv,
+            'icon' => $category->icon,
+            // Uploaded artwork wins in every client; `icon` above is the
+            // curated glyph the rail falls back to.
+            'icon_url' => StoreCategoryIcon::url($category->slug, $category->icon_path),
             'sort' => $category->sort,
             'active' => $category->active,
             'active_merchant_count' => $activeMerchantCount,

@@ -563,6 +563,31 @@ public header search, curated category icon rail, graphic hero, store shelves
 including Recently added · empty curated shelves suppressed rather than shown
 as "nothing here" boxes.
 
+### The storefront/Dhivehi round — DONE
+
+Category icons are UPLOADED artwork (superadmin, admin.manfaa.app › Settings ›
+Store categories), served public and immutable-cached from
+`/api/store-categories/{slug}/icon?v=…`; a curated lucide glyph name stays
+underneath as the fallback so the rail is never a row of blank tiles. SVG is
+refused — it is a scriptable document served from our own origin.
+
+Landing rebuilt on the rakuten/islebooks shape: copy on one side, an animated
+customer-app mockup on the other (code → sale → "Ka-ching, you earned …"),
+which mirrors under RTL. The three-stop gradient panel is gone — it fought
+every card below it — and how-it-works moved directly under the hero as one
+compact left-to-right row. Store card media is square, so an uploaded square
+logo fits instead of letterboxing.
+
+Dhivehi: money reads "1,249.60 ރުފިޔާ", never "MVR" (a MoneyLocale context in
+@manfaa/ui, so no call site knows the language); Noto Sans Thaana is
+self-hosted (~8 KB, was relying on the reader having Faruma installed) and
+`html[lang=dv]` scales the root size so type, leading and spacing grow
+together; percentages and amounts carry Unicode LTR isolates, which is what
+turned "%2" back into "2%". Stores collect a Thaana name at signup (editable
+in profile, never touches the slug) and every storefront surface shows it.
+Merchant PRODUCT categories now REQUIRE a Dhivehi name — they print on the
+customer's own receipt lines.
+
 ### Queue: EMPTY. Next work needs a product decision — see below.
 
 ### Open decisions awaiting the owner
@@ -582,7 +607,10 @@ as "nothing here" boxes.
   (all appeared in a chat transcript). Confirm Cloudflare SSL = Full (strict).
 - Replace the MsgOwl sender id (currently IsleBooks') with a Manfaa id.
 - Native review of the Dhivehi machine-draft locales (customer + merchant apps;
-  apps/admin is intentionally English-only — no i18n runtime).
+  apps/admin is intentionally English-only — no i18n runtime). Now covers the
+  rebuilt hero copy and the demo panel strings as well.
+- Upload real category artwork for the nine curated store categories; until
+  then each falls back to its curated glyph.
 - SPF/DKIM/DMARC before any outbound email.
 - Bank bulk payout file format (§14) — blocks real payout runs.
 - Consolidate the suspended-store refusal onto EnsureMerchantApproved:trading

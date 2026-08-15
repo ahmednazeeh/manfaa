@@ -194,7 +194,7 @@ it('leaks nothing: no internal ids, no PII, no commercial terms', function () {
     foreach (['featured', 'increased', 'nearby', 'in_store', 'online', 'recently_added'] as $shelf) {
         foreach ($data[$shelf] as $entry) {
             expect(array_keys($entry))->toBe([
-                'name', 'slug', 'category', 'logo_url', 'channel', 'cashback_rate_percent', 'standing_cashback_rate_percent', 'promo_ends_at', 'distance_m',
+                'name', 'name_dv', 'slug', 'category', 'logo_url', 'channel', 'cashback_rate_percent', 'standing_cashback_rate_percent', 'promo_ends_at', 'distance_m',
             ]);
         }
     }
@@ -203,7 +203,7 @@ it('leaks nothing: no internal ids, no PII, no commercial terms', function () {
     // row id, no sort weight, nothing internal.
     expect($data['categories'])->not->toBe([]);
     foreach ($data['categories'] as $category) {
-        expect(array_keys($category))->toBe(['slug', 'name_en', 'name_dv', 'merchant_count']);
+        expect(array_keys($category))->toBe(['slug', 'name_en', 'name_dv', 'icon', 'icon_url', 'merchant_count']);
     }
 
     $raw = $response->getContent();
@@ -344,7 +344,7 @@ it('orders the recently added shelf by approval, falling back to creation', func
     // Same entry shape and the same percent-string wire format as every
     // other shelf — the shelf differs only in its ordering.
     expect(array_keys($shelf[0]))->toBe([
-        'name', 'slug', 'category', 'logo_url', 'channel', 'cashback_rate_percent', 'standing_cashback_rate_percent', 'promo_ends_at', 'distance_m',
+        'name', 'name_dv', 'slug', 'category', 'logo_url', 'channel', 'cashback_rate_percent', 'standing_cashback_rate_percent', 'promo_ends_at', 'distance_m',
     ]);
     expect($shelf[0]['cashback_rate_percent'])->toBe('2.00');
     expect($shelf[1]['cashback_rate_percent'])->toBe('1.00');
@@ -426,6 +426,8 @@ it('rails the curated categories that have at least one live store, in curated o
         'slug' => 'grocery',
         'name_en' => 'Grocery',
         'name_dv' => 'ގުރޮސަރީ',
+        'icon' => 'shopping-cart',
+        'icon_url' => null,
         'merchant_count' => 1,
     ]);
 
@@ -468,7 +470,7 @@ it('serves the rail from the same 60-second cache as the shelves', function () {
     discoveryMerchant(['name' => 'Cafe Alpha', 'slug' => 'cafe-alpha', 'category' => 'cafe'], 200);
 
     expect($this->getJson('/api/discover')->assertOk()->json('data.categories'))
-        ->toBe([['slug' => 'cafe', 'name_en' => 'Café', 'name_dv' => 'ކެފޭ', 'merchant_count' => 1]]);
+        ->toBe([['slug' => 'cafe', 'name_en' => 'Café', 'name_dv' => 'ކެފޭ', 'icon' => 'coffee', 'icon_url' => null, 'merchant_count' => 1]]);
 
     // A second cafe inside the TTL does not move the count: the rail is
     // derived from the cached entries, under the same key, so the chip can

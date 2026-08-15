@@ -95,7 +95,7 @@ it('lists the same fixture the moment it is active — the matrix is about statu
 
     // The rail raises the chip the same moment — one live store behind it.
     expect($sections['categories'])->toBe([
-        ['slug' => 'grocery', 'name_en' => 'Grocery', 'name_dv' => 'ގުރޮސަރީ', 'merchant_count' => 1],
+        ['slug' => 'grocery', 'name_en' => 'Grocery', 'name_dv' => 'ގުރޮސަރީ', 'icon' => 'shopping-cart', 'icon_url' => null, 'merchant_count' => 1],
     ]);
 
     $this->getJson('/api/discover/merchants/shadow-store')->assertOk()

@@ -6,7 +6,7 @@ import {
   type StoreCategory,
 } from '@manfaa/api-client';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Pencil, Plus, TriangleAlert } from 'lucide-react';
+import { ImageOff, Pencil, Plus, TriangleAlert } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiErrorMessage } from '@/lib/api-error';
 import { Alert, AlertDescription, AlertIcon } from '@/components/ui/alert';
@@ -159,6 +159,7 @@ export default function StoreCategoriesPage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-16 text-end">Sort</TableHead>
+                    <TableHead className="w-14">Icon</TableHead>
                     <TableHead>Name</TableHead>
                     <TableHead>Slug</TableHead>
                     <TableHead>Status</TableHead>
@@ -170,7 +171,7 @@ export default function StoreCategoriesPage() {
                   {query.isPending ? (
                     Array.from({ length: 4 }).map((_, index) => (
                       <TableRow key={index}>
-                        <TableCell colSpan={6}>
+                        <TableCell colSpan={7}>
                           <Skeleton className="h-6 w-full" />
                         </TableCell>
                       </TableRow>
@@ -178,7 +179,7 @@ export default function StoreCategoriesPage() {
                   ) : categories.length === 0 ? (
                     <TableRow>
                       <TableCell
-                        colSpan={6}
+                        colSpan={7}
                         className="py-10 text-center text-muted-foreground"
                       >
                         No categories yet. Add the list stores will pick from
@@ -190,6 +191,23 @@ export default function StoreCategoriesPage() {
                       <TableRow key={category.id}>
                         <TableCell className="text-end text-muted-foreground">
                           {category.sort}
+                        </TableCell>
+                        <TableCell>
+                          {/* What the storefront rail actually draws. An
+                              empty frame means no artwork — the rail falls
+                              back to a glyph, which is not worth mirroring
+                              here. */}
+                          <span className="flex size-9 items-center justify-center overflow-hidden rounded-lg border border-border bg-card">
+                            {category.icon_url === null ? (
+                              <ImageOff className="size-4 text-muted-foreground" />
+                            ) : (
+                              <img
+                                src={category.icon_url}
+                                alt=""
+                                className="size-full object-cover"
+                              />
+                            )}
+                          </span>
                         </TableCell>
                         <TableCell>
                           <div className="flex flex-col">

@@ -37,8 +37,19 @@ export function estimateLaariAtBp(eligibleLaari: number, bp: number): number {
  * For a rate the API SENT, use formatRate below instead — the wire string
  * is already exact and must not be round-tripped through a number.
  */
+/**
+ * LEFT-TO-RIGHT ISOLATE … POP DIRECTIONAL ISOLATE. A percentage is a
+ * directionally neutral run, so under Dhivehi (RTL) the bidi algorithm
+ * reorders "2%" into "%2". Pinning it in the STRING keeps it right wherever
+ * it lands — including inside a translated sentence, where there is no
+ * element to hang a dir attribute on.
+ */
+function ltrIsolate(text: string): string {
+  return `\u2066${text}\u2069`;
+}
+
 export function formatBp(bp: number): string {
-  return `${bpToPercentString(bp).replace(/\.?0+$/, '')}%`;
+  return ltrIsolate(`${bpToPercentString(bp).replace(/\.?0+$/, '')}%`);
 }
 
 /**
@@ -53,7 +64,7 @@ export function formatBp(bp: number): string {
  * showing a rate the API already expressed as a percent.
  */
 export function formatRate(percent: string): string {
-  return `${trimRate(percent)}%`;
+  return ltrIsolate(`${trimRate(percent)}%`);
 }
 
 /** formatRate for the nullable rate fields (an unpriced fee, no discount). */

@@ -70,6 +70,20 @@ return [
             'report' => false,
         ],
 
+        // Uploaded icons for the superadmin-curated store categories. These
+        // ARE public — the category rail is the storefront's navigation —
+        // but they are served through StoreCategoryIconController like the
+        // logos above, so one route works on every app host and no second
+        // nginx location block has to exist. See
+        // App\Domain\Storefront\StoreCategoryIcon.
+        'store-category-icons' => [
+            'driver' => 'local',
+            'root' => storage_path('app/store-category-icons'),
+            'serve' => false,
+            'throw' => false,
+            'report' => false,
+        ],
+
         'public' => [
             'driver' => 'local',
             'root' => storage_path('app/public'),

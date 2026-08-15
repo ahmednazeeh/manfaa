@@ -6,6 +6,7 @@ namespace App\Domain\Discovery;
 
 use App\Domain\Money\Percent;
 use App\Domain\Onboarding\MerchantLogo;
+use App\Domain\Storefront\StoreCategoryIcon;
 use App\Models\Merchant;
 use App\Models\MerchantBranch;
 use App\Models\MerchantProductCategory;
@@ -53,7 +54,9 @@ final class DiscoveryService
     // carries — a value written by the previous build renders the new
     // payload correctly, so a bump would only force a pointless cold
     // rebuild. Bump the moment an entry gains, loses or renames a key.
-    public const string CACHE_KEY = 'discovery:entries:v4';
+    //
+    // v5: the cached rail rows gained `icon` (admin-chosen lucide name).
+    public const string CACHE_KEY = 'discovery:entries:v5';
 
     // v4: store detail gained category_rates (Task #25).
     public const string STORE_CACHE_PREFIX = 'discovery:store:v4:';
@@ -106,7 +109,7 @@ final class DiscoveryService
     }
 
     /**
-     * @return array{featured: list<array<string, mixed>>, increased: list<array<string, mixed>>, nearby: list<array<string, mixed>>, in_store: list<array<string, mixed>>, online: list<array<string, mixed>>, recently_added: list<array<string, mixed>>, categories: list<array{slug: string, name_en: string, name_dv: string|null, merchant_count: int}>}
+     * @return array{featured: list<array<string, mixed>>, increased: list<array<string, mixed>>, nearby: list<array<string, mixed>>, in_store: list<array<string, mixed>>, online: list<array<string, mixed>>, recently_added: list<array<string, mixed>>, categories: list<array{slug: string, name_en: string, name_dv: string|null, icon: string|null, icon_url: string|null, merchant_count: int}>}
      */
     public function sections(?float $lat, ?float $lng): array
     {
@@ -335,7 +338,7 @@ final class DiscoveryService
      * minute stale is harmless where a stale RATE would not be.
      *
      * @param  list<array<string, mixed>>  $entries
-     * @return list<array{slug: string, name_en: string, name_dv: string|null, merchant_count: int}>
+     * @return list<array{slug: string, name_en: string, name_dv: string|null, icon: string|null, icon_url: string|null, merchant_count: int}>
      */
     private function buildCuratedCategories(array $entries): array
     {
@@ -361,11 +364,17 @@ final class DiscoveryService
             ->whereIn('slug', array_keys($counts))
             ->orderBy('sort')
             ->orderBy('slug')
-            ->get(['slug', 'name_en', 'name_dv'])
+            ->get(['slug', 'name_en', 'name_dv', 'icon', 'icon_path'])
             ->map(fn (StoreCategory $category): array => [
                 'slug' => $category->slug,
                 'name_en' => $category->name_en,
                 'name_dv' => $category->name_dv,
+                // Two-step iconography, resolved by the client in this
+                // order: uploaded artwork, then the curated glyph name,
+                // then its own neutral fallback. The rail therefore always
+                // draws something, whether or not anyone has uploaded yet.
+                'icon' => $category->icon,
+                'icon_url' => StoreCategoryIcon::url($category->slug, $category->icon_path),
                 'merchant_count' => $counts[$category->slug],
             ])
             ->all();
@@ -382,6 +391,10 @@ final class DiscoveryService
     {
         return [
             'name' => $entry['name'],
+            // Null wherever the store has not supplied one; every client
+            // falls back to `name`, so a Dhivehi visitor reads the Latin
+            // name rather than a blank card.
+            'name_dv' => $entry['name_dv'],
             'slug' => $entry['slug'],
             'category' => $entry['category'],
             'logo_url' => $entry['logo_url'],
@@ -406,6 +419,10 @@ final class DiscoveryService
     {
         return [
             'name' => $entry['name'],
+            // Null wherever the store has not supplied one; every client
+            // falls back to `name`, so a Dhivehi visitor reads the Latin
+            // name rather than a blank card.
+            'name_dv' => $entry['name_dv'],
             'slug' => $entry['slug'],
             'category' => $entry['category'],
             'logo_url' => $entry['logo_url'],
@@ -436,7 +453,7 @@ final class DiscoveryService
             ))
             ->when($category !== null, fn ($query) => $query->where('category', $category))
             ->orderBy('name')
-            ->get(['id', 'name', 'slug', 'category', 'logo_path', 'featured', 'channel', 'approved_at', 'created_at']);
+            ->get(['id', 'name', 'name_dv', 'slug', 'category', 'logo_path', 'featured', 'channel', 'approved_at', 'created_at']);
 
         if ($merchants->isEmpty()) {
             return [];
@@ -492,6 +509,7 @@ final class DiscoveryService
 
             $entries[] = [
                 'name' => $merchant->name,
+                'name_dv' => $merchant->name_dv,
                 'slug' => $merchant->slug,
                 'category' => $merchant->category,
                 'logo_url' => $this->logoUrl($merchant->slug, $merchant->logo_path),
@@ -528,7 +546,7 @@ final class DiscoveryService
         $merchant = Merchant::query()
             ->where('status', 'active')
             ->where('slug', $slug)
-            ->first(['id', 'name', 'slug', 'category', 'logo_path', 'featured', 'channel', 'eligibility_basis', 'created_at']);
+            ->first(['id', 'name', 'name_dv', 'slug', 'category', 'logo_path', 'featured', 'channel', 'eligibility_basis', 'created_at']);
 
         if ($merchant === null) {
             return null;
@@ -590,6 +608,7 @@ final class DiscoveryService
 
         return [
             'name' => $merchant->name,
+            'name_dv' => $merchant->name_dv,
             'slug' => $merchant->slug,
             'category' => $merchant->category,
             'logo_url' => $this->logoUrl($merchant->slug, $merchant->logo_path),

@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { type CustomerTransaction } from '@manfaa/api-client';
-import { formatMoney, MoneyText } from '@manfaa/ui';
+import { MoneyText, useFormatMoney } from '@manfaa/ui';
 import { useTranslation } from 'react-i18next';
 import { formatDate } from '@/lib/format';
 import { statusReasonLabel } from '@/lib/labels';
@@ -30,6 +30,7 @@ import { TransactionStatusChip } from '@/components/app/status-chip';
  */
 function TransactionRow({ transaction }: { transaction: CustomerTransaction }) {
   const { t } = useTranslation();
+  const formatMoney = useFormatMoney();
   const merchant = transaction.merchant.name;
 
   const reasonLine = statusReasonLabel(t, transaction.status_reason, merchant);

@@ -26,6 +26,11 @@ interface RequestOptions {
  */
 export const DiscoveryEntrySchema = z.object({
   name: z.string(),
+  /**
+   * The store's own name in Thaana; null when it has not supplied one, in
+   * which case a Dhivehi UI shows `name` rather than a blank.
+   */
+  name_dv: z.string().nullable().catch(null),
   slug: z.string(),
   category: z.string().nullable(),
   /** Absolute URL of the merchant logo; null when none is uploaded. */
@@ -50,12 +55,22 @@ export type DiscoveryEntry = z.infer<typeof DiscoveryEntrySchema>;
  *
  * `name_dv` is the Dhivehi label; render it in Thaana (RTL) and fall back
  * to `name_en` when it is null.
+ *
+ * Iconography is a PAIR, resolved in this order:
+ *   `icon_url` (artwork an admin uploaded)
+ *     → `icon` (a curated glyph name)
+ *       → the client's own neutral fallback.
+ * Both may be null, so a client must always carry that last fallback.
  */
 export const DiscoveryCategorySchema = z.object({
   /** Pass back verbatim as the directory's `category` filter. */
   slug: z.string(),
   name_en: z.string(),
   name_dv: z.string().nullable(),
+  /** Curated glyph name (lucide), drawn when there is no uploaded icon. */
+  icon: z.string().nullable().catch(null),
+  /** Absolute URL of uploaded category artwork; null when none. */
+  icon_url: z.string().nullable().catch(null),
   merchant_count: z.number().int(),
 });
 export type DiscoveryCategory = z.infer<typeof DiscoveryCategorySchema>;
@@ -132,6 +147,8 @@ export function getDiscovery(
  */
 export const DirectoryEntrySchema = z.object({
   name: z.string(),
+  /** Thaana name; null when unset — fall back to `name`. */
+  name_dv: z.string().nullable().catch(null),
   slug: z.string(),
   category: z.string().nullable(),
   /** Absolute URL of the merchant logo; null when none is uploaded. */
@@ -254,6 +271,8 @@ export type StoreBranch = z.infer<typeof StoreBranchSchema>;
  */
 export const StoreDetailSchema = z.object({
   name: z.string(),
+  /** Thaana name; null when unset — fall back to `name`. */
+  name_dv: z.string().nullable().catch(null),
   slug: z.string(),
   category: z.string().nullable(),
   /** Absolute URL of the merchant logo; null when none is uploaded. */

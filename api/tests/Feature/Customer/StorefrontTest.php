@@ -51,7 +51,7 @@ it('paginates the directory alphabetically with default and capped page sizes', 
 
     // Every entry carries exactly the public directory contract.
     expect(array_keys($data[0]))->toBe([
-        'name', 'slug', 'category', 'logo_url', 'channel', 'cashback_rate_percent', 'standing_cashback_rate_percent', 'promo_ends_at',
+        'name', 'name_dv', 'slug', 'category', 'logo_url', 'channel', 'cashback_rate_percent', 'standing_cashback_rate_percent', 'promo_ends_at',
     ]);
 
     // No logo uploaded — the slot is present and null, never absent.
@@ -178,7 +178,7 @@ it('keeps meta.categories a flat slug list while the landing rail carries names 
 
     $rail = $this->getJson('/api/discover')->assertOk()->json('data.categories');
     expect(collect($rail)->pluck('slug')->all())->toBe(['grocery', 'cafe']); // curated sort 10, 30
-    expect(array_keys($rail[0]))->toBe(['slug', 'name_en', 'name_dv', 'merchant_count']);
+    expect(array_keys($rail[0]))->toBe(['slug', 'name_en', 'name_dv', 'icon', 'icon_url', 'merchant_count']);
 
     // The invariant that matters to a shopper: a chip's count is exactly
     // what tapping it returns from the directory — the suspended grocer is
@@ -285,7 +285,7 @@ it('serves the full public store page for an active merchant', function () {
     $data = $this->getJson('/api/discover/merchants/cafe-alpha')->assertOk()->json('data');
 
     expect(array_keys($data))->toBe([
-        'name', 'slug', 'category', 'logo_url', 'channel', 'featured',
+        'name', 'name_dv', 'slug', 'category', 'logo_url', 'channel', 'featured',
         'cashback_rate_percent', 'standing_cashback_rate_percent', 'promotion', 'cashback_basis', 'category_rates', 'branches', 'joined',
     ]);
 

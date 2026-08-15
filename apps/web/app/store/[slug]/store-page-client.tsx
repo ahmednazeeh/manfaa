@@ -6,7 +6,7 @@ import {
   type StoreCategoryRate,
   type StoreDetail,
 } from '@manfaa/api-client';
-import { formatMoney } from '@manfaa/ui';
+import { useFormatMoney } from '@manfaa/ui';
 import {
   ArrowLeft,
   BadgeCheck,
@@ -35,7 +35,11 @@ import { ErrorBlock, LoadingBlock } from '@/components/app/async-states';
 import { useLocationRequest } from '@/components/app/discovery';
 import { PublicFooter, PublicHeader } from '@/components/app/public-header';
 import { StoreAvatar } from '@/components/app/store-avatar';
-import { ChannelChip, useCategoryLabel } from '@/components/app/store-labels';
+import {
+  ChannelChip,
+  useCategoryLabel,
+  useStoreName,
+} from '@/components/app/store-labels';
 
 /**
  * PUBLIC store page (/store/[slug]): the merchant's cashback offer in full —
@@ -79,6 +83,7 @@ export function StoreNotFound() {
 /** The big rate block; promo-aware ("5% — usually 2%" + ends + minimum). */
 function CashbackHero({ store }: { store: StoreDetail }) {
   const { t } = useTranslation();
+  const formatMoney = useFormatMoney();
   const promo = store.promotion;
 
   return (
@@ -273,6 +278,7 @@ function CategoryRatesTable({
  *  neutral fallback line when the merchant has set none). */
 function CashbackDetails({ store }: { store: StoreDetail }) {
   const { t } = useTranslation();
+  const formatMoney = useFormatMoney();
   const promo = store.promotion;
 
   return (
@@ -438,6 +444,7 @@ function Branches({ branches }: { branches: StoreBranch[] }) {
 /** Join/Sign-in CTA for visitors; a Dashboard pointer once signed in. */
 function StoreCta({ store }: { store: StoreDetail }) {
   const { t } = useTranslation();
+  const storeName = useStoreName();
   const { data: me } = useMe();
 
   return (
@@ -445,10 +452,10 @@ function StoreCta({ store }: { store: StoreDetail }) {
       <CardContent className="flex flex-col items-center gap-4 p-6 text-center">
         <p className="max-w-md text-sm text-muted-foreground">
           {me
-            ? t('store.ctaSignedInBody', { name: store.name })
+            ? t('store.ctaSignedInBody', { name: storeName(store) })
             : t('store.ctaBody', {
                 rate: formatRate(store.cashback_rate_percent),
-                name: store.name,
+                name: storeName(store),
               })}
         </p>
         {me ? (
@@ -473,12 +480,13 @@ function StoreCta({ store }: { store: StoreDetail }) {
 function StoreContent({ store }: { store: StoreDetail }) {
   const { t } = useTranslation();
   const categoryLabel = useCategoryLabel();
+  const storeName = useStoreName();
 
   return (
     <div className="flex w-full max-w-3xl flex-col gap-8 pb-10">
       <div className="flex items-center gap-4">
         <StoreAvatar
-          name={store.name}
+          name={storeName(store)}
           slug={store.slug}
           logoUrl={store.logo_url}
           size="lg"
@@ -486,7 +494,7 @@ function StoreContent({ store }: { store: StoreDetail }) {
         <div className="flex min-w-0 flex-col gap-2">
           <div className="flex flex-wrap items-center gap-2">
             <h1 className="text-2xl font-semibold tracking-tight text-mono">
-              {store.name}
+              {storeName(store)}
             </h1>
             {store.featured && (
               <Badge variant="primary" appearance="light" size="sm">

@@ -23,4 +23,10 @@ Route::prefix('admin')->middleware('auth:admin')->group(function () {
     Route::get('store-categories', [StoreCategoriesController::class, 'index']);
     Route::post('store-categories', [StoreCategoriesController::class, 'store']);
     Route::patch('store-categories/{id}', [StoreCategoriesController::class, 'update'])->whereNumber('id');
+
+    // The icon is a FILE, so it gets its own endpoints rather than riding
+    // the JSON PATCH: a multipart body cannot carry the rest of the row,
+    // and clearing an icon has to be distinguishable from not sending one.
+    Route::post('store-categories/{id}/icon', [StoreCategoriesController::class, 'uploadIcon'])->whereNumber('id');
+    Route::delete('store-categories/{id}/icon', [StoreCategoriesController::class, 'destroyIcon'])->whereNumber('id');
 });

@@ -67,7 +67,10 @@
     "passwordTooShort": "Use at least 8 characters.",
     "createStore": "Create my store",
     "alreadyHaveAccount": "Already have an account?",
-    "afterSignupNote": "Next you'll set up your store profile — it goes live once Manfaa approves it."
+    "afterSignupNote": "Next you'll set up your store profile — it goes live once Manfaa approves it.",
+    "businessNameDvLabel": "Store name in Dhivehi",
+    "businessNameDvPlaceholder": "ފިހާރައިގެ ނަން",
+    "businessNameDvHint": "Shown to shoppers reading Manfaa in Dhivehi. Leave it blank and they see the name above."
   },
   "setup": {
     "title": "Set up your store",
@@ -198,7 +201,10 @@
       "active": "Active",
       "suspended": "Suspended",
       "closed": "Closed"
-    }
+    },
+    "storeNameDvLabel": "Store name in Dhivehi",
+    "storeNameDvPlaceholder": "ފިހާރައިގެ ނަން",
+    "storeNameDvHint": "Shown to shoppers reading Manfaa in Dhivehi. Leave it blank and they see your name above. Your public link never changes."
   },
   "apiAccess": {
     "title": "API access",
@@ -297,7 +303,7 @@
     "nameEnLabel": "Name (English)",
     "nameEnPlaceholder": "e.g. Tobacco, Fresh produce",
     "nameDvLabel": "Name (Dhivehi)",
-    "nameDvHint": "Optional — shown to customers and staff using Dhivehi.",
+    "nameDvHint": "Required — this is what a Dhivehi customer sees on their receipt.",
     "modeLabel": "How does this category earn?",
     "modeRate": "Custom rate",
     "modeRateHint": "Sales in this category earn their own cashback percent.",

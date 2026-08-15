@@ -71,7 +71,7 @@ it('walks the full lined-credit lifecycle over HTTP: categories → credits → 
     $this->actingAs($this->owner, 'merchant');
 
     $this->postJson('/api/merchant/product-categories', [
-        'name_en' => 'Fruits', 'mode' => 'excluded', 'sort' => 1,
+        'name_en' => 'Fruits', 'name_dv' => 'ދިވެހި', 'mode' => 'excluded', 'sort' => 1,
     ])
         ->assertCreated()
         ->assertJsonPath('data.slug', 'fruits')
@@ -79,7 +79,7 @@ it('walks the full lined-credit lifecycle over HTTP: categories → credits → 
         ->assertJsonPath('data.cashback_rate_percent', null);
 
     $this->postJson('/api/merchant/product-categories', [
-        'name_en' => 'Veggies', 'mode' => 'rate', 'cashback_rate_percent' => '2.00', 'sort' => 2,
+        'name_en' => 'Veggies', 'name_dv' => 'ދިވެހި', 'mode' => 'rate', 'cashback_rate_percent' => '2.00', 'sort' => 2,
     ])
         ->assertCreated()
         ->assertJsonPath('data.slug', 'veggies')

@@ -15,7 +15,11 @@ import { Card } from '@/components/ui/card';
 import { EmptyBlock } from '@/components/app/async-states';
 import { ScrollRow } from '@/components/app/scroll-row';
 import { StoreAvatar } from '@/components/app/store-avatar';
-import { ChannelChip, useCategoryLabel } from '@/components/app/store-labels';
+import {
+  ChannelChip,
+  useCategoryLabel,
+  useStoreName,
+} from '@/components/app/store-labels';
 
 /**
  * Merchant discovery building blocks shared by the public landing page and
@@ -168,6 +172,7 @@ function StoreLink({ slug, children }: { slug: string; children: ReactNode }) {
 export function MerchantCard({ entry }: { entry: DiscoveryEntry }) {
   const { t } = useTranslation();
   const categoryLabel = useCategoryLabel();
+  const storeName = useStoreName();
   const boosted = isBoosted(entry);
   const category = categoryLabel(entry.category);
 
@@ -175,9 +180,11 @@ export function MerchantCard({ entry }: { entry: DiscoveryEntry }) {
     <StoreLink slug={entry.slug}>
       <Card className="h-full transition-colors group-hover:border-primary/40">
         <div className="p-3 pb-0">
-          <div className="aspect-[4/3] w-full overflow-hidden rounded-lg">
+          {/* Square, so an uploaded square logo fills the slot instead of
+              being letterboxed inside a 4:3 box. */}
+          <div className="aspect-square w-full overflow-hidden rounded-lg">
             <StoreAvatar
-              name={entry.name}
+              name={storeName(entry)}
               slug={entry.slug}
               logoUrl={entry.logo_url}
               size="tile"
@@ -187,7 +194,7 @@ export function MerchantCard({ entry }: { entry: DiscoveryEntry }) {
 
         <div className="flex grow flex-col gap-1 p-4 pt-3">
           <span className="truncate text-sm font-medium text-mono">
-            {entry.name}
+            {storeName(entry)}
           </span>
 
           <div className="flex flex-wrap items-baseline gap-x-2">

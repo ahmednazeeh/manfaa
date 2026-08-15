@@ -33,6 +33,7 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
+import { StoreCategoryIconField } from '@/components/settings/store-category-icon';
 
 const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
@@ -228,6 +229,17 @@ export function StoreCategoryDialog({
                   </FormItem>
                 )}
               />
+              {/* Editing only: the upload needs a row to attach to, so a
+                  new category gets its icon on the next open rather than
+                  making creation a two-request transaction that can half
+                  fail. */}
+              {editing ? (
+                <StoreCategoryIconField category={category} />
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  You can upload the category icon once it is created.
+                </p>
+              )}
               <FormField
                 control={form.control}
                 name="sort"

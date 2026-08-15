@@ -150,14 +150,16 @@ final readonly class MerchantOtpService
      * from the business name, verified phone stored as the contact number)
      * and its owner account in one transaction. The token is single-use.
      *
+     * @param  string|null  $businessNameDv  the store's own name in Thaana,
+     *                                       shown to Dhivehi visitors
      * @return MerchantUser the owner account, merchant relation loaded
      */
-    public function register(string $signupToken, string $businessName, string $email, string $password): MerchantUser
+    public function register(string $signupToken, string $businessName, string $email, string $password, ?string $businessNameDv = null): MerchantUser
     {
         $now = CarbonImmutable::now('UTC');
         $tokenHash = hash('sha256', $signupToken);
 
-        return DB::transaction(function () use ($tokenHash, $businessName, $email, $password, $now): MerchantUser {
+        return DB::transaction(function () use ($tokenHash, $businessName, $businessNameDv, $email, $password, $now): MerchantUser {
             // Lock the code row and re-assert the token INSIDE the lock: a
             // double-submitted register would otherwise have both requests
             // read the same live token and mint two stores (two different
@@ -180,7 +182,7 @@ final readonly class MerchantOtpService
                 'signup_token_expires_at' => null,
             ])->save();
 
-            $merchant = $this->createMerchant($businessName, $email, (string) $otp->phone);
+            $merchant = $this->createMerchant($businessName, $email, (string) $otp->phone, $businessNameDv);
 
             try {
                 $owner = MerchantUser::query()->create([
@@ -220,7 +222,7 @@ final readonly class MerchantOtpService
      * random suffix so a pathological loop still terminates with a usable
      * store rather than a 500.
      */
-    private function createMerchant(string $businessName, string $email, string $phone): Merchant
+    private function createMerchant(string $businessName, string $email, string $phone, ?string $businessNameDv = null): Merchant
     {
         $base = $this->slugBase($businessName);
         $attempt = 1;
@@ -233,6 +235,10 @@ final readonly class MerchantOtpService
             try {
                 return DB::transaction(fn (): Merchant => Merchant::query()->create([
                     'name' => $businessName,
+                    'name_dv' => $businessNameDv,
+                    // The slug stays derived from the LATIN name only, so
+                    // store URLs remain ASCII whatever the store calls
+                    // itself in Thaana.
                     'slug' => $slug,
                     'status' => 'draft',
                     'channel' => 'in_store',

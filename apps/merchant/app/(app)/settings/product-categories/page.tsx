@@ -131,7 +131,7 @@ function CategoryDialog({
   onOpenChange: (open: boolean) => void;
   onSubmit: (values: {
     nameEn: string;
-    nameDv: string | null;
+    nameDv: string;
     mode: 'excluded' | 'rate';
     rateBp: number | null;
     sort: number;
@@ -165,6 +165,10 @@ function CategoryDialog({
 
   const canSubmit =
     form.nameEn.trim() !== '' &&
+    // The Dhivehi name is REQUIRED: these names print on the customer's own
+    // receipt lines, and a Latin category name on an otherwise Dhivehi
+    // receipt is the readability problem the rule exists to prevent.
+    form.nameDv.trim() !== '' &&
     sortValue !== null &&
     sortValue <= 100000 &&
     (form.mode === 'excluded' || (rateBp !== null && rateError === null)) &&
@@ -308,7 +312,7 @@ function CategoryDialog({
             onClick={() =>
               onSubmit({
                 nameEn: form.nameEn.trim(),
-                nameDv: form.nameDv.trim() === '' ? null : form.nameDv.trim(),
+                nameDv: form.nameDv.trim(),
                 mode: form.mode,
                 rateBp: form.mode === 'rate' ? rateBp : null,
                 sort: sortValue as number,
@@ -344,7 +348,7 @@ export default function ProductCategoriesSettingsPage() {
 
   const handleCreate = (values: {
     nameEn: string;
-    nameDv: string | null;
+    nameDv: string;
     mode: 'excluded' | 'rate';
     rateBp: number | null;
     sort: number;
@@ -382,7 +386,7 @@ export default function ProductCategoriesSettingsPage() {
 
   const handleEdit = (values: {
     nameEn: string;
-    nameDv: string | null;
+    nameDv: string;
     mode: 'excluded' | 'rate';
     rateBp: number | null;
     sort: number;
