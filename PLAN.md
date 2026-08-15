@@ -543,12 +543,22 @@ feature-flagged off (merchant-mediated).
 
 ### Queue: EMPTY. Next work needs a product decision.
 
+Since the queue emptied: settlement picker sums + age presets, the 5%
+prompt-payment fee discount (PLAN §1), and developer documentation published
+at /docs/ (narrative guide) and api.manfaa.app/api/v1/docs (interactive
+Scalar reference rendered from openapi.yaml, built by scripts/build-docs.mjs,
+served statically so it survives an app or PHP outage).
+
 ### Open decisions awaiting the owner
 1. **Category-terms resolution instant** (documented above §1): product-category
    overrides resolve at submission time from a mutable row while every other
    rate resolves at occurred_at. Add effective-dated history, or accept?
 2. **Promo × category precedence** — flagged assumption above; confirm or change.
-3. **Defaulter path back** after a 90-day write-off: manual reinstatement only
+3. **Prompt-discount and frozen lines**: "everything outstanding" currently
+   counts lines frozen on an earlier unpaid batch, so a merchant with one
+   stale batch open cannot earn the discount until it clears. Faithful to the
+   rule as written; the softer reading would ignore frozen lines.
+4. **Defaulter path back** after a 90-day write-off: manual reinstatement only
    (as-built) or automatic once cleared?
 
 ### Operational to-dos (not code)
