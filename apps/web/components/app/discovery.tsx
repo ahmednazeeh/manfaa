@@ -1,24 +1,34 @@
 'use client';
 
-import { useState, type ComponentType, type ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import Link from 'next/link';
-import { percentToBp, type DiscoveryEntry } from '@manfaa/api-client';
+import {
+  percentToBp,
+  type DiscoveryEntry,
+  type DiscoverySections,
+} from '@manfaa/api-client';
 import { ArrowRight, MapPin } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { formatDate, formatRate, splitDistance } from '@/lib/format';
-import { Badge } from '@/components/ui/badge';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card } from '@/components/ui/card';
 import { EmptyBlock } from '@/components/app/async-states';
+import { ScrollRow } from '@/components/app/scroll-row';
 import { StoreAvatar } from '@/components/app/store-avatar';
 import { ChannelChip, useCategoryLabel } from '@/components/app/store-labels';
 
 /**
  * Merchant discovery building blocks shared by the public landing page and
- * the authenticated /discover screen. Data comes from GET /api/discover
- * (public, no auth); rates arrive as 2-decimal percent STRINGS (PLAN §1
- * wire format), rendered verbatim by formatRate and compared — never
- * rendered — through percentToBp.
+ * the /discover storefront. Data comes from GET /api/discover (public, no
+ * auth); rates arrive as 2-decimal percent STRINGS (PLAN §1 wire format),
+ * rendered verbatim by formatRate and compared — never rendered — through
+ * percentToBp.
+ *
+ * ONE card anatomy serves every surface (MerchantCard): the logo tile is
+ * the hero of the card, the rate sits large underneath it, a boosted store
+ * strikes out its standing rate, and the channel is always a chip, never
+ * the raw enum. Shelves (a scrolling row, landing) and sections (a grid,
+ * /discover) differ only in how they lay that one card out.
  */
 
 export type GeoState =
@@ -66,6 +76,54 @@ export function useLocationRequest() {
   return { geo, coords, requestLocation };
 }
 
+/**
+ * A live promotion is exactly "the rate now differs from the usual rate" —
+ * compared in basis points, the unit rate arithmetic belongs in, never by
+ * comparing the display strings.
+ */
+export function isBoosted(entry: {
+  cashback_rate_percent: string;
+  standing_cashback_rate_percent: string;
+}): boolean {
+  return (
+    percentToBp(entry.cashback_rate_percent) >
+    percentToBp(entry.standing_cashback_rate_percent)
+  );
+}
+
+/**
+ * The in-store facet of the read model.
+ *
+ * The API ships an `online` shelf but no in-store one, so this derives it
+ * from `recently_added` — the one shelf built from the COMPLETE listed set
+ * (every listed merchant, newest first) rather than from a filter. It
+ * therefore carries exactly the same per-section ceiling as the `online`
+ * shelf it mirrors, and like every shelf it is a teaser: the authoritative,
+ * unbounded list of stores is the paginated directory behind "All stores".
+ */
+export function inStoreEntries(sections: DiscoverySections): DiscoveryEntry[] {
+  return sections.recently_added.filter(
+    (entry) => entry.channel === 'in_store' || entry.channel === 'both',
+  );
+}
+
+/**
+ * Whether the platform has anything to show at all.
+ *
+ * `recently_added` alone would answer this, being the complete listed set —
+ * but it carries a `.catch([])` for the deploy window in which an older API
+ * build has not started sending it, and an empty shelf must never be read
+ * as an empty PLATFORM. Any populated shelf is proof of life.
+ */
+export function hasListedStores(sections: DiscoverySections): boolean {
+  return (
+    sections.recently_added.length > 0 ||
+    sections.featured.length > 0 ||
+    sections.increased.length > 0 ||
+    sections.online.length > 0
+  );
+}
+
 function DistanceLine({ meters }: { meters: number }) {
   const { t } = useTranslation();
   const distance = splitDistance(meters);
@@ -88,204 +146,203 @@ function StoreLink({ slug, children }: { slug: string; children: ReactNode }) {
   return (
     <Link
       href={`/store/${slug}`}
-      className="group block rounded-xl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+      className="group block h-full rounded-xl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
     >
       {children}
     </Link>
   );
 }
 
-const clickableCard =
-  'h-full transition-colors group-hover:border-primary/40 group-hover:bg-muted/40';
-
 /**
- * Standard merchant card (§1 store-channel decision): avatar on the
- * inline-start, then name, the current rate prominent, and the channel
- * label chip — never the raw channel enum. Category (curated-list label),
- * promo end and distance follow as muted meta.
+ * The one merchant card, shared by the landing shelves and the /discover
+ * grid (§1 store-channel decision).
+ *
+ * Anatomy, top to bottom: the logo tile as the card's hero — no store has
+ * uploaded a logo yet, so today that tile is the deterministic initials
+ * mark and it carries the card on its own — then the name, the rate large
+ * ("2% cashback"), the struck-through standing rate whenever a promotion is
+ * beating it, and finally the channel chip with the muted meta.
  */
 export function MerchantCard({ entry }: { entry: DiscoveryEntry }) {
   const { t } = useTranslation();
   const categoryLabel = useCategoryLabel();
-  // A live promotion is exactly "now differs from usually" — compared in
-  // basis points, the unit rate arithmetic belongs in.
-  const boosted =
-    percentToBp(entry.cashback_rate_percent) >
-    percentToBp(entry.standing_cashback_rate_percent);
+  const boosted = isBoosted(entry);
+  const category = categoryLabel(entry.category);
 
   return (
     <StoreLink slug={entry.slug}>
-      <Card className={clickableCard}>
-        <CardContent className="flex items-start gap-3 p-5">
-          <StoreAvatar
-            name={entry.name}
-            slug={entry.slug}
-            logoUrl={entry.logo_url}
-          />
-          <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-            <span className="truncate text-sm font-medium text-mono">
-              {entry.name}
-            </span>
-
-            <span className="text-lg font-semibold text-mono">
-              {boosted
-                ? t('discover.rateUsually', {
-                    rate: formatRate(entry.cashback_rate_percent),
-                    usual: formatRate(entry.standing_cashback_rate_percent),
-                  })
-                : t('discover.rate', {
-                    rate: formatRate(entry.cashback_rate_percent),
-                  })}
-            </span>
-
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-              <ChannelChip channel={entry.channel} />
-              {entry.category !== null && (
-                <span>{categoryLabel(entry.category)}</span>
-              )}
-              {boosted && entry.promo_ends_at !== null && (
-                <span>
-                  {t('discover.promoUntil', {
-                    date: formatDate(entry.promo_ends_at),
-                  })}
-                </span>
-              )}
-              {entry.distance_m !== null && (
-                <DistanceLine meters={entry.distance_m} />
-              )}
-            </div>
+      <Card className="h-full transition-colors group-hover:border-primary/40">
+        <div className="p-3 pb-0">
+          <div className="aspect-[4/3] w-full overflow-hidden rounded-lg">
+            <StoreAvatar
+              name={entry.name}
+              slug={entry.slug}
+              logoUrl={entry.logo_url}
+              size="tile"
+            />
           </div>
-        </CardContent>
-      </Card>
-    </StoreLink>
-  );
-}
+        </div>
 
-/**
- * Promotion card for the "increased cashback" shelf: same avatar-start
- * layout, the boosted rate as the headline, the standing rate struck out in
- * the meta row, the promo end in a chip, and the channel label chip —
- * never the raw enum.
- */
-export function PromoCard({ entry }: { entry: DiscoveryEntry }) {
-  const { t } = useTranslation();
-  const categoryLabel = useCategoryLabel();
+        <div className="flex grow flex-col gap-1 p-4 pt-3">
+          <span className="truncate text-sm font-medium text-mono">
+            {entry.name}
+          </span>
 
-  return (
-    <StoreLink slug={entry.slug}>
-      <Card className={clickableCard}>
-        <CardContent className="flex items-start gap-3 p-5">
-          <StoreAvatar
-            name={entry.name}
-            slug={entry.slug}
-            logoUrl={entry.logo_url}
-          />
-          <div className="flex min-w-0 flex-1 flex-col gap-2">
-            <div className="flex items-start justify-between gap-2">
-              <span className="truncate text-sm font-medium text-mono">
-                {entry.name}
-              </span>
-              {entry.promo_ends_at !== null && (
-                <Badge variant="warning" appearance="light" size="sm">
-                  {t('discover.endsChip', {
-                    date: formatDate(entry.promo_ends_at),
-                  })}
-                </Badge>
-              )}
-            </div>
-
-            <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-bold tracking-tight text-primary">
-                {formatRate(entry.cashback_rate_percent)}
-              </span>
-              <span className="text-sm text-muted-foreground">
-                {t('discover.cashbackLabel')}
-              </span>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-              <span className="line-through">
+          <div className="flex flex-wrap items-baseline gap-x-2">
+            <span className="text-xl font-bold tracking-tight text-primary">
+              {t('discover.rate', {
+                rate: formatRate(entry.cashback_rate_percent),
+              })}
+            </span>
+            {boosted && (
+              <span className="text-xs text-muted-foreground line-through">
                 {t('discover.usuallyRate', {
                   rate: formatRate(entry.standing_cashback_rate_percent),
                 })}
               </span>
-              <ChannelChip channel={entry.channel} />
-              {entry.category !== null && (
-                <span>{categoryLabel(entry.category)}</span>
-              )}
-              {entry.distance_m !== null && (
-                <DistanceLine meters={entry.distance_m} />
-              )}
-            </div>
+            )}
           </div>
-        </CardContent>
+
+          <div className="mt-auto flex flex-wrap items-center gap-x-2 gap-y-1 pt-2 text-2xs text-muted-foreground">
+            <ChannelChip channel={entry.channel} />
+            {category !== null && <span>{category}</span>}
+            {boosted && entry.promo_ends_at !== null && (
+              <span>
+                {t('discover.promoUntil', {
+                  date: formatDate(entry.promo_ends_at),
+                })}
+              </span>
+            )}
+            {entry.distance_m !== null && (
+              <DistanceLine meters={entry.distance_m} />
+            )}
+          </div>
+        </div>
       </Card>
     </StoreLink>
   );
 }
 
+/** Shelf/section heading with its optional "see all" link and actions. */
+function ShelfHeader({
+  icon: Icon,
+  title,
+  viewAllHref,
+  children,
+}: {
+  icon: LucideIcon;
+  title: string;
+  viewAllHref?: string;
+  children?: ReactNode;
+}) {
+  const { t } = useTranslation();
+
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-2">
+      <h2 className="flex items-center gap-2 text-base font-semibold text-mono">
+        <Icon className="size-4 text-muted-foreground" />
+        {title}
+      </h2>
+      <div className="flex items-center gap-3">
+        {children}
+        {viewAllHref !== undefined && (
+          <Link
+            href={viewAllHref}
+            className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
+          >
+            {t('discover.viewAll')}
+            <ArrowRight className="size-3.5 rtl:rotate-180" />
+          </Link>
+        )}
+      </div>
+    </div>
+  );
+}
+
 /**
- * One titled shelf of merchant cards. When `entries` is empty: renders the
- * `emptyText` block if one is given, and disappears entirely otherwise —
- * the landing page hides empty shelves, the app shows a hint instead.
+ * A landing SHELF: heading, "see all", and one horizontally scrolling row
+ * of cards. It renders nothing at all when empty — the landing page never
+ * shows a shelf explaining that it has nothing in it.
+ */
+export function StoreShelf({
+  icon,
+  title,
+  entries,
+  viewAllHref,
+}: {
+  icon: LucideIcon;
+  title: string;
+  entries: DiscoveryEntry[];
+  viewAllHref?: string;
+}) {
+  if (entries.length === 0) {
+    return null;
+  }
+
+  return (
+    <section className="flex flex-col gap-3">
+      <ShelfHeader icon={icon} title={title} viewAllHref={viewAllHref} />
+      <ScrollRow label={title}>
+        {entries.map((entry) => (
+          <li key={entry.slug} className="w-44 shrink-0 snap-start sm:w-48">
+            <MerchantCard entry={entry} />
+          </li>
+        ))}
+      </ScrollRow>
+    </section>
+  );
+}
+
+/**
+ * A /discover SECTION: the same heading, but the cards lay out as a grid
+ * and an empty section explains itself instead of vanishing — inside the
+ * storefront, a shelf that silently disappears is a missing answer.
  */
 export function DiscoverySection({
-  icon: Icon,
+  icon,
   title,
   entries,
   emptyText,
   viewAllHref,
-  card: CardComponent = MerchantCard,
   children,
 }: {
   icon: LucideIcon;
   title: string;
   entries: DiscoveryEntry[];
   emptyText?: string;
-  /** When set, a "View all" link renders beside the shelf title. */
+  /** When set, a "View all" link renders beside the section title. */
   viewAllHref?: string;
-  /** Card renderer; defaults to MerchantCard. */
-  card?: ComponentType<{ entry: DiscoveryEntry }>;
   /** Header-side actions (e.g. the "Use my location" button). */
   children?: ReactNode;
 }) {
-  const { t } = useTranslation();
-
   if (entries.length === 0 && emptyText === undefined) {
     return null;
   }
 
   return (
     <section className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="flex items-center gap-2 text-base font-semibold text-mono">
-          <Icon className="size-4 text-muted-foreground" />
-          {title}
-        </h2>
-        <div className="flex items-center gap-3">
-          {children}
-          {viewAllHref !== undefined && (
-            <Link
-              href={viewAllHref}
-              className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
-            >
-              {t('discover.viewAll')}
-              <ArrowRight className="size-3.5 rtl:rotate-180" />
-            </Link>
-          )}
-        </div>
-      </div>
+      <ShelfHeader icon={icon} title={title} viewAllHref={viewAllHref}>
+        {children}
+      </ShelfHeader>
       {entries.length === 0 ? (
         <Card>
           <EmptyBlock>{emptyText}</EmptyBlock>
         </Card>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {entries.map((entry) => (
-            <CardComponent key={entry.slug} entry={entry} />
-          ))}
-        </div>
+        <MerchantGrid entries={entries} />
       )}
     </section>
+  );
+}
+
+/** The shared card grid — narrower columns than a text list, because the
+ *  card is now a portrait tile rather than a row. */
+export function MerchantGrid({ entries }: { entries: DiscoveryEntry[] }) {
+  return (
+    <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+      {entries.map((entry) => (
+        <MerchantCard key={entry.slug} entry={entry} />
+      ))}
+    </div>
   );
 }

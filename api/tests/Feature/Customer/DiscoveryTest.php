@@ -7,6 +7,7 @@ use App\Models\Merchant;
 use App\Models\MerchantBranch;
 use App\Models\MerchantRate;
 use App\Models\Promotion;
+use App\Models\StoreCategory;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Tests\TestCase;
@@ -188,16 +189,28 @@ it('leaks nothing: no internal ids, no PII, no commercial terms', function () {
     $response = $this->getJson('/api/discover?lat=4.1770&lng=73.5100')->assertOk();
     $data = $response->json('data');
 
-    // The full public contract of an entry — nothing else.
-    foreach ($data as $section) {
-        foreach ($section as $entry) {
+    // The full public contract of an entry — nothing else. Every shelf
+    // carries the identical shape, the newest one included.
+    foreach (['featured', 'increased', 'nearby', 'online', 'recently_added'] as $shelf) {
+        foreach ($data[$shelf] as $entry) {
             expect(array_keys($entry))->toBe([
                 'name', 'slug', 'category', 'logo_url', 'channel', 'cashback_rate_percent', 'standing_cashback_rate_percent', 'promo_ends_at', 'distance_m',
             ]);
         }
     }
 
+    // The rail is display data only: slug, both names, a count. No curated
+    // row id, no sort weight, nothing internal.
+    expect($data['categories'])->not->toBe([]);
+    foreach ($data['categories'] as $category) {
+        expect(array_keys($category))->toBe(['slug', 'name_en', 'name_dv', 'merchant_count']);
+    }
+
     $raw = $response->getContent();
+    expect($raw)->not->toContain('"id"');
+    expect($raw)->not->toContain('"sort"');
+    expect($raw)->not->toContain('listed_at');
+    expect($raw)->not->toContain('approved_at');
     expect($raw)->not->toContain('merchant_id');
     expect($raw)->not->toContain('bank_account');
     expect($raw)->not->toContain('fee_bp');
@@ -244,6 +257,186 @@ it('caps every section and computes distance only inside the nearby bounding box
 
     expect(count($data['online']))->toBe(DiscoveryService::SECTION_LIMIT);
     expect(count($data['nearby']))->toBe(DiscoveryService::SECTION_LIMIT);
+});
+
+// ------------------------------------------------------- recently added
+
+it('orders the recently added shelf by approval, falling back to creation', function () {
+    // A self-signed-up store becomes public when the superadmin approves it
+    // (§1 2026-08-15), so approved_at — not created_at — is when it was
+    // "added". Alpha was created a month before Gamma and approved a week
+    // after it: newest-first must follow the approvals.
+    discoveryMerchant([
+        'name' => 'Alpha Approved Newest',
+        'slug' => 'alpha-approved-newest',
+        'created_at' => now()->subDays(40),
+        'approved_at' => now()->subDay(),
+    ], 200);
+
+    // Admin-created merchants never pass through the approval queue and
+    // carry no approved_at at all — their row creation stands in.
+    discoveryMerchant([
+        'name' => 'Beta Admin Created',
+        'slug' => 'beta-admin-created',
+        'created_at' => now()->subDays(3),
+        'approved_at' => null,
+    ], 100);
+
+    discoveryMerchant([
+        'name' => 'Gamma Approved Oldest',
+        'slug' => 'gamma-approved-oldest',
+        'created_at' => now()->subDays(10),
+        'approved_at' => now()->subDays(8),
+    ], 300);
+
+    $shelf = $this->getJson('/api/discover')->assertOk()->json('data.recently_added');
+
+    expect(collect($shelf)->pluck('slug')->all())
+        ->toBe(['alpha-approved-newest', 'beta-admin-created', 'gamma-approved-oldest']);
+
+    // Same entry shape and the same percent-string wire format as every
+    // other shelf — the shelf differs only in its ordering.
+    expect(array_keys($shelf[0]))->toBe([
+        'name', 'slug', 'category', 'logo_url', 'channel', 'cashback_rate_percent', 'standing_cashback_rate_percent', 'promo_ends_at', 'distance_m',
+    ]);
+    expect($shelf[0]['cashback_rate_percent'])->toBe('2.00');
+    expect($shelf[1]['cashback_rate_percent'])->toBe('1.00');
+    expect($shelf[2]['standing_cashback_rate_percent'])->toBe('3.00');
+    expect($shelf[0]['distance_m'])->toBeNull(); // no coordinates supplied
+});
+
+it('keeps unapproved and suspended stores off the recently added shelf', function () {
+    discoveryMerchant([
+        'name' => 'Live Store',
+        'slug' => 'live-store',
+        'approved_at' => now()->subDays(2),
+    ], 200);
+
+    // Each of these is newer than the live store, so any of them leaking
+    // would take the top of the shelf rather than hide at the bottom.
+    discoveryMerchant([
+        'name' => 'Suspended Store',
+        'slug' => 'suspended-store',
+        'status' => 'suspended',
+        'approved_at' => now(),
+    ], 400);
+    discoveryMerchant([
+        'name' => 'Pending Store',
+        'slug' => 'pending-store',
+        'status' => 'pending_review',
+        'submitted_at' => now(),
+    ], 300);
+    discoveryMerchant([
+        'name' => 'Draft Store',
+        'slug' => 'draft-store',
+        'status' => 'draft',
+    ], 300);
+    discoveryMerchant([
+        'name' => 'Rejected Store',
+        'slug' => 'rejected-store',
+        'status' => 'rejected',
+    ], 300);
+
+    expect(collect($this->getJson('/api/discover')->assertOk()->json('data.recently_added'))->pluck('slug')->all())
+        ->toBe(['live-store']);
+});
+
+it('caps the recently added shelf like every other shelf', function () {
+    foreach (range(1, DiscoveryService::SECTION_LIMIT + 5) as $i) {
+        discoveryMerchant(
+            ['name' => sprintf('Bulk %02d', $i), 'slug' => "bulk-{$i}", 'approved_at' => now()->subMinutes($i)],
+            200,
+        );
+    }
+
+    $shelf = $this->getJson('/api/discover')->assertOk()->json('data.recently_added');
+
+    expect(count($shelf))->toBe(DiscoveryService::SECTION_LIMIT);
+    expect($shelf[0]['slug'])->toBe('bulk-1'); // approved most recently
+});
+
+// ---------------------------------------------------------- category rail
+
+it('rails the curated categories that have at least one live store, in curated order', function () {
+    // The curated rows are seeded by migration: grocery sort 10, cafe 30.
+    discoveryMerchant(['name' => 'Cafe Alpha', 'slug' => 'cafe-alpha', 'category' => 'cafe'], 200);
+    discoveryMerchant(['name' => 'Cafe Bravo', 'slug' => 'cafe-bravo', 'category' => 'cafe'], 200);
+    discoveryMerchant(['name' => 'Grocer Charlie', 'slug' => 'grocer-charlie', 'category' => 'grocery'], 100);
+
+    // None of these counts: suspended, rate-less (no live offer) and
+    // uncategorised stores are not part of the listed population.
+    discoveryMerchant(['name' => 'Sus Cafe', 'slug' => 'sus-cafe', 'category' => 'cafe', 'status' => 'suspended'], 400);
+    Merchant::factory()->create(['name' => 'NoRate Cafe', 'slug' => 'norate-cafe', 'category' => 'cafe']);
+    discoveryMerchant(['name' => 'Uncat Delta', 'slug' => 'uncat-delta', 'category' => null], 200);
+
+    $rail = $this->getJson('/api/discover')->assertOk()->json('data.categories');
+
+    // Curated sort order, never alphabetical: grocery (10) before cafe (30).
+    expect(collect($rail)->pluck('slug')->all())->toBe(['grocery', 'cafe']);
+
+    // Both names travel — the rail localises without a second lookup.
+    expect($rail[0])->toBe([
+        'slug' => 'grocery',
+        'name_en' => 'Grocery',
+        'name_dv' => 'ގުރޮސަރީ',
+        'merchant_count' => 1,
+    ]);
+
+    // Two live cafes only: the suspended and the rate-less one are absent
+    // from the count exactly as they are absent from the shelves.
+    expect($rail[1]['slug'])->toBe('cafe');
+    expect($rail[1]['merchant_count'])->toBe(2);
+
+    // Every other curated category has no live store and is not railed at
+    // all — an empty chip is a dead end.
+    expect(collect($rail)->pluck('slug'))->not->toContain('restaurant');
+    expect(collect($rail)->pluck('slug'))->not->toContain('other');
+});
+
+it('rails nothing when no live store carries a curated category', function () {
+    discoveryMerchant(['name' => 'Uncat Delta', 'slug' => 'uncat-delta', 'category' => null], 200);
+    discoveryMerchant(['name' => 'Sus Cafe', 'slug' => 'sus-cafe', 'category' => 'cafe', 'status' => 'suspended'], 400);
+
+    $data = $this->getJson('/api/discover')->assertOk()->json('data');
+
+    expect($data['categories'])->toBe([]);
+    expect(collect($data['recently_added'])->pluck('slug')->all())->toBe(['uncat-delta']);
+});
+
+it('keeps a deactivated curated category off the rail while its stores stay listed', function () {
+    // Admin CRUD refuses to deactivate a category active stores still carry,
+    // so this state is only reachable by drift — but the curated list is the
+    // authority for what the storefront navigates by, and the store itself
+    // stays listed and reachable.
+    discoveryMerchant(['name' => 'Cafe Alpha', 'slug' => 'cafe-alpha', 'category' => 'cafe'], 200);
+    StoreCategory::query()->where('slug', 'cafe')->update(['active' => false]);
+
+    $data = $this->getJson('/api/discover')->assertOk()->json('data');
+
+    expect($data['categories'])->toBe([]);
+    expect(collect($data['recently_added'])->pluck('slug')->all())->toBe(['cafe-alpha']);
+});
+
+it('serves the rail from the same 60-second cache as the shelves', function () {
+    discoveryMerchant(['name' => 'Cafe Alpha', 'slug' => 'cafe-alpha', 'category' => 'cafe'], 200);
+
+    expect($this->getJson('/api/discover')->assertOk()->json('data.categories'))
+        ->toBe([['slug' => 'cafe', 'name_en' => 'Café', 'name_dv' => 'ކެފޭ', 'merchant_count' => 1]]);
+
+    // A second cafe inside the TTL does not move the count: the rail is
+    // derived from the cached entries, under the same key, so the chip can
+    // never disagree with the shelf it filters.
+    discoveryMerchant(['name' => 'Cafe Bravo', 'slug' => 'cafe-bravo', 'category' => 'cafe'], 200);
+
+    $data = $this->getJson('/api/discover')->assertOk()->json('data');
+    expect($data['categories'][0]['merchant_count'])->toBe(1);
+    expect($data['recently_added'])->toHaveCount(1);
+
+    Cache::flush();
+
+    $data = $this->getJson('/api/discover')->assertOk()->json('data');
+    expect($data['categories'][0]['merchant_count'])->toBe(2);
+    expect($data['recently_added'])->toHaveCount(2);
 });
 
 it('does not list a promo at or below the standing rate as increased', function () {

@@ -163,6 +163,32 @@ it('filters by exact category and lists distinct categories for the filter UI', 
     expect($response->json('meta.categories'))->toBe(['cafe', 'grocery']);
 });
 
+it('keeps meta.categories a flat slug list while the landing rail carries names and counts', function () {
+    // Two payloads, two concerns, one dataset. meta.categories is the
+    // directory FILTER's vocabulary — bare slugs, alphabetical, exactly the
+    // values ?category= accepts. data.categories on /api/discover is the
+    // landing RAIL — curated order, en+dv names, merchant counts.
+    storefrontMerchant(['name' => 'Cafe Alpha', 'slug' => 'cafe-alpha', 'category' => 'cafe']);
+    storefrontMerchant(['name' => 'Cafe Bravo', 'slug' => 'cafe-bravo', 'category' => 'cafe']);
+    storefrontMerchant(['name' => 'Grocer Charlie', 'slug' => 'grocer-charlie', 'category' => 'grocery']);
+    storefrontMerchant(['name' => 'Suspended Sierra', 'slug' => 'suspended-sierra', 'category' => 'grocery', 'status' => 'suspended'], 400);
+
+    expect($this->getJson('/api/discover/merchants')->assertOk()->json('meta.categories'))
+        ->toBe(['cafe', 'grocery']);
+
+    $rail = $this->getJson('/api/discover')->assertOk()->json('data.categories');
+    expect(collect($rail)->pluck('slug')->all())->toBe(['grocery', 'cafe']); // curated sort 10, 30
+    expect(array_keys($rail[0]))->toBe(['slug', 'name_en', 'name_dv', 'merchant_count']);
+
+    // The invariant that matters to a shopper: a chip's count is exactly
+    // what tapping it returns from the directory — the suspended grocer is
+    // missing from both, never from only one.
+    foreach ($rail as $chip) {
+        expect($this->getJson('/api/discover/merchants?category='.$chip['slug'])->assertOk()->json('meta.total'))
+            ->toBe($chip['merchant_count']);
+    }
+});
+
 it('boosts directory entries with a live published promotion only', function () {
     $alpha = storefrontMerchant(['name' => 'Cafe Alpha', 'slug' => 'cafe-alpha'], 200);
     Promotion::query()->create([

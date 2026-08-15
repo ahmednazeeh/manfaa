@@ -11,13 +11,15 @@ use App\Models\MerchantBranch;
 use App\Models\MerchantProductCategory;
 use App\Models\MerchantRate;
 use App\Models\Promotion;
+use App\Models\StoreCategory;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Cache;
 
 /**
  * The public merchant discovery read model (§10 apps/web): featured /
- * increased / nearby / online sections over ACTIVE merchants with a live
- * standing rate, plus the Rakuten-style storefront reads — the paginated
+ * increased / nearby / online / recently-added sections over ACTIVE
+ * merchants with a live standing rate, the curated category rail that sits
+ * above them, plus the Rakuten-style storefront reads — the paginated
  * directory and the per-slug store page.
  *
  * Privacy contract: entries expose merchant name, slug, category, logo URL,
@@ -41,7 +43,10 @@ final class DiscoveryService
 {
     public const int CACHE_SECONDS = 60;
 
-    public const string CACHE_KEY = 'discovery:entries:v3';
+    // v4: the sections payload gained the recently-added shelf and the
+    // curated category rail, and the cached value is now the whole dataset
+    // (entries + rail) rather than a bare entry list.
+    public const string CACHE_KEY = 'discovery:entries:v4';
 
     // v4: store detail gained category_rates (Task #25).
     public const string STORE_CACHE_PREFIX = 'discovery:store:v4:';
@@ -90,11 +95,12 @@ final class DiscoveryService
     }
 
     /**
-     * @return array{featured: list<array<string, mixed>>, increased: list<array<string, mixed>>, nearby: list<array<string, mixed>>, online: list<array<string, mixed>>}
+     * @return array{featured: list<array<string, mixed>>, increased: list<array<string, mixed>>, nearby: list<array<string, mixed>>, online: list<array<string, mixed>>, recently_added: list<array<string, mixed>>, categories: list<array{slug: string, name_en: string, name_dv: string|null, merchant_count: int}>}
      */
     public function sections(?float $lat, ?float $lng): array
     {
-        $entries = $this->cachedEntries();
+        $dataset = $this->cachedDataset();
+        $entries = $dataset['entries'];
 
         $hasCoords = $lat !== null && $lng !== null;
 
@@ -139,6 +145,15 @@ final class DiscoveryService
             usort($nearby, fn (array $a, array $b): int => $a['distance_m'] <=> $b['distance_m']);
         }
 
+        // Newest listing first. `listed_at` is approved_at — the moment the
+        // store actually went live — falling back to created_at for the
+        // admin-created merchants that never passed through the approval
+        // queue and so carry no approved_at. usort is stable in PHP 8, so
+        // merchants listed in the same microsecond keep the dataset's
+        // alphabetical order rather than an arbitrary one.
+        $recentlyAdded = $entries;
+        usort($recentlyAdded, fn (array $a, array $b): int => $b['listed_at'] <=> $a['listed_at']);
+
         $present = fn (array $list): array => array_values(array_map(
             $this->presentEntry(...),
             array_slice($list, 0, self::SECTION_LIMIT),
@@ -149,6 +164,13 @@ final class DiscoveryService
             'increased' => $present(array_values(array_filter($entries, fn (array $e): bool => $e['rate_bp'] > $e['standing_rate_bp']))),
             'nearby' => $present($nearby),
             'online' => $present(array_values(array_filter($entries, fn (array $e): bool => in_array($e['channel'], ['online', 'both'], true)))),
+            // Same entry shape and the same SECTION_LIMIT cap as the shelves
+            // above; only the ordering differs.
+            'recently_added' => $present($recentlyAdded),
+            // NOT a shelf — the category rail that sits above them. See
+            // buildCuratedCategories() for how it differs from the
+            // directory's flat meta.categories.
+            'categories' => $dataset['categories'],
         ];
     }
 
@@ -214,8 +236,17 @@ final class DiscoveryService
     }
 
     /**
-     * Distinct categories across the (cached, unfiltered) listed merchants,
-     * for the directory filter UI.
+     * Distinct category SLUGS across the (cached, unfiltered) listed
+     * merchants — the directory filter's vocabulary, sorted alphabetically.
+     *
+     * Deliberately a DIFFERENT thing from the sections payload's
+     * `categories` rail (buildCuratedCategories()): this one is a flat list
+     * of slugs, and it is what the `category` query parameter accepts, so a
+     * client can round-trip a value it read here without knowing anything
+     * about the curated table. The rail is display data — curated en+dv
+     * names, counts, and the admin's own sort order. Both are derived from
+     * the same listed-merchant dataset, so they can never disagree about
+     * WHICH categories exist; they differ only in how much they say.
      *
      * @return list<string>
      */
@@ -232,12 +263,93 @@ final class DiscoveryService
     }
 
     /**
+     * The whole cached read model: the listed-merchant entries and the
+     * curated category rail derived from them, under ONE key so the rail can
+     * never disagree with the entries it counts — and so the single
+     * forgetMerchant() call site still drops everything a merchant write
+     * changes.
+     *
+     * @return array{entries: list<array<string, mixed>>, categories: list<array<string, mixed>>}
+     */
+    private function cachedDataset(): array
+    {
+        /** @var array{entries: list<array<string, mixed>>, categories: list<array<string, mixed>>} */
+        return Cache::remember(self::CACHE_KEY, self::CACHE_SECONDS, function (): array {
+            $entries = $this->buildEntries();
+
+            return [
+                'entries' => $entries,
+                'categories' => $this->buildCuratedCategories($entries),
+            ];
+        });
+    }
+
+    /**
      * @return list<array<string, mixed>>
      */
     private function cachedEntries(): array
     {
-        /** @var list<array<string, mixed>> */
-        return Cache::remember(self::CACHE_KEY, self::CACHE_SECONDS, fn (): array => $this->buildEntries());
+        return $this->cachedDataset()['entries'];
+    }
+
+    /**
+     * The curated category rail: every ACTIVE store category (§1 decision
+     * 2026-08-15 — the superadmin-curated list stores pick from) that at
+     * least one LISTED merchant carries, in the curated `sort` order, with
+     * the number of merchants behind each chip.
+     *
+     * "Listed" is the same population the rest of this read model serves —
+     * ACTIVE merchants with a live standing rate — so the count on a chip is
+     * exactly what tapping it returns from the directory, never larger. A
+     * category no listed merchant carries is absent entirely: an empty chip
+     * is a dead end, and the rail is navigation.
+     *
+     * A DEACTIVATED curated row never appears even if a listed merchant
+     * still carries its slug (only reachable by drift — the admin refuses to
+     * deactivate a category active merchants still use): the curated list is
+     * the authority for what the storefront navigates by. Such a merchant is
+     * still listed and still reachable through search and the directory's
+     * own `category` filter.
+     *
+     * Renames and re-sorts ride the 60-second dataset cache rather than an
+     * invalidation hook — admin category CRUD is rare, and a chip label one
+     * minute stale is harmless where a stale RATE would not be.
+     *
+     * @param  list<array<string, mixed>>  $entries
+     * @return list<array{slug: string, name_en: string, name_dv: string|null, merchant_count: int}>
+     */
+    private function buildCuratedCategories(array $entries): array
+    {
+        /** @var array<string, int> $counts */
+        $counts = [];
+
+        foreach ($entries as $entry) {
+            $slug = $entry['category'];
+
+            if (! is_string($slug) || $slug === '') {
+                continue;
+            }
+
+            $counts[$slug] = ($counts[$slug] ?? 0) + 1;
+        }
+
+        if ($counts === []) {
+            return [];
+        }
+
+        return StoreCategory::query()
+            ->where('active', true)
+            ->whereIn('slug', array_keys($counts))
+            ->orderBy('sort')
+            ->orderBy('slug')
+            ->get(['slug', 'name_en', 'name_dv'])
+            ->map(fn (StoreCategory $category): array => [
+                'slug' => $category->slug,
+                'name_en' => $category->name_en,
+                'name_dv' => $category->name_dv,
+                'merchant_count' => $counts[$category->slug],
+            ])
+            ->all();
     }
 
     /**
@@ -305,7 +417,7 @@ final class DiscoveryService
             ))
             ->when($category !== null, fn ($query) => $query->where('category', $category))
             ->orderBy('name')
-            ->get(['id', 'name', 'slug', 'category', 'logo_path', 'featured', 'channel']);
+            ->get(['id', 'name', 'slug', 'category', 'logo_path', 'featured', 'channel', 'approved_at', 'created_at']);
 
         if ($merchants->isEmpty()) {
             return [];
@@ -370,6 +482,14 @@ final class DiscoveryService
                 'promo_ends_at' => $boosted ? $promo->ends_at->toIso8601String() : null,
                 'featured' => (bool) $merchant->featured,
                 'channel' => $merchant->channel,
+                // Internal sort key for the recently-added shelf, never
+                // presented: when this store became publicly listed.
+                // approved_at is the truth for a self-signed-up store (§1
+                // 2026-08-15); an admin-created merchant never went through
+                // the approval queue and has none, so its row creation is
+                // the closest honest answer. Microsecond resolution
+                // ("Uu"), because a seeded batch shares a second.
+                'listed_at' => (int) ($merchant->approved_at ?? $merchant->created_at)?->format('Uu'),
                 'branches' => $branches->get($merchant->id, collect())
                     ->map(fn (MerchantBranch $b): array => [(float) $b->lat, (float) $b->lng])
                     ->all(),

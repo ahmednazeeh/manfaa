@@ -14,6 +14,13 @@ use Illuminate\Http\Request;
  */
 class DiscoveryController extends Controller
 {
+    /**
+     * The landing payload: the featured / increased / nearby / online /
+     * recently_added shelves (identical entry shape, each capped at
+     * SECTION_LIMIT) plus `categories`, the curated category rail — the
+     * store categories at least one listed merchant carries, in the
+     * admin's own sort order, each with its en+dv name and merchant count.
+     */
     public function index(Request $request, DiscoveryService $discovery): JsonResponse
     {
         $validated = $request->validate([

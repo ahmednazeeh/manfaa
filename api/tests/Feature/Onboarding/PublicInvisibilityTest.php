@@ -49,9 +49,18 @@ it('hides every non-active status from every public surface', function (string $
     // The category derived from a hidden store never leaks into the filter list.
     expect($this->getJson('/api/discover/merchants')->json('meta.categories'))->toBe([]);
 
-    // All four sections, coordinates supplied so nearby would fire.
+    // Every shelf, coordinates supplied so nearby would fire — and the
+    // category rail, which must not raise a chip for a hidden store's
+    // category either.
     $sections = $this->getJson('/api/discover?lat=4.1752&lng=73.5089')->assertOk()->json('data');
-    expect($sections)->toBe(['featured' => [], 'increased' => [], 'nearby' => [], 'online' => []]);
+    expect($sections)->toBe([
+        'featured' => [],
+        'increased' => [],
+        'nearby' => [],
+        'online' => [],
+        'recently_added' => [],
+        'categories' => [],
+    ]);
 
     // Store page: 404, byte-identical to a slug that never existed. Debug
     // off for the comparison — the debug body embeds the test call-site's
@@ -78,7 +87,13 @@ it('lists the same fixture the moment it is active — the matrix is about statu
     expect(collect($sections['featured'])->pluck('slug'))->toContain('shadow-store');
     expect(collect($sections['online'])->pluck('slug'))->toContain('shadow-store');
     expect(collect($sections['nearby'])->pluck('slug'))->toContain('shadow-store');
+    expect(collect($sections['recently_added'])->pluck('slug'))->toContain('shadow-store');
     expect($sections['featured'][0]['channel'])->toBe('both');
+
+    // The rail raises the chip the same moment — one live store behind it.
+    expect($sections['categories'])->toBe([
+        ['slug' => 'grocery', 'name_en' => 'Grocery', 'name_dv' => 'ގުރޮސަރީ', 'merchant_count' => 1],
+    ]);
 
     $this->getJson('/api/discover/merchants/shadow-store')->assertOk()
         ->assertJsonPath('data.channel', 'both');

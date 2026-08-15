@@ -24,7 +24,9 @@
     "logOut": "Log out",
     "showPassword": "Show password",
     "hidePassword": "Hide password",
-    "search": "Search"
+    "search": "Search",
+    "scrollBack": "Scroll back",
+    "scrollForward": "Scroll forward"
   },
   "nav": {
     "home": "Home",
@@ -189,6 +191,9 @@
     "description": "Stores where your Manfaa code earns cashback",
     "featured": "Featured",
     "increased": "Boosted right now",
+    "boosted": "Boosted",
+    "inStore": "In store",
+    "recentlyAdded": "Recently added",
     "nearby": "Near you",
     "online": "Online",
     "rate": "{{rate}} cashback",
@@ -277,7 +282,11 @@
     "heroTitle": "Real cashback in MVR at Maldivian stores",
     "heroSubtitle": "Join free with your phone number. When a store confirms your purchase, you'll earn a percentage back in MVR — paid to your bank account monthly.",
     "heroSearchPlaceholder": "Search stores…",
-    "increasedTitle": "Increased cashback",
+    "railLabel": "Shop by category",
+    "railCount": "{{count}} stores",
+    "railCount_one": "{{count}} store",
+    "railCount_other": "{{count}} stores",
+    "viewStore": "View store",
     "emptyTitle": "First merchants arriving soon",
     "emptyBody": "We're onboarding the first stores now. Create an account today and your Manfaa code will be ready the moment they go live.",
     "howTitle": "How it works",

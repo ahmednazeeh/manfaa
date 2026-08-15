@@ -40,6 +40,26 @@ export const DiscoveryEntrySchema = z.object({
 });
 export type DiscoveryEntry = z.infer<typeof DiscoveryEntrySchema>;
 
+/**
+ * One chip of the curated category rail: a store category at least one
+ * LISTED store carries, in the order the platform curates them (the array
+ * is already sorted — never re-sort it alphabetically). `merchant_count` is
+ * exactly what `getDirectory({ category: slug })` returns as `meta.total`,
+ * so the number on the chip never overstates the grid behind it. Categories
+ * no live store carries are absent rather than present with a zero.
+ *
+ * `name_dv` is the Dhivehi label; render it in Thaana (RTL) and fall back
+ * to `name_en` when it is null.
+ */
+export const DiscoveryCategorySchema = z.object({
+  /** Pass back verbatim as the directory's `category` filter. */
+  slug: z.string(),
+  name_en: z.string(),
+  name_dv: z.string().nullable(),
+  merchant_count: z.number().int(),
+});
+export type DiscoveryCategory = z.infer<typeof DiscoveryCategorySchema>;
+
 export const DiscoverySectionsSchema = z.object({
   featured: z.array(DiscoveryEntrySchema),
   /** Live promo rate above the standing rate. */
@@ -47,6 +67,23 @@ export const DiscoverySectionsSchema = z.object({
   /** Within 10 km, nearest first; empty without coordinates. */
   nearby: z.array(DiscoveryEntrySchema),
   online: z.array(DiscoveryEntrySchema),
+  /**
+   * Newest listing first — when the store was approved onto the platform,
+   * or created for stores the platform onboarded itself. Same entry shape
+   * and cap as the shelves above; only the ordering differs.
+   *
+   * `.catch([])` degrades an unparseable (or absent) shelf to "no shelf"
+   * instead of failing the whole discovery parse — an older API build
+   * during a deploy window must not blank the landing page.
+   */
+  recently_added: z.array(DiscoveryEntrySchema).catch([]),
+  /**
+   * The curated category rail. Not a shelf: navigation chips above them.
+   * Distinct from the directory's `meta.categories`, which is the flat slug
+   * list the filter accepts — same categories, less to say. Same
+   * deploy-window degrade as `recently_added`.
+   */
+  categories: z.array(DiscoveryCategorySchema).catch([]),
 });
 export type DiscoverySections = z.infer<typeof DiscoverySectionsSchema>;
 

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { type DirectoryEntry, type PaginationMeta } from '@manfaa/api-client';
 import {
+  Clock,
   Globe,
   LoaderCircle,
   MapPin,
@@ -12,6 +13,7 @@ import {
   Store,
   TrendingUp,
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { isUnprocessable, useDirectory, useDiscovery } from '@/lib/queries';
 import { SEARCH_MAX_CHARS, SEARCH_MIN_CHARS } from '@/lib/search';
@@ -22,9 +24,10 @@ import { Input } from '@/components/ui/input';
 import { ErrorBlock, LoadingBlock } from '@/components/app/async-states';
 import {
   DiscoverySection,
-  MerchantCard,
-  PromoCard,
+  inStoreEntries,
+  MerchantGrid,
   useLocationRequest,
+  type GeoState,
 } from '@/components/app/discovery';
 import { ListPagination } from '@/components/app/list-pagination';
 import { PublicFooter, PublicHeader } from '@/components/app/public-header';
@@ -39,9 +42,36 @@ import { useCategoryLabel } from '@/components/app/store-labels';
  * over. q / category / page live in the URL (searchParams), so results are
  * shareable and the back button walks filter history. Nearby stays
  * gesture-gated: geolocation only ever runs from the button press.
+ *
+ * `?view=` is the third mode: the landing page's category rail and every
+ * shelf's "see all" link land here, and the page shows that one facet of
+ * the read model as a full grid. Views are derived from the discovery
+ * payload rather than from a directory filter — the API has no channel or
+ * promotion filter — so a view is a fuller version of the same shelf, and
+ * the complete, unbounded list of stores is always the "All stores" grid a
+ * click away.
  */
 
 const SEARCH_DEBOUNCE_MS = 300;
+
+const FACET_VIEWS = [
+  'featured',
+  'boosted',
+  'recent',
+  'in-store',
+  'online',
+  'nearby',
+] as const;
+
+type FacetView = (typeof FACET_VIEWS)[number];
+
+/** A `view` param from a link or a shared URL, or null for anything else —
+ *  an unknown value degrades to the ordinary page, never to an error. */
+function toFacetView(raw: string | null): FacetView | null {
+  return raw !== null && (FACET_VIEWS as readonly string[]).includes(raw)
+    ? (raw as FacetView)
+    : null;
+}
 
 /**
  * The API bounds `q` to SEARCH_MIN_CHARS..SEARCH_MAX_CHARS — too-short
@@ -56,11 +86,64 @@ function toEffectiveQ(raw: string): string {
 
 /**
  * Directory rows are the discovery-entry shape minus distance (the
- * directory is not geographic) — MerchantCard is reused with a null
+ * directory is not geographic) — the shared card is reused with a null
  * distance so nothing renders in that slot.
  */
 function toCardEntry(entry: DirectoryEntry) {
   return { ...entry, distance_m: null };
+}
+
+/** The gesture that turns the nearby section on. */
+function LocationButton({
+  geo,
+  onRequest,
+}: {
+  geo: GeoState;
+  onRequest: () => void;
+}) {
+  const { t } = useTranslation();
+
+  return (
+    <Button
+      variant="outline"
+      size="sm"
+      onClick={onRequest}
+      disabled={geo.kind === 'locating'}
+    >
+      {geo.kind === 'locating' ? (
+        <>
+          <LoaderCircle className="animate-spin" />
+          {t('discover.locating')}
+        </>
+      ) : (
+        <>
+          <MapPin />
+          {t('discover.useMyLocation')}
+        </>
+      )}
+    </Button>
+  );
+}
+
+/**
+ * What an empty nearby list actually means, told honestly: still locating,
+ * genuinely nothing within the radius, permission refused, or never asked.
+ */
+function useNearbyEmptyText(): (geo: GeoState, locating: boolean) => string {
+  const { t } = useTranslation();
+
+  return (geo, locating) =>
+    geo.kind === 'granted'
+      ? // Previous (coord-less) data is on screen while the coord-scoped
+        // refetch runs; don't claim "none nearby" yet.
+        locating
+        ? t('discover.locating')
+        : t('discover.nearbyEmpty')
+      : geo.kind === 'denied'
+        ? t('discover.locationDenied')
+        : geo.kind === 'unavailable'
+          ? t('discover.locationUnavailable')
+          : t('discover.nearbyAskLocation');
 }
 
 /**
@@ -155,14 +238,106 @@ function DirectoryEmpty({
 }
 
 /**
- * The curated shelves — rendered only while no query/category is active.
- * Order per plan: Increased first, then Featured, Nearby (gesture-gated),
- * Online. No per-shelf "view all" links: the full grid is on this same
- * page, right below.
+ * One facet of the discovery payload as a full grid — where the landing
+ * page's rail entries and shelf "see all" links land. Coordinates are
+ * requested only inside the nearby view, and only from the button.
+ */
+function FacetSection({
+  view,
+  onClear,
+}: {
+  view: FacetView;
+  onClear: () => void;
+}) {
+  const { t } = useTranslation();
+  const { geo, coords, requestLocation } = useLocationRequest();
+  const { data, isPending, isPlaceholderData, error } = useDiscovery(coords);
+  const nearbyEmptyText = useNearbyEmptyText();
+
+  if (isPending) {
+    return <LoadingBlock lines={5} />;
+  }
+  if (error) {
+    return <ErrorBlock error={error} />;
+  }
+  if (!data) {
+    return null;
+  }
+
+  const facets: Record<
+    FacetView,
+    { icon: LucideIcon; title: string; entries: typeof data.featured }
+  > = {
+    featured: {
+      icon: Sparkles,
+      title: t('discover.featured'),
+      entries: data.featured,
+    },
+    boosted: {
+      icon: TrendingUp,
+      title: t('discover.increased'),
+      entries: data.increased,
+    },
+    recent: {
+      icon: Clock,
+      title: t('discover.recentlyAdded'),
+      entries: data.recently_added,
+    },
+    'in-store': {
+      icon: Store,
+      title: t('discover.inStore'),
+      entries: inStoreEntries(data),
+    },
+    online: {
+      icon: Globe,
+      title: t('discover.online'),
+      entries: data.online,
+    },
+    nearby: {
+      icon: MapPin,
+      title: t('discover.nearby'),
+      entries: data.nearby,
+    },
+  };
+
+  const facet = facets[view];
+
+  return (
+    <DiscoverySection
+      icon={facet.icon}
+      title={facet.title}
+      entries={facet.entries}
+      emptyText={
+        view === 'nearby'
+          ? nearbyEmptyText(geo, isPlaceholderData)
+          : t('discover.sectionEmpty')
+      }
+    >
+      {facet.entries.length > 0 && (
+        <span className="text-sm text-muted-foreground">
+          {t('stores.resultsCount', { count: facet.entries.length })}
+        </span>
+      )}
+      {view === 'nearby' && geo.kind !== 'granted' && (
+        <LocationButton geo={geo} onRequest={requestLocation} />
+      )}
+      <Button variant="outline" size="sm" onClick={onClear}>
+        {t('store.browseStores')}
+      </Button>
+    </DiscoverySection>
+  );
+}
+
+/**
+ * The curated shelves — rendered only while nothing is filtered and no view
+ * is active. Order per plan: Increased first, then Featured, Nearby
+ * (gesture-gated), Online. No per-shelf "view all" links: the full grid is
+ * on this same page, right below.
  */
 function CuratedShelves() {
   const { geo, coords, requestLocation } = useLocationRequest();
   const { data, isPending, isPlaceholderData, error } = useDiscovery(coords);
+  const nearbyEmptyText = useNearbyEmptyText();
   const { t } = useTranslation();
 
   if (isPending) {
@@ -182,7 +357,6 @@ function CuratedShelves() {
         title={t('discover.increased')}
         entries={data.increased}
         emptyText={t('discover.sectionEmpty')}
-        card={PromoCard}
       />
 
       <DiscoverySection
@@ -196,39 +370,10 @@ function CuratedShelves() {
         icon={Store}
         title={t('discover.nearby')}
         entries={data.nearby}
-        emptyText={
-          geo.kind === 'granted'
-            ? // Previous (coord-less) data is on screen while the
-              // coord-scoped refetch runs; don't claim "none nearby" yet.
-              isPlaceholderData
-              ? t('discover.locating')
-              : t('discover.nearbyEmpty')
-            : geo.kind === 'denied'
-              ? t('discover.locationDenied')
-              : geo.kind === 'unavailable'
-                ? t('discover.locationUnavailable')
-                : t('discover.nearbyAskLocation')
-        }
+        emptyText={nearbyEmptyText(geo, isPlaceholderData)}
       >
         {geo.kind !== 'granted' && (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={requestLocation}
-            disabled={geo.kind === 'locating'}
-          >
-            {geo.kind === 'locating' ? (
-              <>
-                <LoaderCircle className="animate-spin" />
-                {t('discover.locating')}
-              </>
-            ) : (
-              <>
-                <MapPin />
-                {t('discover.useMyLocation')}
-              </>
-            )}
-          </Button>
+          <LocationButton geo={geo} onRequest={requestLocation} />
         )}
       </DiscoverySection>
 
@@ -248,7 +393,7 @@ export default function DiscoverClient() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
-  // --- URL state (q + category + page live in searchParams) ---------------
+  // --- URL state (q + category + page + view live in searchParams) --------
   const urlQ = searchParams.get('q')?.trim() ?? '';
   const effectiveUrlQ = toEffectiveQ(urlQ);
   const category = searchParams.get('category');
@@ -258,15 +403,20 @@ export default function DiscoverClient() {
   const [searchInput, setSearchInput] = useState(urlQ);
 
   /**
-   * Writes filter state into the URL. Defaults (empty q, no category,
-   * page 1) are dropped so the canonical unfiltered URL stays /discover.
-   * `replace` is for keystroke debounces (typing must not stack history
-   * entries); chip clicks, pagination and clears `push` so the back button
-   * steps through them.
+   * Writes filter state into the URL. Defaults (empty q, no category, no
+   * view, page 1) are dropped so the canonical unfiltered URL stays
+   * /discover. `replace` is for keystroke debounces (typing must not stack
+   * history entries); chip clicks, pagination and clears `push` so the back
+   * button steps through them.
    */
   const applyParams = useCallback(
     (
-      next: { q?: string; category?: string | null; page?: number },
+      next: {
+        q?: string;
+        category?: string | null;
+        page?: number;
+        view?: string | null;
+      },
       mode: 'push' | 'replace',
     ) => {
       const params = new URLSearchParams(searchParams.toString());
@@ -277,6 +427,10 @@ export default function DiscoverClient() {
       if (next.category !== undefined) {
         if (next.category === null) params.delete('category');
         else params.set('category', next.category);
+      }
+      if (next.view !== undefined) {
+        if (next.view === null) params.delete('view');
+        else params.set('view', next.view);
       }
       if (next.page !== undefined) {
         if (next.page <= 1) params.delete('page');
@@ -295,7 +449,8 @@ export default function DiscoverClient() {
   const lastWrittenQ = useRef(effectiveUrlQ);
 
   // Debounced keystrokes -> URL. Filter changes reset to page 1 so a
-  // shrunken result set is never opened on a page past its end.
+  // shrunken result set is never opened on a page past its end, and drop
+  // any active view: a search is a directory query, not a facet.
   useEffect(() => {
     const handle = setTimeout(() => {
       const effective = toEffectiveQ(searchInput);
@@ -303,7 +458,7 @@ export default function DiscoverClient() {
         return;
       }
       lastWrittenQ.current = effective;
-      applyParams({ q: effective, page: 1 }, 'replace');
+      applyParams({ q: effective, page: 1, view: null }, 'replace');
     }, SEARCH_DEBOUNCE_MS);
     return () => clearTimeout(handle);
   }, [searchInput, effectiveUrlQ, applyParams]);
@@ -320,6 +475,9 @@ export default function DiscoverClient() {
   }, [effectiveUrlQ]);
 
   const filtered = effectiveUrlQ !== '' || category !== null;
+  // A directory filter always outranks a view — a crafted URL carrying both
+  // resolves to the filter, never to a half-applied mixture of the two.
+  const view = filtered ? null : toFacetView(searchParams.get('view'));
 
   const { data, isPending, isPlaceholderData, error } = useDirectory({
     q: effectiveUrlQ === '' ? undefined : effectiveUrlQ,
@@ -330,7 +488,7 @@ export default function DiscoverClient() {
   const clearFilters = () => {
     setSearchInput('');
     lastWrittenQ.current = '';
-    applyParams({ q: '', category: null, page: 1 }, 'push');
+    applyParams({ q: '', category: null, page: 1, view: null }, 'push');
   };
 
   // Adapt the directory meta to the Laravel pagination shape the shared
@@ -368,7 +526,7 @@ export default function DiscoverClient() {
           </p>
         </div>
 
-        {/* Search + chips lead the page in both modes. */}
+        {/* Search + chips lead the page in every mode. */}
         <div className="flex flex-col gap-4 pb-8">
           <div className="relative w-full max-w-md">
             <Search className="absolute start-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -395,30 +553,38 @@ export default function DiscoverClient() {
               categories={data.meta.categories}
               selected={category}
               onSelect={(next) =>
-                applyParams({ category: next, page: 1 }, 'push')
+                applyParams({ category: next, page: 1, view: null }, 'push')
               }
             />
           )}
         </div>
 
         <div className="flex flex-col gap-8 pb-10">
-          {/* Curated shelves only while nothing is filtered. */}
-          {!filtered && <CuratedShelves />}
+          {/* One facet, full grid — the landing rail's destination. */}
+          {view !== null && (
+            <FacetSection
+              view={view}
+              onClear={() => applyParams({ view: null, page: 1 }, 'push')}
+            />
+          )}
 
-          {isPending && <LoadingBlock lines={6} />}
+          {/* Curated shelves only while nothing is filtered or facetted. */}
+          {view === null && !filtered && <CuratedShelves />}
+
+          {view === null && isPending && <LoadingBlock lines={6} />}
           {/* A 422 means the URL carried filter params outside the API's
               bounds (clamping covers q; category/page can still arrive
               oversized in a crafted link). That's "nothing matches", not an
               outage — show the localised empty state with its clear-filters
               reset instead of the API's raw English validation prose. */}
-          {!isPending && error && isUnprocessable(error) && (
+          {view === null && !isPending && error && isUnprocessable(error) && (
             <DirectoryEmpty filtered onClear={clearFilters} />
           )}
-          {!isPending && error && !isUnprocessable(error) && (
+          {view === null && !isPending && error && !isUnprocessable(error) && (
             <ErrorBlock error={error} />
           )}
 
-          {data && (
+          {view === null && data && (
             <section
               className={cn(
                 'flex flex-col gap-4',
@@ -445,11 +611,7 @@ export default function DiscoverClient() {
               {data.data.length === 0 ? (
                 <DirectoryEmpty filtered={filtered} onClear={clearFilters} />
               ) : (
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                  {data.data.map((entry) => (
-                    <MerchantCard key={entry.slug} entry={toCardEntry(entry)} />
-                  ))}
-                </div>
+                <MerchantGrid entries={data.data.map(toCardEntry)} />
               )}
 
               {pagerMeta && (

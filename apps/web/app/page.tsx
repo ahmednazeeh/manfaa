@@ -3,11 +3,11 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import type { DiscoveryEntry, DiscoverySections } from '@manfaa/api-client';
 import {
   Banknote,
+  Clock,
   Globe,
-  LoaderCircle,
-  MapPin,
   QrCode,
   Search,
   ShoppingBag,
@@ -18,18 +18,25 @@ import {
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { formatDate, formatRate } from '@/lib/format';
 import { useDiscovery, useMe } from '@/lib/queries';
 import { SEARCH_MAX_CHARS } from '@/lib/search';
+import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import {
-  DiscoverySection,
-  PromoCard,
-  useLocationRequest,
+  CategoryRail,
+  CategoryRailSkeleton,
+} from '@/components/app/category-rail';
+import {
+  hasListedStores,
+  inStoreEntries,
+  StoreShelf,
 } from '@/components/app/discovery';
 import { PublicFooter, PublicHeader } from '@/components/app/public-header';
+import { StoreAvatar } from '@/components/app/store-avatar';
 
 /**
  * Public landing page (manfaa.app) — the reason to open the app before
@@ -37,6 +44,14 @@ import { PublicFooter, PublicHeader } from '@/components/app/public-header';
  * public GET /api/discover endpoint, and the shared PublicHeader quietly
  * upgrades to a "Dashboard" button when a customer session cookie is
  * already present.
+ *
+ * Shape, top to bottom: the category rail (the storefront's navigation),
+ * the hero panel, the store shelves, then how-it-works and the marketplace
+ * teaser. Everything between the header and how-it-works is data-driven and
+ * disappears cleanly when there is no data — with ONE live store the page
+ * must still read as finished, so a shelf never renders empty, the rail
+ * never offers a filter that leads nowhere, and the hero never becomes a
+ * carousel with one slide in it.
  *
  * Authed visitors (the same silent me-probe the header uses; react-query
  * dedupes the request) never see a "Create account" CTA anywhere on this
@@ -47,16 +62,20 @@ import { PublicFooter, PublicHeader } from '@/components/app/public-header';
  * unchanged.
  */
 
+/** Cards per landing shelf. The shelves are teasers; "see all" carries the
+ *  rest, and the full directory is always one tap away. */
+const SHELF_LIMIT = 12;
+
 /**
  * The landing page's primary CTA: Create account for visitors, Open
  * dashboard once the me-probe confirms a session.
  */
-function PrimaryCta() {
+function PrimaryCta({ className }: { className?: string }) {
   const { t } = useTranslation();
   const { data: me } = useMe();
 
   return (
-    <Button size="lg" asChild>
+    <Button size="lg" asChild className={className}>
       {me ? (
         <Link href="/dashboard">{t('landing.openDashboard')}</Link>
       ) : (
@@ -112,23 +131,136 @@ function HeroSearch() {
   );
 }
 
-function Hero() {
+/**
+ * Flat geometric decoration for the hero panel: CSS shapes only — no
+ * photography, no external images, nothing to load. All logical insets, so
+ * the composition mirrors under RTL instead of tearing.
+ */
+function PanelShapes() {
+  return (
+    <div
+      aria-hidden="true"
+      className="pointer-events-none absolute inset-0 overflow-hidden"
+    >
+      <div className="absolute -top-28 -end-20 size-80 rounded-full bg-panel-foreground/10" />
+      <div className="absolute -bottom-20 -start-16 size-56 rotate-12 rounded-[3rem] bg-panel-foreground/5" />
+      <div className="absolute top-14 end-36 hidden size-24 rounded-full border-4 border-panel-accent/40 lg:block" />
+      <div className="absolute bottom-10 end-16 hidden h-2 w-44 rounded-full bg-panel-accent/70 lg:block" />
+    </div>
+  );
+}
+
+/**
+ * The promoted-store panel — the SECOND hero panel, and only when there is
+ * genuinely something to promote (a store whose live promotion beats its
+ * standing rate). With nothing boosted the hero is one calm panel; it is
+ * never a carousel waiting for slides.
+ */
+function PromotedPanel({ entry }: { entry: DiscoveryEntry }) {
   const { t } = useTranslation();
 
   return (
-    <section className="container flex flex-col items-center gap-5 py-16 text-center lg:py-24">
-      <h1 className="max-w-3xl text-balance text-3xl font-semibold tracking-tight text-mono sm:text-4xl lg:text-5xl">
-        {t('landing.heroTitle')}
-      </h1>
-      <p className="max-w-xl text-pretty text-base text-muted-foreground lg:text-lg">
-        {t('landing.heroSubtitle')}
-      </p>
-      <HeroSearch />
-      <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
-        <PrimaryCta />
-        <Button size="lg" variant="outline" asChild>
-          <a href="#how-it-works">{t('landing.howTitle')}</a>
-        </Button>
+    <Link
+      href={`/store/${entry.slug}`}
+      className="group relative flex flex-col justify-between gap-5 overflow-hidden rounded-2xl bg-panel-accent p-6 text-panel-to focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+    >
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute -bottom-16 -end-10 size-48 rounded-full bg-panel-to/10"
+      />
+
+      <div className="relative flex items-center gap-3">
+        <StoreAvatar
+          name={entry.name}
+          slug={entry.slug}
+          logoUrl={entry.logo_url}
+          size="sm"
+        />
+        <div className="flex min-w-0 flex-col">
+          <span className="inline-flex items-center gap-1.5 text-2xs font-semibold tracking-wide uppercase">
+            <TrendingUp className="size-3" />
+            {t('discover.boosted')}
+          </span>
+          <span className="truncate text-sm font-medium">{entry.name}</span>
+        </div>
+      </div>
+
+      <div className="relative flex flex-col gap-1">
+        <div className="flex flex-wrap items-baseline gap-x-2">
+          <span className="text-4xl font-bold tracking-tight">
+            {formatRate(entry.cashback_rate_percent)}
+          </span>
+          <span className="text-sm">{t('discover.cashbackLabel')}</span>
+        </div>
+        {/* Full-strength ink, not a faded one: the accent panel is bright,
+            and a translucent tint on it drops under 4.5:1. The meta line is
+            demoted by size and by the strike, never by contrast. */}
+        <div className="flex flex-wrap items-center gap-x-3 text-xs">
+          <span className="line-through">
+            {t('discover.usuallyRate', {
+              rate: formatRate(entry.standing_cashback_rate_percent),
+            })}
+          </span>
+          {entry.promo_ends_at !== null && (
+            <span>
+              {t('discover.promoUntil', {
+                date: formatDate(entry.promo_ends_at),
+              })}
+            </span>
+          )}
+        </div>
+      </div>
+
+      <span className="relative text-sm font-semibold group-hover:underline">
+        {t('landing.viewStore')}
+      </span>
+    </Link>
+  );
+}
+
+/** Headline, search and CTA on the Manfaa panel, plus the promoted store
+ *  beside it when one exists. */
+function Hero({ promoted }: { promoted: DiscoveryEntry | null }) {
+  const { t } = useTranslation();
+
+  return (
+    <section className="container pb-10 lg:pb-14">
+      <div
+        className={cn(
+          'grid gap-4',
+          promoted !== null && 'lg:grid-cols-3',
+        )}
+      >
+        <div
+          className={cn(
+            'relative isolate overflow-hidden rounded-2xl bg-linear-to-br from-panel-from via-panel-via to-panel-to px-6 py-12 text-panel-foreground sm:px-10 lg:py-16',
+            promoted !== null && 'lg:col-span-2',
+          )}
+        >
+          <PanelShapes />
+          <div className="relative flex max-w-xl flex-col gap-5">
+            <h1 className="text-3xl font-semibold tracking-tight text-balance sm:text-4xl lg:text-5xl">
+              {t('landing.heroTitle')}
+            </h1>
+            <p className="text-sm/relaxed text-pretty text-panel-foreground/90 sm:text-base/relaxed">
+              {t('landing.heroSubtitle')}
+            </p>
+            <HeroSearch />
+            <div className="flex flex-wrap items-center gap-3">
+              <PrimaryCta className="bg-panel-foreground text-panel-to hover:bg-panel-foreground/90" />
+              <Button
+                size="lg"
+                variant="ghost"
+                asChild
+                className="border border-panel-foreground/40 text-panel-foreground hover:bg-panel-foreground/10 hover:text-panel-foreground"
+              >
+                <a href="#how-it-works">{t('landing.howTitle')}</a>
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        {promoted !== null && <PromotedPanel entry={promoted} />}
       </div>
     </section>
   );
@@ -140,128 +272,128 @@ function AllEmptyBlock() {
   const { data: me } = useMe();
 
   return (
-    <Card className="mx-auto w-full max-w-xl">
-      <CardContent className="flex flex-col items-center gap-4 p-8 text-center">
-        <span className="flex size-12 items-center justify-center rounded-full bg-primary/10 text-primary">
-          <Store className="size-5" />
-        </span>
-        <div className="flex flex-col gap-1.5">
-          <h2 className="text-lg font-semibold text-mono">
-            {t('landing.emptyTitle')}
-          </h2>
-          <p className="text-sm text-muted-foreground">
-            {t('landing.emptyBody')}
-          </p>
-        </div>
-        <Button asChild>
-          {me ? (
-            <Link href="/dashboard">{t('landing.openDashboard')}</Link>
-          ) : (
-            <Link href="/signup">{t('landing.createAccount')}</Link>
-          )}
-        </Button>
-      </CardContent>
-    </Card>
+    <section className="container pb-14">
+      <Card className="mx-auto w-full max-w-xl">
+        <CardContent className="flex flex-col items-center gap-4 p-8 text-center">
+          <span className="flex size-12 items-center justify-center rounded-full bg-primary/10 text-primary">
+            <Store className="size-5" />
+          </span>
+          <div className="flex flex-col gap-1.5">
+            <h2 className="text-lg font-semibold text-mono">
+              {t('landing.emptyTitle')}
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              {t('landing.emptyBody')}
+            </p>
+          </div>
+          <Button asChild>
+            {me ? (
+              <Link href="/dashboard">{t('landing.openDashboard')}</Link>
+            ) : (
+              <Link href="/signup">{t('landing.createAccount')}</Link>
+            )}
+          </Button>
+        </CardContent>
+      </Card>
+    </section>
   );
 }
 
-function Discovery() {
-  const { geo, coords, requestLocation } = useLocationRequest();
-  const { data, isPlaceholderData } = useDiscovery(coords);
+/**
+ * The store shelves.
+ *
+ * A shelf renders only if it puts at least one store on the page that no
+ * shelf above it already has. That single rule is what keeps a sparse
+ * platform looking deliberate: with one live store, "Featured" shows it
+ * once and "Recently added", "In store" and "Online" stand down rather than
+ * printing the same card four times under four headings. The facets those
+ * shelves would have offered are not lost — they are exactly the entry
+ * points in the category rail above, and each one still opens its own view
+ * of the directory.
+ */
+function Shelves({ sections }: { sections: DiscoverySections }) {
   const { t } = useTranslation();
 
-  // Nothing renders while loading and nothing renders on error — a public
-  // landing page carries itself on the hero and how-it-works instead of
-  // showing spinners or API errors.
-  if (!data) {
+  const candidates: Array<{
+    key: string;
+    icon: LucideIcon;
+    title: string;
+    entries: DiscoveryEntry[];
+    viewAllHref: string;
+  }> = [
+    {
+      key: 'boosted',
+      icon: TrendingUp,
+      title: t('discover.increased'),
+      entries: sections.increased,
+      viewAllHref: '/discover?view=boosted',
+    },
+    {
+      key: 'featured',
+      icon: Sparkles,
+      title: t('discover.featured'),
+      entries: sections.featured,
+      viewAllHref: '/discover?view=featured',
+    },
+    {
+      key: 'recent',
+      icon: Clock,
+      title: t('discover.recentlyAdded'),
+      entries: sections.recently_added,
+      viewAllHref: '/discover?view=recent',
+    },
+    {
+      key: 'in-store',
+      icon: Store,
+      title: t('discover.inStore'),
+      entries: inStoreEntries(sections),
+      viewAllHref: '/discover?view=in-store',
+    },
+    {
+      key: 'online',
+      icon: Globe,
+      title: t('discover.online'),
+      entries: sections.online,
+      viewAllHref: '/discover?view=online',
+    },
+  ];
+
+  const alreadyShown = new Set<string>();
+  const shelves = [];
+
+  for (const candidate of candidates) {
+    const entries = candidate.entries.slice(0, SHELF_LIMIT);
+
+    if (
+      entries.length === 0 ||
+      entries.every((entry) => alreadyShown.has(entry.slug))
+    ) {
+      continue;
+    }
+
+    for (const entry of entries) {
+      alreadyShown.add(entry.slug);
+    }
+
+    shelves.push({ ...candidate, entries });
+  }
+
+  if (shelves.length === 0) {
     return null;
   }
 
-  const allEmpty =
-    data.increased.length === 0 &&
-    data.featured.length === 0 &&
-    data.online.length === 0 &&
-    data.nearby.length === 0;
-
-  if (allEmpty) {
-    return (
-      <section className="container pb-16">
-        <AllEmptyBlock />
-      </section>
-    );
-  }
-
   return (
-    <section className="container flex flex-col gap-10 pb-16">
-      {/* Boosted rates lead the page whenever any are live. The landing
-          shelves are the teaser — every "view all" points at the full
-          /discover directory. */}
-      <DiscoverySection
-        icon={TrendingUp}
-        title={t('landing.increasedTitle')}
-        entries={data.increased}
-        card={PromoCard}
-        viewAllHref="/discover"
-      />
-
-      <DiscoverySection
-        icon={Sparkles}
-        title={t('discover.featured')}
-        entries={data.featured}
-        viewAllHref="/discover"
-      />
-
-      <DiscoverySection
-        icon={Globe}
-        title={t('discover.online')}
-        entries={data.online}
-        viewAllHref="/discover"
-      />
-
-      {/* Nearby is gesture-gated: the section renders its prompt copy until
-          the visitor explicitly shares their location. */}
-      <DiscoverySection
-        icon={Store}
-        title={t('discover.nearby')}
-        entries={data.nearby}
-        viewAllHref="/discover"
-        emptyText={
-          geo.kind === 'granted'
-            ? // While the coord-scoped refetch is still in flight the shelf
-              // shows previous (coord-less) data — say "finding stores", not
-              // "none within 10 km".
-              isPlaceholderData
-              ? t('discover.locating')
-              : t('discover.nearbyEmpty')
-            : geo.kind === 'denied'
-              ? t('discover.locationDenied')
-              : geo.kind === 'unavailable'
-                ? t('discover.locationUnavailable')
-                : t('discover.nearbyAskLocation')
-        }
-      >
-        {geo.kind !== 'granted' && (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={requestLocation}
-            disabled={geo.kind === 'locating'}
-          >
-            {geo.kind === 'locating' ? (
-              <>
-                <LoaderCircle className="animate-spin" />
-                {t('discover.locating')}
-              </>
-            ) : (
-              <>
-                <MapPin />
-                {t('discover.useMyLocation')}
-              </>
-            )}
-          </Button>
-        )}
-      </DiscoverySection>
-    </section>
+    <div className="container flex flex-col gap-10 pb-14">
+      {shelves.map((shelf) => (
+        <StoreShelf
+          key={shelf.key}
+          icon={shelf.icon}
+          title={shelf.title}
+          entries={shelf.entries}
+          viewAllHref={shelf.viewAllHref}
+        />
+      ))}
+    </div>
   );
 }
 
@@ -341,7 +473,7 @@ function MarketplaceTeaser() {
   const { data: me } = useMe();
 
   return (
-    <section className="container pb-16">
+    <section className="container py-14">
       <Card className="mx-auto w-full max-w-3xl">
         <CardContent className="flex flex-col items-center gap-4 p-8 text-center">
           <span className="flex size-12 items-center justify-center rounded-full bg-primary/10 text-primary">
@@ -381,14 +513,38 @@ function MarketplaceTeaser() {
 }
 
 export default function LandingPage() {
+  // Coordinate-free on purpose: the landing has no "near you" shelf any
+  // more — Nearby is a rail entry point, and geolocation is only ever asked
+  // for on /discover, from the button the visitor presses there.
+  const { data, isPending } = useDiscovery(null);
+
+  // The single best live promotion becomes the hero's second panel; the
+  // boosted shelf below still lists it with everything else that is live.
+  const promoted = data?.increased[0] ?? null;
+
   return (
     <div className="flex min-h-screen w-full flex-col bg-background">
       <PublicHeader />
       <main className="grow">
-        <Hero />
-        <Discovery />
-        <MarketplaceTeaser />
+        {/* Nothing renders while loading and nothing renders on error — a
+            public landing page carries itself on the hero and how-it-works
+            instead of showing spinners or API errors. The rail is the one
+            exception: it reserves its height so the hero below it does not
+            jump when the payload lands. */}
+        {isPending && <CategoryRailSkeleton />}
+        {data !== undefined && <CategoryRail sections={data} />}
+
+        <Hero promoted={promoted} />
+
+        {data !== undefined &&
+          (hasListedStores(data) ? (
+            <Shelves sections={data} />
+          ) : (
+            <AllEmptyBlock />
+          ))}
+
         <HowItWorks />
+        <MarketplaceTeaser />
       </main>
       <PublicFooter />
     </div>

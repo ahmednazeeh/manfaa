@@ -211,6 +211,7 @@ line, customer-favourable):
     "invoice_no": "INV-1001",
     "state": "awaiting_validation",
     "reason_code": null,
+    "backdated": false,
     "currency": "MVR",
     "eligible_laari": 118000,
     "sale_laari": 125000,

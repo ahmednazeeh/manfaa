@@ -6,6 +6,13 @@ import { cn } from '@/lib/utils';
  * deterministic initials tile — the palette index is a plain integer hash
  * of the slug, so a store keeps its colour across pages, sessions and
  * users with no external libraries involved.
+ *
+ * No store has uploaded a logo yet, so on the storefront today this tile IS
+ * the card: at the `tile` size it fills the card's whole hero slot and the
+ * initials are the only brand mark on screen. It is built to look
+ * deliberate at that size rather than like a grey placeholder — a saturated
+ * brand-ish ground, a soft corner highlight that keeps it from reading
+ * flat, and confident letterforms.
  */
 
 /**
@@ -23,6 +30,16 @@ const PALETTE: ReadonlyArray<{ bg: string; fg: string }> = [
   { bg: '#7e22ce', fg: '#ffffff' }, // purple
   { bg: '#be123c', fg: '#ffffff' }, // rose
 ];
+
+/**
+ * A corner highlight so a large tile is not a flat rectangle of colour.
+ * Deliberately capped at 18% white and faded out well before the centre:
+ * the initials sit in the middle, and at this strength even the LIGHTEST
+ * point of the lightest palette entry still clears 4.5:1 against white —
+ * the tile gains depth without spending any of the contrast budget.
+ */
+const HIGHLIGHT =
+  'radial-gradient(120% 120% at 22% 0%, rgba(255,255,255,0.18), rgba(255,255,255,0) 60%)';
 
 /** Simple 31-based string hash — stable, dependency-free, sign-safe. */
 function hashSlug(slug: string): number {
@@ -45,10 +62,15 @@ function initialsOf(name: string): string {
 }
 
 const SIZE_CLASSES = {
-  /** Card rows. */
+  /** Inline rows (the store page header, the promoted-store panel). */
   sm: 'size-10 rounded-lg text-xs',
   /** Store page hero. */
   lg: 'size-16 rounded-xl text-lg',
+  /**
+   * Card hero: fills the slot the caller sizes (an aspect-ratio box), with
+   * initials big enough to be the card's brand mark rather than a badge.
+   */
+  tile: 'size-full rounded-lg text-3xl tracking-tight sm:text-4xl',
 } as const;
 
 export function StoreAvatar({
@@ -69,6 +91,7 @@ export function StoreAvatar({
       <span
         className={cn(
           'flex shrink-0 items-center justify-center overflow-hidden border border-border bg-background',
+          size === 'tile' && 'p-3',
           SIZE_CLASSES[size],
           className,
         )}
@@ -99,7 +122,14 @@ export function StoreAvatar({
         SIZE_CLASSES[size],
         className,
       )}
-      style={{ backgroundColor: bg, color: fg }}
+      style={{
+        backgroundColor: bg,
+        backgroundImage: HIGHLIGHT,
+        color: fg,
+        // A hairline inset edge so the tile reads as an object rather than
+        // a colour fill, in both themes and without a border box.
+        boxShadow: 'inset 0 0 0 1px rgba(255, 255, 255, 0.12)',
+      }}
     >
       {initialsOf(name)}
     </span>

@@ -240,56 +240,109 @@ paths:
             schema:
               $ref: '#/components/schemas/TransactionCreateRequest'
             examples:
-              typical:
-                summary: A typical POS sale
+              simplest:
+                summary: Simplest
+                description: |
+                  Everything a till is required to send: who to credit, the
+                  invoice number, and the merchant's own eligible total in
+                  laari. `occurred_at` is omitted, so the sale is recorded
+                  **now** — the response echoes `occurred_at` equal to
+                  `received_at` — and prices at the rate effective at that
+                  instant.
+
+                  Hand-derived against the §4 law
+                  (`intdiv(laari × bp + 9999, 10000)` — every fractional
+                  laari rounds UP) at this store's standing 2.00%:
+
+                  - cashback = ceil(118,000 × 200 ÷ 10,000) = **2,360
+                    laari** = MVR 23.60
+                  - 2.00% sits in the 2.00%–4.99% band, whose platform fee
+                    is 0.75%, so fee = ceil(118,000 × 75 ÷ 10,000) = **885
+                    laari** = MVR 8.85
+                  - the merchant owes 2,360 + 885 = **3,245 laari** (MVR
+                    32.45) when this sale settles
+
+                  See the `created` response example — these are its exact
+                  integers.
                 value:
                   invoice_no: INV-1001
                   customer_ref: '482917'
                   eligible_amount: 118000
-                  sale_amount: 125000
-                  occurred_at: '2026-08-14T11:04:22+05:00'
-                  branch_id: 3
-              minimal:
-                summary: Only the required fields — occurred_at omitted, so the sale is recorded now
-                value:
-                  invoice_no: INV-1002
-                  customer_ref: '482917'
-                  eligible_amount: 50000
-              wallClockTimestamp:
-                summary: Offsetless till clock, read as Maldives time (UTC+5)
+              saleTotalAndWallClock:
+                summary: With sale total and wall-clock time
                 description: |
-                  `2026-08-14 11:09:00` is the instant
-                  `2026-08-14T06:09:00Z`. A till that writes its own local
-                  clock needs no timezone maths.
+                  The same sale with the two optional reference fields a
+                  real till usually has to hand.
+
+                  `sale_amount` is the FULL bill (MVR 625.00); the merchant
+                  found MVR 500.33 of it eligible under their own policy,
+                  which the platform never recomputes or second-guesses. It
+                  enters no computation — it is kept for dispute answers
+                  and the eligible-ratio monitoring of §11 (here
+                  50,033 ÷ 62,500 = 80.05%).
+
+                  `occurred_at` carries no offset, so it is read as
+                  **Maldives time (UTC+5)**: `2026-08-15 11:09:00` is the
+                  instant `2026-08-15T06:09:00Z`, which is what the
+                  response echoes. A till that writes its own local clock
+                  needs no timezone maths.
+
+                  Hand-derived at the standing 2.00% — note the ceiling
+                  rounding on both figures, which an even amount hides:
+
+                  - cashback = ceil(50,033 × 200 ÷ 10,000) = ceil(1,000.66)
+                    = **1,001 laari** = MVR 10.01
+                  - fee = ceil(50,033 × 75 ÷ 10,000) = ceil(375.2475) =
+                    **376 laari** = MVR 3.76
+
+                  The response is the `created` shape with
+                  `sale_laari: 62500` and
+                  `occurred_at: "2026-08-15T06:09:00+00:00"`.
+
+                  A till standing at one branch adds the third optional
+                  field, `branch_id`, from the ids issued at onboarding. It
+                  scopes reporting and lets branch-scoped promotions apply;
+                  it changes none of the arithmetic above.
                 value:
-                  invoice_no: INV-1005
+                  invoice_no: INV-1007
                   customer_ref: '482917'
-                  eligible_amount: 50000
-                  occurred_at: '2026-08-14 11:09:00'
-              rateOverride:
-                summary: Per-sale rate override — 5% on this sale only
+                  eligible_amount: 50033
+                  sale_amount: 62500
+                  occurred_at: '2026-08-15 11:09:00'
+              mixedBasket:
+                summary: Mixed basket with line items
                 description: |
-                  The merchant's standing rate is 2.00%; this one sale is
-                  credited at 5.00%. The response freezes
-                  `cashback_rate_percent: "5.00"` with the matching fee tier
-                  `platform_fee_percent: "1.00"`, and the standing rate is
-                  unchanged. A value BELOW the rate the sale would otherwise
-                  earn is refused `rate_below_advertised`.
-                value:
-                  invoice_no: INV-1006
-                  customer_ref: '482917'
-                  eligible_amount: 118000
-                  cashback_rate_percent: '5.00'
-                  occurred_at: '2026-08-14T11:04:22+05:00'
-              phoneKeyed:
-                summary: Online store, keyed by customer phone (origin api_phone)
-                value:
-                  invoice_no: WEB-88410
-                  customer_ref: '+9607712345'
-                  eligible_amount: 118000
-                  occurred_at: '2026-08-14T11:12:41+05:00'
-              linedBasket:
-                summary: Mixed basket split by product category (lines sum to eligible_amount)
+                  A store with a product-category rate card. The three
+                  lines sum to exactly `eligible_amount`
+                  (30,000 + 25,000 + 45,000 = 100,000) — one excluded
+                  category, one category with its own rate, and the
+                  `category: null` bucket for everything else.
+
+                  Pricing is per line at §4 ceiling rounding, then summed;
+                  the transaction totals are the SUM of the stored line
+                  integers, never a recomputation on the aggregate. This
+                  store (the same one the integration guide works through)
+                  stands at 5.00%, prices `veggies` at its own 2.00%, and
+                  excludes `fruits` — and each line's platform fee follows
+                  that line's own rate into its §4 band:
+
+                  - fruits, excluded → **0** cashback, **0** fee, whatever
+                    the rest of the basket does
+                  - veggies at 2.00%: ceil(25,000 × 200 ÷ 10,000) = **500
+                    laari**; the 2.00%–4.99% band's 0.75% fee gives
+                    ceil(25,000 × 75 ÷ 10,000) = ceil(187.5) = **188
+                    laari**
+                  - the remainder at the standing 5.00%:
+                    ceil(45,000 × 500 ÷ 10,000) = **2,250 laari**; the
+                    5.00%–20.00% band's 1.00% fee gives
+                    ceil(45,000 × 100 ÷ 10,000) = **450 laari**
+                  - transaction totals: cashback 0 + 500 + 2,250 = **2,750
+                    laari** (MVR 27.50), fee 0 + 188 + 450 = **638 laari**
+                    (MVR 6.38)
+
+                  A line whose amounts do not sum to `eligible_amount` is
+                  `422 lines_sum_mismatch` — see the `linedCreated`
+                  response example for the priced echo.
                 value:
                   invoice_no: INV-2107
                   customer_ref: '482917'
@@ -302,6 +355,66 @@ paths:
                       amount_laari: 25000
                     - category: null
                       amount_laari: 45000
+              customRate:
+                summary: Custom cashback for this sale
+                description: |
+                  A one-off boost — a staff discount day, a goodwill
+                  gesture — for THIS sale only. The store's standing rate
+                  stays 2.00%; nothing about the offer it advertises
+                  changes.
+
+                  An override may only **raise** the rate the sale would
+                  otherwise earn: 2.00% here, or a live promotion's rate if
+                  one covers the sale. A lower value is refused
+                  `422 rate_below_advertised` rather than quietly ignored,
+                  because the advertised rate is a promise to the customer.
+
+                  Hand-derived at the applied 5.00% — the platform fee
+                  follows the APPLIED rate into its own §4 band, and 5.00%
+                  crosses into the 5.00%–20.00% band at 1.00%:
+
+                  - cashback = ceil(118,000 × 500 ÷ 10,000) = **5,900
+                    laari** = MVR 59.00
+                  - fee = ceil(118,000 × 100 ÷ 10,000) = **1,180 laari** =
+                    MVR 11.80
+                  - the merchant owes **7,080 laari** (MVR 70.80) against
+                    the 3,245 the same basket would have cost at 2.00% —
+                    the fee band moved too, not only the cashback
+
+                  The applied rate is frozen on the row: see the
+                  `overridden` response example.
+                value:
+                  invoice_no: INV-1006
+                  customer_ref: '482917'
+                  eligible_amount: 118000
+                  cashback_rate_percent: '5.00'
+                  occurred_at: '2026-08-15T11:04:22+05:00'
+              phoneKeyed:
+                summary: Online store — phone-keyed customer
+                description: |
+                  A web checkout has the shopper's mobile, not the 6-digit
+                  code they would read out at a till. Send it as
+                  `+960XXXXXXX` (the 7-digit local form is accepted too and
+                  normalised to E.164 before lookup). The two spaces never
+                  collide: codes are exactly six digits, local mobiles
+                  exactly seven.
+
+                  The only difference in the response is
+                  `origin: "api_phone"` instead of `pos`; an unknown number
+                  answers exactly like an unknown code,
+                  `422 customer_not_found`.
+
+                  Hand-derived at the standing 2.00% on MVR 299.00:
+
+                  - cashback = ceil(29,900 × 200 ÷ 10,000) = **598 laari**
+                    = MVR 5.98
+                  - fee = ceil(29,900 × 75 ÷ 10,000) = ceil(224.25) =
+                    **225 laari** = MVR 2.25
+                value:
+                  invoice_no: WEB-88410
+                  customer_ref: '+9607712345'
+                  eligible_amount: 29900
+                  occurred_at: '2026-08-15T11:12:41+05:00'
       responses:
         '201':
           description: |
@@ -318,7 +431,19 @@ paths:
                 $ref: '#/components/schemas/TransactionWriteResult'
               examples:
                 created:
-                  summary: Cashback accrued at 200 bp
+                  summary: Created — cashback accrued at the standing 2.00%
+                  description: |
+                    The answer to the **Simplest** request example. Worked
+                    integers, §4 ceiling rounding: cashback
+                    ceil(118,000 × 200 ÷ 10,000) = 2,360 laari (MVR 23.60);
+                    the 2.00%–4.99% band's fee is 0.75%, so
+                    ceil(118,000 × 75 ÷ 10,000) = 885 laari (MVR 8.85).
+
+                    `occurred_at` equals `received_at` because the request
+                    omitted it and the platform used now. A request that
+                    sends `sale_amount` gets the identical shape with
+                    `sale_laari` set — it is reference data only and never
+                    touches these integers.
                   value:
                     status: created
                     reason: null
@@ -328,9 +453,10 @@ paths:
                       invoice_no: INV-1001
                       state: awaiting_validation
                       reason_code: null
+                      backdated: false
                       currency: MVR
                       eligible_laari: 118000
-                      sale_laari: 125000
+                      sale_laari: null
                       cashback_rate_percent: '2.00'
                       platform_fee_percent: '0.75'
                       cashback_laari: 2360
@@ -338,24 +464,30 @@ paths:
                       fee_laari: 885
                       fee_mvr: '8.85'
                       fee_gst_laari: 0
-                      occurred_at: '2026-08-14T06:04:22+00:00'
-                      received_at: '2026-08-14T06:04:23+00:00'
+                      occurred_at: '2026-08-15T06:04:22+00:00'
+                      received_at: '2026-08-15T06:04:22+00:00'
                 linedCreated:
-                  summary: |
-                    Mixed basket priced per line (standing 500 bp, veggies
-                    override 200 bp, fruits excluded)
+                  summary: Lined created — the mixed basket priced per line
                   description: |
-                    Worked integers, per §4 ceiling rounding at each line:
-                    fruits 30,000 excluded → 0/0; veggies 25,000 @200 bp →
-                    ceil(25,000×200/10,000) = 500 cashback, fee tier 75 bp →
-                    ceil(25,000×75/10,000) = 188; default 45,000 @500 bp →
-                    ceil(45,000×500/10,000) = 2,250 cashback, fee tier
-                    100 bp → ceil(45,000×100/10,000) = 450. Transaction
-                    totals are the SUMS of the stored line integers:
-                    cashback 2,750, fee 638. The row-level
-                    `cashback_rate_percent: "5.00"` /
-                    `platform_fee_percent: "1.00"` are the standing-rate
-                    base snapshot.
+                    The answer to the **Mixed basket with line items**
+                    request. Standing 5.00% (fee band 1.00%), `veggies`
+                    priced at its own 2.00% (fee band 0.75%), `fruits`
+                    excluded. §4 ceiling rounding at each line, then
+                    summed:
+
+                    - fruits 30,000, excluded → 0 cashback, 0 fee
+                    - veggies ceil(25,000 × 200 ÷ 10,000) = 500; fee
+                      ceil(25,000 × 75 ÷ 10,000) = ceil(187.5) = 188
+                    - default bucket ceil(45,000 × 500 ÷ 10,000) = 2,250;
+                      fee ceil(45,000 × 100 ÷ 10,000) = 450
+
+                    Transaction totals are the SUMS of those stored line
+                    integers — cashback 2,750 (MVR 27.50), fee 638 (MVR
+                    6.38) — never a recomputation against the 100,000
+                    aggregate. The row-level `cashback_rate_percent` /
+                    `platform_fee_percent` are the base-rate snapshot,
+                    which is why they read "5.00" / "1.00" while the
+                    veggies line reads "2.00".
                   value:
                     status: created
                     reason: null
@@ -365,6 +497,7 @@ paths:
                       invoice_no: INV-2107
                       state: awaiting_validation
                       reason_code: null
+                      backdated: false
                       currency: MVR
                       eligible_laari: 100000
                       sale_laari: null
@@ -408,11 +541,14 @@ paths:
                 overridden:
                   summary: Per-sale override applied — 5.00% frozen on the row
                   description: |
-                    Standing 2.00%, override "5.00" on this sale. Worked
-                    integers: cashback ceil(118,000 × 500 / 10,000) = 5,900;
-                    the fee follows the APPLIED rate into the 5.00%–20.00%
-                    band (1.00%), so ceil(118,000 × 100 / 10,000) = 1,180.
-                    The merchant's standing rate is untouched.
+                    The answer to the **Custom cashback for this sale**
+                    request. Standing 2.00%, override "5.00" on this sale.
+                    Worked integers: cashback
+                    ceil(118,000 × 500 ÷ 10,000) = 5,900 (MVR 59.00); the
+                    fee follows the APPLIED rate into the 5.00%–20.00% band
+                    (1.00%), so ceil(118,000 × 100 ÷ 10,000) = 1,180 (MVR
+                    11.80). The merchant's standing rate is untouched — the
+                    next sale prices at 2.00% again.
                   value:
                     status: created
                     reason: null
@@ -433,10 +569,21 @@ paths:
                       fee_laari: 1180
                       fee_mvr: '11.80'
                       fee_gst_laari: 0
-                      occurred_at: '2026-08-14T06:04:22+00:00'
-                      received_at: '2026-08-14T06:04:23+00:00'
+                      occurred_at: '2026-08-15T06:04:22+00:00'
+                      received_at: '2026-08-15T06:04:23+00:00'
                 backdated:
                   summary: Backdated sale — payable immediately, irreversible
+                  description: |
+                    `occurred_at` is older than the merchant's validation
+                    window plus the 3-day grace, so the sale skipped the
+                    refund window entirely: `state: payable_unfunded` with
+                    the 15-day settlement clock starting NOW, and
+                    `backdated: true` forever — `POST /reverse` answers
+                    `409 backdated_irreversible` whatever the state.
+                    Pricing is unchanged by any of that: at the standing
+                    2.00%, cashback ceil(50,000 × 200 ÷ 10,000) = 1,000
+                    (MVR 10.00), fee ceil(50,000 × 75 ÷ 10,000) = 375 (MVR
+                    3.75).
                   value:
                     status: created
                     reason: backdated_final
@@ -458,7 +605,7 @@ paths:
                       fee_mvr: '3.75'
                       fee_gst_laari: 0
                       occurred_at: '2026-08-01T10:00:00+00:00'
-                      received_at: '2026-08-14T06:04:23+00:00'
+                      received_at: '2026-08-15T06:04:23+00:00'
         '200':
           description: |
             One of three non-error outcomes, distinguished by `status`:
@@ -487,6 +634,14 @@ paths:
               examples:
                 idempotentReplay:
                   summary: Replay of an earlier successful creation (Idempotency-Replay header set)
+                  description: |
+                    Byte-for-byte the original `created` body — the same
+                    id, the same 2,360 / 885 integers, the same
+                    `received_at` from the first request — returned with
+                    `Idempotency-Replay: true` and HTTP 200 instead of 201.
+                    Nothing was recorded twice. A till that retries after a
+                    timeout is safe precisely because this is not a new
+                    sale.
                   value:
                     status: created
                     reason: null
@@ -496,9 +651,10 @@ paths:
                       invoice_no: INV-1001
                       state: awaiting_validation
                       reason_code: null
+                      backdated: false
                       currency: MVR
                       eligible_laari: 118000
-                      sale_laari: 125000
+                      sale_laari: null
                       cashback_rate_percent: '2.00'
                       platform_fee_percent: '0.75'
                       cashback_laari: 2360
@@ -506,10 +662,31 @@ paths:
                       fee_laari: 885
                       fee_mvr: '8.85'
                       fee_gst_laari: 0
-                      occurred_at: '2026-08-14T06:04:22+00:00'
-                      received_at: '2026-08-14T06:04:23+00:00'
+                      occurred_at: '2026-08-15T06:04:22+00:00'
+                      received_at: '2026-08-15T06:04:22+00:00'
                 recordedIneligibleSuspended:
-                  summary: Merchant suspended — recorded, no cashback
+                  summary: recorded_ineligible — suspended store, sale recorded, no cashback
+                  description: |
+                    The merchant is suspended for an overdue settlement
+                    (§7: suspension stops cashback CREATION, not
+                    ingestion). The sale is accepted so the till never
+                    errors, and lands terminal at `state: reversed` — it
+                    can never confirm, so it is never shown to the customer
+                    as Pending.
+
+                    Every money integer is **0**: MVR 2,000.00 eligible at
+                    2.00% would have earned ceil(200,000 × 200 ÷ 10,000) =
+                    4,000 laari with a 1,500-laari fee, and earns none of
+                    it. The frozen `cashback_rate_percent` /
+                    `platform_fee_percent` are still present and still the
+                    standing terms: the row evidences what the sale would
+                    have met. A `cashback_rate_percent` override in the
+                    request is ignored here rather than refused — the sale
+                    earns nothing either way.
+
+                    Accrual resumes by itself on reinstatement; watch the
+                    `merchant.suspended` / `merchant.reinstated` webhooks
+                    rather than retrying this sale.
                   value:
                     status: recorded_ineligible
                     reason: merchant_suspended
@@ -519,6 +696,7 @@ paths:
                       invoice_no: INV-1003
                       state: reversed
                       reason_code: merchant_suspended
+                      backdated: false
                       currency: MVR
                       eligible_laari: 200000
                       sale_laari: null
@@ -529,10 +707,21 @@ paths:
                       fee_laari: 0
                       fee_mvr: '0.00'
                       fee_gst_laari: 0
-                      occurred_at: '2026-08-14T06:10:00+00:00'
-                      received_at: '2026-08-14T06:10:01+00:00'
+                      occurred_at: '2026-08-15T06:10:00+00:00'
+                      received_at: '2026-08-15T06:10:01+00:00'
                 belowMinimum:
-                  summary: Below the merchant's minimum — recorded, zero cashback
+                  summary: below_minimum — under the store's minimum, recorded, zero cashback
+                  description: |
+                    `eligible_amount` 3,500 laari is MVR 35.00, under this
+                    merchant's MVR 50.00 (5,000 laari) minimum eligible
+                    transaction, so no cashback accrues:
+                    ceil(3,500 × 200 ÷ 10,000) = 70 laari is what the sale
+                    would have earned above the minimum, and it earns 0.
+                    The row is terminal at `state: reversed`.
+
+                    This is a **200, not an error** — the sale is genuine
+                    and the cashier should be told the truth, not shown a
+                    failure. Do not retry it.
                   value:
                     status: below_minimum
                     reason: below_minimum
@@ -542,6 +731,7 @@ paths:
                       invoice_no: INV-1004
                       state: reversed
                       reason_code: below_minimum
+                      backdated: false
                       currency: MVR
                       eligible_laari: 3500
                       sale_laari: 3500
@@ -552,8 +742,8 @@ paths:
                       fee_laari: 0
                       fee_mvr: '0.00'
                       fee_gst_laari: 0
-                      occurred_at: '2026-08-14T06:12:00+00:00'
-                      received_at: '2026-08-14T06:12:01+00:00'
+                      occurred_at: '2026-08-15T06:12:00+00:00'
+                      received_at: '2026-08-15T06:12:01+00:00'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -783,9 +973,10 @@ paths:
                       invoice_no: INV-1001
                       state: reversed
                       reason_code: customer_refund
+                      backdated: false
                       currency: MVR
                       eligible_laari: 118000
-                      sale_laari: 125000
+                      sale_laari: null
                       cashback_rate_percent: '2.00'
                       platform_fee_percent: '0.75'
                       cashback_laari: 2360
@@ -814,9 +1005,10 @@ paths:
                       invoice_no: INV-1001
                       state: payable_unfunded
                       reason_code: null
+                      backdated: false
                       currency: MVR
                       eligible_laari: 118000
-                      sale_laari: 125000
+                      sale_laari: null
                       cashback_rate_percent: '2.00'
                       platform_fee_percent: '0.75'
                       cashback_laari: 2360
@@ -845,6 +1037,7 @@ paths:
                       invoice_no: INV-0991
                       state: confirmed
                       reason_code: null
+                      backdated: false
                       currency: MVR
                       eligible_laari: 100000
                       sale_laari: null
@@ -1906,6 +2099,7 @@ components:
         - invoice_no
         - state
         - reason_code
+        - backdated
         - currency
         - eligible_laari
         - sale_laari

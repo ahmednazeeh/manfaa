@@ -33,6 +33,26 @@
   --input: var(--color-zinc-200);
   --ring: var(--color-zinc-400);
   --radius: 0.5rem;
+
+  /**
+   * Manfaa storefront panel palette — the flat geometric panels on the
+   * public landing (hero, promoted store). Light-first per PLAN §13: every
+   * colour is DEFINED here on :root and only redefined under .dark, never
+   * introduced there.
+   *
+   * The three gradient stops are deliberately dark enough that plain white
+   * clears 4.5:1 on the lightest of them, so panel copy needs no per-stop
+   * exception. `--panel-accent` is the warm counterweight: it carries the
+   * decorative shapes and the promoted-store panel, where the ink is
+   * `--panel-to` rather than white.
+   */
+  --panel-from: oklch(0.46 0.1 200);
+  --panel-via: oklch(0.4 0.12 245);
+  --panel-to: oklch(0.36 0.13 268);
+  --panel-foreground: oklch(0.99 0.01 210);
+  /* Light enough that --panel-to reads on it at ≥ 4.5:1 — the promoted-store
+     panel is accent-on-ink, not white-on-accent. */
+  --panel-accent: oklch(0.88 0.13 88);
 }
 
 .dark {
@@ -60,6 +80,14 @@
   --border: var(--color-zinc-800);
   --input: var(--color-zinc-800);
   --ring: var(--color-zinc-600);
+
+  /* Storefront panels: the same hues, taken deeper so a full-bleed panel
+     never glares against a dark page. White still clears 4.5:1 on each. */
+  --panel-from: oklch(0.38 0.08 200);
+  --panel-via: oklch(0.32 0.1 245);
+  --panel-to: oklch(0.28 0.11 268);
+  --panel-foreground: oklch(0.98 0.01 210);
+  --panel-accent: oklch(0.82 0.13 88);
 }
 
 /** Theme Setup **/
@@ -81,6 +109,13 @@
   --color-secondary-foreground: var(--secondary-foreground);
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
+
+  /** Storefront panels (see :root) — bg-panel-from / text-panel-foreground … **/
+  --color-panel-from: var(--panel-from);
+  --color-panel-via: var(--panel-via);
+  --color-panel-to: var(--panel-to);
+  --color-panel-foreground: var(--panel-foreground);
+  --color-panel-accent: var(--panel-accent);
 
   /** Base Styles **/
   --color-border: var(--border);
