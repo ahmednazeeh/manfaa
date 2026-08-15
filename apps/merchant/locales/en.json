@@ -360,8 +360,6 @@
     "title": "New settlement",
     "subtitle": "Pay your outstanding cashback and fees, then upload your transfer receipt",
     "stepSelect": "Choose transactions",
-    "stepReview": "Transfer",
-    "stepUpload": "Upload receipt",
     "progress": "Step {{current}} of {{total}}",
     "selectTitle": "What are you settling?",
     "settleAll": "Settle everything outstanding",
@@ -430,7 +428,6 @@
     "copyAccountName": "Copy the account name",
     "noAccountTitle": "Transfer details are not published yet",
     "noAccountBody": "Contact Manfaa for the account to pay into. Nothing is lost — come back and submit your receipt once you have transferred.",
-    "haveTransferred": "I've transferred — upload my receipt",
     "walletTitle": "Or settle from your wallet",
     "walletBalance": "Wallet balance: {{amount}}",
     "walletShort": "Not enough to cover this settlement.",
@@ -520,7 +517,8 @@
     "methodWallet": "Wallet",
     "notFound": "Settlement not found.",
     "settledTitle": "Settled — the rewards on this batch are confirmed",
-    "settledBody": "Settlement {{reference}} is closed and funded from your wallet. Nothing else is needed from you."
+    "settledBody": "Settlement {{reference}} is closed and funded from your wallet. Nothing else is needed from you.",
+    "stepTransfer": "Transfer & confirm"
   },
   "credit": {
     "backdatedTitle": "Backdated sale — this credit is final",

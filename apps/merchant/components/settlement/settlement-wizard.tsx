@@ -16,7 +16,11 @@ import {
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
-import type { MerchantSettlement, SettlementSelection } from '@/lib/api';
+import type {
+  MerchantSettlement,
+  ReceiptSubmission,
+  SettlementSelection,
+} from '@/lib/api';
 import {
   apiErrorMessage,
   isSelectionRefusal,
@@ -89,7 +93,7 @@ import { TransactionPicker } from '@/components/settlement/transaction-picker';
  * of leaving one behind and silently costing the merchant the discount.
  */
 
-const STEPS = ['select', 'review', 'upload'] as const;
+const STEPS = ['select', 'transfer'] as const;
 
 /** The race-proof "everything outstanding" selection. */
 const SETTLE_ALL: SettlementSelection = { settleAll: true };
@@ -329,7 +333,15 @@ export function SettlementWizard() {
           walletBalanceLaari={wallet.data?.balance_laari}
           walletPending={walletSettle.isPending}
           onBack={() => setStep(0)}
-          onContinue={() => setStep(2)}
+          submitPending={submitReceipt.isPending}
+          submitError={submitReceipt.error}
+          onSubmitReceipt={(receipt) => {
+            if (selection === null) return;
+            submitReceipt.mutate(
+              { selection, receipt },
+              { onSuccess: (settlement) => setCreated(settlement) },
+            );
+          }}
           // The discount's way back, offered only while a SUBSET is selected:
           // switching re-prices against settle_all, and the server decides.
           onSettleEverything={mode === 'all' ? undefined : selectEverything}
@@ -349,55 +361,13 @@ export function SettlementWizard() {
         />
       )}
 
-      {step === 2 && (
-        <Card className="mb-7.5">
-          <CardHeader>
-            <CardTitle>{t('settlement.uploadTitle')}</CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-5">
-            <p className="text-sm text-secondary-foreground">
-              {t('settlement.uploadLead')}
-            </p>
-            {preview.data === undefined ? (
-              <LoadingBlock lines={4} />
-            ) : (
-              <ReceiptForm
-                amountDueLaari={preview.data.amount_due_laari}
-                submitLabel={t('settlement.submitReceipt')}
-                pending={submitReceipt.isPending}
-                error={submitReceipt.error}
-                footerStart={
-                  <Button
-                    variant="outline"
-                    onClick={() => setStep(1)}
-                    disabled={submitReceipt.isPending}
-                  >
-                    {t('common.back')}
-                  </Button>
-                }
-                onSubmit={(receipt) => {
-                  if (selection === null) return;
-                  submitReceipt.mutate(
-                    { selection, receipt },
-                    { onSuccess: (settlement) => setCreated(settlement) },
-                  );
-                }}
-              />
-            )}
-          </CardContent>
-        </Card>
-      )}
     </div>
   );
 }
 
 function StepIndicator({ current }: { current: number }) {
   const { t } = useTranslation();
-  const labels = [
-    t('settlement.stepSelect'),
-    t('settlement.stepReview'),
-    t('settlement.stepUpload'),
-  ];
+  const labels = [t('settlement.stepSelect'), t('settlement.stepTransfer')];
 
   return (
     <nav aria-label={t('settlement.title')}>
@@ -456,7 +426,9 @@ function ReviewStep({
   walletBalanceLaari,
   walletPending,
   onBack,
-  onContinue,
+  submitPending,
+  submitError,
+  onSubmitReceipt,
   onSettleEverything,
   onWalletSettle,
 }: {
@@ -464,7 +436,9 @@ function ReviewStep({
   walletBalanceLaari: number | undefined;
   walletPending: boolean;
   onBack: () => void;
-  onContinue: () => void;
+  submitPending: boolean;
+  submitError: unknown;
+  onSubmitReceipt: (receipt: ReceiptSubmission) => void;
   /** Present only while a SUBSET is selected — the discount's way back. */
   onSettleEverything?: () => void;
   onWalletSettle: () => void;
@@ -537,20 +511,56 @@ function ReviewStep({
               {t('settlement.nothingDueBody')}
             </p>
           ) : (
-            <PaymentInstructions
-              reference={data.payment_instructions.reference_preview}
-              referenceIsFinal={data.payment_instructions.reference_is_final}
-              amountDueLaari={data.amount_due_laari}
-              bankAccount={data.payment_instructions.bank_account}
-              needsConfiguration={data.payment_instructions.needs_configuration}
-            />
+            <>
+              <PaymentInstructions
+                reference={data.payment_instructions.reference_preview}
+                referenceIsFinal={data.payment_instructions.reference_is_final}
+                amountDueLaari={data.amount_due_laari}
+                bankAccount={data.payment_instructions.bank_account}
+                needsConfiguration={
+                  data.payment_instructions.needs_configuration
+                }
+              />
+
+              {/* The receipt lives on this same screen deliberately: the
+                  merchant transfers in their banking app and comes straight
+                  back to the slip field, with the amount and reference still
+                  in front of them. Submitting is what creates the
+                  settlement — there is no receiptless path. */}
+              <div className="flex flex-col gap-4 border-t border-border pt-5">
+                <div className="flex flex-col gap-1">
+                  <h3 className="text-sm font-medium text-mono">
+                    {t('settlement.uploadTitle')}
+                  </h3>
+                  <p className="text-sm text-secondary-foreground">
+                    {t('settlement.uploadLead')}
+                  </p>
+                </div>
+                <ReceiptForm
+                  amountDueLaari={data.amount_due_laari}
+                  submitLabel={t('settlement.submitReceipt')}
+                  pending={submitPending}
+                  error={submitError}
+                  footerStart={
+                    <Button
+                      variant="outline"
+                      onClick={onBack}
+                      disabled={submitPending}
+                    >
+                      {t('common.back')}
+                    </Button>
+                  }
+                  onSubmit={onSubmitReceipt}
+                />
+              </div>
+            </>
           )}
         </CardContent>
-        <CardFooter className="flex flex-wrap items-center justify-between gap-3">
-          <Button variant="outline" onClick={onBack}>
-            {t('common.back')}
-          </Button>
-          {nothingDue ? (
+        {nothingDue && (
+          <CardFooter className="flex flex-wrap items-center justify-between gap-3">
+            <Button variant="outline" onClick={onBack}>
+              {t('common.back')}
+            </Button>
             <Button onClick={onWalletSettle} disabled={walletPending}>
               {walletPending ? (
                 <LoaderCircle className="animate-spin" />
@@ -559,12 +569,8 @@ function ReviewStep({
               )}
               {t('settlement.confirmNothingDue')}
             </Button>
-          ) : (
-            <Button onClick={onContinue}>
-              {t('settlement.haveTransferred')}
-            </Button>
-          )}
-        </CardFooter>
+          </CardFooter>
+        )}
       </Card>
 
       <div className="flex flex-col gap-5">
