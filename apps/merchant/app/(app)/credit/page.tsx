@@ -1,7 +1,12 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { ApiError, parseMvrToLaari, type Transaction } from '@manfaa/api-client';
+import {
+  ApiError,
+  parseMvrToLaari,
+  type ProductCategory,
+  type Transaction,
+} from '@manfaa/api-client';
 import { MoneyText } from '@manfaa/ui';
 import { REGEXP_ONLY_DIGITS } from 'input-otp';
 import {
@@ -13,11 +18,14 @@ import {
   SearchX,
   TriangleAlert,
 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { estimateLaariAtBp, formatBp } from '@/lib/estimate';
 import {
   apiErrorMessage,
   useCreateCredit,
   useCustomerLookup,
+  useProductCategories,
+  usePromotions,
   useRate,
 } from '@/lib/queries';
 import {
@@ -28,22 +36,29 @@ import {
   AlertTitle,
 } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input, InputAddon, InputGroup } from '@/components/ui/input';
-import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp';
+import {
+  InputOTP,
+  InputOTPGroup,
+  InputOTPSlot,
+} from '@/components/ui/input-otp';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Switch } from '@/components/ui/switch';
 import {
   Toolbar,
   ToolbarDescription,
   ToolbarHeading,
   ToolbarPageTitle,
 } from '@/components/app-layout/toolbar';
+import {
+  analyzeSplit,
+  DEFAULT_BUCKET,
+  ResultLines,
+  SplitEditor,
+  type SplitRow,
+} from '@/components/app/credit-split';
 import { TransactionStateBadge } from '@/components/app/state-badge';
 
 /**
@@ -119,7 +134,10 @@ function LookupCard({ code }: { code: string }) {
           <TriangleAlert />
         </AlertIcon>
         <AlertTitle>
-          {apiErrorMessage(lookup.error, 'Could not check this code — try again.')}
+          {apiErrorMessage(
+            lookup.error,
+            'Could not check this code — try again.',
+          )}
         </AlertTitle>
       </Alert>
     );
@@ -134,8 +152,8 @@ function LookupCard({ code }: { code: string }) {
         <AlertContent>
           <AlertTitle>We don&apos;t recognise this code</AlertTitle>
           <AlertDescription>
-            Check the digits with the customer before trying again — a typo
-            here credits a stranger.
+            Check the digits with the customer before trying again — a typo here
+            credits a stranger.
           </AlertDescription>
         </AlertContent>
       </Alert>
@@ -159,11 +177,15 @@ function LookupCard({ code }: { code: string }) {
 
 function ResultCard({
   result,
+  categories,
   onReset,
 }: {
   result: CreditResult;
+  /** For dv names on the priced lines; [] is always safe. */
+  categories: ProductCategory[];
   onReset: () => void;
 }) {
+  const { t } = useTranslation();
   const { transaction } = result;
   const belowMinimum =
     transaction.state === 'reversed' &&
@@ -218,7 +240,9 @@ function ResultCard({
               <Clock4 />
             </AlertIcon>
             <AlertContent>
-              <AlertTitle>Backdated entry — Manfaa reviews it first.</AlertTitle>
+              <AlertTitle>
+                Backdated entry — Manfaa reviews it first.
+              </AlertTitle>
               <AlertDescription>
                 The sale is recorded and on hold. It counts for the customer
                 once the review approves it; nothing else is needed from you.
@@ -231,7 +255,9 @@ function ResultCard({
           <span className="text-muted-foreground">Customer</span>
           <span className="sm:col-span-2">{result.maskedName}</span>
           <span className="text-muted-foreground">Invoice</span>
-          <span className="sm:col-span-2 text-mono">{transaction.invoice_no}</span>
+          <span className="sm:col-span-2 text-mono">
+            {transaction.invoice_no}
+          </span>
           <span className="text-muted-foreground">State</span>
           <span className="sm:col-span-2">
             <TransactionStateBadge state={transaction.state} />
@@ -247,14 +273,20 @@ function ResultCard({
             className="sm:col-span-2"
           />
           <span className="text-muted-foreground">
-            Customer cashback ({formatBp(transaction.rate_bp)})
+            Customer cashback{' '}
+            {transaction.lines === undefined || transaction.lines.length === 0
+              ? `(${formatBp(transaction.rate_bp)})`
+              : `(${t('creditSplit.perLine')})`}
           </span>
           <MoneyText
             laari={transaction.cashback_laari}
             className="sm:col-span-2"
           />
           <span className="text-muted-foreground">
-            Platform fee ({formatBp(transaction.fee_bp)})
+            Platform fee{' '}
+            {transaction.lines === undefined || transaction.lines.length === 0
+              ? `(${formatBp(transaction.fee_bp)})`
+              : `(${t('creditSplit.perLine')})`}
           </span>
           <MoneyText laari={transaction.fee_laari} className="sm:col-span-2" />
           <span className="text-muted-foreground">You pay</span>
@@ -267,22 +299,67 @@ function ResultCard({
             className="sm:col-span-2 font-medium"
           />
         </div>
+
+        {transaction.lines !== undefined && transaction.lines.length > 0 && (
+          <div className="flex flex-col gap-1.5 pt-1">
+            <span className="text-xs font-medium text-muted-foreground">
+              {t('creditSplit.resultLinesTitle')}
+            </span>
+            <ResultLines lines={transaction.lines} categories={categories} />
+          </div>
+        )}
       </CardContent>
     </Card>
   );
 }
 
+/** A fresh one-row split: the whole amount in the default bucket. */
+function initialSplitRows(): SplitRow[] {
+  return [{ key: 1, category: DEFAULT_BUCKET, amount: '' }];
+}
+
 export default function CreditPage() {
+  const { t } = useTranslation();
   const [code, setCode] = useState('');
   const [invoiceNo, setInvoiceNo] = useState('');
   const [eligibleInput, setEligibleInput] = useState('');
   const [saleInput, setSaleInput] = useState('');
   const [occurredAt, setOccurredAt] = useState(nowLocalValue);
   const [result, setResult] = useState<CreditResult | null>(null);
+  const [splitEnabled, setSplitEnabled] = useState(false);
+  const [splitRows, setSplitRows] = useState<SplitRow[]>(initialSplitRows);
 
   const rate = useRate();
   const lookup = useCustomerLookup(code);
   const createCredit = useCreateCredit();
+  const categoriesQuery = useProductCategories();
+  const promotionsQuery = usePromotions();
+
+  const allCategories = useMemo(
+    () => categoriesQuery.data ?? [],
+    [categoriesQuery.data],
+  );
+  const activeCategories = useMemo(
+    () => allCategories.filter((category) => category.active),
+    [allCategories],
+  );
+
+  /**
+   * The live promotion a MANUAL credit can price under: published, window
+   * covering now, merchant-wide (manual credits carry no branch, so
+   * branch-scoped promotions never apply). Highest rate wins, mirroring
+   * the server's resolution order. Preview only — the server re-resolves
+   * at the sale time.
+   */
+  const livePromo = useMemo(() => {
+    const live = (promotionsQuery.data ?? []).filter(
+      (promotion) => promotion.is_live && promotion.branch_id === null,
+    );
+    if (live.length === 0) return null;
+    return live.reduce((best, promotion) =>
+      promotion.rate_bp > best.rate_bp ? promotion : best,
+    );
+  }, [promotionsQuery.data]);
 
   const eligibleLaari = useMemo(
     () => (eligibleInput.trim() === '' ? null : safeParseMvr(eligibleInput)),
@@ -294,7 +371,8 @@ export default function CreditPage() {
   );
 
   const eligibleInvalid =
-    eligibleInput.trim() !== '' && (eligibleLaari === null || eligibleLaari < 0);
+    eligibleInput.trim() !== '' &&
+    (eligibleLaari === null || eligibleLaari < 0);
   const saleInvalid =
     saleInput.trim() !== '' &&
     (saleLaari === null ||
@@ -305,13 +383,50 @@ export default function CreditPage() {
     [occurredAt],
   );
   const futureDated =
-    Number.isFinite(occurredEpoch) && occurredEpoch > Date.now() + 5 * 60 * 1000;
+    Number.isFinite(occurredEpoch) &&
+    occurredEpoch > Date.now() + 5 * 60 * 1000;
   const backdated =
     Number.isFinite(occurredEpoch) &&
     Date.now() - occurredEpoch >
       DEFAULT_VALIDATION_WINDOW_DAYS * 24 * 60 * 60 * 1000;
 
   const currentRate = rate.data?.current ?? null;
+
+  /**
+   * Promo minimum purchase is evaluated against the WHOLE eligible amount
+   * (never per line), exactly as the server applies it to the sale.
+   */
+  const appliedPromo =
+    livePromo !== null &&
+    eligibleLaari !== null &&
+    !eligibleInvalid &&
+    (livePromo.min_purchase_laari === null ||
+      eligibleLaari >= livePromo.min_purchase_laari)
+      ? livePromo
+      : null;
+
+  const splitActive = splitEnabled && activeCategories.length > 0;
+
+  const splitAnalysis = useMemo(
+    () =>
+      analyzeSplit(
+        splitRows,
+        activeCategories,
+        currentRate?.rate_bp ?? null,
+        currentRate?.fee_bp ?? null,
+        appliedPromo?.rate_bp ?? null,
+        appliedPromo?.fee_bp ?? null,
+        eligibleLaari !== null && !eligibleInvalid ? eligibleLaari : null,
+      ),
+    [
+      splitRows,
+      activeCategories,
+      currentRate,
+      appliedPromo,
+      eligibleLaari,
+      eligibleInvalid,
+    ],
+  );
 
   // No fee preview when the standing rate has no priced fee (stranded
   // legacy rate — the server refuses credits in that state anyway).
@@ -335,6 +450,7 @@ export default function CreditPage() {
     occurredAt !== '' &&
     Number.isFinite(occurredEpoch) &&
     !futureDated &&
+    (!splitActive || splitAnalysis.submittable) &&
     !createCredit.isPending;
 
   // A new mutate() clears any previous error state itself.
@@ -344,6 +460,7 @@ export default function CreditPage() {
     setEligibleInput('');
     setSaleInput('');
     setOccurredAt(nowLocalValue());
+    setSplitRows(initialSplitRows());
   };
 
   const submit = () => {
@@ -358,6 +475,16 @@ export default function CreditPage() {
           ? { sale_amount: saleLaari }
           : {}),
         occurred_at: toBusinessIso(occurredAt),
+        // The split is OPTIONAL — with the toggle off the request stays
+        // byte-identical to the single-rate path.
+        ...(splitActive
+          ? {
+              lines: splitRows.map((row) => ({
+                category: row.category === DEFAULT_BUCKET ? null : row.category,
+                amount_laari: parseMvrToLaari(row.amount.trim()),
+              })),
+            }
+          : {}),
       },
       {
         onSuccess: (response) => {
@@ -387,7 +514,13 @@ export default function CreditPage() {
         </ToolbarHeading>
       </Toolbar>
 
-      {result && <ResultCard result={result} onReset={() => setResult(null)} />}
+      {result && (
+        <ResultCard
+          result={result}
+          categories={allCategories}
+          onReset={() => setResult(null)}
+        />
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 pb-7.5 items-start">
         <Card className="lg:col-span-2">
@@ -502,6 +635,44 @@ export default function CreditPage() {
               </div>
             </div>
 
+            {activeCategories.length > 0 && (
+              <div className="flex flex-col gap-4">
+                <div className="flex items-center gap-2.5">
+                  <Switch
+                    id="split-by-category"
+                    size="sm"
+                    checked={splitEnabled}
+                    onCheckedChange={setSplitEnabled}
+                  />
+                  <Label htmlFor="split-by-category">
+                    {t('creditSplit.toggleLabel')}
+                  </Label>
+                </div>
+                {splitEnabled ? (
+                  <>
+                    <p className="text-xs text-muted-foreground">
+                      {t('creditSplit.editorHint')}
+                    </p>
+                    <SplitEditor
+                      rows={splitRows}
+                      onRowsChange={setSplitRows}
+                      categories={activeCategories}
+                      analysis={splitAnalysis}
+                      eligibleLaari={
+                        eligibleLaari !== null && !eligibleInvalid
+                          ? eligibleLaari
+                          : null
+                      }
+                    />
+                  </>
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    {t('creditSplit.toggleHint')}
+                  </p>
+                )}
+              </div>
+            )}
+
             {backdated && (
               <Alert variant="warning" appearance="light">
                 <AlertIcon>
@@ -510,8 +681,8 @@ export default function CreditPage() {
                 <AlertContent>
                   <AlertTitle>Backdated entry</AlertTitle>
                   <AlertDescription>
-                    This sale is older than the validation window — entries
-                    this old are reviewed by Manfaa before they count.
+                    This sale is older than the validation window — entries this
+                    old are reviewed by Manfaa before they count.
                   </AlertDescription>
                 </AlertContent>
               </Alert>
@@ -535,15 +706,14 @@ export default function CreditPage() {
                   </AlertTitle>
                   {duplicateInvoice && (
                     <AlertDescription>
-                      Each invoice can be credited once. If this is a
-                      different sale, check the invoice number on the receipt.
+                      Each invoice can be credited once. If this is a different
+                      sale, check the invoice number on the receipt.
                     </AlertDescription>
                   )}
                   {suspendedMerchant && (
                     <AlertDescription>
                       Settle your outstanding balance to resume crediting
-                      customers, or contact Manfaa if you believe this is
-                      wrong.
+                      customers, or contact Manfaa if you believe this is wrong.
                     </AlertDescription>
                   )}
                 </AlertContent>
@@ -580,6 +750,45 @@ export default function CreditPage() {
                 No cashback rate is in effect yet — contact Manfaa before
                 crediting customers.
               </span>
+            ) : splitActive ? (
+              <>
+                <div className="flex justify-between gap-3">
+                  <span className="text-muted-foreground">
+                    {t('creditSplit.previewCashback')}
+                  </span>
+                  {splitAnalysis.cashbackTotal !== null ? (
+                    <MoneyText laari={splitAnalysis.cashbackTotal} />
+                  ) : (
+                    <span className="text-muted-foreground">—</span>
+                  )}
+                </div>
+                <div className="flex justify-between gap-3">
+                  <span className="text-muted-foreground">
+                    {t('creditSplit.previewFee')}
+                  </span>
+                  {splitAnalysis.feeTotal !== null ? (
+                    <MoneyText laari={splitAnalysis.feeTotal} />
+                  ) : (
+                    <span className="text-muted-foreground">—</span>
+                  )}
+                </div>
+                <div className="flex justify-between gap-3 border-t border-border pt-2 font-medium">
+                  <span>{t('creditSplit.previewYouPay')}</span>
+                  {splitAnalysis.cashbackTotal !== null &&
+                  splitAnalysis.feeTotal !== null ? (
+                    <MoneyText
+                      laari={
+                        splitAnalysis.cashbackTotal + splitAnalysis.feeTotal
+                      }
+                    />
+                  ) : (
+                    <span className="text-muted-foreground">—</span>
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {t('creditSplit.previewNote')}
+                </p>
+              </>
             ) : (
               <>
                 <div className="flex justify-between gap-3">

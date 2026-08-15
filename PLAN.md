@@ -36,6 +36,14 @@ Settled. Treat as constraints, not proposals.
 | Product-category rates | **Line-item pricing** (decision 2026-08-15): stores define their own product categories with per-category overrides (excluded, or a rate). Credit form and /v1 accept optional `lines: [{category, amount}]`; each line prices at its category's rate (excluded → 0, unlisted → standing rate), per-line ceiling rounding then sum per §4; the split is stored on the transaction. Lines must sum to the eligible amount. No lines supplied → whole amount at the standing rate (back-compatible). |
 | Staff roles | Three tiers (decision 2026-08-15): **Owner** (everything), **Manager** (rates, promotions, settlements, branches — NOT bank account, staff management, or API credentials), **Staff** (credit entry + read-only). |
 
+**Open decision (category-terms resolution instant):** product-category
+overrides currently resolve at SUBMISSION time from the mutable category row,
+while standing rates/promos/fee schedules resolve at occurred_at — a merchant
+can edit a category and backdate-reprice, and a retroactive exclusion zeroes a
+delayed vendor retry. Fix would be effective-dated category history mirroring
+merchant_rates. Behaviour as-built is documented in openapi.yaml; decide
+whether to add history or accept submission-time semantics.
+
 **Flagged assumption (promo × category precedence):** during a live promotion,
 excluded product categories STAY excluded; every non-excluded line prices at
 max(promotion rate, its category rate) — a promotion never pays less, and

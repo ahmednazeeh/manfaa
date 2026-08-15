@@ -5,6 +5,7 @@ import {
   MerchantChannelSchema,
   MerchantStatusSchema,
   paginated,
+  ProductCategoryModeSchema,
   PromotionSchema,
   PromotionStatusSchema,
   RateDescriptionSchema,
@@ -17,7 +18,8 @@ import {
 
 /**
  * Typed contracts for the merchant surface: outstanding by age bucket, the
- * settlement builder and lifecycle, the wallet, manual credits (Phase 1),
+ * settlement builder and lifecycle, the wallet, manual credits (Phase 1,
+ * now with the optional lines[] split of Task #25), product-category CRUD,
  * the promotion builder (Phase 3), and the settings module (profile, bank
  * account, branches, staff, preferences, customer lookup). All amounts sent
  * and received are integer laari.
@@ -185,6 +187,21 @@ export function getMerchantWallet(
 // POST /api/merchant/credits
 // ---------------------------------------------------------------------------
 
+/**
+ * One line of an optional line-item split (Task #25). `category` is one of
+ * the merchant's product-category slugs, or null for the explicit default
+ * "everything else" bucket (standing rate). Each category — and the default
+ * bucket — may appear at most once (422 `duplicate_category_line`); an
+ * unknown or another merchant's slug answers 422 `unknown_category`, a
+ * deactivated one 422 `inactive_category`.
+ */
+export const CreditLineInputSchema = z.object({
+  category: z.string().max(80).nullable(),
+  /** Integer laari, >= 1. Line amounts MUST sum to eligible_amount. */
+  amount_laari: z.number().int().min(1),
+});
+export type CreditLineInput = z.infer<typeof CreditLineInputSchema>;
+
 export const CreateCreditRequestSchema = z.object({
   /** The customer's 6-digit code. */
   customer_code: z.string().regex(/^\d{6}$/),
@@ -195,6 +212,15 @@ export const CreateCreditRequestSchema = z.object({
   sale_amount: z.number().int().optional(),
   /** ISO 8601 with an explicit UTC offset, e.g. "2026-08-14T10:30:00+05:00". */
   occurred_at: z.string(),
+  /**
+   * Optional line-item split. When present, SUM(amount_laari) must equal
+   * eligible_amount (422 `lines_sum_mismatch`) and each line prices at its
+   * own effective rate per §4 (per-line ceiling, totals = sum of stored
+   * lines); the response transaction then carries the priced `lines`.
+   * When absent the whole amount earns the single standing/promo rate,
+   * byte-identical to the pre-lines behaviour.
+   */
+  lines: z.array(CreditLineInputSchema).min(1).max(100).optional(),
 });
 export type CreateCreditRequest = z.infer<typeof CreateCreditRequestSchema>;
 
@@ -211,6 +237,131 @@ export function createMerchantCredit(
     body,
     signal: options.signal,
   });
+}
+
+// ---------------------------------------------------------------------------
+// Product categories (Task #25)
+// ---------------------------------------------------------------------------
+
+/**
+ * One per-store product category. The `slug` is generated from `name_en` at
+ * creation and is IMMUTABLE — it is the `lines[].category` key vendors and
+ * the credit form submit, and transaction lines snapshot it; renames never
+ * touch it. Mode/rate changes reprice FUTURE credits only. `rate_bp` is set
+ * exactly when `mode` is `'rate'`, null when `'excluded'`.
+ */
+export const ProductCategorySchema = z.object({
+  id: z.number().int(),
+  slug: z.string(),
+  name_en: z.string(),
+  name_dv: z.string().nullable(),
+  mode: ProductCategoryModeSchema,
+  /** Integer basis points; null exactly when mode is "excluded". */
+  rate_bp: z.number().int().nullable(),
+  active: z.boolean(),
+  sort: z.number().int(),
+  created_at: z.string().nullable(),
+  updated_at: z.string().nullable(),
+});
+export type ProductCategory = z.infer<typeof ProductCategorySchema>;
+
+export const ProductCategoryListResponseSchema = z.object({
+  data: z.array(ProductCategorySchema),
+});
+export type ProductCategoryListResponse = z.infer<
+  typeof ProductCategoryListResponseSchema
+>;
+
+export const ProductCategoryResponseSchema = dataWrapped(ProductCategorySchema);
+export type ProductCategoryResponse = z.infer<
+  typeof ProductCategoryResponseSchema
+>;
+
+const productCategoryRequestBase = z.object({
+  name_en: z.string().min(1).max(120),
+  name_dv: z.string().max(120).nullable().optional(),
+  sort: z.number().int().min(0).max(100000).optional(),
+});
+
+/**
+ * The mode/rate pair is coherent by construction: an exclusion never
+ * carries a rate, a rate override always does. Rates follow the standing-
+ * rate sellability law — 50–2000 bp structurally, and rates the active fee
+ * tier schedule does not price are refused server-side with a 422
+ * `code: rate_not_priced`.
+ */
+export const CreateProductCategoryRequestSchema = z.discriminatedUnion('mode', [
+  productCategoryRequestBase.extend({ mode: z.literal('excluded') }),
+  productCategoryRequestBase.extend({
+    mode: z.literal('rate'),
+    rate_bp: z.number().int().min(50).max(2000),
+  }),
+]);
+export type CreateProductCategoryRequest = z.infer<
+  typeof CreateProductCategoryRequestSchema
+>;
+
+/**
+ * Partial update; omitted keys are untouched. The server validates the
+ * FINAL mode/rate pair (post-merge): mode `rate` must end up with a rate,
+ * mode `excluded` must end up without one — so switching to `excluded`
+ * means sending `{mode: 'excluded', rate_bp: null}`. The slug never
+ * changes.
+ */
+export const UpdateProductCategoryRequestSchema = z.object({
+  name_en: z.string().min(1).max(120).optional(),
+  name_dv: z.string().max(120).nullable().optional(),
+  mode: ProductCategoryModeSchema.optional(),
+  rate_bp: z.number().int().min(50).max(2000).nullable().optional(),
+  sort: z.number().int().min(0).max(100000).optional(),
+  active: z.boolean().optional(),
+});
+export type UpdateProductCategoryRequest = z.infer<
+  typeof UpdateProductCategoryRequestSchema
+>;
+
+/**
+ * GET /api/merchant/product-categories — STAFF-readable (it feeds the
+ * credit form), sort then id order, inactive rows included (the settings
+ * screen manages them; filter on `active` for the credit form).
+ */
+export function listMerchantProductCategories(
+  options: RequestOptions = {},
+): Promise<ProductCategoryListResponse> {
+  return apiFetch(
+    '/api/merchant/product-categories',
+    ProductCategoryListResponseSchema,
+    { signal: options.signal },
+  );
+}
+
+/** POST /api/merchant/product-categories — owner only, approved stores only (201). */
+export function createMerchantProductCategory(
+  body: CreateProductCategoryRequest,
+  options: RequestOptions = {},
+): Promise<ProductCategoryResponse> {
+  return apiFetch(
+    '/api/merchant/product-categories',
+    ProductCategoryResponseSchema,
+    { method: 'POST', body, signal: options.signal },
+  );
+}
+
+/**
+ * PATCH /api/merchant/product-categories/{id} — owner only. There is
+ * deliberately no DELETE: deactivation (`active: false`) is the only
+ * removal, because historical transaction lines reference the category.
+ */
+export function updateMerchantProductCategory(
+  id: number,
+  body: UpdateProductCategoryRequest,
+  options: RequestOptions = {},
+): Promise<ProductCategoryResponse> {
+  return apiFetch(
+    `/api/merchant/product-categories/${id}`,
+    ProductCategoryResponseSchema,
+    { method: 'PATCH', body, signal: options.signal },
+  );
 }
 
 // ---------------------------------------------------------------------------

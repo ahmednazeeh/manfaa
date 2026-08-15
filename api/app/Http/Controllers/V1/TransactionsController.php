@@ -13,6 +13,8 @@ use App\Domain\Cashback\CustomerNotFoundException;
 use App\Domain\Cashback\CustomerRef;
 use App\Domain\Cashback\DuplicateInvoiceException;
 use App\Domain\Cashback\FutureDatedTransactionException;
+use App\Domain\Cashback\LinePricingException;
+use App\Domain\Cashback\LineSetParser;
 use App\Domain\Cashback\MerchantNotActiveException;
 use App\Domain\Cashback\NoEffectiveRateException;
 use App\Domain\Money\Laari;
@@ -41,7 +43,7 @@ class TransactionsController extends V1Controller
     // wrong instant, so it is rejected outright.
     private const string OCCURRED_AT_FORMATS = 'date_format:Y-m-d\TH:i:sP,Y-m-d\TH:i:sp,Y-m-d\TH:i:sO';
 
-    public function store(Request $request, ApiCreditService $credits): JsonResponse
+    public function store(Request $request, ApiCreditService $credits, LineSetParser $lineParser): JsonResponse
     {
         $data = $this->validateEnvelope($request, [
             'invoice_no' => ['required', 'string', 'max:64'],
@@ -53,6 +55,15 @@ class TransactionsController extends V1Controller
             'sale_amount' => ['nullable', 'integer', 'min:1'],
             'occurred_at' => ['required', self::OCCURRED_AT_FORMATS],
             'branch_id' => ['nullable', 'integer'],
+            // Optional line-item split (docs/openapi.yaml): each line names
+            // one of the merchant's product-category slugs
+            // (GET /v1/merchants/me/product-categories), or null for the
+            // default "everything else" bucket. Amounts must sum to
+            // eligible_amount.
+            'lines' => ['sometimes', 'array', 'min:1', 'max:100'],
+            'lines.*' => ['array'],
+            'lines.*.category' => ['present', 'nullable', 'string', 'max:80'],
+            'lines.*.amount_laari' => ['required', 'integer', 'min:1'],
         ]);
 
         $merchant = $this->merchant($request);
@@ -63,6 +74,16 @@ class TransactionsController extends V1Controller
             return $this->error(422, 'validation_failed', 'The given data was invalid.', errors: [
                 'branch_id' => ['The branch_id does not belong to this merchant.'],
             ]);
+        }
+
+        $lines = null;
+
+        if (isset($data['lines'])) {
+            try {
+                $lines = $lineParser->parse($merchant, $data['lines'], Laari::of((int) $data['eligible_amount']));
+            } catch (LinePricingException $exception) {
+                return $this->error(422, $exception->errorCode, $exception->getMessage());
+            }
         }
 
         try {
@@ -76,6 +97,7 @@ class TransactionsController extends V1Controller
                 occurredAt: CarbonImmutable::parse($data['occurred_at']),
                 branchId: $branchId,
                 idempotencyKey: $request->header('Idempotency-Key'),
+                lines: $lines,
             );
         } catch (CustomerNotFoundException $exception) {
             return $this->error(422, 'customer_not_found', $exception->getMessage());
@@ -109,6 +131,12 @@ class TransactionsController extends V1Controller
             'below_minimum' => ['below_minimum', 200],
             default => ['created', 201],
         };
+
+        // Only lined credits expose their pricing split; single-rate
+        // responses keep the exact pre-lines shape.
+        if ($lines !== null) {
+            $transaction->load('lines');
+        }
 
         return new JsonResponse([
             'status' => $status,

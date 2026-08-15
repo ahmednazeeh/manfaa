@@ -67,6 +67,15 @@ class Transaction extends Model
         return $this->hasMany(TransactionEvent::class);
     }
 
+    /**
+     * The immutable pricing split, in submitted order. Present only on
+     * lined credits; single-rate transactions have no rows here.
+     */
+    public function lines(): HasMany
+    {
+        return $this->hasMany(TransactionLine::class)->orderBy('sort')->orderBy('id');
+    }
+
     public function adjustments(): HasMany
     {
         return $this->hasMany(Adjustment::class);

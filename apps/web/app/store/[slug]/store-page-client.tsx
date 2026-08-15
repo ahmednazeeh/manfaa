@@ -1,7 +1,11 @@
 'use client';
 
 import Link from 'next/link';
-import { type StoreBranch, type StoreDetail } from '@manfaa/api-client';
+import {
+  type StoreBranch,
+  type StoreCategoryRate,
+  type StoreDetail,
+} from '@manfaa/api-client';
 import { formatMoney } from '@manfaa/ui';
 import {
   ArrowLeft,
@@ -198,7 +202,71 @@ function HowToEarn({ store }: { store: StoreDetail }) {
   );
 }
 
-/** Rate breakdown + the merchant's own terms wording (verbatim, or a
+/**
+ * The store's own product categories as a rate table (Task #25). Names are
+ * merchant data, not locale keys: Dhivehi UI shows `name_dv` when the
+ * merchant provided one, else the English name (same rule as the merchant
+ * panel). Excluded categories show a localised "Excluded" — they earn
+ * nothing, even during promotions — and the closing row states what
+ * everything NOT listed earns: the standing rate. `dir="auto"` lets a
+ * Thaana name render correctly inside an English page and vice versa.
+ */
+function CategoryRatesTable({
+  rows,
+  standingRateBp,
+}: {
+  rows: StoreCategoryRate[];
+  standingRateBp: number;
+}) {
+  const { t, i18n } = useTranslation();
+
+  const displayName = (row: StoreCategoryRate): string =>
+    i18n.language === 'dv' && row.name_dv !== null && row.name_dv !== ''
+      ? row.name_dv
+      : row.name_en;
+
+  return (
+    <div className="flex flex-col gap-2 border-t border-border pt-4">
+      <h3 className="text-sm font-semibold text-mono">
+        {t('store.categoryRatesTitle')}
+      </h3>
+      <ul className="flex flex-col text-sm">
+        {rows.map((row, index) => (
+          <li
+            key={index}
+            className="flex items-center justify-between gap-3 py-1.5"
+          >
+            <span dir="auto" className="text-muted-foreground">
+              {displayName(row)}
+            </span>
+            {row.mode === 'excluded' ? (
+              <span className="font-medium text-muted-foreground">
+                {t('store.categoryExcluded')}
+              </span>
+            ) : (
+              <span className="font-medium text-mono">
+                {/* rate_bp is non-null whenever mode is "rate"; the standing
+                    rate is the schema-level fallback (unlisted ⇒ standing). */}
+                {formatRateBp(row.rate_bp ?? standingRateBp)}
+              </span>
+            )}
+          </li>
+        ))}
+        <li className="flex items-center justify-between gap-3 border-t border-border py-1.5 mt-0.5 pt-2">
+          <span className="text-muted-foreground">
+            {t('store.categoryEverythingElse')}
+          </span>
+          <span className="font-medium text-mono">
+            {formatRateBp(standingRateBp)}
+          </span>
+        </li>
+      </ul>
+    </div>
+  );
+}
+
+/** Rate breakdown + the per-category rate table (when the store defines
+ *  product categories) + the merchant's own terms wording (verbatim, or a
  *  neutral fallback line when the merchant has set none). */
 function CashbackDetails({ store }: { store: StoreDetail }) {
   const { t } = useTranslation();
@@ -243,6 +311,13 @@ function CashbackDetails({ store }: { store: StoreDetail }) {
               </div>
             )}
           </dl>
+
+          {store.category_rates.length > 0 && (
+            <CategoryRatesTable
+              rows={store.category_rates}
+              standingRateBp={store.standing_rate_bp}
+            />
+          )}
 
           <div className="flex flex-col gap-1.5 border-t border-border pt-4">
             <h3 className="text-sm font-semibold text-mono">

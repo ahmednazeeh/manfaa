@@ -37,3 +37,22 @@ export function estimateLaariAtBp(eligibleLaari: number, bp: number): number {
 export function formatBp(bp: number): string {
   return `${bpToPercentString(bp).replace(/\.?0+$/, '')}%`;
 }
+
+/**
+ * The §4 STATIC fee bands, for display-only estimates where the server's
+ * schedule-resolved fee is not at hand (e.g. per-line previews on the
+ * credit screen). The platform's fee tier schedule remains authoritative —
+ * the server resolves the actual per-line fee at credit time.
+ */
+const STATIC_FEE_BANDS: ReadonlyArray<{ to: number; fee: number }> = [
+  { to: 99, fee: 25 },
+  { to: 199, fee: 50 },
+  { to: 499, fee: 75 },
+  { to: 2000, fee: 100 },
+];
+
+/** Estimated fee bp for a cashback rate, from the §4 static bands. */
+export function estimateFeeBpFor(rateBp: number): number {
+  const band = STATIC_FEE_BANDS.find(({ to }) => rateBp <= to);
+  return (band ?? STATIC_FEE_BANDS[STATIC_FEE_BANDS.length - 1]).fee;
+}

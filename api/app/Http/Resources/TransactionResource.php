@@ -32,6 +32,9 @@ class TransactionResource extends JsonResource
             'fee_gst_laari' => $this->fee_gst_laari,
             'occurred_at' => $this->occurred_at->toIso8601String(),
             'received_at' => $this->received_at->toIso8601String(),
+            // Present only when the caller loaded the pricing split (lined
+            // credits) — single-rate responses stay byte-identical.
+            'lines' => TransactionLineResource::collection($this->whenLoaded('lines')),
         ];
     }
 }

@@ -32,6 +32,9 @@ final readonly class ApiCreditService
 {
     public function __construct(private CreditRecorder $recorder) {}
 
+    /**
+     * @param  list<LineInput>|null  $lines  parsed line splits (LineSetParser) — null for a single-rate credit
+     */
     public function credit(
         Merchant $merchant,
         Actor $actor,
@@ -42,6 +45,7 @@ final readonly class ApiCreditService
         CarbonImmutable $occurredAt,
         ?int $branchId = null,
         ?string $idempotencyKey = null,
+        ?array $lines = null,
     ): Transaction {
         // Only active and suspended merchants may reach the recorder (§7:
         // suspension stops cashback creation, not ingestion). Closed is
@@ -79,6 +83,7 @@ final readonly class ApiCreditService
             branchId: $branchId,
             idempotencyKey: $idempotencyKey,
             ineligibleReason: $merchant->status === 'suspended' ? 'merchant_suspended' : null,
+            lines: $lines,
         );
     }
 }

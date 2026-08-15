@@ -12,6 +12,7 @@ use App\Models\Customer;
 use App\Models\Merchant;
 use App\Models\MerchantRate;
 use App\Models\Transaction;
+use App\Models\TransactionLine;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
@@ -36,6 +37,16 @@ use Illuminate\Support\Facades\DB;
  * and the whole result floored at the standing terms (a promotion never
  * pays less than no promotion). A sale matching no candidate simply earns
  * the standing rate; it is never rejected.
+ *
+ * Line-item pricing (Task #25): when $lines is non-null the credit is a
+ * LINED credit — TermsResolver::resolveLines prices each line (excluded →
+ * 0, category override → its rate, default bucket → standing, live promo
+ * lifting non-excluded lines to max(promo, own)), the per-line integers
+ * are stored as append-only transaction_lines snapshots, and the
+ * transaction row's totals are the SUM of those stored integers. The row's
+ * rate_bp/fee_bp remain the STANDING resolution (base-rate snapshot);
+ * per-line truth lives in the lines. With $lines null, the single-rate
+ * path below runs untouched.
  */
 final readonly class CreditRecorder
 {
@@ -52,6 +63,9 @@ final readonly class CreditRecorder
         private TermsResolver $terms,
     ) {}
 
+    /**
+     * @param  list<LineInput>|null  $lines  parsed line splits (LineSetParser) — null for a single-rate credit
+     */
     public function record(
         Merchant $merchant,
         Actor $actor,
@@ -64,6 +78,7 @@ final readonly class CreditRecorder
         ?int $branchId = null,
         ?string $idempotencyKey = null,
         ?string $ineligibleReason = null,
+        ?array $lines = null,
     ): Transaction {
         $customer = Customer::query()->where('customer_code', $customerCode)->first()
             ?? throw CustomerNotFoundException::forCode($customerCode);
@@ -92,13 +107,45 @@ final readonly class CreditRecorder
         $reason = $ineligible ? $ineligibleReason : ($belowMinimum ? 'below_minimum' : null);
 
         try {
-            return DB::transaction(function () use ($merchant, $actor, $origin, $customer, $invoiceNo, $eligible, $saleAmount, $occurredAt, $now, $branchId, $idempotencyKey, $standingBp, $zeroed, $reason, $stale): Transaction {
-                // Promo-aware terms at occurred_at (PLAN §12 Phase 3): only
-                // rows that actually accrue consult promotions — a zeroed row
-                // freezes the standing terms it failed against.
-                [$result, $promotionId] = $zeroed
-                    ? [$this->calculator->calculate($eligible, Rate::cashback($standingBp)), null]
-                    : $this->terms->resolve($merchant->id, $branchId, $eligible, $standingBp, $customer->id, $occurredAt);
+            return DB::transaction(function () use ($merchant, $actor, $origin, $customer, $invoiceNo, $eligible, $saleAmount, $occurredAt, $now, $branchId, $idempotencyKey, $standingBp, $zeroed, $reason, $stale, $lines): Transaction {
+                $priced = null;
+
+                if ($lines === null) {
+                    // Promo-aware terms at occurred_at (PLAN §12 Phase 3): only
+                    // rows that actually accrue consult promotions — a zeroed row
+                    // freezes the standing terms it failed against.
+                    [$result, $promotionId] = $zeroed
+                        ? [$this->calculator->calculate($eligible, Rate::cashback($standingBp)), null]
+                        : $this->terms->resolve($merchant->id, $branchId, $eligible, $standingBp, $customer->id, $occurredAt);
+
+                    $rateBp = $result->rateBp;
+                    $feeBp = $result->feeBp;
+                    $cashbackLaari = $zeroed ? 0 : $result->cashbackLaari;
+                    $feeLaari = $zeroed ? 0 : $result->feeLaari;
+                } else {
+                    // Lined credit: per-line §4 pricing; totals = SUM of the
+                    // stored line integers, never recomputed on aggregates.
+                    // Zeroed rows price without promotions and store their
+                    // lines with zero money — the line snapshots still
+                    // evidence the terms each line met, and the sums stay
+                    // equal to the (zero) row totals.
+                    $priced = $this->terms->resolveLines(
+                        $merchant->id,
+                        $branchId,
+                        $lines,
+                        $eligible,
+                        $standingBp,
+                        $customer->id,
+                        $occurredAt,
+                        consultPromotions: ! $zeroed,
+                    );
+
+                    $promotionId = $zeroed ? null : $priced->promotionId;
+                    $rateBp = $priced->rowRateBp;
+                    $feeBp = $priced->rowFeeBp;
+                    $cashbackLaari = $zeroed ? 0 : $priced->cashbackTotal();
+                    $feeLaari = $zeroed ? 0 : $priced->feeTotal();
+                }
 
                 $transaction = Transaction::query()->create([
                     'merchant_id' => $merchant->id,
@@ -111,16 +158,35 @@ final readonly class CreditRecorder
                     'eligible_laari' => $eligible->value(),
                     'sale_laari' => $saleAmount?->value(),
                     'currency' => 'MVR',
-                    'rate_bp' => $result->rateBp,
-                    'fee_bp' => $result->feeBp,
-                    'cashback_laari' => $zeroed ? 0 : $result->cashbackLaari,
-                    'fee_laari' => $zeroed ? 0 : $result->feeLaari,
+                    'rate_bp' => $rateBp,
+                    'fee_bp' => $feeBp,
+                    'cashback_laari' => $cashbackLaari,
+                    'fee_laari' => $feeLaari,
                     'fee_gst_laari' => 0,
                     'state' => TransactionState::Tracked,
                     'reason_code' => $reason,
                     'occurred_at' => $occurredAt,
                     'received_at' => $now,
                 ]);
+
+                if ($priced !== null) {
+                    foreach ($priced->lines as $line) {
+                        TransactionLine::query()->create([
+                            'transaction_id' => $transaction->id,
+                            'product_category_id' => $line->categoryId,
+                            'category_slug' => $line->slug,
+                            'category_name_en' => $line->nameEn,
+                            'amount_laari' => $line->amountLaari,
+                            'currency' => 'MVR',
+                            'effective_rate_bp' => $line->rateBp,
+                            'fee_bp' => $line->feeBp,
+                            'cashback_laari' => $zeroed ? 0 : $line->cashbackLaari,
+                            'fee_laari' => $zeroed ? 0 : $line->feeLaari,
+                            'priced_by' => $line->pricedBy,
+                            'sort' => $line->sort,
+                        ]);
+                    }
+                }
 
                 $this->transitions->recordCreated($transaction, $actor, $reason);
 

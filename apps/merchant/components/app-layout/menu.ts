@@ -3,16 +3,17 @@ import {
   HandCoins,
   Landmark,
   LayoutGrid,
+  LucideIcon,
   MapPin,
   Megaphone,
   Percent,
   ReceiptText,
   SlidersHorizontal,
   Store,
+  Tags,
   Users,
   Wallet,
 } from 'lucide-react';
-import { LucideIcon } from 'lucide-react';
 
 export interface AppMenuItem {
   title: string;
@@ -53,6 +54,11 @@ export const APP_MENU: AppMenuSection[] = [
     ownerOnly: true,
     items: [
       { title: 'Cashback rate', path: '/settings/rate', icon: Percent },
+      {
+        title: 'Product categories',
+        path: '/settings/product-categories',
+        icon: Tags,
+      },
       { title: 'Profile', path: '/settings/profile', icon: Store },
       { title: 'Bank account', path: '/settings/bank-account', icon: Banknote },
       { title: 'Branches', path: '/settings/branches', icon: MapPin },

@@ -9,11 +9,13 @@ use App\Domain\Money\TierSchedule;
 use App\Models\AdminUser;
 use App\Models\FeeTierSchedule;
 use App\Models\Merchant;
+use App\Models\MerchantProductCategory;
 use App\Models\MerchantRate;
 use App\Models\Promotion;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * Admin management of the append-only fee tier schedule history. Creation
@@ -126,7 +128,20 @@ final class TierScheduleService
             ->when($until !== null, fn ($query) => $query->where('starts_at', '<', $until))
             ->max('rate_bp');
 
-        $maxInForceBp = max($maxStandingBp, $maxPromoBp);
+        // ACTIVE product-category rate overrides (Task #25) price future
+        // lined credits open-endedly — like standing rates, a schedule that
+        // cannot price one would make every credit naming it throw at
+        // billing time. Deactivated categories never price a new credit.
+        // hasTable: same deploy-order probe as FeeTierScheduleResolver.
+        $maxCategoryBp = Schema::hasTable('merchant_product_categories')
+            ? (int) MerchantProductCategory::query()
+                ->whereIn('merchant_id', $notClosed)
+                ->where('active', true)
+                ->where('mode', 'rate')
+                ->max('rate_bp')
+            : 0;
+
+        $maxInForceBp = max($maxStandingBp, $maxPromoBp, $maxCategoryBp);
 
         if ($maxInForceBp > $ceilingBp) {
             throw InvalidTierScheduleException::ceilingBelowInForceRates($ceilingBp, $maxInForceBp);

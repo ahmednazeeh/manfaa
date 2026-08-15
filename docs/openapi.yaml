@@ -202,6 +202,20 @@ paths:
                   customer_ref: '+9607712345'
                   eligible_amount: 118000
                   occurred_at: '2026-08-14T11:12:41+05:00'
+              linedBasket:
+                summary: Mixed basket split by product category (lines sum to eligible_amount)
+                value:
+                  invoice_no: INV-2107
+                  customer_ref: '482917'
+                  eligible_amount: 100000
+                  occurred_at: '2026-08-15T10:30:00+05:00'
+                  lines:
+                    - category: fruits
+                      amount_laari: 30000
+                    - category: veggies
+                      amount_laari: 25000
+                    - category: null
+                      amount_laari: 45000
       responses:
         '201':
           description: |
@@ -238,6 +252,69 @@ paths:
                       fee_gst_laari: 0
                       occurred_at: '2026-08-14T06:04:22+00:00'
                       received_at: '2026-08-14T06:04:23+00:00'
+                linedCreated:
+                  summary: |
+                    Mixed basket priced per line (standing 500 bp, veggies
+                    override 200 bp, fruits excluded)
+                  description: |
+                    Worked integers, per §4 ceiling rounding at each line:
+                    fruits 30,000 excluded → 0/0; veggies 25,000 @200 bp →
+                    ceil(25,000×200/10,000) = 500 cashback, fee tier 75 bp →
+                    ceil(25,000×75/10,000) = 188; default 45,000 @500 bp →
+                    ceil(45,000×500/10,000) = 2,250 cashback, fee tier
+                    100 bp → ceil(45,000×100/10,000) = 450. Transaction
+                    totals are the SUMS of the stored line integers:
+                    cashback 2,750, fee 638. The row-level `rate_bp: 500` /
+                    `fee_bp: 100` are the standing-rate base snapshot.
+                  value:
+                    status: created
+                    reason: null
+                    transaction:
+                      id: 84525
+                      origin: pos
+                      invoice_no: INV-2107
+                      state: awaiting_validation
+                      reason_code: null
+                      currency: MVR
+                      eligible_laari: 100000
+                      sale_laari: null
+                      rate_bp: 500
+                      fee_bp: 100
+                      cashback_laari: 2750
+                      cashback_mvr: '27.50'
+                      fee_laari: 638
+                      fee_mvr: '6.38'
+                      fee_gst_laari: 0
+                      occurred_at: '2026-08-15T05:30:00+00:00'
+                      received_at: '2026-08-15T05:30:01+00:00'
+                      lines:
+                        - category: fruits
+                          category_name_en: Fruits
+                          amount_laari: 30000
+                          effective_rate_bp: 0
+                          fee_bp: 0
+                          cashback_laari: 0
+                          fee_laari: 0
+                          priced_by: excluded
+                          sort: 0
+                        - category: veggies
+                          category_name_en: Veggies
+                          amount_laari: 25000
+                          effective_rate_bp: 200
+                          fee_bp: 75
+                          cashback_laari: 500
+                          fee_laari: 188
+                          priced_by: category
+                          sort: 1
+                        - category: null
+                          category_name_en: null
+                          amount_laari: 45000
+                          effective_rate_bp: 500
+                          fee_bp: 100
+                          cashback_laari: 2250
+                          fee_laari: 450
+                          priced_by: standing
+                          sort: 2
                 staleHeld:
                   summary: Stale sale accepted but held for review
                   value:
@@ -399,6 +476,14 @@ paths:
             `idempotency_key_reuse_mismatch` (this `Idempotency-Key` was
             already used with a different request body — fix the till's key
             generation; never reuse a key across different sales).
+
+            Line-split failures (only possible when `lines` is sent):
+            `unknown_category` (not one of this merchant's slugs — refresh
+            `GET /v1/merchants/me/product-categories`), `inactive_category`
+            (the category was deactivated), `duplicate_category_line` (a
+            category — or the null default — appears twice), and
+            `lines_sum_mismatch` (line amounts do not sum to exactly
+            `eligible_amount`).
           content:
             application/json:
               schema:
@@ -437,6 +522,17 @@ paths:
                     error:
                       code: customer_not_found
                       message: 'No customer matches ref "482917".'
+                linesSumMismatch:
+                  summary: Line amounts do not sum to eligible_amount
+                  value:
+                    error:
+                      code: lines_sum_mismatch
+                      message: Line amounts sum to 75000 laari but eligible_amount is 100000 — they must be equal.
+                unknownCategory:
+                  value:
+                    error:
+                      code: unknown_category
+                      message: 'No product category "electronics" exists for this merchant.'
 
   /v1/transactions/{id}/reverse:
     post:
@@ -701,6 +797,57 @@ paths:
                     error:
                       code: no_effective_rate
                       message: No cashback rate is currently effective — contact the platform.
+
+  /v1/merchants/me/product-categories:
+    get:
+      operationId: listMyProductCategories
+      tags: [Merchant]
+      summary: Product categories usable in transaction lines
+      x-required-ability: rates:read
+      description: |
+        The authenticated merchant's **active** product categories — the
+        allowed values for `lines[].category` on `POST /v1/transactions`.
+        `category` is the exact string to submit. `mode: excluded` lines
+        earn nothing (even during promotions); `mode: rate` lines earn
+        `rate_bp` instead of the standing rate. Amounts in no listed
+        category belong on the default line (`category: null`), which earns
+        the standing rate.
+
+        The list is merchant-managed and can change at any time; a
+        deactivated category is refused at credit time with
+        `inactive_category`, so refresh on that error rather than caching
+        indefinitely. Sales without `lines` are never affected.
+      responses:
+        '200':
+          description: Active product categories, in display order.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ProductCategory'
+              examples:
+                typical:
+                  value:
+                    data:
+                      - category: fruits
+                        name_en: Fruits
+                        name_dv: މޭވާ
+                        mode: excluded
+                        rate_bp: null
+                      - category: veggies
+                        name_en: Veggies
+                        name_dv: ތަރުކާރީ
+                        mode: rate
+                        rate_bp: 200
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/ForbiddenAbility'
 
   /v1/customers/lookup:
     get:
@@ -1148,6 +1295,10 @@ components:
         | `future_dated` | error | 422 | Fix the till clock; resend with a fresh key |
         | `customer_not_found` | error | 422 (create) / 404 (lookup) | Re-confirm the ref with the customer |
         | `no_effective_rate` | error | 422 | No — contact the platform |
+        | `unknown_category` | error | 422 | Refresh the category list; fix the slug; fresh key |
+        | `inactive_category` | error | 422 | Refresh the category list; resubmit; fresh key |
+        | `duplicate_category_line` | error | 422 | Merge the duplicate lines; fresh key |
+        | `lines_sum_mismatch` | error | 422 | Make line amounts sum to `eligible_amount`; fresh key |
         | `duplicate_invoice` | error | 409 | Never — sale already recorded |
         | `invalid_state` | error | 409 | Never — terminal state |
         | `transaction_not_found` | error | 404 | Never |
@@ -1170,6 +1321,10 @@ components:
         - future_dated
         - customer_not_found
         - no_effective_rate
+        - unknown_category
+        - inactive_category
+        - duplicate_category_line
+        - lines_sum_mismatch
         - duplicate_invoice
         - invalid_state
         - transaction_not_found
@@ -1312,6 +1467,116 @@ components:
           description: |
             Optional branch, from the ids issued at onboarding. Must belong
             to the authenticated merchant, else `validation_failed`.
+        lines:
+          type: array
+          minItems: 1
+          maxItems: 100
+          description: |
+            **Optional line-item split** for stores with product-category
+            rates (`GET /v1/merchants/me/product-categories`). Omit it and
+            the whole `eligible_amount` earns the standing rate, exactly as
+            before — sending `lines` is never required.
+
+            Each line is `{category, amount_laari}`: `category` is one of
+            the merchant's active category slugs, or **`null` for the
+            default "everything else" bucket** (standing rate). Rules:
+
+            - amounts are laari integers ≥ 1 and **must sum to exactly
+              `eligible_amount`** (`422 lines_sum_mismatch`);
+            - each category — and the null default — may appear at most
+              once (`422 duplicate_category_line`);
+            - unknown or other-merchant slugs are `422 unknown_category`;
+              deactivated ones are `422 inactive_category`.
+
+            Pricing per line (§4 ceiling rounding per line, then summed —
+            totals are the sum of the stored line integers): `excluded`
+            categories earn 0 (even during promotions); `rate` categories
+            earn their own `rate_bp`; the default line earns the standing
+            rate. A live promotion covering the sale (its minimum purchase
+            is judged against the WHOLE `eligible_amount`) lifts every
+            non-excluded line to max(promotion rate, the line's own rate);
+            per-customer promotion caps clip only the promotion-priced
+            lines, in submitted order. The response echoes the priced
+            `lines` with per-line integers.
+          items:
+            type: object
+            required: [category, amount_laari]
+            properties:
+              category:
+                type: ['string', 'null']
+                description: Category slug, or null for the default (standing-rate) bucket.
+              amount_laari:
+                allOf:
+                  - $ref: '#/components/schemas/LaariAmount'
+                minimum: 1
+
+    ProductCategory:
+      type: object
+      description: |
+        One merchant product category as listed to vendors. `category` is
+        the exact `lines[].category` value. `rate_bp` is null exactly when
+        `mode` is `excluded`.
+      required: [category, name_en, name_dv, mode, rate_bp]
+      properties:
+        category:
+          type: string
+          description: The immutable slug submitted in transaction lines.
+        name_en:
+          type: string
+        name_dv:
+          type: ['string', 'null']
+        mode:
+          type: string
+          enum: [excluded, rate]
+        rate_bp:
+          type: ['integer', 'null']
+          description: The override cashback rate in basis points; null for excluded categories.
+
+    TransactionLine:
+      type: object
+      description: |
+        One priced line of a lined transaction — an immutable snapshot of
+        the terms the line earned under. `priced_by` says why:
+        `excluded` (earns nothing, promos included), `category` (its own
+        override rate), `standing` (the default bucket, or a line whose own
+        rate beat the promotion), `promotion` (lifted to the promotion
+        rate; per-customer caps clip only these lines, fee following the
+        reward actually granted). The transaction's `cashback_laari` /
+        `fee_laari` are the SUMS of these stored integers.
+      required:
+        - category
+        - category_name_en
+        - amount_laari
+        - effective_rate_bp
+        - fee_bp
+        - cashback_laari
+        - fee_laari
+        - priced_by
+        - sort
+      properties:
+        category:
+          type: ['string', 'null']
+          description: The category slug as submitted (creation-time snapshot); null for the default bucket.
+        category_name_en:
+          type: ['string', 'null']
+        amount_laari:
+          $ref: '#/components/schemas/LaariAmount'
+        effective_rate_bp:
+          type: integer
+          description: The rate this line actually earned, in basis points (0 for excluded lines).
+        fee_bp:
+          type: integer
+          description: The platform fee tier for the line's effective rate (0 for excluded lines).
+        cashback_laari:
+          $ref: '#/components/schemas/LaariAmount'
+        fee_laari:
+          $ref: '#/components/schemas/LaariAmount'
+        priced_by:
+          type: string
+          enum: [excluded, category, standing, promotion]
+        sort:
+          type: integer
+          description: Zero-based submitted position.
 
     Transaction:
       type: object
@@ -1396,6 +1661,17 @@ components:
           type: string
           format: date-time
           description: When the platform received the POST (UTC).
+        lines:
+          type: array
+          description: |
+            Present ONLY on transactions created with a `lines` split: the
+            priced lines, in submitted order. Absent — not empty — on
+            single-rate transactions. When present, `rate_bp`/`fee_bp` on
+            the transaction are the standing-rate base snapshot; the
+            per-line truth is here, and `cashback_laari`/`fee_laari` are
+            the sums of these line integers.
+          items:
+            $ref: '#/components/schemas/TransactionLine'
 
     TransactionWriteResult:
       type: object

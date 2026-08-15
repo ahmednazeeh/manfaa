@@ -21,6 +21,9 @@ final readonly class ManualCreditService
 {
     public function __construct(private CreditRecorder $recorder) {}
 
+    /**
+     * @param  list<LineInput>|null  $lines  parsed line splits (LineSetParser) — null for a single-rate credit
+     */
     public function credit(
         Merchant $merchant,
         MerchantUser $actor,
@@ -29,6 +32,7 @@ final readonly class ManualCreditService
         Laari $eligible,
         ?Laari $saleAmount,
         CarbonImmutable $occurredAt,
+        ?array $lines = null,
     ): Transaction {
         if ($merchant->status !== 'active') {
             throw MerchantNotActiveException::for($merchant);
@@ -43,6 +47,7 @@ final readonly class ManualCreditService
             eligible: $eligible,
             saleAmount: $saleAmount,
             occurredAt: $occurredAt,
+            lines: $lines,
         );
     }
 }

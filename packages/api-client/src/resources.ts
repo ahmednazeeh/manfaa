@@ -106,6 +106,54 @@ export const TransactionOriginSchema = z.enum([
 ]);
 export type TransactionOrigin = z.infer<typeof TransactionOriginSchema>;
 
+// ---------------------------------------------------------------------------
+// Product categories + line-item pricing (Task #25)
+// ---------------------------------------------------------------------------
+
+/**
+ * What a per-store product category does to the rate: `excluded` earns
+ * nothing (even during promotions), `rate` overrides the standing rate with
+ * the category's own `rate_bp`.
+ */
+export const ProductCategoryModeSchema = z.enum(['excluded', 'rate']);
+export type ProductCategoryMode = z.infer<typeof ProductCategoryModeSchema>;
+
+/**
+ * WHY a line priced the way it did: `excluded` (category excluded → zeros),
+ * `category` (the category's own rate override), `standing` (no category /
+ * default bucket → merchant standing rate), `promotion` (a live promo beat
+ * the line's own rate — only these lines consume the per-customer promo cap).
+ */
+export const TransactionLinePricedBySchema = z.enum([
+  'excluded',
+  'category',
+  'standing',
+  'promotion',
+]);
+export type TransactionLinePricedBy = z.infer<
+  typeof TransactionLinePricedBySchema
+>;
+
+/**
+ * One priced line of a lined credit — an immutable creation-time snapshot.
+ * `category` is the product-category slug (null = the default "everything
+ * else" bucket, which also has a null `category_name_en`). All money is
+ * integer laari, per-line §4 ceiling; the transaction totals equal the SUM
+ * of these stored integers.
+ */
+export const TransactionLineSchema = z.object({
+  category: z.string().nullable(),
+  category_name_en: z.string().nullable(),
+  amount_laari: z.number().int(),
+  effective_rate_bp: z.number().int(),
+  fee_bp: z.number().int(),
+  cashback_laari: z.number().int(),
+  fee_laari: z.number().int(),
+  priced_by: TransactionLinePricedBySchema,
+  sort: z.number().int(),
+});
+export type TransactionLine = z.infer<typeof TransactionLineSchema>;
+
 export const TransactionSchema = z.object({
   id: z.number().int(),
   origin: TransactionOriginSchema,
@@ -122,6 +170,14 @@ export const TransactionSchema = z.object({
   fee_gst_laari: z.number().int(),
   occurred_at: z.string(),
   received_at: z.string(),
+  /**
+   * The pricing split of a lined credit, in submitted order. Present only
+   * when the endpoint loads it (e.g. the credit POST response for a lined
+   * credit); single-rate transactions keep the exact pre-lines shape. On a
+   * lined credit the row-level rate_bp/fee_bp are the standing-rate
+   * snapshot — the per-line truth lives here.
+   */
+  lines: z.array(TransactionLineSchema).optional(),
 });
 export type Transaction = z.infer<typeof TransactionSchema>;
 

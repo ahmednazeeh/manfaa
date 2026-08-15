@@ -260,8 +260,12 @@ it('serves the full public store page for an active merchant', function () {
 
     expect(array_keys($data))->toBe([
         'name', 'slug', 'category', 'logo_url', 'channel', 'featured',
-        'rate_bp', 'standing_rate_bp', 'promotion', 'cashback_basis', 'branches', 'joined',
+        'rate_bp', 'standing_rate_bp', 'promotion', 'cashback_basis', 'category_rates', 'branches', 'joined',
     ]);
+
+    // No product categories defined — the rates table is an empty list
+    // (never absent), and "everything else" is the standing_rate_bp above.
+    expect($data['category_rates'])->toBe([]);
 
     expect($data['name'])->toBe('Cafe Alpha');
     expect($data['slug'])->toBe('cafe-alpha');

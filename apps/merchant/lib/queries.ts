@@ -6,6 +6,7 @@ import {
   cancelMerchantPromotion,
   createMerchantBranch,
   createMerchantCredit,
+  createMerchantProductCategory,
   createMerchantPromotion,
   createMerchantSettlement,
   createMerchantStaff,
@@ -16,6 +17,7 @@ import {
   getMerchantSetup,
   getMerchantWallet,
   listMerchantBranches,
+  listMerchantProductCategories,
   listMerchantPromotions,
   listMerchantSettlements,
   listMerchantStaff,
@@ -28,6 +30,7 @@ import {
   updateMerchantBankAccount,
   updateMerchantBranch,
   updateMerchantPreferences,
+  updateMerchantProductCategory,
   updateMerchantProfile,
   updateMerchantSetupProfile,
   updateMerchantSetupRate,
@@ -39,6 +42,7 @@ import {
   type CreateCreditRequest,
   type CreateMerchantBranchRequest,
   type CreateMerchantStaffRequest,
+  type CreateProductCategoryRequest,
   type CreatePromotionRequest,
   type CreateSettlementRequest,
   type MerchantSetupStateResponse,
@@ -51,6 +55,7 @@ import {
   type UpdateMerchantProfileRequest,
   type UpdateMerchantSetupProfileRequest,
   type UpdateMerchantStaffRequest,
+  type UpdateProductCategoryRequest,
 } from '@manfaa/api-client';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -83,6 +88,7 @@ export const queryKeys = {
   staff: ['merchant', 'staff'] as const,
   preferences: ['merchant', 'preferences'] as const,
   promotions: ['merchant', 'promotions'] as const,
+  productCategories: ['merchant', 'product-categories'] as const,
   setup: ['merchant', 'setup'] as const,
 };
 
@@ -302,6 +308,58 @@ export function useCancelPromotion() {
     mutationFn: (id: number) => cancelMerchantPromotion(id),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.promotions });
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Product categories (Task #25) — owner mutates, staff may read
+// ---------------------------------------------------------------------------
+
+/**
+ * GET is STAFF-readable — it feeds the credit screen's split-by-category
+ * editor. Inactive rows are included (the settings screen manages them);
+ * the credit form filters on `active`.
+ */
+export function useProductCategories() {
+  return useQuery({
+    queryKey: queryKeys.productCategories,
+    queryFn: ({ signal }) => listMerchantProductCategories({ signal }),
+    select: (response) => response.data,
+  });
+}
+
+export function useCreateProductCategory() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: CreateProductCategoryRequest) =>
+      createMerchantProductCategory(body),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.productCategories,
+      });
+    },
+  });
+}
+
+/**
+ * PATCH — owner only. Deactivation (`active: false`) is the only removal;
+ * historical transaction lines snapshot the category, so there is no DELETE.
+ */
+export function useUpdateProductCategory() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      id,
+      body,
+    }: {
+      id: number;
+      body: UpdateProductCategoryRequest;
+    }) => updateMerchantProductCategory(id, body),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.productCategories,
+      });
     },
   });
 }

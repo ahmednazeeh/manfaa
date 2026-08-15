@@ -282,6 +282,97 @@ account records over free-typed entry, or confirm the masked name via
 customers reject transactions they don't recognise — until then, send a
 reversal if a customer reports a credit that isn't theirs.
 
+#### Line-item pricing — optional `lines` for stores with category rates
+
+Some stores price cashback **per product category**: certain categories are
+excluded (earn nothing), others carry their own rate, and everything else
+earns the standing rate. If the merchant you integrate uses categories,
+split the eligible total into `lines`; if not — or if you simply don't send
+`lines` — the whole `eligible_amount` earns the standing rate exactly as
+before. **Sending `lines` is never required.**
+
+Each line is `{category, amount_laari}`. `category` is one of the
+merchant's active slugs from `GET /v1/merchants/me/product-categories`
+(§4.5); `category: null` is the default "everything else" bucket. Rules:
+
+- amounts are laari integers ≥ 1 and must sum to **exactly**
+  `eligible_amount` → otherwise `422 lines_sum_mismatch`;
+- each category (and the null default) at most once →
+  `422 duplicate_category_line`;
+- unknown slug → `422 unknown_category`; deactivated →
+  `422 inactive_category`.
+
+**Worked example.** Merchant standing rate 5.00% (`500` bp), category
+`veggies` overridden to 2.00% (`200` bp), category `fruits` excluded. A
+MVR 1,000.00 basket split 300.00 fruits + 250.00 veggies + 450.00 other:
+
+```sh
+curl -s -X POST $MANFAA_API/v1/transactions \
+  -H "Authorization: Bearer $MANFAA_TOKEN" \
+  -H "Idempotency-Key: $(uuidgen)" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "invoice_no": "INV-2107",
+    "customer_ref": "111111",
+    "eligible_amount": 100000,
+    "occurred_at": "2026-08-15T10:30:00+05:00",
+    "lines": [
+      { "category": "fruits",  "amount_laari": 30000 },
+      { "category": "veggies", "amount_laari": 25000 },
+      { "category": null,      "amount_laari": 45000 }
+    ]
+  }'
+```
+
+Every line rounds **up** independently (§4 ceiling), then the transaction
+totals are the *sums of the line integers* — never recomputed on the whole
+amount:
+
+| Line | Amount | Rate | Cashback | Fee tier | Fee |
+|---|---:|---|---:|---|---:|
+| fruits (excluded) | 30000 | 0 | 0 | — | 0 |
+| veggies | 25000 | 200 bp | ceil(25000×200/10000) = **500** | 75 bp | ceil(25000×75/10000) = **188** |
+| default | 45000 | 500 bp | ceil(45000×500/10000) = **2250** | 100 bp | ceil(45000×100/10000) = **450** |
+| **Totals** | 100000 | | **2750** | | **638** |
+
+```json
+{
+  "status": "created",
+  "reason": null,
+  "transaction": {
+    "id": 84525,
+    "state": "awaiting_validation",
+    "eligible_laari": 100000,
+    "rate_bp": 500,
+    "fee_bp": 100,
+    "cashback_laari": 2750,
+    "cashback_mvr": "27.50",
+    "fee_laari": 638,
+    "fee_mvr": "6.38",
+    "lines": [
+      { "category": "fruits",  "category_name_en": "Fruits",  "amount_laari": 30000, "effective_rate_bp": 0,   "fee_bp": 0,   "cashback_laari": 0,    "fee_laari": 0,   "priced_by": "excluded", "sort": 0 },
+      { "category": "veggies", "category_name_en": "Veggies", "amount_laari": 25000, "effective_rate_bp": 200, "fee_bp": 75,  "cashback_laari": 500,  "fee_laari": 188, "priced_by": "category", "sort": 1 },
+      { "category": null,      "category_name_en": null,      "amount_laari": 45000, "effective_rate_bp": 500, "fee_bp": 100, "cashback_laari": 2250, "fee_laari": 450, "priced_by": "standing", "sort": 2 }
+    ],
+    "...": "other transaction fields as above"
+  }
+}
+```
+
+Notes:
+
+- On a lined transaction, `rate_bp`/`fee_bp` at the transaction level are
+  the **standing-rate snapshot**; per-line truth is in `lines`
+  (`effective_rate_bp`, `priced_by`).
+- During a live promotion, every **non-excluded** line earns
+  max(promotion rate, its own rate) — `priced_by: "promotion"` on the
+  lifted lines. Excluded categories stay excluded even during promotions.
+  A promotion's minimum purchase is judged against the whole
+  `eligible_amount`, not per line. Per-customer promotion caps clip only
+  the promotion-priced lines, in submitted order.
+- Reversals work unchanged — reverse the transaction by id; the stored
+  totals reverse as one.
+
 ### 4.2 Reverse a sale — `POST /v1/transactions/{id}/reverse`
 
 Ability: `transactions:reverse`.
@@ -410,6 +501,33 @@ A known code that cannot currently earn (sandbox: `333333`) still answers
 An unknown code answers `404 customer_not_found`; re-read it with the
 customer (this is almost always a mistyped digit).
 
+### 4.5 Product categories — `GET /v1/merchants/me/product-categories`
+
+Ability: `rates:read`. The merchant's **active** product categories — the
+allowed `lines[].category` values for line-item pricing (§4.1):
+
+```sh
+curl -s $MANFAA_API/v1/merchants/me/product-categories \
+  -H "Authorization: Bearer $MANFAA_TOKEN"
+```
+
+```json
+{
+  "data": [
+    { "category": "fruits",  "name_en": "Fruits",  "name_dv": "މޭވާ",     "mode": "excluded", "rate_bp": null },
+    { "category": "veggies", "name_en": "Veggies", "name_dv": "ތަރުކާރީ", "mode": "rate",     "rate_bp": 200 }
+  ]
+}
+```
+
+`category` is the exact string to submit. `mode: "excluded"` lines earn
+nothing; `mode: "rate"` lines earn `rate_bp` instead of the standing rate;
+anything else goes on the `category: null` default line. The merchant can
+change this list at any time — refresh it when a POST answers
+`unknown_category` or `inactive_category` rather than caching forever. A
+merchant with no categories returns an empty `data` and you simply never
+send `lines`.
+
 ---
 
 ## 5. Errors
@@ -437,6 +555,10 @@ The complete code registry (also in `openapi.yaml` → `MachineCode`):
 | `future_dated` | error envelope — `occurred_at` beyond 5-minute skew | 422 | Fix the till clock; resend with a fresh key |
 | `customer_not_found` | error envelope | 422 (create) / 404 (lookup) | Re-confirm the code with the customer |
 | `no_effective_rate` | error envelope | 422 | No — contact Manfaa |
+| `unknown_category` | error envelope — `lines[].category` is not one of this merchant's slugs | 422 | Refresh §4.5, fix the slug; fresh key |
+| `inactive_category` | error envelope — the category was deactivated | 422 | Refresh §4.5, resubmit; fresh key |
+| `duplicate_category_line` | error envelope — a category (or the null default) appears twice | 422 | Merge the lines; fresh key |
+| `lines_sum_mismatch` | error envelope — line amounts ≠ `eligible_amount` | 422 | Fix the split; fresh key |
 | `duplicate_invoice` | error envelope; existing id in `meta.transaction_id` | 409 | Never — sale already recorded |
 | `invalid_state` | error envelope; current state in `meta.state` | 409 | Never — terminal state |
 | `transaction_not_found` | error envelope | 404 | Never |

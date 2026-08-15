@@ -1,6 +1,10 @@
 import { z } from 'zod';
 import { apiFetch } from './client';
-import { dataWrapped, MerchantChannelSchema } from './resources';
+import {
+  dataWrapped,
+  MerchantChannelSchema,
+  ProductCategoryModeSchema,
+} from './resources';
 
 /**
  * Public merchant discovery (Phase 3) — no auth required, throttled per IP,
@@ -167,6 +171,22 @@ export const StorePromotionSchema = z.object({
 });
 export type StorePromotion = z.infer<typeof StorePromotionSchema>;
 
+/**
+ * One row of the public category-rates table (Task #25): "Fruits —
+ * excluded, Veggies — 2%, everything else — standing_rate_bp". Display
+ * names + mode + rate only — deliberately no ids and no slugs; the public
+ * page displays terms, it does not integrate. Excluded categories earn
+ * nothing, even during promotions; `rate_bp` is null exactly when `mode`
+ * is "excluded".
+ */
+export const StoreCategoryRateSchema = z.object({
+  name_en: z.string(),
+  name_dv: z.string().nullable(),
+  mode: ProductCategoryModeSchema,
+  rate_bp: z.number().int().nullable(),
+});
+export type StoreCategoryRate = z.infer<typeof StoreCategoryRateSchema>;
+
 export const StoreBranchSchema = z.object({
   name: z.string(),
   address: z.string().nullable(),
@@ -194,6 +214,12 @@ export const StoreDetailSchema = z.object({
   standing_rate_bp: z.number().int(),
   promotion: StorePromotionSchema.nullable(),
   cashback_basis: z.string().nullable(),
+  /**
+   * The store's ACTIVE product categories, merchant sort order. Empty for
+   * stores without category overrides — "everything else" always earns
+   * `standing_rate_bp` and is NOT a row here; the UI appends that line.
+   */
+  category_rates: z.array(StoreCategoryRateSchema),
   branches: z.array(StoreBranchSchema),
   /**
    * Month the merchant joined, machine form "YYYY-MM" (month granularity,

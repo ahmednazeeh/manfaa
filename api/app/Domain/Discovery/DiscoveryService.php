@@ -6,6 +6,7 @@ namespace App\Domain\Discovery;
 
 use App\Models\Merchant;
 use App\Models\MerchantBranch;
+use App\Models\MerchantProductCategory;
 use App\Models\MerchantRate;
 use App\Models\Promotion;
 use Carbon\CarbonImmutable;
@@ -41,7 +42,8 @@ final class DiscoveryService
 
     public const string CACHE_KEY = 'discovery:entries:v3';
 
-    public const string STORE_CACHE_PREFIX = 'discovery:store:v3:';
+    // v4: store detail gained category_rates (Task #25).
+    public const string STORE_CACHE_PREFIX = 'discovery:store:v4:';
 
     public const int DIRECTORY_DEFAULT_PER_PAGE = 12;
 
@@ -405,6 +407,24 @@ final class DiscoveryService
             ->orderBy('name')
             ->get(['name', 'address', 'lat', 'lng']);
 
+        // The store's ACTIVE product categories (Task #25) for the rates
+        // table — "Fruits — excluded, Veggies — 2%, everything else —
+        // standing_rate_bp". Names + mode + rate only: no ids, no slugs —
+        // the public page displays terms, it does not integrate.
+        $categoryRates = MerchantProductCategory::query()
+            ->where('merchant_id', $merchant->id)
+            ->where('active', true)
+            ->orderBy('sort')
+            ->orderBy('id')
+            ->get(['name_en', 'name_dv', 'mode', 'rate_bp'])
+            ->map(fn (MerchantProductCategory $category): array => [
+                'name_en' => $category->name_en,
+                'name_dv' => $category->name_dv,
+                'mode' => $category->mode,
+                'rate_bp' => $category->mode === 'rate' ? $category->rate_bp : null,
+            ])
+            ->all();
+
         return [
             'name' => $merchant->name,
             'slug' => $merchant->slug,
@@ -422,6 +442,9 @@ final class DiscoveryService
             // The merchant's own eligibility wording, verbatim (§11: shown to
             // customers, never used in computation). Null when unset.
             'cashback_basis' => $merchant->eligibility_basis,
+            // "Everything else" earns the standing_rate_bp above; excluded
+            // categories earn nothing, even during promotions.
+            'category_rates' => $categoryRates,
             'branches' => $branches
                 ->map(fn (MerchantBranch $b): array => [
                     'name' => $b->name,

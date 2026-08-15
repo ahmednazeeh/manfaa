@@ -52,6 +52,11 @@ class Merchant extends Model
         return $this->hasMany(Promotion::class);
     }
 
+    public function productCategories(): HasMany
+    {
+        return $this->hasMany(MerchantProductCategory::class);
+    }
+
     public function apiCredentials(): HasMany
     {
         return $this->hasMany(ApiCredential::class);
