@@ -32,6 +32,15 @@ final class PlatformConfig
         'write_off_days' => ['default' => 90, 'min' => 30, 'max' => 365],
         'default_validation_window_days' => ['default' => 3, 'min' => 0, 'max' => 30],
         'default_min_eligible_laari' => ['default' => 5000, 'min' => 0, 'max' => 1000000],
+        // Prompt-payment discount (PLAN §1). 0 turns the incentive OFF
+        // entirely — every batch then prices exactly as it did before the
+        // feature existed. The 2000bp ceiling mirrors the §4 rate cap.
+        'prompt_discount_rate_bp' => ['default' => 500, 'min' => 0, 'max' => 2000],
+        // Must stay SHORTER than settlement_due_days (15): a window at or
+        // past the due date rewards nothing, because every line still owed
+        // on the due date would qualify. Capped at 15 so it can never be
+        // set beyond the clock itself.
+        'prompt_discount_max_age_days' => ['default' => 10, 'min' => 1, 'max' => 15],
     ];
 
     public function minPayoutLaari(): int
@@ -57,6 +66,25 @@ final class PlatformConfig
     public function defaultMinEligibleLaari(): int
     {
         return $this->get('default_min_eligible_laari');
+    }
+
+    /**
+     * PLAN §1: basis points off the PLATFORM FEE (never the customer's
+     * cashback) when a merchant settles everything outstanding promptly.
+     * Zero disables the incentive.
+     */
+    public function promptDiscountRateBp(): int
+    {
+        return $this->get('prompt_discount_rate_bp');
+    }
+
+    /**
+     * How young every line in the batch must be, in whole days since
+     * clock_start_at, for the discount to be granted.
+     */
+    public function promptDiscountMaxAgeDays(): int
+    {
+        return $this->get('prompt_discount_max_age_days');
     }
 
     public function get(string $key): int

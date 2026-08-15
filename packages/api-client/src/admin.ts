@@ -799,6 +799,15 @@ export const PlatformSettingKeySchema = z.enum([
   'write_off_days',
   'default_validation_window_days',
   'default_min_eligible_laari',
+  /**
+   * PLAN §1 prompt-payment discount: basis points off the PLATFORM FEE when a
+   * merchant settles everything outstanding promptly (0 disables it, 2000 is
+   * the ceiling), and how young every line must be, in whole days, to
+   * qualify. The window must stay shorter than `settlement_due_days` or the
+   * incentive rewards nothing; the range (1–15) enforces the outer bound.
+   */
+  'prompt_discount_rate_bp',
+  'prompt_discount_max_age_days',
 ]);
 export type PlatformSettingKey = z.infer<typeof PlatformSettingKeySchema>;
 

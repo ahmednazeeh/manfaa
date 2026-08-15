@@ -538,6 +538,31 @@ export type SettlementMerchantStatus = z.infer<
   typeof SettlementMerchantStatusSchema
 >;
 
+/**
+ * Why a batch did — or did not — get the PLAN §1 prompt-payment discount.
+ * Machine keys; the human labels belong in the panels' label maps.
+ *
+ *  - `eligible`            granted: the batch covered everything outstanding
+ *                          and every line was under the age window;
+ *  - `not_all_outstanding` the merchant still has payable transactions this
+ *                          batch does not cover (including lines frozen on an
+ *                          earlier, still-unpaid batch);
+ *  - `line_too_old`        at least one included line has reached the window
+ *                          (10 days by default);
+ *  - `clock_not_started`   at least one included line has no settlement clock
+ *                          at all (a null `clock_start_at`, §13b), so its age
+ *                          cannot be proved — and nothing ages it, either;
+ *  - `disabled`            the platform has the incentive switched off (0bp).
+ */
+export const PromptDiscountReasonSchema = z.enum([
+  'eligible',
+  'not_all_outstanding',
+  'line_too_old',
+  'clock_not_started',
+  'disabled',
+]);
+export type PromptDiscountReason = z.infer<typeof PromptDiscountReasonSchema>;
+
 export const SettlementSchema = z.object({
   id: z.number().int(),
   reference: z.string(),
@@ -548,6 +573,17 @@ export const SettlementSchema = z.object({
   cashback_total_laari: z.number().int(),
   fee_total_laari: z.number().int(),
   fee_gst_total_laari: z.number().int(),
+  /**
+   * PLAN §1 prompt-payment discount as GRANTED at submit — 5% off the
+   * PLATFORM FEE, never off the customer's cashback. Already subtracted from
+   * `amount_due_laari`, so never subtract it again. `discount_rate_bp` is
+   * null when nothing was granted, and `discount_reason` says why (it is set
+   * on refusals too, which is what lets a panel explain the full price).
+   */
+  discount_laari: z.number().int(),
+  discount_mvr: z.string(),
+  discount_rate_bp: z.number().int().nullable(),
+  discount_reason: PromptDiscountReasonSchema.nullable(),
   amount_due_laari: z.number().int(),
   amount_received_laari: z.number().int(),
   cashback_total_mvr: z.string(),

@@ -8,6 +8,7 @@ use App\Domain\Cashback\Actor;
 use App\Domain\Cashback\ManualCreditService;
 use App\Domain\Cashback\TransitionService;
 use App\Domain\Money\Laari;
+use App\Domain\Platform\PlatformConfig;
 use App\Models\Customer;
 use App\Models\Merchant;
 use App\Models\MerchantRate;
@@ -26,6 +27,16 @@ use Illuminate\Support\Carbon;
  * the last transaction became payable, so every line sits in the 0–5 ageing
  * bucket and nothing is overdue. Not a *Test.php file — PHPUnit never
  * collects it; tests reach it through the Tests\ PSR-4 map.
+ *
+ * The PLAN §1 prompt-payment discount is pinned OFF here (rate 0bp) so this
+ * fixture keeps pricing the §4 table exactly as §4 states it: every test
+ * built on it is about allocation mechanics — partial payments, the
+ * forgiveness boundary, overpayment, the wallet remainder — and a discount
+ * silently shaving 162 laari off each of those would make every assertion
+ * measure two rules at once. Tests that ARE about the discount turn it on
+ * explicitly (see tests/Feature/PromptDiscount), and one of them settles this
+ * same batch through a platform left at its shipped defaults, so the live
+ * default is covered too.
  */
 final class SettlementFixture
 {
@@ -48,6 +59,9 @@ final class SettlementFixture
     public static function payableBatch(string $customerCode = '482917'): self
     {
         $base = CarbonImmutable::parse(self::BASE);
+
+        // See the class docblock: the §4 fixture prices the §4 table.
+        app(PlatformConfig::class)->set('prompt_discount_rate_bp', 0);
 
         $fixture = new self;
         $fixture->merchant = Merchant::factory()->create([

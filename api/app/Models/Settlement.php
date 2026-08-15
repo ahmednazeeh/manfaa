@@ -23,6 +23,12 @@ class Settlement extends Model
             'cashback_total_laari' => 'integer',
             'fee_total_laari' => 'integer',
             'fee_gst_total_laari' => 'integer',
+            // PLAN §1 prompt-payment discount: the relief granted (already
+            // subtracted from amount_due_laari) and the rate it was priced
+            // at. discount_rate_bp is null when nothing was granted.
+            'discount_laari' => 'integer',
+            'discount_posted_laari' => 'integer',
+            'discount_rate_bp' => 'integer',
             'amount_due_laari' => 'integer',
             'amount_received_laari' => 'integer',
             'due_at' => 'immutable_datetime',

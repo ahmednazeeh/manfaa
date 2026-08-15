@@ -54,6 +54,7 @@ final class SettlementBuilder
         private readonly SettlementAllocator $payments,
         private readonly WalletFunding $wallet,
         private readonly SlipStorage $slips,
+        private readonly PromptDiscount $discounts,
     ) {}
 
     /**
@@ -90,17 +91,22 @@ final class SettlementBuilder
 
         try {
             return DB::transaction(function () use ($merchant, $uploader, $transactionIds, $amount, $bankRef, $slip, $inspection, &$storedPath): Settlement {
-                $settlement = $this->createDraft($merchant, $transactionIds);
+                $settlement = $this->submit($this->createDraft($merchant, $transactionIds));
 
-                // Fully netted by §7 credits: no transfer is due, so no
-                // receipt can be honest about one. The credit-netted batch
+                // Fully netted by §7 credits, or by them plus the PLAN §1
+                // prompt-payment discount: no transfer is due, so no receipt
+                // can be honest about one. submit() has already allocated and
+                // settled such a batch — and the throw rolls the whole
+                // attempt back, so nothing survives. The credit-netted batch
                 // settles through createAndSettleFromWallet, which draws
                 // nothing from the wallet either.
-                if ($settlement->amount_due_laari === 0) {
+                //
+                // Checked AFTER submit because the discount is evaluated
+                // there, under the row lock: a draft can owe money and a
+                // submitted batch owe nothing.
+                if ($settlement->state !== SettlementState::AwaitingPayment) {
                     throw NotEligibleForSettlementException::nothingDue($merchant);
                 }
-
-                $settlement = $this->submit($settlement);
 
                 $storedPath = $this->slips->store($merchant, $settlement, $slip, $inspection);
 
@@ -377,6 +383,12 @@ final class SettlementBuilder
                 throw NotEligibleForSettlementException::emptyDraft($settlement);
             }
 
+            // PLAN §1: the prompt-payment discount is decided HERE — inside
+            // the transaction, under the settlement lock, against the frozen
+            // line set — and nowhere else. Whatever the preview told the
+            // merchant is advisory; this is the answer that moves money.
+            $this->applyPromptDiscount($settlement);
+
             // Defensive: removeLine on a draft carrying applied adjustments
             // can push the netted due below zero. A batch never leaves draft
             // owing the merchant money — add lines or drop the batch.
@@ -384,21 +396,28 @@ final class SettlementBuilder
                 throw InvalidSettlementStateException::forAction($settlement, 'submit', 'a batch with a non-negative amount due');
             }
 
-            // Fully netted by applied credits: there is nothing to await —
-            // no payment path accepts zero laari (bank payments must be
+            // Fully netted by applied credits (and, at the margin, by the
+            // prompt-payment discount): there is nothing to await — no
+            // payment path accepts zero laari (bank payments must be
             // positive, a zero wallet movement is refused), so an
             // awaiting_payment batch owing 0 would strand its transactions
             // payable_unfunded past due_at and auto-suspend a merchant with
             // zero net debt. The credit IS the funding: every line allocates
             // now (confirming the customers' cashback through the state
             // machine) and the batch settles. The applied credits' journals
-            // posted at application, so no further posting belongs here.
+            // posted at application; the discount's posts here, with the
+            // allocation it funds.
             if ($settlement->amount_due_laari === 0) {
                 $now = CarbonImmutable::now('UTC');
 
                 foreach (SettlementLines::inAllocationOrder($settlement) as $line) {
                     $this->allocator->allocate($line, Actor::system(), $now);
                 }
+
+                // The discount is covered funds like any other, and this is
+                // the allocation instant for this batch — so its journal
+                // posts here, once, exactly as it would through a payment.
+                $this->postPromptDiscount($settlement);
 
                 $settlement->forceFill(['state' => SettlementState::Settled])->save();
 
@@ -409,6 +428,63 @@ final class SettlementBuilder
 
             return $settlement;
         });
+    }
+
+    /**
+     * Re-evaluates the PLAN §1 prompt-payment discount against the batch's
+     * own (locked) transactions and writes the outcome onto the settlement:
+     * the relief granted, the rate it was priced at, the machine reason — and
+     * the reduced amount due.
+     *
+     * The rows are re-locked rather than trusted: on the receipt-first path
+     * this transaction already holds them from createDraft, but submit() is
+     * also reachable on its own (the admin fallback), and the eligibility
+     * test reads state and clock_start_at off rows another request could
+     * otherwise be moving underneath it.
+     *
+     * The grant is capped at what the batch still owes after §7 credits: a
+     * discount must never hand money back, and a batch never leaves submit
+     * owing the merchant.
+     */
+    private function applyPromptDiscount(Settlement $settlement): void
+    {
+        $transactionIds = $settlement->lines()->pluck('transaction_id')->all();
+
+        $transactions = Transaction::query()
+            ->whereIn('id', $transactionIds)
+            ->orderBy('id')
+            ->lockForUpdate()
+            ->get();
+
+        $result = $this->discounts
+            ->evaluate($settlement->merchant, $transactions, CarbonImmutable::now('UTC'))
+            ->cappedTo($settlement->amount_due_laari);
+
+        $settlement->forceFill([
+            'discount_laari' => $result->discountLaari,
+            'discount_rate_bp' => $result->storedRateBp(),
+            'discount_reason' => $result->reason->value,
+            'amount_due_laari' => $settlement->amount_due_laari - $result->discountLaari,
+        ])->save();
+    }
+
+    /**
+     * Posts a batch's stored discount as the §8 sales discount on our own
+     * revenue, split back into its fee and GST legs from the settlement's own
+     * integers. Callers own the "has this already posted?" question; the two
+     * whole-batch paths (a zero-due submit, a wallet settlement) allocate
+     * every line exactly once, so for them the answer is always no.
+     */
+    private function postPromptDiscount(Settlement $settlement): void
+    {
+        [$fee, $gst] = PromptDiscount::reliefLegs($settlement);
+
+        if ($fee + $gst <= 0) {
+            return;
+        }
+
+        $this->postings->promptPaymentDiscount($fee, $gst, referenceId: $settlement->id);
+        $settlement->forceFill(['discount_posted_laari' => $fee + $gst])->save();
     }
 
     /**

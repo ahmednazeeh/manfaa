@@ -71,6 +71,15 @@ final class WalletFunding
      * posts walletSettle (DR Merchant Wallet Balance / CR Merchant
      * Receivable), confirms every line through the shared allocation flow,
      * and marks the settlement settled.
+     *
+     * A PLAN §1 prompt-payment discount rides along unchanged (§7: wallet is
+     * the same path, only the funding source differs). It was decided at
+     * submit — under the settlement lock, from the merchant's real
+     * outstanding position — and is already subtracted from amount_due, so
+     * the wallet is only ever drawn for the DISCOUNTED figure; the relief
+     * itself posts as the sales discount that covers the rest of the lines.
+     * Wallet settlement allocates the whole batch in one go, so that posting
+     * happens exactly once by construction.
      */
     public function settleFromWallet(Settlement $settlement, MerchantUser $actor): Settlement
     {
@@ -94,6 +103,13 @@ final class WalletFunding
 
             $this->postings->walletSettle($required, referenceId: $settlement->id);
 
+            [$discountFee, $discountGst] = PromptDiscount::reliefLegs($settlement);
+            $discountPosted = $discountFee + $discountGst;
+
+            if ($discountPosted > 0) {
+                $this->postings->promptPaymentDiscount($discountFee, $discountGst, referenceId: $settlement->id);
+            }
+
             $now = CarbonImmutable::now('UTC');
 
             foreach (SettlementLines::inAllocationOrder($settlement) as $line) {
@@ -104,6 +120,7 @@ final class WalletFunding
                 'state' => SettlementState::Settled,
                 'funding_method' => 'wallet',
                 'amount_received_laari' => $required,
+                'discount_posted_laari' => $discountPosted,
             ])->save();
 
             return $settlement;

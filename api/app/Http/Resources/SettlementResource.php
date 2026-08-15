@@ -30,6 +30,15 @@ class SettlementResource extends JsonResource
             'cashback_total_laari' => $this->cashback_total_laari,
             'fee_total_laari' => $this->fee_total_laari,
             'fee_gst_total_laari' => $this->fee_gst_total_laari,
+            // PLAN §1 prompt-payment discount, as GRANTED at submit: the
+            // relief already subtracted from amount_due, the rate it was
+            // priced at (null when nothing was granted), and the machine
+            // reason — which the panels turn into "you saved MVR 1.62" or
+            // "settle everything to save 5% of the fee".
+            'discount_laari' => (int) $this->discount_laari,
+            'discount_mvr' => Laari::of((int) $this->discount_laari)->formatMvr(),
+            'discount_rate_bp' => $this->discount_rate_bp === null ? null : (int) $this->discount_rate_bp,
+            'discount_reason' => $this->discount_reason,
             'amount_due_laari' => $this->amount_due_laari,
             'amount_received_laari' => $this->amount_received_laari,
             'cashback_total_mvr' => Laari::of($this->cashback_total_laari)->formatMvr(),

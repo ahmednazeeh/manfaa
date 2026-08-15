@@ -16,6 +16,7 @@ import {
   CardToolbar,
 } from '@/components/ui/card';
 import { PaymentStateBadge } from '@/components/admin/state-badge';
+import { BatchPriceBreakdown, PromptDiscountNote } from './prompt-discount';
 import { compareClaim, outstandingLaari } from './receipt';
 import { RejectSettlementDialog } from './reject-settlement-dialog';
 import { SlipPreview } from './slip-preview';
@@ -34,8 +35,10 @@ function Fact({ label, children }: { label: string; children: ReactNode }) {
 /**
  * What matching this claim will do, stated before the admin commits to it.
  * Purely §7: whole lines oldest-first, sub-MVR-1 forgiveness, overpayment to
- * the wallet. Cash only — any merchant credit already parked in the wallet is
- * counted on top at match time, so a shortfall shown here is the worst case.
+ * the wallet. It measures cash against cash — the outstanding figure is the
+ * batch's own due, already net of any prompt-payment discount and §7 credits,
+ * and any merchant credit parked in the wallet is counted on top at match
+ * time, so a shortfall shown here is the worst case.
  */
 function ClaimVerdict({
   claimedLaari,
@@ -168,12 +171,21 @@ export function ReceiptReviewCard({
                   {formatMoney(settlement.amount_received_laari)} received)
                 </span>
               ) : null}
+              {settlement.discount_laari > 0 ? (
+                <span className="ms-2 text-xs text-muted-foreground">
+                  — already net of the {formatMoney(settlement.discount_laari)}{' '}
+                  prompt-payment discount
+                </span>
+              ) : null}
             </Fact>
             <Fact label="Submitted">{formatDateTime(payment.created_at)}</Fact>
             <Fact label="Payment state">
               <PaymentStateBadge state={payment.state} />
             </Fact>
           </div>
+
+          <BatchPriceBreakdown settlement={settlement} />
+          <PromptDiscountNote settlement={settlement} />
 
           {isPending ? (
             <ClaimVerdict

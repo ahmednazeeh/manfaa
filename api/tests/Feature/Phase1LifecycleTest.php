@@ -237,22 +237,27 @@ it('runs the full Phase 1 lifecycle: credit → sweep → settle → forgive →
     $admin2 = AdminUser::factory()->create();
 
     // ── (c) Merchant A settles in full: settle-all picks up exactly the §4
-    // batch, the admin records the EXACT 11,825 total, and matching confirms
-    // all four lines.
+    // batch and every line is one day old, so PLAN §1's prompt-payment
+    // discount takes 5% off the FEE — 3,225 → intdiv(3225*500+9999, 10000)
+    // = 162 — and A transfers 11,663 instead of 11,825. The customers' 8,600
+    // of cashback is untouched, and matching confirms all four lines.
     Carbon::setTestNow($august->addDays(6)->setTime(11, 0)); // Aug 7
-    $settlementA = lifecycleSettleAll($userA, 11_825, 'BML-A-11825');
+    $settlementA = lifecycleSettleAll($userA, 11_663, 'BML-A-11663');
 
     expect($settlementA->cashback_total_laari)->toBe(8_600)
         ->and($settlementA->fee_total_laari)->toBe(3_225)
         ->and($settlementA->fee_gst_total_laari)->toBe(0)
-        ->and($settlementA->amount_due_laari)->toBe(11_825)
+        ->and($settlementA->discount_laari)->toBe(162)
+        ->and($settlementA->discount_rate_bp)->toBe(500)
+        ->and($settlementA->discount_reason)->toBe('eligible')
+        ->and($settlementA->amount_due_laari)->toBe(11_663)
         ->and($settlementA->due_at->equalTo($expectedDueAt))->toBeTrue()
         ->and($settlementA->lines()->count())->toBe(4);
 
-    $settlementA = lifecycleMatch($admin1, $settlementA, 'BML-A-11825');
+    $settlementA = lifecycleMatch($admin1, $settlementA, 'BML-A-11663');
 
     expect($settlementA->state->value)->toBe('settled')
-        ->and($settlementA->amount_received_laari)->toBe(11_825);
+        ->and($settlementA->amount_received_laari)->toBe(11_663);
 
     foreach ($a as $transaction) {
         expect($transaction->refresh()->state)->toBe(TransactionState::Confirmed)
@@ -260,20 +265,28 @@ it('runs the full Phase 1 lifecycle: credit → sweep → settle → forgive →
             ->and($transaction->events()->where('to_state', 'confirmed')->sole()->reason_code)->toBe('settlement_allocated');
     }
 
-    // Merchant A's receivable nets to zero — cash booked exactly what the
-    // batch owed, and every journal still balances.
+    // Merchant A's receivable nets to zero — 11,663 of cash plus the 162
+    // discount cover the whole 11,825, the discount comes out of OUR fee
+    // revenue, and every journal still balances.
     expect(lifecycleReceivableFor($merchantA))->toBe(0)
-        ->and(lifecycleJournalDebits($settlementA->id, 'Bank settlement received'))->toBe(11_825)
+        ->and(lifecycleJournalDebits($settlementA->id, 'Bank settlement received'))->toBe(11_663)
+        ->and(lifecycleJournalDebits($settlementA->id, 'Prompt-payment fee discount'))->toBe(162)
         ->and($balances->naturalBalance(AccountCode::MerchantReceivable))->toBe(39_910 - 11_825)
         ->and($balances->journalsAllBalance())->toBeTrue();
 
-    // ── (d) Merchant B pays 19,000 against 23,960: oldest-first covers B1
-    // and B2 in whole (18,185), B3 is unaffordable, and the 815 remainder is
-    // parked in the wallet — partially_settled.
+    // ── (d) Merchant B pays 19,000 against 23,633 (23,960 of lines less a
+    // 327 discount on its 6,535 of fee): oldest-first covers B1 and B2 in
+    // whole (18,185, all of it B's own cash), B3 is unaffordable, and the 815
+    // remainder is parked in the wallet — partially_settled. The 327 of
+    // relief is NOT spent here: it was granted for clearing the board, and
+    // this payment leaves three lines behind.
     Carbon::setTestNow($august->addDays(7)->setTime(11, 0)); // Aug 8
     $settlementB = lifecycleSettleAll($userB, 19_000, 'BML-B-19000');
 
-    expect($settlementB->amount_due_laari)->toBe(23_960)->and($settlementB->lines()->count())->toBe(5);
+    expect($settlementB->fee_total_laari)->toBe(6_535)
+        ->and($settlementB->discount_laari)->toBe(327)
+        ->and($settlementB->amount_due_laari)->toBe(23_633)
+        ->and($settlementB->lines()->count())->toBe(5);
 
     $settlementB = lifecycleMatch($admin1, $settlementB, 'BML-B-19000');
 
@@ -286,19 +299,25 @@ it('runs the full Phase 1 lifecycle: credit → sweep → settle → forgive →
         ->and($b[4]->refresh()->state)->toBe(TransactionState::PayableUnfunded);
 
     expect(lifecycleJournalDebits($settlementB->id, 'Bank settlement received'))->toBe(18_185)
+        ->and(lifecycleJournalDebits($settlementB->id, 'Prompt-payment fee discount'))->toBe(0)
+        ->and($settlementB->refresh()->discount_posted_laari)->toBe(0)
         ->and($merchantB->wallet()->sole()->balance_laari)->toBe(815)
         ->and($balances->naturalBalance(AccountCode::MerchantWalletBalance))->toBe(815)
         ->and($balances->journalsAllBalance())->toBeTrue();
 
-    // ── (e) Forgiveness: merchant C pays 1,330 against 1,375 — 45 laari
-    // short, under MVR 1 — so the whole batch settles, the platform books the
-    // 45 as expense, and bad debt stays untouched at zero.
+    // ── (e) Forgiveness: merchant C owes 1,356 (1,375 of lines less a 19
+    // discount on its 375 of fee) and pays 1,311 — 45 laari short, under
+    // MVR 1 — so the whole batch settles, the platform books the 45 as
+    // expense, and bad debt stays untouched at zero. A discount never
+    // becomes forgiveness: the two are separate funding components and both
+    // appear here.
     Carbon::setTestNow($august->addDays(8)->setTime(11, 0)); // Aug 9
-    $settlementC = lifecycleSettleAll($userC, 1_330, 'BML-C-1330');
+    $settlementC = lifecycleSettleAll($userC, 1_311, 'BML-C-1311');
 
-    expect($settlementC->amount_due_laari)->toBe(1_375);
+    expect($settlementC->discount_laari)->toBe(19)
+        ->and($settlementC->amount_due_laari)->toBe(1_356);
 
-    $settlementC = lifecycleMatch($admin1, $settlementC, 'BML-C-1330');
+    $settlementC = lifecycleMatch($admin1, $settlementC, 'BML-C-1311');
 
     expect($settlementC->state->value)->toBe('settled')
         ->and($settlementC->lines()->whereNull('allocated_at')->count())->toBe(0)
@@ -335,17 +354,22 @@ it('runs the full Phase 1 lifecycle: credit → sweep → settle → forgive →
     expect(Transaction::query()->count())->toBe(12);
 
     // ── (h·2) Aug 25 — after the payout cutoff: B clears the remaining
-    // 5,775 with 4,960 cash plus the 815 wallet credit, settles in full, and
-    // the next reinstatement run flips it back to active. D stays suspended.
+    // 5,775 with 4,633 cash plus the 815 wallet credit and the 327 discount,
+    // settles in full, and the next reinstatement run flips it back to
+    // active. D stays suspended. The relief is released HERE — the match
+    // that finishes the batch — and exactly once: 327 in total, never 654,
+    // and the merchant's total outlay is still the discounted 23,633.
     Carbon::setTestNow(CarbonImmutable::parse('2026-08-25T10:00:00+05:00'));
-    lifecycleTopUp($userB, $settlementB, 4_960, 'BML-B-4960');
-    $settlementB = lifecycleMatch($admin1, $settlementB, 'BML-B-4960');
+    lifecycleTopUp($userB, $settlementB, 4_633, 'BML-B-4633');
+    $settlementB = lifecycleMatch($admin1, $settlementB, 'BML-B-4633');
 
     expect($settlementB->state->value)->toBe('settled')
-        ->and($settlementB->amount_received_laari)->toBe(23_960)
+        ->and($settlementB->amount_received_laari)->toBe(23_633)
         ->and($merchantB->wallet()->sole()->balance_laari)->toBe(0)
         ->and(lifecycleJournalDebits($settlementB->id, 'Wallet settlement applied'))->toBe(815)
-        ->and(lifecycleJournalDebits($settlementB->id, 'Bank settlement received'))->toBe(18_185 + 4_960)
+        ->and(lifecycleJournalDebits($settlementB->id, 'Bank settlement received'))->toBe(18_185 + 4_633)
+        ->and(lifecycleJournalDebits($settlementB->id, 'Prompt-payment fee discount'))->toBe(327)
+        ->and($settlementB->discount_posted_laari)->toBe(327)
         ->and(lifecycleReceivableFor($merchantB))->toBe(0);
 
     foreach ([$b[2], $b[3], $b[4]] as $transaction) {
@@ -498,7 +522,9 @@ it('runs the full Phase 1 lifecycle: credit → sweep → settle → forgive →
 
     expect($run->status)->toBe('ok')
         ->and($run->issues)->toBeNull()
-        ->and($run->journals_checked)->toBe(21);
+        // 21 before the incentive existed, plus one prompt-payment discount
+        // journal each for A, B and C.
+        ->and($run->journals_checked)->toBe(24);
 
     // Independent derivation from the transactions and payout tables only.
     $derived = DB::table('transactions')->selectRaw(<<<'SQL'
@@ -518,8 +544,11 @@ it('runs the full Phase 1 lifecycle: credit → sweep → settle → forgive →
         ->and($balances->accountBalance(AccountCode::MerchantReceivable))->toBe(0)
         ->and((int) $derived->liability_laari)->toBe(15_200)
         ->and($balances->naturalBalance(AccountCode::CustomerCashbackLiability))->toBe(15_200)
+        // Accrued fee revenue is still 10,885; the ledger carries it net of
+        // the three prompt-payment discounts (162 + 327 + 19 = 508), which
+        // are a sales discount on our own revenue and reduce it for good.
         ->and((int) $derived->revenue_laari)->toBe(10_885)
-        ->and($balances->naturalBalance(AccountCode::PlatformFeeRevenue))->toBe(10_885)
+        ->and($balances->naturalBalance(AccountCode::PlatformFeeRevenue))->toBe(10_885 - 508)
         ->and((int) $derived->paid_laari)->toBe(11_825)
         ->and($paidItems)->toBe(11_825);
 
@@ -528,15 +557,18 @@ it('runs the full Phase 1 lifecycle: credit → sweep → settle → forgive →
     // carry exactly the forgiven 45 and the defaulted margin 750.
     $trial = collect($balances->trialBalance())->map(fn (array $row) => $row['balance_laari'])->all();
 
+    // Cash received: A 11,663 + B (19,000 + 4,633) + C 1,311 = 36,607 —
+    // exactly 508 less than the 37,115 the same batches owed before the
+    // prompt-payment discount, and the same 508 the fee revenue gave up.
     expect($trial)->toBe([
-        1000 => 37_115 - 11_825, // Settlement Cash
-        1100 => 0,               // Merchant Receivable
-        2100 => -15_200,         // Customer Cashback Liability
-        2200 => 0,               // Merchant Wallet Balance
-        2300 => 0,               // Fee GST Payable
-        4100 => -10_885,         // Platform Fee Revenue
-        5100 => 45,              // Platform-Funded Rewards
-        5900 => 750,             // Bad Debt Expense
+        1000 => 36_607 - 11_825,  // Settlement Cash
+        1100 => 0,                // Merchant Receivable
+        2100 => -15_200,          // Customer Cashback Liability
+        2200 => 0,                // Merchant Wallet Balance
+        2300 => 0,                // Fee GST Payable
+        4100 => -(10_885 - 508),  // Platform Fee Revenue, net of discounts
+        5100 => 45,               // Platform-Funded Rewards
+        5900 => 750,              // Bad Debt Expense
     ])
         ->and(array_sum($trial))->toBe(0)
         ->and($balances->journalsAllBalance())->toBeTrue();

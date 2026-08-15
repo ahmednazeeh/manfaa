@@ -30,6 +30,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { PageHeader } from '@/components/admin/page-header';
 import { Pager } from '@/components/admin/pager';
 import { SettlementStateBadge } from '@/components/admin/state-badge';
+import { DiscountedDueHint } from '@/components/settlements/prompt-discount';
 import {
   claimedLaari,
   compareClaim,
@@ -174,6 +175,7 @@ export default function SettlementsPage() {
           </TableCell>
           <TableCell className="text-end">
             <MoneyText laari={settlement.amount_due_laari} />
+            <DiscountedDueHint settlement={settlement} />
           </TableCell>
           <TableCell className="text-end font-medium">
             {claim ? <MoneyText laari={claim.amount_laari} /> : '—'}

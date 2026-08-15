@@ -290,9 +290,12 @@ it('runs the full Phase 3 customer journey: OTP signup → promo publish → pri
         ->assertJsonPath('data.has_payout_account', false);
 
     // ── (k) Day 0 of the clock for all four sales, then the receipt-first
-    // settle-all (PLAN §1) — the merchant transfers 40,126 and submits the
-    // slip in one call → admin matches: oldest-first allocation confirms
-    // every line in full.
+    // settle-all (PLAN §1) — the batch covers everything outstanding on day
+    // 0, so the prompt-payment discount takes 5% off the 7,126 of FEE
+    // (intdiv(7126*500+9999, 10000) = 357) and the merchant transfers 39,769
+    // and submits the slip in one call → admin matches: oldest-first
+    // allocation confirms every line in full. The customers' 33,000 of
+    // cashback is not reduced by a single laari.
     Carbon::setTestNow(CarbonImmutable::parse('2026-08-16T12:00:00+05:00'));
     $this->artisan('manfaa:sweep-validation')->assertExitCode(0);
 
@@ -303,26 +306,27 @@ it('runs the full Phase 3 customer journey: OTP signup → promo publish → pri
     p3ActingAs($owner)
         ->post('/api/merchant/settlements', [
             'settle_all' => '1',
-            'amount' => 40_126,
-            'bank_ref' => 'BML-P3-40126',
+            'amount' => 39_769,
+            'bank_ref' => 'BML-P3-39769',
             'slip' => Slips::webp(),
         ])
         ->assertCreated()
         ->assertJsonPath('data.state', 'payment_review')
         ->assertJsonPath('data.cashback_total_laari', 33_000)
         ->assertJsonPath('data.fee_total_laari', 7_126)
-        ->assertJsonPath('data.amount_due_laari', 40_126);
+        ->assertJsonPath('data.discount_laari', 357)
+        ->assertJsonPath('data.amount_due_laari', 39_769);
 
     Carbon::setTestNow(CarbonImmutable::parse('2026-08-17T10:00:00+05:00'));
 
     p3ActingAs($admin);
 
-    $paymentId = (int) DB::table('settlement_payments')->where('bank_ref', 'BML-P3-40126')->value('id');
+    $paymentId = (int) DB::table('settlement_payments')->where('bank_ref', 'BML-P3-39769')->value('id');
     $this->postJson("/api/admin/payments/{$paymentId}/match")->assertOk();
 
     expect(Transaction::query()->where('state', 'confirmed')->count())->toBe(4)
         ->and($balances->accountBalance(AccountCode::MerchantReceivable))->toBe(0)
-        ->and($balances->accountBalance(AccountCode::SettlementCash))->toBe(40_126)
+        ->and($balances->accountBalance(AccountCode::SettlementCash))->toBe(39_769)
         ->and($balances->journalsAllBalance())->toBeTrue();
 
     // The headline moves: confirmed 33,000, pending drops to zero.
@@ -388,7 +392,7 @@ it('runs the full Phase 3 customer journey: OTP signup → promo publish → pri
     expect(DB::table('ledger_journals')->where('reference_type', 'payout_item')->count())->toBe(1)
         ->and(Transaction::query()->where('state', 'paid')->count())->toBe(4)
         ->and($balances->naturalBalance(AccountCode::CustomerCashbackLiability))->toBe(0)
-        ->and($balances->accountBalance(AccountCode::SettlementCash))->toBe(40_126 - 33_000)
+        ->and($balances->accountBalance(AccountCode::SettlementCash))->toBe(39_769 - 33_000)
         ->and($balances->journalsAllBalance())->toBeTrue();
 
     // paid_this_month reads the event log in business time: 33,000 in August.
@@ -470,25 +474,25 @@ it('runs the full Phase 3 customer journey: OTP signup → promo publish → pri
     // laari.
     //   receivable: claim 917 + phone credit 1,650 .................. 2,567
     //   liability:  667 + 1,200 pending (33,000 paid out) ........... 1,867
-    //   revenue:    7,126 + 250 + 450 ............................... 7,826
+    //   revenue:    7,126 + 250 + 450 − 357 prompt-payment discount .. 7,469
     $run = app(Reconciler::class)->run();
 
     expect($run->status)->toBe('ok')
         ->and($run->issues)->toBeNull()
-        ->and($run->journals_checked)->toBe(8)
+        ->and($run->journals_checked)->toBe(9)
         ->and($run->totals['receivable'])->toBe(['derived_laari' => 2_567, 'ledger_laari' => 2_567])
         ->and($run->totals['liability'])->toBe(['derived_laari' => 1_867, 'ledger_laari' => 1_867])
-        ->and($run->totals['revenue'])->toBe(['derived_laari' => 7_826, 'ledger_laari' => 7_826]);
+        ->and($run->totals['revenue'])->toBe(['derived_laari' => 7_469, 'ledger_laari' => 7_469]);
 
     $trial = collect($balances->trialBalance())->map(fn (array $row) => $row['balance_laari'])->all();
 
     expect($trial)->toBe([
-        1000 => 7_126,  // Settlement Cash: 40,126 received − 33,000 paid out
+        1000 => 6_769,  // Settlement Cash: 39,769 received − 33,000 paid out
         1100 => 2_567,  // Merchant Receivable: claim + phone credit on the clock
         2100 => -1_867, // Customer Cashback Liability: the two pending rewards
         2200 => 0,      // Merchant Wallet Balance
         2300 => 0,      // Fee GST Payable
-        4100 => -7_826, // Platform Fee Revenue
+        4100 => -7_469, // Platform Fee Revenue, net of the 357 discounted
         5100 => 0,      // Platform-Funded Rewards
         5900 => 0,      // Bad Debt Expense
     ])

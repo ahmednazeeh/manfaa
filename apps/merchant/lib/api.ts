@@ -7,9 +7,12 @@ import {
   paginated,
   RateDescriptionSchema,
   SettlementPaymentSchema,
+  SettlementPreviewSchema,
   SettlementSchema,
   TransactionSchema,
   type MerchantStatus,
+  type SettlementBankAccount,
+  type SettlementPreview,
   type TransactionState,
 } from '@manfaa/api-client';
 import { z } from 'zod';
@@ -235,12 +238,11 @@ function appendSelection(
   }
 }
 
-export const PlatformBankAccountSchema = z.object({
-  bank_name: z.string(),
-  account_no: z.string(),
-  account_name: z.string(),
-});
-export type PlatformBankAccount = z.infer<typeof PlatformBankAccountSchema>;
+/**
+ * The platform's payout account. An alias of the shared contract rather than
+ * a local restatement — the panel's copy was identical field for field.
+ */
+export type PlatformBankAccount = SettlementBankAccount;
 
 /**
  * GET /api/merchant/settlements/preview — what this selection costs and
@@ -248,33 +250,17 @@ export type PlatformBankAccount = z.infer<typeof PlatformBankAccountSchema>;
  * lines frozen, and the reference is explicitly a preview
  * (`reference_is_final: false`) — the real one is assigned at submit and is
  * the one the merchant should quote if they ever differ.
+ *
+ * The response is parsed against the SHARED schema (@manfaa/api-client), not
+ * a copy kept here: it carries the picker's row set, the age-preset buckets
+ * and the PLAN §1 discount evaluation, and a second declaration of those is
+ * only ever a place for the panel and the API to drift apart. (The
+ * merchant-only extras below — `merchant_status`, the receipt columns — do
+ * still need their own schemas; the preview never did.)
  */
-export const SettlementPreviewSchema = z.object({
-  transaction_ids: z.array(z.number().int()),
-  transaction_count: z.number().int(),
-  sale_total_laari: z.number().int(),
-  cashback_total_laari: z.number().int(),
-  fee_total_laari: z.number().int(),
-  fee_gst_total_laari: z.number().int(),
-  line_total_laari: z.number().int(),
-  /** §7 credit memos netted into this batch (0 when there are none). */
-  credit_applied_laari: z.number().int(),
-  credit_applied_mvr: z.string(),
-  amount_due_laari: z.number().int(),
-  amount_due_mvr: z.string(),
-  due_at: z.string().nullable(),
-  payment_instructions: z.object({
-    reference_preview: z.string(),
-    reference_is_final: z.boolean(),
-    amount_due_laari: z.number().int(),
-    amount_due_mvr: z.string(),
-    bank_account: PlatformBankAccountSchema.nullable(),
-    needs_configuration: z.boolean(),
-  }),
-});
-export type SettlementPreview = z.infer<typeof SettlementPreviewSchema>;
-
 const SettlementPreviewResponseSchema = dataWrapped(SettlementPreviewSchema);
+
+export type { SettlementPreview };
 
 export function previewSettlement(
   selection: SettlementSelection,

@@ -191,8 +191,15 @@ it('walks the receipt-first settlement lifecycle over HTTP: credits → preview 
         ->assertJsonPath('data.transaction_count', 4)
         ->assertJsonPath('data.line_total_laari', 11_825)
         ->assertJsonPath('data.credit_applied_laari', 0)
-        ->assertJsonPath('data.amount_due_laari', 11_825)
-        ->assertJsonPath('data.amount_due_mvr', '118.25')
+        // PLAN §1 prompt-payment discount at the shipped defaults: the batch
+        // covers everything outstanding and every line is 1 day old, so 5%
+        // comes off the FEE TOTAL and nothing off the cashback.
+        //   fee 3,225 → intdiv(3225 * 500 + 9999, 10000) = 162
+        //   due 11,825 − 162 = 11,663
+        ->assertJsonPath('data.discount.eligible', true)
+        ->assertJsonPath('data.discount_laari', 162)
+        ->assertJsonPath('data.amount_due_laari', 11_663)
+        ->assertJsonPath('data.amount_due_mvr', '116.63')
         // PLAN §1: "see amount due + platform bank account (copy button) +
         // reference" — the whole point of previewing before walking to the bank.
         ->assertJsonPath('data.payment_instructions.bank_account.bank_name', 'Bank of Maldives')
@@ -232,7 +239,8 @@ it('walks the receipt-first settlement lifecycle over HTTP: credits → preview 
         ->assertCreated()
         ->assertJsonPath('data.state', 'payment_review')
         ->assertJsonPath('data.reference', 'ST-2026-00001')
-        ->assertJsonPath('data.amount_due_laari', 11_825)
+        ->assertJsonPath('data.amount_due_laari', 11_663)
+        ->assertJsonPath('data.discount_laari', 162)
         ->assertJsonPath('data.amount_received_laari', 0)
         ->assertJsonPath('data.merchant_status.code', 'verifying')
         ->assertJsonCount(4, 'data.lines')
@@ -264,7 +272,7 @@ it('walks the receipt-first settlement lifecycle over HTTP: credits → preview 
 
     $detail = $this->getJson("/api/admin/settlements/{$firstId}")
         ->assertOk()
-        ->assertJsonPath('data.payments.0.amount_laari', 11_825)
+        ->assertJsonPath('data.payments.0.amount_laari', 11_663)
         ->assertJsonPath('data.payments.0.bank_ref', 'BML-88421')
         ->assertJsonPath('data.payments.0.state', 'pending')
         ->assertJsonPath('data.payments.0.has_slip', true)
@@ -332,20 +340,24 @@ it('walks the receipt-first settlement lifecycle over HTTP: credits → preview 
     // the same four lines.
     $this->getJson('/api/merchant/settlements/preview?settle_all=1')
         ->assertOk()
-        ->assertJsonPath('data.amount_due_laari', 11_825)
+        ->assertJsonPath('data.amount_due_laari', 11_663)
         ->assertJsonPath('data.payment_instructions.reference_preview', 'ST-2026-00002');
 
     // ── 10. The real transfer went out 45 laari short (§7 forgiveness) ────
+    // 11,663 due − 45 = 11,618 transferred. The discount is covered funds,
+    // so the gap the platform absorbs is still exactly 45 — a discount never
+    // becomes forgiveness and forgiveness never eats a discount.
     $secondId = (int) $this->post('/api/merchant/settlements', [
         'settle_all' => '1',
-        'amount' => 11_780,
+        'amount' => 11_618,
         'bank_ref' => 'BML-88999',
         'slip' => Slips::pdf(),
     ])
         ->assertCreated()
         ->assertJsonPath('data.state', 'payment_review')
         ->assertJsonPath('data.reference', 'ST-2026-00002')
-        ->assertJsonPath('data.amount_due_laari', 11_825)
+        ->assertJsonPath('data.amount_due_laari', 11_663)
+        ->assertJsonPath('data.discount_laari', 162)
         ->assertJsonCount(4, 'data.lines')
         ->json('data.id');
 
@@ -362,7 +374,7 @@ it('walks the receipt-first settlement lifecycle over HTTP: credits → preview 
     $this->postJson("/api/admin/payments/{$paymentId}/match")
         ->assertOk()
         ->assertJsonPath('data.state', 'settled')
-        ->assertJsonPath('data.amount_received_laari', 11_780)
+        ->assertJsonPath('data.amount_received_laari', 11_618)
         ->assertJsonPath('data.merchant_status.code', 'settled')
         ->assertJsonPath('data.lines.0.transaction.state', 'confirmed')
         ->assertJsonPath('data.lines.3.transaction.state', 'confirmed');
@@ -385,14 +397,16 @@ it('walks the receipt-first settlement lifecycle over HTTP: credits → preview 
     // ── 12. The ledger: cash books only what cash covered ─────────────────
     // §7/§8: the 45-laari gap is DR Platform-Funded Rewards / CR Merchant
     // Receivable — never bad debt, which is reserved for the 90-day default.
-    expect($this->balances->accountBalance(AccountCode::SettlementCash))->toBe(11_780)
+    // 11,618 cash + 162 discount + 45 forgiven = the whole 11,825 receivable.
+    expect($this->balances->accountBalance(AccountCode::SettlementCash))->toBe(11_618)
         ->and($this->balances->naturalBalance(AccountCode::PlatformFundedRewards))->toBe(45)
         ->and($this->balances->accountBalance(AccountCode::BadDebtExpense))->toBe(0)
         ->and($this->balances->accountBalance(AccountCode::MerchantReceivable))->toBe(0)
         // The customer liability is untouched by settlement — it was
-        // recognised at accrual and survives until payout (§8).
+        // recognised at accrual and survives until payout (§8) — and the
+        // prompt-payment discount comes out of OUR revenue, not out of it.
         ->and($this->balances->naturalBalance(AccountCode::CustomerCashbackLiability))->toBe(8_600)
-        ->and($this->balances->naturalBalance(AccountCode::PlatformFeeRevenue))->toBe(3_225)
+        ->and($this->balances->naturalBalance(AccountCode::PlatformFeeRevenue))->toBe(3_225 - 162)
         ->and($this->balances->journalsAllBalance())->toBeTrue();
 
     $this->artisan('manfaa:reconcile')->assertExitCode(0);
@@ -462,10 +476,22 @@ it('takes a 30-day-old credit straight to payable, settles it the same day, and 
         ->assertJsonPath('data.buckets.0_5.count', 1)
         ->assertJsonPath('data.buckets.overdue.count', 0);
 
+    // PLAN §1 prompt-payment discount, at the platform's shipped defaults
+    // (500bp, 10 days): this batch covers everything outstanding and the line
+    // is 0 days old, so 5% comes off the FEE — never the cashback.
+    //   fee 750 → intdiv(750 * 500 + 9999, 10000) = intdiv(384999, 10000) = 38
+    //   due 2,750 − 38 = 2,712   (cashback 2,000 untouched)
+    expect(intdiv(750 * 500 + 9999, 10000))->toBe(38);
+
     $this->getJson('/api/merchant/settlements/preview?settle_all=1')
         ->assertOk()
         ->assertJsonPath('data.transaction_count', 1)
-        ->assertJsonPath('data.amount_due_laari', 2_750);
+        ->assertJsonPath('data.discount.eligible', true)
+        ->assertJsonPath('data.discount.reason_code', 'eligible')
+        ->assertJsonPath('data.discount.rate_bp', 500)
+        ->assertJsonPath('data.discount_laari', 38)
+        ->assertJsonPath('data.amount_due_before_discount_laari', 2_750)
+        ->assertJsonPath('data.amount_due_laari', 2_712);
 
     // ── 3. The vendor tries to reverse it: 409, and nothing moves ─────────
     $this->vendorToken = $this->merchant->createToken('till', ['transactions:reverse'])->plainTextToken;
@@ -488,13 +514,16 @@ it('takes a 30-day-old credit straight to payable, settles it the same day, and 
     $settlementId = (int) $this->actingAs($this->manager, 'merchant')
         ->post('/api/merchant/settlements', [
             'settle_all' => '1',
-            'amount' => 2_750,
+            'amount' => 2_712,
             'bank_ref' => 'BML-BACKDATED-1',
             'slip' => Slips::png(),
         ])
         ->assertCreated()
         ->assertJsonPath('data.state', 'payment_review')
-        ->assertJsonPath('data.amount_due_laari', 2_750)
+        ->assertJsonPath('data.amount_due_laari', 2_712)
+        ->assertJsonPath('data.discount_laari', 38)
+        ->assertJsonPath('data.discount_rate_bp', 500)
+        ->assertJsonPath('data.discount_reason', 'eligible')
         ->json('data.id');
 
     $this->actingAs($this->admin, 'admin');
@@ -511,9 +540,15 @@ it('takes a 30-day-old credit straight to payable, settles it the same day, and 
     expect(Transaction::query()->findOrFail($id)->state)->toBe(TransactionState::Confirmed)
         // The flag outlives the state: still irreversible once confirmed.
         ->and(Transaction::query()->findOrFail($id)->backdated)->toBeTrue()
+        // 2,712 of cash + 38 of discount = the whole 2,750 receivable.
         ->and($this->balances->accountBalance(AccountCode::MerchantReceivable))->toBe(0)
-        ->and($this->balances->accountBalance(AccountCode::SettlementCash))->toBe(2_750)
-        // Nothing was forgiven: the transfer covered the batch exactly.
+        ->and($this->balances->accountBalance(AccountCode::SettlementCash))->toBe(2_712)
+        // The discount is a sales discount on OUR revenue: fee 750 → 712.
+        // The customer's 2,000 liability is untouched (PLAN §1).
+        ->and($this->balances->naturalBalance(AccountCode::PlatformFeeRevenue))->toBe(712)
+        ->and($this->balances->naturalBalance(AccountCode::CustomerCashbackLiability))->toBe(2_000)
+        // Nothing was forgiven: the discounted transfer covered the batch
+        // exactly, with no residue and no sub-MVR-1 gap to absorb.
         ->and($this->balances->naturalBalance(AccountCode::PlatformFundedRewards))->toBe(0)
         ->and($this->balances->journalsAllBalance())->toBeTrue();
 

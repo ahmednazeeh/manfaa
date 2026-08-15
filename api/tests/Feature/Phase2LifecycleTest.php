@@ -312,14 +312,18 @@ it('runs the full Phase 2 vendor lifecycle: credential → POS ingest → replay
         ->and($tx2->refresh()->due_at->equalTo($dueAt))->toBeTrue();
 
     // ── (h) Settle-all → submit: the batch snapshots the three payable lines
-    // (2845 cashback + 1145 fee = 3990 due) and freezes them.
+    // (2845 cashback + 1145 fee = 3990 of lines) and freezes them. It covers
+    // everything outstanding on day 0, so PLAN §1 takes 5% off the FEE —
+    // intdiv(1145*500+9999, 10000) = 58 — and 3,932 is what the vendor's
+    // merchant transfers.
     Carbon::setTestNow(CarbonImmutable::parse('2026-08-05T13:00:00+05:00'));
 
-    $settlement1 = p2SettleAll($owner, 3_990, 'BML-P2-3990');
+    $settlement1 = p2SettleAll($owner, 3_932, 'BML-P2-3932');
 
     expect($settlement1->cashback_total_laari)->toBe(2_845)
         ->and($settlement1->fee_total_laari)->toBe(1_145)
-        ->and($settlement1->amount_due_laari)->toBe(3_990)
+        ->and($settlement1->discount_laari)->toBe(58)
+        ->and($settlement1->amount_due_laari)->toBe(3_932)
         ->and($settlement1->lines()->count())->toBe(3)
         ->and($settlement1->due_at->equalTo($dueAt))->toBeTrue();
 
@@ -350,14 +354,16 @@ it('runs the full Phase 2 vendor lifecycle: credential → POS ingest → replay
         // No echo webhook: the vendor saw adjustment_created synchronously.
         ->and(WebhookDelivery::query()->where('event', 'transaction.reversed')->count())->toBe(1);
 
-    // ── (j) The merchant pays the full 3990 — the credit nets the NEXT
-    // batch, never the locked one. All three lines confirm, oldest-first.
+    // ── (j) The merchant pays the full discounted 3,932 — the credit nets
+    // the NEXT batch, never the locked one. All three lines confirm,
+    // oldest-first, with the 58 discount covering the rest.
     Carbon::setTestNow(CarbonImmutable::parse('2026-08-06T10:00:00+05:00'));
 
-    $settlement1 = p2PayAndMatch($admin, $settlement1, 'BML-P2-3990');
+    $settlement1 = p2PayAndMatch($admin, $settlement1, 'BML-P2-3932');
 
     expect($settlement1->state->value)->toBe('settled')
-        ->and($settlement1->amount_received_laari)->toBe(3_990);
+        ->and($settlement1->amount_received_laari)->toBe(3_932)
+        ->and($settlement1->discount_posted_laari)->toBe(58);
 
     foreach ([$tx2, $tx3, $tx4] as $transaction) {
         expect($transaction->refresh()->state)->toBe(TransactionState::Confirmed);
@@ -391,12 +397,14 @@ it('runs the full Phase 2 vendor lifecycle: credential → POS ingest → replay
     // credit.
     Carbon::setTestNow(CarbonImmutable::parse('2026-08-10T13:00:00+05:00'));
 
-    $settlement2 = p2SettleAll($owner, 125, 'BML-P2-125');
+    $settlement2 = p2SettleAll($owner, 100, 'BML-P2-100');
     $adjustment->refresh();
 
+    // 1,500 of lines − 1,375 of credit − a 25 discount on its 500 of fee.
     expect($settlement2->cashback_total_laari)->toBe(1_000)
         ->and($settlement2->fee_total_laari)->toBe(500)
-        ->and($settlement2->amount_due_laari)->toBe(125)
+        ->and($settlement2->discount_laari)->toBe(25)
+        ->and($settlement2->amount_due_laari)->toBe(100)
         ->and($settlement2->lines()->count())->toBe(1)
         ->and($adjustment->state)->toBe('applied')
         ->and($adjustment->settlement_id)->toBe($settlement2->id)
@@ -413,22 +421,25 @@ it('runs the full Phase 2 vendor lifecycle: credential → POS ingest → replay
 
     expect($midRun->status)->toBe('ok')
         ->and($midRun->issues)->toBeNull()
-        ->and($midRun->journals_checked)->toBe(8)
+        // 8 before the incentive, plus settlement1's discount journal.
+        ->and($midRun->journals_checked)->toBe(9)
         ->and($midRun->totals['receivable'])->toBe(['derived_laari' => 125, 'ledger_laari' => 125])
         // Liability = every live reward in full (1000+1230+615 confirmed +
         // 1000 payable): the applied adjustment released none of it.
         ->and($midRun->totals['liability'])->toBe(['derived_laari' => 3_845, 'ledger_laari' => 3_845])
-        ->and($midRun->totals['revenue'])->toBe(['derived_laari' => 1_270, 'ledger_laari' => 1_270]);
+        // Fee revenue net of the 58 already discounted away at (j).
+        ->and($midRun->totals['revenue'])->toBe(['derived_laari' => 1_270 - 58, 'ledger_laari' => 1_270 - 58]);
 
-    // ── (m) The merchant pays the NETTED 125 and the batch settles in full:
+    // ── (m) The merchant pays the NETTED 100 and the batch settles in full:
     // the applied credit already moved the ledger at application, so cash
-    // books only 125, nothing is "forgiven", no wallet row appears, and the
-    // receivable returns to zero.
+    // books only 100, the 25 discount posts as the batch allocates, nothing
+    // is "forgiven", no wallet row appears, and the receivable returns to
+    // zero.
     Carbon::setTestNow(CarbonImmutable::parse('2026-08-10T14:00:00+05:00'));
-    $settlement2 = p2PayAndMatch($admin, $settlement2, 'BML-P2-125');
+    $settlement2 = p2PayAndMatch($admin, $settlement2, 'BML-P2-100');
 
     expect($settlement2->state->value)->toBe('settled')
-        ->and($settlement2->amount_received_laari)->toBe(125)
+        ->and($settlement2->amount_received_laari)->toBe(100)
         ->and($settlement2->lines()->whereNull('allocated_at')->count())->toBe(0)
         ->and($tx5->refresh()->state)->toBe(TransactionState::Confirmed)
         ->and(p2Journals('settlement', $settlement2->id, 'Settlement shortfall forgiven'))->toBe(0)
@@ -482,7 +493,9 @@ it('runs the full Phase 2 vendor lifecycle: credential → POS ingest → replay
         ->assertJsonPath('transaction.fee_bp', 50);
 
     expect(Transaction::query()->count())->toBe(7)
-        ->and(DB::table('ledger_journals')->count())->toBe(10);
+        // 10 before the incentive, plus one prompt-payment discount journal
+        // on each of the two settled batches.
+        ->and(DB::table('ledger_journals')->count())->toBe(12);
 
     // The manual admin path back, with its mandatory note — recorded in the
     // append-only notice trail and echoed to the vendor as merchant.reinstated.
@@ -519,27 +532,27 @@ it('runs the full Phase 2 vendor lifecycle: credential → POS ingest → replay
     //   liability:  1000+1230+615+1000+300 confirmed/payable — in FULL:
     //               the applied adjustment funded INV-2002's reward from
     //               the platform, it did not release the customer's claim . 4145
-    //   revenue:    375+462+308+500+150 − 375 adj ..................... 1420
+    //   revenue:    375+462+308+500+150 − 375 adj − 58 − 25 discount .. 1337
     //   platform-funded: the adjusted reward's cashback share ......... 1000
-    //   cash:       3990 + 125 ........................................ 4115
+    //   cash:       3932 + 100 ........................................ 4032
     $finalRun = app(Reconciler::class)->run();
 
     expect($finalRun->status)->toBe('ok')
         ->and($finalRun->issues)->toBeNull()
-        ->and($finalRun->journals_checked)->toBe(10)
+        ->and($finalRun->journals_checked)->toBe(12)
         ->and($finalRun->totals['receivable'])->toBe(['derived_laari' => 450, 'ledger_laari' => 450])
         ->and($finalRun->totals['liability'])->toBe(['derived_laari' => 4_145, 'ledger_laari' => 4_145])
-        ->and($finalRun->totals['revenue'])->toBe(['derived_laari' => 1_420, 'ledger_laari' => 1_420]);
+        ->and($finalRun->totals['revenue'])->toBe(['derived_laari' => 1_337, 'ledger_laari' => 1_337]);
 
     $trial = collect($balances->trialBalance())->map(fn (array $row) => $row['balance_laari'])->all();
 
     expect($trial)->toBe([
-        1000 => 4_115,  // Settlement Cash
+        1000 => 4_032,  // Settlement Cash (3,932 + 100 transferred)
         1100 => 450,    // Merchant Receivable
         2100 => -4_145, // Customer Cashback Liability
         2200 => 0,      // Merchant Wallet Balance
         2300 => 0,      // Fee GST Payable
-        4100 => -1_420, // Platform Fee Revenue
+        4100 => -1_337, // Platform Fee Revenue, net of the 83 discounted
         5100 => 1_000,  // Platform-Funded Rewards
         5900 => 0,      // Bad Debt Expense
     ])

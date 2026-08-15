@@ -38,6 +38,13 @@ use InvalidArgumentException;
  *     a merchant credit applied to the next batch, never a refund; and a
  *     partial's remainder is exactly the same kind of credit, so both take
  *     one auditable path and the receivable only ever moves by whole lines.
+ *   - the PLAN §1 prompt-payment discount the batch was granted at submit →
+ *     promptPaymentDiscount (DR Platform Fee Revenue / CR Merchant
+ *     Receivable). Covered funds like an applied credit, so a merchant who
+ *     transfers the discounted amount settles every line — but posted at
+ *     ALLOCATION, once, because a rejected receipt must leave no discount
+ *     journal behind, and only on the match that COMPLETES the batch,
+ *     because the relief was granted for clearing the board.
  *   - a forgiven shortfall (unpaid balance < 100 laari) →
  *     forgiveSettlementShortfall (DR Platform-Funded Rewards Expense /
  *     CR Merchant Receivable), so the receivable nets to zero and the
@@ -183,24 +190,43 @@ final class SettlementAllocator
                 }
             }
 
+            // The PLAN §1 prompt-payment discount decided at submit. Covered
+            // funds exactly like an applied credit — a merchant who transfers
+            // the DISCOUNTED amount settles every line, with no residue and
+            // no forgiveness — but posted HERE rather than at submit: a batch
+            // whose receipt is rejected never allocates and must leave no
+            // discount journal behind.
+            $discount = (int) $settlement->discount_laari;
+
             // §7 adjustment credits netted into this batch at draft time
-            // (amount_due = line total − applied credits). Their
+            // (amount_due = line total − applied credits − discount). Their
             // reverseAccrual already posted at application, so here they are
             // PRE-POSTED funding: consumed before any cash, never re-posted,
             // and emphatically never "forgiven" — forgiveness is reserved for
             // real sub-MVR-1 shortfalls.
-            $adjustmentCredit = max(0, $lineTotal - $due);
-            $adjustmentAvailable = max(0, $adjustmentCredit - $previouslyAllocated);
+            $adjustmentCredit = max(0, $lineTotal - $due - $discount);
 
-            // What this match can actually fund: the credit remainder, the
-            // payment's cash, plus the portion of any earlier unallocated cash
-            // remainder that is BOTH still owed to this batch and still
-            // present in the wallet. Prior allocations consumed the credit
-            // first, so the cash they consumed is what the credit left over.
-            $priorCashConsumed = $previouslyAllocated - min($adjustmentCredit, $previouslyAllocated);
+            // What makes the discount posting idempotent is the row's own
+            // record of how much of it has reached the ledger — a re-match,
+            // or a partial-then-complete sequence, can only ever post the
+            // remainder, and the batch's completing allocation posts the last
+            // laari of it. Prior allocations ate the adjustment credit first;
+            // whatever they allocated beyond the credit and the posted
+            // discount was funded by cash, whichever order it was spent in.
+            $adjustmentAvailable = max(0, $adjustmentCredit - $previouslyAllocated);
+            $discountPosted = (int) $settlement->discount_posted_laari;
+            $discountAvailable = $discount - $discountPosted;
+
+            // What this match can actually fund: the pre-posted credit
+            // remainder, the payment's cash, plus the portion of any earlier
+            // unallocated cash remainder that is BOTH still owed to this
+            // batch and still present in the wallet. The discount is counted
+            // separately below — it is not funding of the same kind.
+            $priorCashConsumed = max(0, $previouslyAllocated - $adjustmentCredit - $discountPosted);
             $priorUnallocated = max(0, $receivedBefore - $priorCashConsumed);
             $walletAvailable = min($priorUnallocated, $this->wallet->lockedBalance($settlement->merchant));
-            $funds = $payment->amount_laari + $walletAvailable + $adjustmentAvailable;
+            $merchantFunds = $payment->amount_laari + $walletAvailable + $adjustmentAvailable;
+            $funds = $merchantFunds + $discountAvailable;
             $remainingDue = $lineTotal - $previouslyAllocated;
 
             // The forgiveness rule (§7): strictly under 100 laari short of the
@@ -210,9 +236,23 @@ final class SettlementAllocator
             $forgiving = $unpaid > 0 && $unpaid < self::FORGIVENESS_THRESHOLD_LAARI;
             $coversEverything = $funds >= $remainingDue || $forgiving;
 
+            // The discount was granted for CLEARING THE BOARD (PLAN §1), so
+            // it funds only a match that finishes the batch. On a match that
+            // leaves lines behind it is withheld — not forfeited: it stays on
+            // the row, unposted, and funds the completion whenever it comes.
+            // Without this, a merchant who paid a fraction of the batch
+            // consumed the WHOLE relief first (it was spent ahead of their
+            // own cash) and could then walk away from the rest, leaving the
+            // platform having discounted a settlement that never happened.
+            // The exact-payment arithmetic is untouched: a merchant who
+            // transfers the discounted amount covers everything in one match,
+            // and the discount is spent there exactly as before.
+            $discountSpendable = $coversEverything ? $discountAvailable : 0;
+
             // Oldest-first walk over the not-yet-allocated lines. A line is
             // taken only when the available funds cover it in full — unless
-            // forgiveness covers the whole batch anyway.
+            // forgiveness covers the whole batch anyway. A partial match
+            // walks on the merchant's own funds alone, for the same reason.
             $newlyAllocated = [];
             $allocatedNow = 0;
 
@@ -223,7 +263,7 @@ final class SettlementAllocator
 
                 $lineDue = SettlementLines::due($line);
 
-                if (! $coversEverything && $allocatedNow + $lineDue > $funds) {
+                if (! $coversEverything && $allocatedNow + $lineDue > $merchantFunds) {
                     break;
                 }
 
@@ -237,13 +277,26 @@ final class SettlementAllocator
 
             // Fund the newly allocated total: the pre-posted adjustment credit
             // first (no posting — its journal exists since application), then
-            // this payment's cash, then the still-present wallet remainder,
-            // and — only when forgiving — the platform-absorbed shortfall.
+            // the prompt-payment discount, then this payment's cash, then the
+            // still-present wallet remainder, and — only when forgiving — the
+            // platform-absorbed shortfall.
             $adjustmentPortion = min($adjustmentAvailable, $allocatedNow);
-            $cashPortion = min($payment->amount_laari, $allocatedNow - $adjustmentPortion);
-            $walletPortion = min($walletAvailable, $allocatedNow - $adjustmentPortion - $cashPortion);
-            $forgivenShortfall = $allocatedNow - $adjustmentPortion - $cashPortion - $walletPortion;
+            $discountPortion = min($discountSpendable, $allocatedNow - $adjustmentPortion);
+            $cashPortion = min($payment->amount_laari, $allocatedNow - $adjustmentPortion - $discountPortion);
+            $walletPortion = min($walletAvailable, $allocatedNow - $adjustmentPortion - $discountPortion - $cashPortion);
+            $forgivenShortfall = $allocatedNow - $adjustmentPortion - $discountPortion - $cashPortion - $walletPortion;
             $remainder = $payment->amount_laari - $cashPortion;
+
+            if ($discountPortion > 0) {
+                // Split back into the fee-revenue and GST legs from the
+                // batch's own integers, fee leg first — the same order the
+                // grant itself was capped in, so a discount consumed across
+                // two matches posts each leg exactly once in total.
+                [$feeLeg] = PromptDiscount::reliefLegs($settlement);
+                $feeNow = min(max(0, $feeLeg - $discountPosted), $discountPortion);
+
+                $this->postings->promptPaymentDiscount($feeNow, $discountPortion - $feeNow, referenceId: $settlement->id);
+            }
 
             if ($cashPortion > 0) {
                 $this->postings->bankSettlementReceived($cashPortion, referenceId: $settlement->id);
@@ -282,6 +335,10 @@ final class SettlementAllocator
 
             $settlement->forceFill([
                 'amount_received_laari' => $received,
+                // Written with the journal it counts, in the same
+                // transaction: the row can never claim a posting that rolled
+                // back, nor forget one that committed.
+                'discount_posted_laari' => $discountPosted + $discountPortion,
                 // Settled means every LINE is allocated; on an adjustment-
                 // netted batch the line total exceeds the netted amount_due,
                 // so completeness is measured against the lines.

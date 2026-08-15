@@ -2,22 +2,31 @@
 
 import { useEffect, useState } from 'react';
 import {
+  bpToPercentString,
+  formatBpPercent,
   parseMvrToLaari,
+  parsePercentToBp,
   updateAdminPlatformSetting,
   type PlatformSetting,
   type PlatformSettingKey,
 } from '@manfaa/api-client';
 import { formatMoney } from '@manfaa/ui';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { TriangleAlert } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiErrorMessage } from '@/lib/api-error';
+import { Alert, AlertDescription, AlertIcon } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
-/** How a key's integer value is entered and displayed. */
-export type SettingUnit = 'mvr' | 'days';
+/**
+ * How a key's integer value is entered and displayed. `bp` keys are stored
+ * as integer basis points and typed as a percent — the same integer-bp law
+ * the rate inputs follow, never a float in between.
+ */
+export type SettingUnit = 'mvr' | 'days' | 'bp';
 
 export interface SettingMeta {
   label: string;
@@ -29,6 +38,9 @@ export interface SettingMeta {
 function toInput(value: number, unit: SettingUnit): string {
   if (unit === 'days') {
     return String(value);
+  }
+  if (unit === 'bp') {
+    return bpToPercentString(value);
   }
   // Integer laari -> "1,234.56" style MVR string, no float in between.
   const abs = Math.abs(value);
@@ -47,6 +59,9 @@ function fromInput(raw: string, unit: SettingUnit): number | null {
       const value = Number(trimmed);
       return Number.isSafeInteger(value) ? value : null;
     }
+    if (unit === 'bp') {
+      return parsePercentToBp(raw);
+    }
     return parseMvrToLaari(raw);
   } catch {
     return null;
@@ -54,9 +69,10 @@ function fromInput(raw: string, unit: SettingUnit): number | null {
 }
 
 function display(value: number, unit: SettingUnit): string {
-  return unit === 'days'
-    ? `${value} ${value === 1 ? 'day' : 'days'}`
-    : formatMoney(value);
+  if (unit === 'days') {
+    return `${value} ${value === 1 ? 'day' : 'days'}`;
+  }
+  return unit === 'bp' ? formatBpPercent(value) : formatMoney(value);
 }
 
 /**
@@ -68,10 +84,17 @@ export function PlatformSettingRow({
   settingKey,
   setting,
   meta,
+  notice,
 }: {
   settingKey: PlatformSettingKey;
   setting: PlatformSetting;
   meta: SettingMeta;
+  /**
+   * A live warning about the SAVED value that no single key's range can
+   * express — a setting inside its own bounds but wrong against another one.
+   * Advisory: the value is legal and saving stays enabled.
+   */
+  notice?: string | null;
 }) {
   const queryClient = useQueryClient();
   const [raw, setRaw] = useState(() => toInput(setting.value, meta.unit));
@@ -124,6 +147,19 @@ export function PlatformSettingRow({
           {display(setting.max, meta.unit)} · default{' '}
           {display(setting.default, meta.unit)}
         </p>
+        {notice ? (
+          <Alert
+            variant="warning"
+            appearance="light"
+            size="sm"
+            className="mt-1"
+          >
+            <AlertIcon>
+              <TriangleAlert />
+            </AlertIcon>
+            <AlertDescription>{notice}</AlertDescription>
+          </Alert>
+        ) : null}
       </div>
       <div className="flex shrink-0 items-start gap-2">
         <div className="flex flex-col gap-1">
@@ -135,18 +171,31 @@ export function PlatformSettingRow({
             ) : null}
             <Input
               id={inputId}
-              inputMode={meta.unit === 'mvr' ? 'decimal' : 'numeric'}
+              inputMode={meta.unit === 'days' ? 'numeric' : 'decimal'}
               value={raw}
               onChange={(event) => setRaw(event.target.value)}
-              className={meta.unit === 'mvr' ? 'w-40 ps-12' : 'w-28'}
+              className={
+                meta.unit === 'mvr'
+                  ? 'w-40 ps-12'
+                  : meta.unit === 'bp'
+                    ? 'w-28 pe-8'
+                    : 'w-28'
+              }
               aria-invalid={invalid}
             />
+            {meta.unit === 'bp' ? (
+              <span className="pointer-events-none absolute inset-y-0 end-3 flex items-center text-sm text-muted-foreground">
+                %
+              </span>
+            ) : null}
           </div>
           {parsed === null ? (
             <p className="text-xs text-destructive">
               {meta.unit === 'mvr'
                 ? 'Enter an MVR amount, e.g. 100.00.'
-                : 'Enter a whole number of days.'}
+                : meta.unit === 'bp'
+                  ? 'Enter a percentage, e.g. 5.00.'
+                  : 'Enter a whole number of days.'}
             </p>
           ) : outOfRange ? (
             <p className="text-xs text-destructive">

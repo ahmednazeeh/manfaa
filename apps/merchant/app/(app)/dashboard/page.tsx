@@ -4,7 +4,7 @@ import { type OutstandingBucket } from '@manfaa/api-client';
 import { MoneyText } from '@manfaa/ui';
 import { HandCoins } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useOutstanding, useWallet } from '@/lib/queries';
+import { useOutstanding, useSettlementPreview, useWallet } from '@/lib/queries';
 import { hasRoleAtLeast } from '@/lib/roles';
 import { useLayout } from '@/components/app-layout/context';
 import { Button } from '@/components/ui/button';
@@ -24,6 +24,7 @@ import {
   ToolbarPageTitle,
 } from '@/components/app-layout/toolbar';
 import { ErrorBlock } from '@/components/app/async-states';
+import { PromptDiscountDeadline } from '@/components/settlement/prompt-discount';
 
 const BUCKETS: { key: '0_5' | '6_10' | '11_15' | 'overdue'; label: string }[] = [
   { key: '0_5', label: '0–5 days' },
@@ -76,6 +77,15 @@ export default function DashboardPage() {
   const canManage = hasRoleAtLeast(me.role, 'manager');
   const outstanding = useOutstanding();
   const wallet = useWallet();
+  // The settlement preview, purely to say when the PLAN §1 prompt-payment
+  // discount runs out. It claims nothing (no batch, no reference reserved),
+  // it is the one endpoint that evaluates the discount, and it is skipped
+  // entirely when there is nothing outstanding to settle — a merchant with a
+  // clear board is not owed a countdown.
+  const settleAllPreview = useSettlementPreview(
+    { settleAll: true },
+    (outstanding.data?.total.count ?? 0) > 0,
+  );
 
   return (
     <div className="container">
@@ -102,6 +112,13 @@ export default function DashboardPage() {
         <ErrorBlock error={outstanding.error} />
       ) : (
         <div className="flex flex-col gap-5 pb-7.5">
+          {settleAllPreview.data && (
+            <PromptDiscountDeadline
+              discount={settleAllPreview.data.discount}
+              rows={settleAllPreview.data.transactions}
+            />
+          )}
+
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5">
             {BUCKETS.map(({ key, label }) =>
               outstanding.data ? (

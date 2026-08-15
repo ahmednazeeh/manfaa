@@ -25,7 +25,9 @@ use Illuminate\Support\Facades\DB;
  *      confirmed — the liability is released only at payout, reversal, or
  *      write-off.
  *    - Platform Fee Revenue = Σ(fee) over everything except reversed —
- *      write-off charges bad debt, it never claws back revenue.
+ *      write-off charges bad debt, it never claws back revenue — LESS the
+ *      PLAN §1 prompt-payment discounts already posted, which are a sales
+ *      discount on that revenue and reduce it for good.
  *    - APPLIED adjustments (§7 locked-line reversals netted into a batch)
  *      moved the ledger with their application-time credit journal
  *      (applyAdjustmentCredit) while the underlying transaction kept its
@@ -168,6 +170,33 @@ final readonly class Reconciler
             ->selectRaw('COALESCE(SUM(fee_laari), 0) AS fee_laari')
             ->first();
 
+        // PLAN §1 prompt-payment discounts already POSTED (they post as
+        // lines allocate, never at submit). Each one gave up fee revenue and
+        // credited the receivable by the same laari, so revenue must be
+        // derived net of them. Only the fee leg counts here: the GST leg
+        // debits the tax payable, which this run does not derive. The fee leg
+        // is re-derived from the batch's own stored integers with the §4
+        // ceiling — PostgreSQL's integer division makes (x*bp + 9999)/10000
+        // the same expression PromptDiscount computes in PHP — and clamped by
+        // both the granted and the posted total, exactly as reliefLegs does.
+        //
+        // The receivable side needs no such term: the discount only ever
+        // posts in step with the lines it allocates, so the receivable it
+        // credits leaves the derivation at the same instant as the
+        // transactions it settled.
+        $discounted = DB::selectOne(<<<'SQL'
+            SELECT COALESCE(SUM(LEAST(
+                CASE WHEN COALESCE(discount_rate_bp, 0) > 0
+                     THEN (fee_total_laari * discount_rate_bp + 9999) / 10000
+                     ELSE discount_laari
+                END,
+                discount_laari,
+                discount_posted_laari
+            )), 0) AS fee_laari
+            FROM settlements
+            WHERE discount_posted_laari > 0
+            SQL);
+
         // The receivable side of an applied credit is consumed as the netted
         // batch's lines allocate (credit before cash, mirroring
         // SettlementAllocator); only the unconsumed remainder still offsets
@@ -199,7 +228,7 @@ final readonly class Reconciler
                 'ledger_laari' => $this->balances->naturalBalance(AccountCode::CustomerCashbackLiability),
             ],
             'revenue' => [
-                'derived_laari' => (int) $derived->revenue_laari + (int) $applied->fee_laari,
+                'derived_laari' => (int) $derived->revenue_laari + (int) $applied->fee_laari - (int) $discounted->fee_laari,
                 'ledger_laari' => $this->balances->naturalBalance(AccountCode::PlatformFeeRevenue),
             ],
         ];

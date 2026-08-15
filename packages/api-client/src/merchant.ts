@@ -8,6 +8,7 @@ import {
   ProductCategoryModeSchema,
   PromotionSchema,
   PromotionStatusSchema,
+  PromptDiscountReasonSchema,
   RateDescriptionSchema,
   SettlementBankAccountSchema,
   SettlementFundingMethodSchema,
@@ -202,6 +203,93 @@ export type SettlementPreviewInstructions = z.infer<
 >;
 
 /**
+ * One selectable transaction in the settlement picker. Every figure is the
+ * SERVER's: `due_laari` is the sum of the stored line integers, and
+ * `age_days` is whole business-timezone days since `clock_start_at` (§13) —
+ * the same count the discount window and the age buckets use. A panel may
+ * total these rows to keep checkbox-clicking instant, but the amount a
+ * merchant transfers is always one the API returned.
+ */
+export const SettlementPickerRowSchema = z.object({
+  id: z.number().int(),
+  invoice_no: z.string().nullable(),
+  occurred_at: z.string().nullable(),
+  /** Day 0 of the 15-day clock — when the validation window closed. */
+  clock_start_at: z.string().nullable(),
+  due_at: z.string().nullable(),
+  age_days: z.number().int(),
+  overdue: z.boolean(),
+  cashback_laari: z.number().int(),
+  fee_laari: z.number().int(),
+  fee_gst_laari: z.number().int(),
+  due_laari: z.number().int(),
+  due_mvr: z.string(),
+  /** Whether this row is in the selection this response priced. */
+  selected: z.boolean(),
+});
+export type SettlementPickerRow = z.infer<typeof SettlementPickerRowSchema>;
+
+/** Counts, totals and membership for one filter preset. */
+export const SettlementPickerBucketSchema = z.object({
+  count: z.number().int(),
+  cashback_laari: z.number().int(),
+  fee_laari: z.number().int(),
+  fee_gst_laari: z.number().int(),
+  due_laari: z.number().int(),
+  due_mvr: z.string(),
+  /** Send these back as a selection to apply the preset. */
+  transaction_ids: z.array(z.number().int()),
+});
+export type SettlementPickerBucket = z.infer<
+  typeof SettlementPickerBucketSchema
+>;
+
+/**
+ * The picker's filter presets, over everything eligible (not just the
+ * selection). Ages are whole days since `clock_start_at`, so `older_than_5`
+ * is day 6 and beyond — the same boundary as the dashboard's 0–5 / 6–10
+ * buckets. `overdue` is measured against `due_at`, independent of age.
+ */
+export const SettlementPickerBucketsSchema = z.object({
+  all: SettlementPickerBucketSchema,
+  older_than_5: SettlementPickerBucketSchema,
+  older_than_10: SettlementPickerBucketSchema,
+  overdue: SettlementPickerBucketSchema,
+});
+export type SettlementPickerBuckets = z.infer<
+  typeof SettlementPickerBucketsSchema
+>;
+
+/**
+ * The PLAN §1 prompt-payment discount as the preview sees it — ADVISORY.
+ * The server re-decides it at submit, under the row lock, and that answer is
+ * the one that moves money: a clock ticking past midnight or a till POSTing
+ * one more sale between preview and submit legitimately withdraws it. Never
+ * send this back; there is no field for it on the submission.
+ *
+ * `discount_laari` is 5% (`rate_bp`) of the FEE total, ceiling, and the
+ * customer's cashback is never reduced. `reason_code` is set on refusals
+ * too, so the panel can say what settling everything today would save.
+ */
+export const SettlementPreviewDiscountSchema = z.object({
+  eligible: z.boolean(),
+  reason_code: PromptDiscountReasonSchema,
+  /** The platform's configured rate, reported even when nothing was granted. */
+  rate_bp: z.number().int(),
+  /** How young every line must be, in whole days, to qualify. */
+  max_age_days: z.number().int(),
+  discount_laari: z.number().int(),
+  discount_mvr: z.string(),
+  /** The fee leg alone; equal to discount_laari while fee GST is zero. */
+  fee_discount_laari: z.number().int(),
+  /** GST recomputed proportionally on the discounted fee — zero today. */
+  gst_relief_laari: z.number().int(),
+});
+export type SettlementPreviewDiscount = z.infer<
+  typeof SettlementPreviewDiscountSchema
+>;
+
+/**
  * The receipt-first preview (PLAN §1): exactly what this selection will owe,
  * where to transfer it, and what to quote — before anything is claimed. No
  * draft is created and no reference is burnt, so previewing twice changes
@@ -209,9 +297,16 @@ export type SettlementPreviewInstructions = z.infer<
  *
  * `line_total_laari` is the batch before §7 credits; `credit_applied_laari`
  * is what pending reversal memos net off it (strict FIFO, stopping at the
- * first memo larger than what remains); `amount_due_laari` is the transfer.
+ * first memo larger than what remains); `discount_laari` is the PLAN §1
+ * prompt-payment discount; `amount_due_laari` is the transfer, net of both.
+ *
+ * It also feeds the picker: `transactions` is EVERY eligible row (not only
+ * the selection — the list survives a re-price), and `buckets` carries the
+ * counts, totals and ids behind the filter presets.
  */
 export const SettlementPreviewSchema = z.object({
+  /** When the server evaluated the ages and the discount. */
+  as_of: z.string(),
   /** Exactly the transactions the batch would freeze, oldest due first. */
   transaction_ids: z.array(z.number().int()),
   transaction_count: z.number().int(),
@@ -222,10 +317,17 @@ export const SettlementPreviewSchema = z.object({
   line_total_laari: z.number().int(),
   credit_applied_laari: z.number().int(),
   credit_applied_mvr: z.string(),
+  discount_laari: z.number().int(),
+  discount_mvr: z.string(),
+  /** What the batch would owe with no discount — the "before" price. */
+  amount_due_before_discount_laari: z.number().int(),
   amount_due_laari: z.number().int(),
   amount_due_mvr: z.string(),
   /** The EARLIEST line's due date (§7), not a batch creation date. */
   due_at: z.string().nullable(),
+  discount: SettlementPreviewDiscountSchema,
+  transactions: z.array(SettlementPickerRowSchema),
+  buckets: SettlementPickerBucketsSchema,
   payment_instructions: SettlementPreviewInstructionsSchema,
 });
 export type SettlementPreview = z.infer<typeof SettlementPreviewSchema>;

@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import {
+  formatBpPercent,
   getAdminSettlement,
   matchAdminSettlementPayment,
   type Settlement,
@@ -14,6 +15,8 @@ import { ArrowLeft, CircleCheck, Paperclip, TriangleAlert } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiErrorMessage } from '@/lib/api-error';
 import { formatDateTime } from '@/lib/format';
+import { fundingMethodLabel, settlementStateLabel } from '@/lib/labels';
+import { cn } from '@/lib/utils';
 import {
   Alert,
   AlertContent,
@@ -35,11 +38,11 @@ import {
   Table,
   TableBody,
   TableCell,
+  TableFooter,
   TableHead,
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { fundingMethodLabel, settlementStateLabel } from '@/lib/labels';
 import { PageHeader } from '@/components/admin/page-header';
 import {
   PaymentStateBadge,
@@ -47,10 +50,12 @@ import {
   TransactionReasonLine,
   TransactionStateBadge,
 } from '@/components/admin/state-badge';
+import { batchPrice } from '@/components/settlements/discount';
 import {
   computeMatchOutcome,
   type MatchOutcome,
 } from '@/components/settlements/match-outcome';
+import { PromptDiscountBadge } from '@/components/settlements/prompt-discount';
 import {
   pendingPayment,
   rejection,
@@ -116,6 +121,18 @@ function MatchOutcomeAlert({
                     outcome.allocatedCount === 1 ? '' : 's'
                   } allocated and confirmed (${formatMoney(outcome.allocatedLaari)}).`}
             </li>
+            {outcome.discountAppliedLaari > 0 ? (
+              <li>
+                {formatMoney(outcome.discountAppliedLaari)} of the
+                prompt-payment discount
+                {outcome.discountRateBp === null
+                  ? ''
+                  : ` (${formatBpPercent(outcome.discountRateBp)} of the platform fee)`}{' '}
+                counted as covered funds and posted against platform fee revenue
+                — that much of the lines was funded by the discount, not by cash
+                and not by forgiveness.
+              </li>
+            ) : null}
             {outcome.forgivenLaari > 0 ? (
               <li>
                 Shortfall of {formatMoney(outcome.forgivenLaari)} forgiven —
@@ -203,6 +220,23 @@ export default function SettlementDetailPage() {
   const payments = settlement.payments ?? [];
   const allocatedCount = lines.filter((l) => l.allocated_at !== null).length;
 
+  // PLAN §1: a discounted batch asks for less than its lines add up to, and
+  // so does one carrying §7 credit adjustments. The lines keep their full
+  // stored dues either way, so the gap is stated rather than left for the
+  // matcher to discover.
+  const price = batchPrice(settlement);
+  const discountLaari = settlement.discount_laari;
+  const creditLaari = price?.creditAppliedLaari ?? 0;
+  const lineTotals = lines.reduce(
+    (totals, line) => ({
+      cashback: totals.cashback + line.cashback_laari,
+      fee: totals.fee + line.fee_laari,
+      gst: totals.gst + line.fee_gst_laari,
+      due: totals.due + line.due_laari,
+    }),
+    { cashback: 0, fee: 0, gst: 0, due: 0 },
+  );
+
   // The receipt this queue exists to review: the claim still awaiting a
   // decision, or — once decided — whatever slip the batch carries, so the
   // evidence stays readable after the fact.
@@ -224,6 +258,7 @@ export default function SettlementDetailPage() {
           <>
             {settlement.reference}
             <SettlementStateBadge state={settlement.state} />
+            <PromptDiscountBadge settlement={settlement} />
           </>
         }
         description={
@@ -269,11 +304,20 @@ export default function SettlementDetailPage() {
         />
       ) : null}
 
-      <div className="mb-5 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div
+        className={cn(
+          'mb-5 grid grid-cols-1 gap-4 sm:grid-cols-2',
+          discountLaari > 0 ? 'xl:grid-cols-5' : 'xl:grid-cols-4',
+        )}
+      >
         <SummaryStat
           label="Amount due"
           laari={settlement.amount_due_laari}
-          hint={`${settlement.amount_due_mvr} MVR`}
+          hint={
+            discountLaari > 0
+              ? `${settlement.amount_due_mvr} MVR — after the discount`
+              : `${settlement.amount_due_mvr} MVR`
+          }
         />
         <SummaryStat
           label="Received"
@@ -282,12 +326,24 @@ export default function SettlementDetailPage() {
         <SummaryStat
           label="Cashback total"
           laari={settlement.cashback_total_laari}
+          hint={discountLaari > 0 ? 'Never discounted' : undefined}
         />
         <SummaryStat
           label="Fee total (excl. GST)"
           laari={settlement.fee_total_laari}
           hint={`GST ${formatMoney(settlement.fee_gst_total_laari)}`}
         />
+        {discountLaari > 0 ? (
+          <SummaryStat
+            label="Prompt-payment discount"
+            laari={-discountLaari}
+            hint={
+              settlement.discount_rate_bp === null
+                ? 'Off the platform fee'
+                : `${formatBpPercent(settlement.discount_rate_bp)} off the platform fee`
+            }
+          />
+        ) : null}
       </div>
 
       <Card className="mb-5">
@@ -468,6 +524,61 @@ export default function SettlementDetailPage() {
                   ))
                 )}
               </TableBody>
+              {lines.length > 0 ? (
+                <TableFooter>
+                  <TableRow>
+                    <TableCell colSpan={3}>Line totals</TableCell>
+                    <TableCell className="text-end">
+                      <MoneyText laari={lineTotals.cashback} />
+                    </TableCell>
+                    <TableCell className="text-end">
+                      <MoneyText laari={lineTotals.fee} />
+                    </TableCell>
+                    <TableCell className="text-end">
+                      <MoneyText laari={lineTotals.gst} />
+                    </TableCell>
+                    <TableCell className="text-end">
+                      <MoneyText laari={lineTotals.due} />
+                    </TableCell>
+                    <TableCell />
+                  </TableRow>
+                  {creditLaari > 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={6} className="font-normal">
+                        Less credit adjustments netted onto the batch at draft
+                      </TableCell>
+                      <TableCell className="text-end">
+                        <MoneyText laari={-creditLaari} />
+                      </TableCell>
+                      <TableCell />
+                    </TableRow>
+                  ) : null}
+                  {discountLaari > 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={6} className="font-normal">
+                        Less prompt-payment discount
+                        {settlement.discount_rate_bp === null
+                          ? ''
+                          : ` — ${formatBpPercent(settlement.discount_rate_bp)} of the platform fee`}
+                        , covered funds at allocation
+                      </TableCell>
+                      <TableCell className="text-end">
+                        <MoneyText laari={-discountLaari} />
+                      </TableCell>
+                      <TableCell />
+                    </TableRow>
+                  ) : null}
+                  {creditLaari > 0 || discountLaari > 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={6}>Amount due</TableCell>
+                      <TableCell className="text-end">
+                        <MoneyText laari={settlement.amount_due_laari} />
+                      </TableCell>
+                      <TableCell />
+                    </TableRow>
+                  ) : null}
+                </TableFooter>
+              ) : null}
             </Table>
           </div>
         </CardTable>

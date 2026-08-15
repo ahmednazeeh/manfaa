@@ -60,6 +60,7 @@ import {
 import { ErrorBlock, LoadingBlock } from '@/components/app/async-states';
 import { SettlementStateBadge } from '@/components/app/state-badge';
 import { PaymentInstructions } from '@/components/settlement/payment-instructions';
+import { PromptDiscountRow } from '@/components/settlement/prompt-discount';
 import { ReceiptForm } from '@/components/settlement/receipt-form';
 
 /**
@@ -466,6 +467,25 @@ export default function SettlementDetailPage({
                 </span>
                 <MoneyText laari={settlement.fee_gst_total_laari} />
               </div>
+              {/*
+                PLAN §1: the prompt-payment discount this batch was GRANTED at
+                submit — 5% off the platform fee, never off the customer's
+                cashback. It is already subtracted from `amount_due_laari`, so
+                the line is shown as the relief it was, not applied again. The
+                rate stamped on the settlement is the rate it was priced at,
+                which is not necessarily the rate the platform charges today.
+              */}
+              {settlement.discount_laari > 0 && (
+                <div className="flex flex-col gap-0.5">
+                  <PromptDiscountRow
+                    rateBp={settlement.discount_rate_bp}
+                    discountLaari={settlement.discount_laari}
+                  />
+                  <span className="text-xs text-muted-foreground">
+                    {t('settlement.discountAppliedHint')}
+                  </span>
+                </div>
+              )}
               <div className="flex justify-between gap-3 border-t border-border pt-1.5 font-medium">
                 <span>{t('settlement.summaryDue')}</span>
                 <MoneyText laari={settlement.amount_due_laari} />

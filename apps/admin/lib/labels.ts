@@ -7,6 +7,7 @@ import {
   type MerchantStatus,
   type PayoutBatchState,
   type PayoutItemState,
+  type PromptDiscountReason,
   type SettlementFundingMethod,
   type SettlementPaymentState,
   type SettlementState,
@@ -146,6 +147,25 @@ const FUNDING_METHODS: Record<SettlementFundingMethod, string> = {
 const UNKNOWN_FUNDING_METHOD = 'Other';
 
 /**
+ * Why a batch did — or did not — get the PLAN §1 prompt-payment discount.
+ * Written as a clause that finishes "Prompt-payment discount —", because the
+ * question an admin is asking at the matching screen is always the same one:
+ * why is the amount due lower (or not lower) than the lines add up to?
+ */
+const PROMPT_DISCOUNT_REASONS: Record<PromptDiscountReason, string> = {
+  eligible:
+    'granted: the batch covers every transaction this merchant had outstanding, and every line was still inside the age window at submit.',
+  not_all_outstanding:
+    'not granted: the merchant still has payable transactions this batch does not cover, including any frozen on an earlier unpaid batch.',
+  line_too_old:
+    'not granted: at least one line had already reached the age window when the batch was submitted.',
+  clock_not_started:
+    'not granted: at least one line has no settlement clock (a null clock_start_at), so its age cannot be established — fix the transaction before the merchant can earn this.',
+  disabled:
+    'not granted: the incentive is switched off platform-wide (rate 0%).',
+};
+
+/**
  * Where the store sells. The literal enum value — and the word "both" above
  * all — never reaches the screen (§1 decision 2026-08-15).
  */
@@ -245,6 +265,17 @@ export function fundingMethodLabel(method: string): string {
   return method in FUNDING_METHODS
     ? FUNDING_METHODS[method as SettlementFundingMethod]
     : UNKNOWN_FUNDING_METHOD;
+}
+
+/**
+ * The prompt-payment discount decision in words. The API sets a reason on
+ * refusals as well as grants, which is what lets the queue explain a full
+ * price as readily as a discounted one.
+ */
+export function promptDiscountReasonLabel(
+  reason: PromptDiscountReason,
+): string {
+  return PROMPT_DISCOUNT_REASONS[reason];
 }
 
 export function merchantChannelLabel(channel: MerchantChannel): string {

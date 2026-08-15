@@ -6,6 +6,7 @@ import {
   type MerchantStaffRole,
   type MerchantStatus,
   type PromotionStatus,
+  type PromptDiscountReason,
   type SettlementFundingMethod,
   type SettlementPaymentState,
   type SettlementState,
@@ -189,6 +190,21 @@ const WALLET_MOVEMENT_KEYS: Record<WalletMovementType, string> = {
 const UNKNOWN_WALLET_MOVEMENT_KEY = 'labels.walletMovement.unknown';
 
 /**
+ * Why the batch in front of the merchant did — or did not — earn the PLAN §1
+ * prompt-payment discount. The API answers with a machine code on refusals as
+ * well as grants, which is the whole point: "no discount" is an answer the
+ * merchant is entitled to understand, and every one of these has an action
+ * behind it (settle the rest too / you left it too long).
+ */
+const PROMPT_DISCOUNT_REASON_KEYS: Record<PromptDiscountReason, string> = {
+  eligible: 'settlement.discountReasonEligible',
+  not_all_outstanding: 'settlement.discountReasonNotAllOutstanding',
+  line_too_old: 'settlement.discountReasonLineTooOld',
+  clock_not_started: 'settlement.discountReasonClockNotStarted',
+  disabled: 'settlement.discountReasonDisabled',
+};
+
+/**
  * Not a status the API stores — `published` plus a window that covers now
  * (the is_live flag). It gets a label of its own because that is the word the
  * merchant actually needs on the chip.
@@ -268,6 +284,20 @@ export function walletMovementLabel(t: TFunction, type: string): string {
   return isWalletMovementType(type)
     ? t(WALLET_MOVEMENT_KEYS[type])
     : t(UNKNOWN_WALLET_MOVEMENT_KEY);
+}
+
+/**
+ * The discount verdict in plain language. `rate` is the platform's configured
+ * rate already formatted ("5%") and `days` its age window — both come from
+ * the API's own evaluation, never from anything the panel worked out, so the
+ * sentence can never promise a rate the server is not applying.
+ */
+export function promptDiscountReasonLabel(
+  t: TFunction,
+  reason: PromptDiscountReason,
+  values: { rate: string; days: number },
+): string {
+  return t(PROMPT_DISCOUNT_REASON_KEYS[reason], values);
 }
 
 export function merchantStatusLabel(

@@ -23,7 +23,6 @@ import {
   useOutstanding,
   useSettlementPreview,
   useSubmitSettlementReceipt,
-  useTransactions,
   useWallet,
   useWalletSettleSelection,
 } from '@/lib/queries';
@@ -35,20 +34,8 @@ import {
   CardContent,
   CardFooter,
   CardHeader,
-  CardTable,
   CardTitle,
 } from '@/components/ui/card';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Label } from '@/components/ui/label';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
 import {
   Toolbar,
   ToolbarDescription,
@@ -60,9 +47,14 @@ import {
   ErrorBlock,
   LoadingBlock,
 } from '@/components/app/async-states';
-import { ListPagination } from '@/components/app/list-pagination';
 import { PaymentInstructions } from '@/components/settlement/payment-instructions';
+import {
+  DiscountedFeeAmount,
+  PromptDiscountNotice,
+  PromptDiscountRow,
+} from '@/components/settlement/prompt-discount';
 import { ReceiptForm } from '@/components/settlement/receipt-form';
+import { TransactionPicker } from '@/components/settlement/transaction-picker';
 
 /**
  * The receipt-first settlement wizard (PLAN §1 "Settlement flow"), which
@@ -82,28 +74,50 @@ import { ReceiptForm } from '@/components/settlement/receipt-form';
  * source) and is the only route for a batch that credit adjustments have
  * netted to zero — there is no transfer to evidence, so no receipt can
  * honestly claim one.
+ *
+ * **Where the money comes from.** One endpoint prices everything: the preview.
+ * Step 1 asks it for the whole board — every eligible row, the age buckets
+ * behind the filter chips, and the PLAN §1 discount verdict for settling the
+ * lot — and the picker adds up the stored per-row integers as boxes are
+ * ticked, so a click costs nothing. The moment it matters, the figure shown is
+ * the one the server priced for the selection, and the discount is whatever
+ * the server granted — never a percentage this panel applied.
+ *
+ * **Settling everything is a MODE, not a list.** Whenever the selection covers
+ * the whole board the wizard sends `settle_all` rather than the ids: a sale
+ * that becomes payable between here and submit then joins the batch, instead
+ * of leaving one behind and silently costing the merchant the discount.
  */
 
 const STEPS = ['select', 'review', 'upload'] as const;
+
+/** The race-proof "everything outstanding" selection. */
+const SETTLE_ALL: SettlementSelection = { settleAll: true };
 
 export function SettlementWizard() {
   const { t } = useTranslation();
   const [step, setStep] = useState(0);
   const [mode, setMode] = useState<'all' | 'pick'>('all');
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
-  const [page, setPage] = useState(1);
   const [created, setCreated] = useState<MerchantSettlement | null>(null);
 
   const outstanding = useOutstanding();
-  const payable = useTransactions('payable_unfunded', page);
   const wallet = useWallet();
   const submitReceipt = useSubmitSettlementReceipt();
   const walletSettle = useWalletSettleSelection();
 
   const selection: SettlementSelection | null = useMemo(() => {
-    if (mode === 'all') return { settleAll: true };
+    if (mode === 'all') return SETTLE_ALL;
     return selectedIds.length > 0 ? { transactionIds: selectedIds } : null;
   }, [mode, selectedIds]);
+
+  // The picker's catalogue: every eligible row, the preset buckets and the
+  // discount verdict for settling EVERYTHING. Claims nothing (§ preview is
+  // reservation-free), so it is safe to hold open while the merchant picks.
+  const catalogue = useSettlementPreview(
+    SETTLE_ALL,
+    step === 0 && created === null,
+  );
 
   // Priced from step 2 onwards and kept for step 3, so the amount the
   // merchant was told to transfer is the amount the receipt form prefills.
@@ -112,32 +126,41 @@ export function SettlementWizard() {
     step >= 1 && created === null,
   );
 
-  const toggle = (id: number, checked: boolean) => {
-    setMode('pick');
-    setSelectedIds((current) =>
-      checked
-        ? current.includes(id)
-          ? current
-          : [...current, id]
-        : current.filter((value) => value !== id),
-    );
+  const rows = useMemo(
+    () => catalogue.data?.transactions ?? [],
+    [catalogue.data],
+  );
+  const selectedIdSet = useMemo(
+    () => new Set(mode === 'all' ? rows.map((row) => row.id) : selectedIds),
+    [mode, rows, selectedIds],
+  );
+  const selectedRows = rows.filter((row) => selectedIdSet.has(row.id));
+
+  // The live running total: a SUM of the server's per-row `due_laari`
+  // integers, nothing more. No rate is applied, nothing is divided, and the
+  // figure the merchant actually transfers still comes from the priced
+  // preview on the next step.
+  const selectedTotalLaari = selectedRows.reduce(
+    (total, row) => total + row.due_laari,
+    0,
+  );
+
+  const selectEverything = () => {
+    setMode('all');
+    setSelectedIds([]);
   };
 
-  const pageIds = payable.data?.data.map((transaction) => transaction.id) ?? [];
-  const allOnPageSelected =
-    pageIds.length > 0 && pageIds.every((id) => selectedIds.includes(id));
-
-  const togglePage = (checked: boolean) => {
+  const applySelection = (ids: number[]) => {
+    const unique = Array.from(new Set(ids));
+    if (rows.length > 0 && unique.length === rows.length) {
+      selectEverything();
+      return;
+    }
     setMode('pick');
-    setSelectedIds((current) =>
-      checked
-        ? Array.from(new Set([...current, ...pageIds]))
-        : current.filter((id) => !pageIds.includes(id)),
-    );
+    setSelectedIds(unique);
   };
 
-  const nothingOutstanding = outstanding.data?.total.count === 0;
-  const canContinue = selection !== null && !nothingOutstanding;
+  const canContinue = selection !== null && selectedRows.length > 0;
 
   // ---------------------------------------------------------------------
   // Done. Either the receipt landed the batch in payment_review — "Manfaa is
@@ -179,6 +202,12 @@ export function SettlementWizard() {
                 { reference: created.reference },
               )}
             </p>
+            {created.discount_laari > 0 && (
+              <div className="flex flex-wrap items-center gap-1.5 text-sm text-primary">
+                <span>{t('settlement.discountSaved')}</span>
+                <MoneyText laari={created.discount_laari} />
+              </div>
+            )}
             <div className="flex flex-wrap gap-3">
               <Button asChild>
                 <Link href={`/settlements/${created.id}`}>
@@ -220,153 +249,70 @@ export function SettlementWizard() {
           <CardHeader>
             <CardTitle>{t('settlement.selectTitle')}</CardTitle>
           </CardHeader>
-          <CardContent className="flex flex-col gap-5">
-            <RadioGroup
-              value={mode}
-              onValueChange={(value) => setMode(value as 'all' | 'pick')}
-              className="flex flex-col gap-3"
-            >
-              <div className="flex items-start gap-2.5">
-                <RadioGroupItem
-                  value="all"
-                  id="settle-all"
-                  className="mt-0.5"
-                />
-                <div className="flex flex-col gap-0.5">
-                  <Label htmlFor="settle-all">
-                    {t('settlement.settleAll')}
-                  </Label>
-                  <span className="text-xs text-muted-foreground">
-                    {t('settlement.settleAllHint')}
-                  </span>
-                </div>
-              </div>
-              <div className="flex items-start gap-2.5">
-                <RadioGroupItem
-                  value="pick"
-                  id="settle-pick"
-                  className="mt-0.5"
-                />
-                <div className="flex flex-col gap-0.5">
-                  <Label htmlFor="settle-pick">
-                    {t('settlement.settleSome')}
-                  </Label>
-                  <span className="text-xs text-muted-foreground">
-                    {mode === 'pick' && selectedIds.length > 0
-                      ? t('settlement.selectedCount', {
-                          count: selectedIds.length,
-                        })
-                      : t('settlement.settleSomeHint')}
-                  </span>
-                </div>
-              </div>
-            </RadioGroup>
 
-            {mode === 'pick' && selectedIds.length === 0 && (
-              <p className="text-xs text-muted-foreground">
-                {t('settlement.selectAtLeastOne')}
-              </p>
-            )}
-          </CardContent>
-
-          {payable.error ? (
-            <ErrorBlock error={payable.error} />
-          ) : !payable.data ? (
-            <LoadingBlock lines={5} />
-          ) : payable.data.data.length === 0 ? (
-            <EmptyBlock>{t('settlement.emptyPayable')}</EmptyBlock>
+          {catalogue.error ? (
+            // The domain's "nothing to settle" refusal is not an error the
+            // merchant caused — it is an empty board.
+            isSelectionRefusal(catalogue.error) ? (
+              <EmptyBlock>{t('settlement.emptyPayable')}</EmptyBlock>
+            ) : (
+              <ErrorBlock
+                error={catalogue.error}
+                fallback={t('settlement.previewFailed')}
+              />
+            )
+          ) : !catalogue.data ? (
+            <LoadingBlock lines={6} />
           ) : (
             <>
-              <CardTable>
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="w-10">
-                          {mode === 'pick' && (
-                            <Checkbox
-                              checked={allOnPageSelected}
-                              onCheckedChange={(checked) =>
-                                togglePage(checked === true)
-                              }
-                              aria-label={t('settlement.selectAllOnPage')}
-                            />
-                          )}
-                        </TableHead>
-                        <TableHead>{t('settlement.colInvoice')}</TableHead>
-                        <TableHead>{t('settlement.colDate')}</TableHead>
-                        <TableHead className="text-end">
-                          {t('settlement.colCashback')}
-                        </TableHead>
-                        <TableHead className="text-end">
-                          {t('settlement.colFees')}
-                        </TableHead>
-                        <TableHead className="text-end">
-                          {t('settlement.colDue')}
-                        </TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {payable.data.data.map((transaction) => (
-                        <TableRow key={transaction.id}>
-                          <TableCell>
-                            {mode === 'pick' ? (
-                              <Checkbox
-                                checked={selectedIds.includes(transaction.id)}
-                                onCheckedChange={(checked) =>
-                                  toggle(transaction.id, checked === true)
-                                }
-                                aria-label={t('settlement.selectRow', {
-                                  invoice: transaction.invoice_no,
-                                })}
-                              />
-                            ) : (
-                              <Check
-                                className="size-4 text-primary"
-                                aria-hidden
-                              />
-                            )}
-                          </TableCell>
-                          <TableCell className="font-medium text-mono">
-                            {transaction.invoice_no}
-                          </TableCell>
-                          <TableCell className="whitespace-nowrap text-secondary-foreground">
-                            {format(
-                              new Date(transaction.occurred_at),
-                              'dd MMM yyyy',
-                            )}
-                          </TableCell>
-                          <TableCell className="text-end">
-                            <MoneyText laari={transaction.cashback_laari} />
-                          </TableCell>
-                          <TableCell className="text-end">
-                            <MoneyText
-                              laari={
-                                transaction.fee_laari +
-                                transaction.fee_gst_laari
-                              }
-                            />
-                          </TableCell>
-                          <TableCell className="text-end font-medium">
-                            <MoneyText
-                              laari={
-                                transaction.cashback_laari +
-                                transaction.fee_laari +
-                                transaction.fee_gst_laari
-                              }
-                            />
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              </CardTable>
-              <CardFooter className="flex flex-wrap items-center justify-between gap-3">
-                <ListPagination
-                  meta={payable.data.meta}
-                  onPageChange={setPage}
+              <CardContent className="flex flex-col gap-5">
+                <p className="text-sm text-secondary-foreground">
+                  {t('settlement.selectLead')}
+                </p>
+                <PromptDiscountNotice
+                  discount={catalogue.data.discount}
+                  // The catalogue prices the WHOLE board: it describes the
+                  // selection only while the selection is the whole board.
+                  variant={mode === 'all' ? 'priced' : 'whole'}
+                  onSettleEverything={
+                    mode === 'all' ? undefined : selectEverything
+                  }
                 />
+              </CardContent>
+
+              <TransactionPicker
+                rows={rows}
+                buckets={catalogue.data.buckets}
+                selectedIds={Array.from(selectedIdSet)}
+                discountMaxAgeDays={
+                  catalogue.data.discount.rate_bp === 0
+                    ? 0
+                    : catalogue.data.discount.max_age_days
+                }
+                onSelect={applySelection}
+                onSelectEverything={selectEverything}
+              />
+
+              <CardFooter className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-xs uppercase text-muted-foreground">
+                    {t('settlement.selectionTotal')}
+                  </span>
+                  <span className="flex flex-wrap items-baseline gap-2">
+                    <MoneyText
+                      laari={selectedTotalLaari}
+                      className="text-lg font-semibold text-mono"
+                    />
+                    <span className="text-xs text-muted-foreground">
+                      {t('settlement.selectedCount', {
+                        count: selectedRows.length,
+                      })}
+                    </span>
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    {t('settlement.selectionTotalHint')}
+                  </span>
+                </div>
                 <Button disabled={!canContinue} onClick={() => setStep(1)}>
                   <HandCoins />
                   {t('common.continue')}
@@ -384,6 +330,9 @@ export function SettlementWizard() {
           walletPending={walletSettle.isPending}
           onBack={() => setStep(0)}
           onContinue={() => setStep(2)}
+          // The discount's way back, offered only while a SUBSET is selected:
+          // switching re-prices against settle_all, and the server decides.
+          onSettleEverything={mode === 'all' ? undefined : selectEverything}
           onWalletSettle={() => {
             if (selection === null) return;
             walletSettle.mutate(selection, {
@@ -508,6 +457,7 @@ function ReviewStep({
   walletPending,
   onBack,
   onContinue,
+  onSettleEverything,
   onWalletSettle,
 }: {
   preview: ReturnType<typeof useSettlementPreview>;
@@ -515,6 +465,8 @@ function ReviewStep({
   walletPending: boolean;
   onBack: () => void;
   onContinue: () => void;
+  /** Present only while a SUBSET is selected — the discount's way back. */
+  onSettleEverything?: () => void;
   onWalletSettle: () => void;
 }) {
   const { t } = useTranslation();
@@ -561,6 +513,8 @@ function ReviewStep({
   const walletSufficient =
     walletBalanceLaari !== undefined &&
     walletBalanceLaari >= data.amount_due_laari;
+  // Granted by the server for exactly this selection, capped at what is due.
+  const discounted = data.discount_laari > 0;
 
   return (
     <div className="mb-7.5 grid grid-cols-1 items-start gap-5 lg:grid-cols-3">
@@ -572,7 +526,12 @@ function ReviewStep({
               : t('settlement.reviewTitle')}
           </CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="flex flex-col gap-5">
+          <PromptDiscountNotice
+            discount={data.discount}
+            variant="priced"
+            onSettleEverything={onSettleEverything}
+          />
           {nothingDue ? (
             <p className="text-sm text-secondary-foreground">
               {t('settlement.nothingDueBody')}
@@ -626,20 +585,40 @@ function ReviewStep({
               <span className="text-muted-foreground">
                 {t('settlement.summaryCashback')}
               </span>
+              {/* Never discounted: the customer's reward is untouched (§1). */}
               <MoneyText laari={data.cashback_total_laari} />
             </div>
             <div className="flex justify-between gap-3">
               <span className="text-muted-foreground">
                 {t('settlement.summaryFee')}
               </span>
-              <MoneyText laari={data.fee_total_laari} />
+              <DiscountedFeeAmount
+                feeLaari={data.fee_total_laari}
+                feeDiscountLaari={data.discount.fee_discount_laari}
+              />
             </div>
             <div className="flex justify-between gap-3">
               <span className="text-muted-foreground">
                 {t('settlement.summaryGst')}
               </span>
-              <MoneyText laari={data.fee_gst_total_laari} />
+              <DiscountedFeeAmount
+                feeLaari={data.fee_gst_total_laari}
+                feeDiscountLaari={data.discount.gst_relief_laari}
+              />
             </div>
+            {discounted && (
+              <div className="flex flex-col gap-0.5 border-t border-border pt-1.5">
+                <PromptDiscountRow
+                  rateBp={data.discount.rate_bp}
+                  discountLaari={data.discount_laari}
+                />
+                <span className="text-xs text-muted-foreground">
+                  {t('settlement.discountAdvisory', {
+                    days: data.discount.max_age_days,
+                  })}
+                </span>
+              </div>
+            )}
             {data.credit_applied_laari > 0 && (
               <div className="flex flex-col gap-0.5 border-t border-border pt-1.5">
                 <div className="flex justify-between gap-3">

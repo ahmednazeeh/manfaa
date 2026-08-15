@@ -248,6 +248,44 @@ final readonly class Postings
     }
 
     /**
+     * Prompt-payment discount (PLAN §1): the merchant settled EVERYTHING
+     * outstanding while every line was still young, so the platform charges
+     * less for its own service. This is a SALES DISCOUNT on our own revenue —
+     * DR Platform Fee Revenue, CR Merchant Receivable — and emphatically not
+     * bad debt (that account is reserved for the 90-day default) nor a
+     * platform-funded reward (that account is for cashback WE fund; the
+     * customer's cashback is untouched here, which is the whole point).
+     *
+     * The GST leg exists for the day fee GST is switched on: the tax follows
+     * the taxable amount, so a discounted fee carries proportionally
+     * discounted GST. It is zero everywhere today and the line is omitted.
+     *
+     * Posted at ALLOCATION, never at submit: a batch whose receipt an admin
+     * rejects never allocates, and a discount that was never earned must
+     * leave no journal to unwind.
+     */
+    public function promptPaymentDiscount(
+        int $feeLaari,
+        int $feeGstLaari,
+        string $referenceType = 'settlement',
+        int $referenceId = 0,
+    ): int {
+        $lines = [];
+
+        if ($feeLaari !== 0) {
+            $lines[] = $this->dr(AccountCode::PlatformFeeRevenue, $feeLaari);
+        }
+
+        if ($feeGstLaari !== 0) {
+            $lines[] = $this->dr(AccountCode::FeeTaxPayable, $feeGstLaari);
+        }
+
+        $lines[] = $this->cr(AccountCode::MerchantReceivable, $feeLaari + $feeGstLaari);
+
+        return $this->poster->post($referenceType, $referenceId, 'Prompt-payment fee discount', $lines);
+    }
+
+    /**
      * Referral and other platform-funded rewards bypass the merchant
      * receivable entirely.
      */

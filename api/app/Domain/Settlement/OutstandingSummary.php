@@ -113,7 +113,12 @@ final class OutstandingSummary
             return '0_5';
         }
 
-        $days = (int) $clockStart->setTimezone($timezone)->startOfDay()->diffInDays($today);
+        // The one day-count definition, shared with the settlement picker's
+        // presets and the PLAN §1 discount window (TransactionAge), so the
+        // dashboard and the settlement screen can never disagree about
+        // whether a line is "10 days old". $today is already the business
+        // timezone's start of day; TransactionAge truncates both sides.
+        $days = TransactionAge::days($clockStart, $today, $timezone);
 
         return match (true) {
             $days <= 5 => '0_5',

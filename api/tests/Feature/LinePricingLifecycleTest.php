@@ -246,18 +246,22 @@ it('walks the full lined-credit lifecycle over HTTP: categories → credits → 
         ->and(Transaction::query()->findOrFail($secondId)->state->value)->toBe('payable_unfunded');
 
     // ── 6. OWNER settles both; ADMIN records and matches the payment ─────
-    // Dues from the STORED integers: (2,750+638) + (4,500+750) = 8,638.
+    // Dues from the STORED integers: (2,750+638) + (4,500+750) = 8,638, less
+    // PLAN §1's prompt-payment discount on the FEE alone — everything
+    // outstanding, both lines a day old, intdiv(1388*500+9999, 10000) = 70 —
+    // so the owner transfers 8,568 and the lined cashback is untouched.
     $this->actingAs($this->owner, 'merchant');
 
     $settlementId = $this->post('/api/merchant/settlements', [
         'settle_all' => '1',
-        'amount' => 8638,
+        'amount' => 8568,
         'bank_ref' => 'BML-LC-88421',
         'slip' => Slips::png(),
     ])
         ->assertCreated()
         ->assertJsonPath('data.state', 'payment_review')
-        ->assertJsonPath('data.amount_due_laari', 8638)
+        ->assertJsonPath('data.discount_laari', 70)
+        ->assertJsonPath('data.amount_due_laari', 8568)
         ->assertJsonCount(2, 'data.lines')
         ->json('data.id');
 
@@ -270,7 +274,7 @@ it('walks the full lined-credit lifecycle over HTTP: categories → credits → 
     $this->postJson("/api/admin/payments/{$paymentId}/match")
         ->assertOk()
         ->assertJsonPath('data.state', 'settled')
-        ->assertJsonPath('data.amount_received_laari', 8638)
+        ->assertJsonPath('data.amount_received_laari', 8568)
         ->assertJsonPath('data.lines.0.transaction.state', 'confirmed')
         ->assertJsonPath('data.lines.1.transaction.state', 'confirmed');
 
@@ -281,14 +285,15 @@ it('walks the full lined-credit lifecycle over HTTP: categories → credits → 
 
     expect($run->status)->toBe('ok')
         ->and($run->issues)->toBeNull()
-        // Receivable fully extinguished by the settlement; the liability
-        // (7,250) survives until payout; revenue (1,388) is accrued.
+        // Receivable fully extinguished by the settlement (8,568 of cash
+        // plus the 70 discount); the liability (7,250) survives until
+        // payout; accrued revenue (1,388) less the 70 discounted away.
         ->and($run->totals['receivable']['derived_laari'])->toBe(0)
         ->and($run->totals['receivable']['ledger_laari'])->toBe(0)
         ->and($run->totals['liability']['derived_laari'])->toBe(7250)
         ->and($run->totals['liability']['ledger_laari'])->toBe(7250)
-        ->and($run->totals['revenue']['derived_laari'])->toBe(1388)
-        ->and($run->totals['revenue']['ledger_laari'])->toBe(1388);
+        ->and($run->totals['revenue']['derived_laari'])->toBe(1318)
+        ->and($run->totals['revenue']['ledger_laari'])->toBe(1318);
 
     // Derived-from-LINES equals the ledger exactly: the immutable per-line
     // snapshots are the source of truth the row totals and the ledger both
@@ -300,7 +305,8 @@ it('walks the full lined-credit lifecycle over HTTP: categories → credits → 
     expect($lineCashback)->toBe(7250)
         ->and($lineFees)->toBe(1388)
         ->and($balances->naturalBalance(AccountCode::CustomerCashbackLiability))->toBe($lineCashback)
-        ->and($balances->naturalBalance(AccountCode::PlatformFeeRevenue))->toBe($lineFees)
+        // Revenue is the lined fee total net of the prompt-payment discount.
+        ->and($balances->naturalBalance(AccountCode::PlatformFeeRevenue))->toBe($lineFees - 70)
         ->and($balances->accountBalance(AccountCode::MerchantReceivable))->toBe(0);
 
     // Per transaction, the stored totals ARE the sums of the stored lines.

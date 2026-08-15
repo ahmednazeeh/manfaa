@@ -3,6 +3,7 @@
 import {
   getAdminPlatformSettings,
   PlatformSettingKeySchema,
+  type PlatformSetting,
   type PlatformSettingKey,
 } from '@manfaa/api-client';
 import { useQuery } from '@tanstack/react-query';
@@ -54,9 +55,47 @@ const SETTING_META: Record<PlatformSettingKey, SettingMeta> = {
       'Sales below this earn no cashback — they are still recorded, with a below-minimum reason, so the till sees something truthful. Applied to new merchants.',
     unit: 'mvr',
   },
+  prompt_discount_rate_bp: {
+    label: 'Prompt-payment discount',
+    description:
+      'Taken off the PLATFORM FEE — never off the customer’s cashback — when a merchant settles every outstanding transaction and each one is still inside the age window below. Set to 0% to switch the incentive off entirely.',
+    unit: 'bp',
+  },
+  prompt_discount_max_age_days: {
+    label: 'Prompt-payment age window',
+    description:
+      'How young every transaction in the batch must be, counted from the day its settlement clock started, for the discount to be granted. Keep it shorter than the settlement window — at or past it, every merchant would qualify and the incentive would reward nothing.',
+    unit: 'days',
+  },
 };
 
 const KEY_ORDER = PlatformSettingKeySchema.options;
+
+/**
+ * A warning no single key's range can carry, because it is about two keys at
+ * once: the prompt-payment age window has to stay SHORTER than the settlement
+ * window. Set at or beyond it, every line a merchant still owes on its due
+ * date qualifies, and a discount meant to pull payment forward is simply 5%
+ * off the fee for everyone. Advisory only — the value is legal, and the ranges
+ * (1–15 days) already stop anything worse.
+ */
+function crossKeyNotice(
+  key: string,
+  settings: Record<string, PlatformSetting>,
+): string | null {
+  if (key !== 'prompt_discount_max_age_days') {
+    return null;
+  }
+
+  const window = settings.settlement_due_days?.value;
+  const maxAge = settings.prompt_discount_max_age_days?.value;
+
+  if (window === undefined || maxAge === undefined || maxAge < window) {
+    return null;
+  }
+
+  return `At ${maxAge} days this is not shorter than the ${window}-day settlement window, so every line a merchant still owes on its due date qualifies — the discount stops rewarding promptness and becomes a standing fee cut.`;
+}
 
 export default function PlatformSettingsPage() {
   const query = useQuery({
@@ -83,7 +122,7 @@ export default function PlatformSettingsPage() {
           <CardContent>
             {query.isPending ? (
               <div className="flex flex-col gap-4">
-                {Array.from({ length: 5 }).map((_, index) => (
+                {Array.from({ length: KEY_ORDER.length }).map((_, index) => (
                   <Skeleton key={index} className="h-16 w-full" />
                 ))}
               </div>
@@ -103,6 +142,7 @@ export default function PlatformSettingsPage() {
                     <PlatformSettingRow
                       settingKey={key}
                       setting={settings[key]}
+                      notice={crossKeyNotice(key, settings)}
                       meta={
                         SETTING_META[key] ?? {
                           label: key,
