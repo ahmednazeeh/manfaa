@@ -352,19 +352,29 @@ function CuratedShelves() {
 
   return (
     <div className="flex flex-col gap-8">
-      <DiscoverySection
-        icon={TrendingUp}
-        title={t('discover.increased')}
-        entries={data.increased}
-        emptyText={t('discover.sectionEmpty')}
-      />
+      {/* A curated shelf nobody asked for says nothing when it is empty, and
+          a column of "Nothing here right now" boxes reads as a broken page
+          rather than a young catalogue — so an empty one is simply absent.
+          Nearby is the exception below: empty, it still carries the location
+          prompt. The focused views keep their empty text, because there the
+          reader asked a question and deserves the answer. */}
+      {data.increased.length > 0 && (
+        <DiscoverySection
+          icon={TrendingUp}
+          title={t('discover.increased')}
+          entries={data.increased}
+          emptyText={t('discover.sectionEmpty')}
+        />
+      )}
 
-      <DiscoverySection
-        icon={Sparkles}
-        title={t('discover.featured')}
-        entries={data.featured}
-        emptyText={t('discover.sectionEmpty')}
-      />
+      {data.featured.length > 0 && (
+        <DiscoverySection
+          icon={Sparkles}
+          title={t('discover.featured')}
+          entries={data.featured}
+          emptyText={t('discover.sectionEmpty')}
+        />
+      )}
 
       <DiscoverySection
         icon={Store}
@@ -377,12 +387,14 @@ function CuratedShelves() {
         )}
       </DiscoverySection>
 
-      <DiscoverySection
-        icon={Globe}
-        title={t('discover.online')}
-        entries={data.online}
-        emptyText={t('discover.sectionEmpty')}
-      />
+      {data.online.length > 0 && (
+        <DiscoverySection
+          icon={Globe}
+          title={t('discover.online')}
+          entries={data.online}
+          emptyText={t('discover.sectionEmpty')}
+        />
+      )}
     </div>
   );
 }

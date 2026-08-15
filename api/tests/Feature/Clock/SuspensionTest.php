@@ -102,3 +102,45 @@ it('does not suspend a merchant whose payables are all inside the 15 days', func
         ->and($clean->refresh()->status)->toBe('active')
         ->and(MerchantNotice::query()->where('type', 'suspended')->count())->toBe(1);
 });
+
+it('drops the public read model as it suspends, so the storefront stops advertising the store', function () {
+    $clockStart = CarbonImmutable::parse('2026-08-01T09:00:00+05:00')->utc();
+    Carbon::setTestNow($clockStart->addDays(16));
+
+    $merchant = Merchant::factory()->create([
+        'name' => 'Clock Store',
+        'slug' => 'clock-store',
+        'category' => 'grocery',
+        'channel' => 'in_store',
+    ]);
+    MerchantRate::factory()->for($merchant)->create([
+        'rate_bp' => 200,
+        'effective_from' => $clockStart->subYear(),
+        'effective_to' => null,
+    ]);
+    Transaction::factory()->for($merchant)->create([
+        'state' => 'payable_unfunded',
+        'clock_start_at' => $clockStart,
+        'due_at' => $clockStart->addDays(15),
+    ]);
+
+    // A visitor warms both cached keys, exactly as a real read would.
+    $data = $this->getJson('/api/discover')->assertOk()->json('data');
+    expect(collect($data['in_store'])->pluck('slug'))->toContain('clock-store');
+    expect(collect($data['categories'])->firstWhere('slug', 'grocery')['merchant_count'])->toBe(1);
+    $this->getJson('/api/discover/merchants/clock-store')->assertOk();
+
+    $this->artisan('manfaa:suspend-overdue')->assertExitCode(0);
+
+    // Without the invalidation the shelves kept the store — and the rail
+    // kept counting it — for up to 60 seconds, while the UNCACHED directory
+    // grid on the same screen already answered that it is gone, and the
+    // store page kept quoting 2.00% the till now refuses (§7).
+    $data = $this->getJson('/api/discover')->assertOk()->json('data');
+    expect($data['in_store'])->toBe([]);
+    expect($data['recently_added'])->toBe([]);
+    expect($data['categories'])->toBe([]);
+
+    expect($this->getJson('/api/discover/merchants')->assertOk()->json('meta.total'))->toBe(0);
+    $this->getJson('/api/discover/merchants/clock-store')->assertNotFound();
+});

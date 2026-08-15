@@ -46,6 +46,13 @@ final class DiscoveryService
     // v4: the sections payload gained the recently-added shelf and the
     // curated category rail, and the cached value is now the whole dataset
     // (entries + rail) rather than a bare entry list.
+    //
+    // The version tracks the shape of the CACHED VALUE, not of the response:
+    // the later in-store shelf needed no bump because it is filtered at the
+    // presentation boundary from `channel`, which every v4 entry already
+    // carries — a value written by the previous build renders the new
+    // payload correctly, so a bump would only force a pointless cold
+    // rebuild. Bump the moment an entry gains, loses or renames a key.
     public const string CACHE_KEY = 'discovery:entries:v4';
 
     // v4: store detail gained category_rates (Task #25).

@@ -57,6 +57,7 @@ it('hides every non-active status from every public surface', function (string $
         'featured' => [],
         'increased' => [],
         'nearby' => [],
+        'in_store' => [],
         'online' => [],
         'recently_added' => [],
         'categories' => [],
@@ -86,6 +87,8 @@ it('lists the same fixture the moment it is active — the matrix is about statu
     $sections = $this->getJson('/api/discover?lat=4.1752&lng=73.5089')->assertOk()->json('data');
     expect(collect($sections['featured'])->pluck('slug'))->toContain('shadow-store');
     expect(collect($sections['online'])->pluck('slug'))->toContain('shadow-store');
+    // Channel `both` earns either way, so it sits on both channel shelves.
+    expect(collect($sections['in_store'])->pluck('slug'))->toContain('shadow-store');
     expect(collect($sections['nearby'])->pluck('slug'))->toContain('shadow-store');
     expect(collect($sections['recently_added'])->pluck('slug'))->toContain('shadow-store');
     expect($sections['featured'][0]['channel'])->toBe('both');

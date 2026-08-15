@@ -1,11 +1,13 @@
 <?php
 
+use App\Domain\Discovery\DiscoveryService;
 use App\Domain\Standing\NoticeRecorder;
 use App\Models\AdminUser;
 use App\Models\Merchant;
 use App\Models\MerchantNotice;
 use App\Models\Transaction;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Tests\TestCase;
 
 uses(TestCase::class, RefreshDatabase::class);
@@ -84,4 +86,20 @@ it('is the only path back after write-off: the automatic sweep keeps skipping, t
     $this->artisan('manfaa:reinstate')->assertExitCode(0);
     expect($merchant->refresh()->status)->toBe('active')
         ->and(MerchantNotice::query()->where('type', 'reinstated')->count())->toBe(1);
+});
+
+it('drops the storefront read model so the store reappears at once', function () {
+    $merchant = Merchant::factory()->suspended()->create();
+
+    // Both keys warm, as a live storefront read leaves them — here holding
+    // the store's ABSENCE, which is exactly as stale as a stale rate.
+    Cache::put(DiscoveryService::CACHE_KEY, ['entries' => [], 'categories' => []], 60);
+    Cache::put(DiscoveryService::STORE_CACHE_PREFIX.$merchant->slug, ['name' => 'stale'], 60);
+
+    $this->actingAs(AdminUser::factory()->create(), 'admin')
+        ->postJson("/api/admin/merchants/{$merchant->id}/reinstate", ['note' => 'Debt settled out of band.'])
+        ->assertOk();
+
+    expect(Cache::has(DiscoveryService::CACHE_KEY))->toBeFalse()
+        ->and(Cache::has(DiscoveryService::STORE_CACHE_PREFIX.$merchant->slug))->toBeFalse();
 });

@@ -5,6 +5,7 @@ use App\Domain\Cashback\TransitionService;
 use App\Domain\Standing\NoticeRecorder;
 use App\Models\Merchant;
 use App\Models\MerchantNotice;
+use App\Models\MerchantRate;
 use App\Models\Transaction;
 use Carbon\CarbonImmutable;
 use Database\Seeders\LedgerAccountSeeder;
@@ -118,4 +119,42 @@ it('never reverses a suspension it did not itself impose', function () {
 
     expect($merchant->refresh()->status)->toBe('suspended')
         ->and(MerchantNotice::query()->count())->toBe(0);
+});
+
+it('re-lists the store as it reinstates, without waiting out the read-model cache', function () {
+    $clockStart = CarbonImmutable::parse('2026-08-01T09:00:00+05:00')->utc();
+    Carbon::setTestNow($clockStart->addDays(16));
+
+    $merchant = Merchant::factory()->create([
+        'name' => 'Back Store',
+        'slug' => 'back-store',
+        'category' => 'grocery',
+    ]);
+    MerchantRate::factory()->for($merchant)->create([
+        'rate_bp' => 200,
+        'effective_from' => $clockStart->subYear(),
+        'effective_to' => null,
+    ]);
+    $overdue = Transaction::factory()->for($merchant)->create([
+        'state' => 'payable_unfunded',
+        'clock_start_at' => $clockStart,
+        'due_at' => $clockStart->addDays(15),
+    ]);
+
+    $this->artisan('manfaa:suspend-overdue')->assertExitCode(0);
+
+    // The storefront read model now caches the store's ABSENCE.
+    expect($this->getJson('/api/discover')->assertOk()->json('data.recently_added'))->toBe([]);
+
+    // Settlement clears the debt — the same confirm() allocation performs.
+    app(TransitionService::class)->confirm($overdue, Actor::system());
+
+    $this->artisan('manfaa:reinstate')->assertExitCode(0);
+    expect($merchant->refresh()->status)->toBe('active');
+
+    // A merchant who settles is listable again this second, not up to 60
+    // seconds later: reinstatement drops the same read model suspension did.
+    expect(collect($this->getJson('/api/discover')->assertOk()->json('data.recently_added'))->pluck('slug')->all())
+        ->toBe(['back-store']);
+    $this->getJson('/api/discover/merchants/back-store')->assertOk();
 });

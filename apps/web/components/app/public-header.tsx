@@ -193,8 +193,11 @@ export function PublicFooter() {
           >
             {t('landing.forMerchants')}
           </a>
-          {/* Integration docs get a real /docs link later. */}
-          <span>{t('landing.forPartners')}</span>
+          {/* Static docs served by nginx, not a Next.js route — a plain
+              anchor, so no client-side navigation is attempted. */}
+          <a href="/docs/" className="hover:text-foreground">
+            {t('landing.forPartners')}
+          </a>
         </div>
       </div>
     </footer>
