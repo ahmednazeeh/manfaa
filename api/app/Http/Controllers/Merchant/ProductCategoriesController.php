@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Merchant;
 
 use App\Domain\Discovery\DiscoveryService;
+use App\Domain\Money\Percent;
 use App\Domain\Platform\RateNotPricedException;
 use App\Domain\Platform\TierScheduleService;
 use App\Http\Controllers\Controller;
@@ -12,6 +13,7 @@ use App\Http\Resources\ProductCategoryResource;
 use App\Models\Merchant;
 use App\Models\MerchantProductCategory;
 use App\Models\MerchantUser;
+use App\Rules\PercentRate;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -31,9 +33,11 @@ use Illuminate\Validation\ValidationException;
  *   frozen snapshots.
  * - Deactivation is soft (PATCH active: false); there is no delete.
  * - Rate overrides obey the same sellability law as the standing rate:
- *   50..2000 structurally, refused above the fee tier schedule ceiling
+ *   0.50%..20.00% structurally, refused above the fee tier schedule ceiling
  *   with code `rate_not_priced`, checked under the coverage lock so a
  *   concurrently published narrower schedule cannot slip past.
+ * - The rate is a 2-decimal percent on the wire (`cashback_rate_percent`,
+ *   PLAN §1) and integer basis points in storage.
  */
 class ProductCategoriesController extends Controller
 {
@@ -54,13 +58,15 @@ class ProductCategoriesController extends Controller
             'name_en' => ['required', 'string', 'max:120'],
             'name_dv' => ['nullable', 'string', 'max:120'],
             'mode' => ['required', 'in:excluded,rate'],
-            'rate_bp' => ['required_if:mode,rate', 'prohibited_if:mode,excluded', 'nullable', 'integer', 'min:50', 'max:2000'],
+            'cashback_rate_percent' => ['required_if:mode,rate', 'prohibited_if:mode,excluded', 'nullable', PercentRate::cashback()],
             'sort' => ['nullable', 'integer', 'min:0', 'max:100000'],
             'slug' => ['prohibited'],
         ]);
 
         $merchant = $this->merchant($request);
-        $rateBp = $validated['mode'] === 'rate' ? (int) $validated['rate_bp'] : null;
+        $rateBp = $validated['mode'] === 'rate'
+            ? Percent::toBasisPoints($validated['cashback_rate_percent'])
+            : null;
 
         try {
             $category = DB::transaction(function () use ($merchant, $validated, $rateBp, $schedules): MerchantProductCategory {
@@ -116,7 +122,7 @@ class ProductCategoriesController extends Controller
             'name_en' => ['sometimes', 'string', 'max:120'],
             'name_dv' => ['sometimes', 'nullable', 'string', 'max:120'],
             'mode' => ['sometimes', 'in:excluded,rate'],
-            'rate_bp' => ['sometimes', 'nullable', 'integer', 'min:50', 'max:2000'],
+            'cashback_rate_percent' => ['sometimes', 'nullable', PercentRate::cashback()],
             'sort' => ['sometimes', 'integer', 'min:0', 'max:100000'],
             'active' => ['sometimes', 'boolean'],
             'slug' => ['prohibited'],
@@ -125,19 +131,19 @@ class ProductCategoriesController extends Controller
         // Resolve the FINAL mode/rate pair and validate their coherence —
         // a rate override always carries a rate, an exclusion never does.
         $mode = $validated['mode'] ?? $category->mode;
-        $rateBp = array_key_exists('rate_bp', $validated)
-            ? ($validated['rate_bp'] === null ? null : (int) $validated['rate_bp'])
+        $rateBp = array_key_exists('cashback_rate_percent', $validated)
+            ? ($validated['cashback_rate_percent'] === null ? null : Percent::toBasisPoints($validated['cashback_rate_percent']))
             : ($mode === 'rate' ? $category->rate_bp : null);
 
         if ($mode === 'rate' && $rateBp === null) {
             throw ValidationException::withMessages([
-                'rate_bp' => ['A rate is required when mode is "rate".'],
+                'cashback_rate_percent' => ['A rate is required when mode is "rate".'],
             ]);
         }
 
         if ($mode === 'excluded' && $rateBp !== null) {
             throw ValidationException::withMessages([
-                'rate_bp' => ['An excluded category cannot carry a rate.'],
+                'cashback_rate_percent' => ['An excluded category cannot carry a rate.'],
             ]);
         }
 

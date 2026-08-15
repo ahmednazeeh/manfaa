@@ -69,7 +69,7 @@ it('lets a staff user run lookup, credit, and duplicate 409 as the UI does', fun
         ->assertJsonPath('data.origin', 'manual')
         ->assertJsonPath('data.state', 'awaiting_validation')
         ->assertJsonPath('data.invoice_no', 'INV-7001')
-        ->assertJsonPath('data.rate_bp', 200)
+        ->assertJsonPath('data.cashback_rate_percent', '2.00')
         ->assertJsonPath('data.cashback_laari', intdiv(125000 * 200 + 9999, 10000))
         ->assertJsonPath('data.fee_laari', intdiv(125000 * 75 + 9999, 10000));
 

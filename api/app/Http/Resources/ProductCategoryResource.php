@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Domain\Money\Percent;
 use App\Models\MerchantProductCategory;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -25,7 +26,9 @@ class ProductCategoryResource extends JsonResource
             'name_en' => $this->name_en,
             'name_dv' => $this->name_dv,
             'mode' => $this->mode,
-            'rate_bp' => $this->rate_bp,
+            // 2-decimal percent string, null for an excluded category
+            // (PLAN §1 wire format).
+            'cashback_rate_percent' => Percent::formatOrNull($this->rate_bp),
             'active' => $this->active,
             'sort' => $this->sort,
             'created_at' => $this->created_at?->toIso8601String(),

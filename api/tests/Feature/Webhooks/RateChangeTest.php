@@ -63,22 +63,29 @@ it('refuses staff and rejects out-of-tier rates', function () {
     $staff = MerchantUser::factory()->for($this->merchant)->create(); // role staff
 
     $this->actingAs($staff, 'merchant')
-        ->postJson('/api/merchant/rate', ['rate_bp' => 300])
+        ->postJson('/api/merchant/rate', ['cashback_rate_percent' => '3.00'])
         ->assertForbidden();
 
-    // Structural bounds are now 50–2000 (cap widening); 1001–2000 fail
-    // later as rate_not_priced against the active schedule, covered in
-    // tests/Feature/Platform/CapWideningTest.php.
-    foreach ([49, 2001, 0, -100] as $bad) {
+    // Structural bounds are 0.50%–20.00% (cap widening); 10.01%–20.00%
+    // fail later as rate_not_priced against the active schedule, covered in
+    // tests/Feature/Platform/CapWideningTest.php. The wire takes the percent
+    // as a string or a JSON number, and junk of every shape is a field
+    // error on cashback_rate_percent — never a silent reinterpretation.
+    foreach (['0.49', '20.01', '0', -1, 'abc', ''] as $bad) {
         $this->actingAs($this->owner, 'merchant')
-            ->postJson('/api/merchant/rate', ['rate_bp' => $bad])
+            ->postJson('/api/merchant/rate', ['cashback_rate_percent' => $bad])
             ->assertStatus(422)
-            ->assertJsonValidationErrors('rate_bp');
+            ->assertJsonValidationErrors('cashback_rate_percent');
     }
 
-    // §4: non-integer basis points fall into no tier — rejected outright.
+    // §4: finer than 0.01pp falls into no tier — rejected outright, as a
+    // string and as a JSON number.
     $this->actingAs($this->owner, 'merchant')
-        ->postJson('/api/merchant/rate', ['rate_bp' => 250.5])
+        ->postJson('/api/merchant/rate', ['cashback_rate_percent' => '2.505'])
+        ->assertStatus(422);
+
+    $this->actingAs($this->owner, 'merchant')
+        ->postJson('/api/merchant/rate', ['cashback_rate_percent' => 2.505])
         ->assertStatus(422);
 
     expect(MerchantRate::query()->count())->toBe(1);
@@ -91,14 +98,14 @@ it('applies an increase immediately and sale-time resolution honours it at occur
     Carbon::setTestNow($now);
 
     $response = $this->actingAs($this->owner, 'merchant')
-        ->postJson('/api/merchant/rate', ['rate_bp' => 300])
+        ->postJson('/api/merchant/rate', ['cashback_rate_percent' => '3.00'])
         ->assertOk()
-        ->assertJsonPath('data.current.rate_bp', 300)
-        ->assertJsonPath('data.current.fee_bp', 75)
-        ->assertJsonPath('data.current.all_in_bp', 375)
+        ->assertJsonPath('data.current.cashback_rate_percent', '3.00')
+        ->assertJsonPath('data.current.platform_fee_percent', '0.75')
+        ->assertJsonPath('data.current.all_in_percent', '3.75')
         ->assertJsonPath('data.pending', null)
         ->assertJsonPath('change.applies', 'immediately')
-        ->assertJsonPath('change.previous.rate_bp', 200)
+        ->assertJsonPath('change.previous.cashback_rate_percent', '2.00')
         ->assertJsonPath('change.tier_changed', false);
 
     // History: old row closed at now, new row open-ended from now.
@@ -125,12 +132,12 @@ it('schedules a decrease for the next business-day midnight and resolution flips
     $boundary = CarbonImmutable::parse('2026-09-11T00:00:00+05:00')->utc();
 
     $this->actingAs($this->owner, 'merchant')
-        ->postJson('/api/merchant/rate', ['rate_bp' => 100])
+        ->postJson('/api/merchant/rate', ['cashback_rate_percent' => '1.00'])
         ->assertOk()
-        ->assertJsonPath('data.current.rate_bp', 200)
-        ->assertJsonPath('data.pending.rate_bp', 100)
-        ->assertJsonPath('data.pending.fee_bp', 50)
-        ->assertJsonPath('data.pending.all_in_bp', 150)
+        ->assertJsonPath('data.current.cashback_rate_percent', '2.00')
+        ->assertJsonPath('data.pending.cashback_rate_percent', '1.00')
+        ->assertJsonPath('data.pending.platform_fee_percent', '0.50')
+        ->assertJsonPath('data.pending.all_in_percent', '1.50')
         ->assertJsonPath('change.applies', 'next_business_midnight')
         ->assertJsonPath('change.effective_at', '2026-09-11T00:00:00+05:00')
         ->assertJsonPath('change.tier_changed', true);
@@ -155,8 +162,8 @@ it('replaces a pending decrease with the newer change', function () {
     Carbon::setTestNow(CarbonImmutable::parse('2026-09-10T10:00:00+05:00'));
     $boundary = CarbonImmutable::parse('2026-09-11T00:00:00+05:00')->utc();
 
-    $this->actingAs($this->owner, 'merchant')->postJson('/api/merchant/rate', ['rate_bp' => 150])->assertOk();
-    $this->actingAs($this->owner, 'merchant')->postJson('/api/merchant/rate', ['rate_bp' => 100])->assertOk();
+    $this->actingAs($this->owner, 'merchant')->postJson('/api/merchant/rate', ['cashback_rate_percent' => '1.50'])->assertOk();
+    $this->actingAs($this->owner, 'merchant')->postJson('/api/merchant/rate', ['cashback_rate_percent' => '1.00'])->assertOk();
 
     // The 150 row is gone; exactly one future row remains, at 100.
     $future = MerchantRate::query()->where('effective_from', '>', CarbonImmutable::now('UTC'))->get();
@@ -167,7 +174,7 @@ it('replaces a pending decrease with the newer change', function () {
 
     // An increase now cancels the pending decrease entirely and applies
     // immediately.
-    $this->actingAs($this->owner, 'merchant')->postJson('/api/merchant/rate', ['rate_bp' => 500])->assertOk();
+    $this->actingAs($this->owner, 'merchant')->postJson('/api/merchant/rate', ['cashback_rate_percent' => '5.00'])->assertOk();
 
     $rows = MerchantRate::query()->orderBy('effective_from')->get();
     expect($rows)->toHaveCount(2)
@@ -196,17 +203,17 @@ it('queues merchant.rate_changed with the openapi payload for subscribed vendors
     ]);
 
     // Decrease: effective_at is next midnight UTC+5, not now.
-    $this->actingAs($this->owner, 'merchant')->postJson('/api/merchant/rate', ['rate_bp' => 100])->assertOk();
+    $this->actingAs($this->owner, 'merchant')->postJson('/api/merchant/rate', ['cashback_rate_percent' => '1.00'])->assertOk();
 
     $delivery = WebhookDelivery::query()->sole();
     expect($delivery->event)->toBe('merchant.rate_changed')
         // toEqual: jsonb round-trips with canonical key order.
         ->and($delivery->payload['data'])->toEqual([
             'merchant_id' => $this->merchant->id,
-            'rate_bp' => 100,
-            'fee_bp' => 50,
-            'previous_rate_bp' => 200,
-            'previous_fee_bp' => 75,
+            'cashback_rate_percent' => '1.00',
+            'platform_fee_percent' => '0.50',
+            'previous_cashback_rate_percent' => '2.00',
+            'previous_platform_fee_percent' => '0.75',
             'effective_at' => '2026-09-11T00:00:00+05:00',
         ]);
 
@@ -215,26 +222,26 @@ it('queues merchant.rate_changed with the openapi payload for subscribed vendors
     // Re-posting the SAME standing rate with no pending change is a no-op
     // and must not spam vendors. First cancel the pending decrease (which
     // does notify), then repeat the current rate.
-    $this->actingAs($this->owner, 'merchant')->postJson('/api/merchant/rate', ['rate_bp' => 200])->assertOk();
+    $this->actingAs($this->owner, 'merchant')->postJson('/api/merchant/rate', ['cashback_rate_percent' => '2.00'])->assertOk();
     expect(WebhookDelivery::query()->count())->toBe(2);
 
-    $this->actingAs($this->owner, 'merchant')->postJson('/api/merchant/rate', ['rate_bp' => 200])->assertOk();
+    $this->actingAs($this->owner, 'merchant')->postJson('/api/merchant/rate', ['cashback_rate_percent' => '2.00'])->assertOk();
     expect(WebhookDelivery::query()->count())->toBe(2);
 });
 
 it('shows current and pending on GET /merchant/rate for any merchant user', function () {
     Carbon::setTestNow(CarbonImmutable::parse('2026-09-10T22:00:00+05:00'));
 
-    $this->actingAs($this->owner, 'merchant')->postJson('/api/merchant/rate', ['rate_bp' => 100])->assertOk();
+    $this->actingAs($this->owner, 'merchant')->postJson('/api/merchant/rate', ['cashback_rate_percent' => '1.00'])->assertOk();
 
     $staff = MerchantUser::factory()->for($this->merchant)->create();
 
     $this->actingAs($staff, 'merchant')
         ->getJson('/api/merchant/rate')
         ->assertOk()
-        ->assertJsonPath('data.current.rate_bp', 200)
-        ->assertJsonPath('data.current.fee_bp', 75)
-        ->assertJsonPath('data.current.all_in_bp', 275)
-        ->assertJsonPath('data.pending.rate_bp', 100)
+        ->assertJsonPath('data.current.cashback_rate_percent', '2.00')
+        ->assertJsonPath('data.current.platform_fee_percent', '0.75')
+        ->assertJsonPath('data.current.all_in_percent', '2.75')
+        ->assertJsonPath('data.pending.cashback_rate_percent', '1.00')
         ->assertJsonPath('data.pending.effective_from', '2026-09-11T00:00:00+05:00');
 });

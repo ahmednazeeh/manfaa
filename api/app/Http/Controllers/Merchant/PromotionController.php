@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Merchant;
 
 use App\Domain\Discovery\DiscoveryService;
+use App\Domain\Money\Percent;
+use App\Domain\Platform\FeeTierScheduleResolver;
 use App\Domain\Platform\RateNotPricedException;
 use App\Domain\Promotions\BranchNotOwnedException;
 use App\Domain\Promotions\InvalidPromotionWindowException;
@@ -18,6 +20,7 @@ use App\Http\Resources\RateResource;
 use App\Models\Merchant;
 use App\Models\MerchantUser;
 use App\Models\Promotion;
+use App\Rules\PercentRate;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -59,12 +62,15 @@ class PromotionController extends Controller
         $merchant = $this->merchant($request);
         $user = $this->managerOrAbove($request);
 
-        // §4: integer basis points 50–2000 (structural cap), or 4.995%
-        // falls into no tier. The domain additionally refuses any rate the
-        // ACTIVE fee tier schedule does not price (rate_not_priced below).
-        // occurred_at-style timestamps must carry an explicit UTC offset.
+        // PLAN §1 wire format: the promo rate is a 2-decimal percent
+        // ("5", "5.5", 5.5), converted to integer basis points here. §4
+        // bounds 0.50%–20.00% (structural cap), or 4.995% falls into no
+        // tier. The domain additionally refuses any rate the ACTIVE fee
+        // tier schedule does not price (rate_not_priced below). The
+        // promotion WINDOW is a scheduling instant, not a sale instant, so
+        // both ends still require an explicit UTC offset.
         $validated = $request->validate([
-            'rate_bp' => ['required', 'integer', 'min:50', 'max:2000'],
+            'cashback_rate_percent' => ['required', PercentRate::cashback()],
             'starts_at' => ['required', 'date_format:Y-m-d\TH:i:sP,Y-m-d\TH:i:sp,Y-m-d\TH:i:sO'],
             'ends_at' => ['required', 'date_format:Y-m-d\TH:i:sP,Y-m-d\TH:i:sp,Y-m-d\TH:i:sO'],
             'min_purchase_laari' => ['nullable', 'integer', 'min:0'],
@@ -76,7 +82,7 @@ class PromotionController extends Controller
             $promotion = $this->promotions->createDraft(
                 merchant: $merchant,
                 creator: $user,
-                rateBp: (int) $validated['rate_bp'],
+                rateBp: Percent::toBasisPoints($validated['cashback_rate_percent']),
                 startsAt: CarbonImmutable::parse($validated['starts_at']),
                 endsAt: CarbonImmutable::parse($validated['ends_at']),
                 minPurchaseLaari: isset($validated['min_purchase_laari']) ? (int) $validated['min_purchase_laari'] : null,
@@ -157,14 +163,20 @@ class PromotionController extends Controller
         $now = CarbonImmutable::now('UTC');
         $feeInstant = $promotion->starts_at->utc()->isAfter($now) ? $promotion->starts_at->utc() : $now;
 
-        $promo = RateResource::describeBp($promotion->rate_bp, $feeInstant);
-        $standing = $standingBp === null ? null : RateResource::describeBp($standingBp, $feeInstant);
+        // Percent strings for the wire, integer basis points for the two
+        // comparisons (§4 money law: never compare or subtract formatted
+        // money).
+        $feeTiers = app(FeeTierScheduleResolver::class);
+        $promoFeeBp = $feeTiers->feeBpAt($promotion->rate_bp, $feeInstant);
+        $standingFeeBp = $standingBp === null ? null : $feeTiers->feeBpAt($standingBp, $feeInstant);
 
         return [
-            'promo' => $promo,
-            'standing' => $standing,
-            'all_in_delta_bp' => $standing === null ? null : $promo['all_in_bp'] - $standing['all_in_bp'],
-            'tier_changed' => $standing !== null && $promo['fee_bp'] !== $standing['fee_bp'],
+            'promo' => RateResource::describe($promotion->rate_bp, $feeInstant),
+            'standing' => $standingBp === null ? null : RateResource::describe($standingBp, $feeInstant),
+            'all_in_delta_percent' => $standingBp === null || $standingFeeBp === null
+                ? null
+                : Percent::formatDelta(($promotion->rate_bp + $promoFeeBp) - ($standingBp + $standingFeeBp)),
+            'tier_changed' => $standingFeeBp !== null && $promoFeeBp !== $standingFeeBp,
         ];
     }
 

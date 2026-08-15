@@ -105,13 +105,13 @@ it('builds the featured, increased and online sections without auth', function (
     expect($data['increased'])->toHaveCount(1);
     $beta = $data['increased'][0];
     expect($beta['slug'])->toBe('hulhu-beta');
-    expect($beta['rate_bp'])->toBe(500);
-    expect($beta['standing_rate_bp'])->toBe(100);
+    expect($beta['cashback_rate_percent'])->toBe('5.00');
+    expect($beta['standing_cashback_rate_percent'])->toBe('1.00');
     expect($beta['promo_ends_at'])->not->toBeNull();
 
     // Alpha's draft/expired promos never boosted it.
     $alpha = collect($data['featured'])->firstWhere('slug', 'cafe-alpha');
-    expect($alpha['rate_bp'])->toBe(200);
+    expect($alpha['cashback_rate_percent'])->toBe('2.00');
     expect($alpha['promo_ends_at'])->toBeNull();
 
     expect(collect($data['online'])->pluck('slug')->all())->toBe(['hulhu-beta']);
@@ -148,7 +148,7 @@ it('keeps branch-scoped promotions off the increased shelf and off the cards', f
     expect($data['increased'])->toBe([]);
 
     $card = collect($data['featured'])->firstWhere('slug', 'cafe-alpha');
-    expect($card['rate_bp'])->toBe(200);
+    expect($card['cashback_rate_percent'])->toBe('2.00');
     expect($card['promo_ends_at'])->toBeNull();
 });
 
@@ -192,7 +192,7 @@ it('leaks nothing: no internal ids, no PII, no commercial terms', function () {
     foreach ($data as $section) {
         foreach ($section as $entry) {
             expect(array_keys($entry))->toBe([
-                'name', 'slug', 'category', 'logo_url', 'channel', 'rate_bp', 'standing_rate_bp', 'promo_ends_at', 'distance_m',
+                'name', 'slug', 'category', 'logo_url', 'channel', 'cashback_rate_percent', 'standing_cashback_rate_percent', 'promo_ends_at', 'distance_m',
             ]);
         }
     }

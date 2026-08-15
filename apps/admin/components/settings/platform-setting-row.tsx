@@ -6,6 +6,7 @@ import {
   formatBpPercent,
   parseMvrToLaari,
   parsePercentToBp,
+  percentToBp,
   updateAdminPlatformSetting,
   type PlatformSetting,
   type PlatformSettingKey,
@@ -22,11 +23,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
 /**
- * How a key's integer value is entered and displayed. `bp` keys are stored
- * as integer basis points and typed as a percent — the same integer-bp law
- * the rate inputs follow, never a float in between.
+ * How a key's value is entered and displayed. A `percent` key arrives from
+ * the API as a 2-decimal percent STRING (basis points never travel on the
+ * wire) and is worked with here as integer basis points — the same
+ * integer-bp law every rate input follows, never a float in between.
  */
-export type SettingUnit = 'mvr' | 'days' | 'bp';
+export type SettingUnit = 'mvr' | 'days' | 'percent';
 
 export interface SettingMeta {
   label: string;
@@ -35,11 +37,22 @@ export interface SettingMeta {
   unit: SettingUnit;
 }
 
+/**
+ * A setting value in the integer unit this component computes in: laari,
+ * days, or basis points parsed out of the wire's percent string. Never a
+ * float, and never a rate read as a number.
+ */
+function toInteger(value: number | string, unit: SettingUnit): number {
+  // percentToBp, not the lenient input parser: the server always emits the
+  // canonical 2-decimal form, so anything else is a contract breach.
+  return unit === 'percent' ? percentToBp(String(value)) : Number(value);
+}
+
 function toInput(value: number, unit: SettingUnit): string {
   if (unit === 'days') {
     return String(value);
   }
-  if (unit === 'bp') {
+  if (unit === 'percent') {
     return bpToPercentString(value);
   }
   // Integer laari -> "1,234.56" style MVR string, no float in between.
@@ -59,7 +72,7 @@ function fromInput(raw: string, unit: SettingUnit): number | null {
       const value = Number(trimmed);
       return Number.isSafeInteger(value) ? value : null;
     }
-    if (unit === 'bp') {
+    if (unit === 'percent') {
       return parsePercentToBp(raw);
     }
     return parseMvrToLaari(raw);
@@ -72,7 +85,7 @@ function display(value: number, unit: SettingUnit): string {
   if (unit === 'days') {
     return `${value} ${value === 1 ? 'day' : 'days'}`;
   }
-  return unit === 'bp' ? formatBpPercent(value) : formatMoney(value);
+  return unit === 'percent' ? formatBpPercent(value) : formatMoney(value);
 }
 
 /**
@@ -97,22 +110,30 @@ export function PlatformSettingRow({
   notice?: string | null;
 }) {
   const queryClient = useQueryClient();
-  const [raw, setRaw] = useState(() => toInput(setting.value, meta.unit));
+  // Every comparison below runs in the key's integer unit, so a percent
+  // setting is parsed out of its wire string exactly once, here.
+  const current = toInteger(setting.value, meta.unit);
+  const min = toInteger(setting.min, meta.unit);
+  const max = toInteger(setting.max, meta.unit);
+  const [raw, setRaw] = useState(() => toInput(current, meta.unit));
 
   // Re-sync the input when another admin's write lands via refetch.
   useEffect(() => {
-    setRaw(toInput(setting.value, meta.unit));
-  }, [setting.value, meta.unit]);
+    setRaw(toInput(current, meta.unit));
+  }, [current, meta.unit]);
 
   const parsed = fromInput(raw, meta.unit);
-  const outOfRange =
-    parsed !== null && (parsed < setting.min || parsed > setting.max);
-  const dirty = parsed !== setting.value;
+  const outOfRange = parsed !== null && (parsed < min || parsed > max);
+  const dirty = parsed !== current;
   const invalid = parsed === null || outOfRange;
 
   const save = useMutation({
+    // The wire wants the key's own unit back: a percent string for a rate,
+    // the plain integer for laari and days.
     mutationFn: (value: number) =>
-      updateAdminPlatformSetting(settingKey, { value }),
+      updateAdminPlatformSetting(settingKey, {
+        value: meta.unit === 'percent' ? bpToPercentString(value) : value,
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: ['admin', 'platform-settings'],
@@ -143,9 +164,8 @@ export function PlatformSettingRow({
         </div>
         <p className="text-sm text-muted-foreground">{meta.description}</p>
         <p className="text-xs text-muted-foreground/80">
-          Allowed {display(setting.min, meta.unit)} –{' '}
-          {display(setting.max, meta.unit)} · default{' '}
-          {display(setting.default, meta.unit)}
+          Allowed {display(min, meta.unit)} – {display(max, meta.unit)} ·
+          default {display(toInteger(setting.default, meta.unit), meta.unit)}
         </p>
         {notice ? (
           <Alert
@@ -177,13 +197,13 @@ export function PlatformSettingRow({
               className={
                 meta.unit === 'mvr'
                   ? 'w-40 ps-12'
-                  : meta.unit === 'bp'
+                  : meta.unit === 'percent'
                     ? 'w-28 pe-8'
                     : 'w-28'
               }
               aria-invalid={invalid}
             />
-            {meta.unit === 'bp' ? (
+            {meta.unit === 'percent' ? (
               <span className="pointer-events-none absolute inset-y-0 end-3 flex items-center text-sm text-muted-foreground">
                 %
               </span>
@@ -193,14 +213,14 @@ export function PlatformSettingRow({
             <p className="text-xs text-destructive">
               {meta.unit === 'mvr'
                 ? 'Enter an MVR amount, e.g. 100.00.'
-                : meta.unit === 'bp'
+                : meta.unit === 'percent'
                   ? 'Enter a percentage, e.g. 5.00.'
                   : 'Enter a whole number of days.'}
             </p>
           ) : outOfRange ? (
             <p className="text-xs text-destructive">
-              Must be between {display(setting.min, meta.unit)} and{' '}
-              {display(setting.max, meta.unit)}.
+              Must be between {display(min, meta.unit)} and{' '}
+              {display(max, meta.unit)}.
             </p>
           ) : null}
         </div>

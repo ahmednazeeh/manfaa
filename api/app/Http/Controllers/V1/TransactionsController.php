@@ -18,14 +18,19 @@ use App\Domain\Cashback\LinePricingException;
 use App\Domain\Cashback\LineSetParser;
 use App\Domain\Cashback\MerchantNotActiveException;
 use App\Domain\Cashback\NoEffectiveRateException;
+use App\Domain\Cashback\RateBelowAdvertisedException;
 use App\Domain\Money\Laari;
+use App\Domain\Money\Percent;
+use App\Domain\Platform\RateNotPricedException;
 use App\Domain\Webhooks\WebhookDispatcher;
 use App\Domain\Webhooks\WebhookEvents;
 use App\Http\Resources\V1\AdjustmentResource;
 use App\Http\Resources\V1\TransactionResource;
+use App\Http\Support\OccurredAt;
 use App\Models\Merchant;
 use App\Models\MerchantBranch;
 use App\Models\Transaction;
+use App\Rules\PercentRate;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -36,14 +41,20 @@ use Laravel\Sanctum\PersonalAccessToken;
  * never rejects a well-formed sale for business reasons — below-minimum
  * and suspended-merchant sales are recorded with zero cashback and a
  * distinct 200 body, so the cashier always sees something truthful.
+ *
+ * The one exception is an unusable `cashback_rate_percent` override on a
+ * sale that would ACCRUE (PLAN §1): a rate the platform cannot price
+ * (`rate_not_priced`) or one below the advertised rate
+ * (`rate_below_advertised`) is refused 422 rather than silently ignored —
+ * the till asked for terms we will not honour, and pretending otherwise
+ * would put a wrong number on the customer's receipt. Omit the field and
+ * the sale prices exactly as it always has. On a sale that grants nothing
+ * either way — suspended merchant, below minimum — the field is ignored
+ * instead (CreditRecorder), because those sales must still be recorded and
+ * answered.
  */
 class TransactionsController extends V1Controller
 {
-    // ISO 8601 with an explicit UTC offset (§9.2). An offset-less
-    // wall-clock string would be read as UTC and freeze the rate at the
-    // wrong instant, so it is rejected outright.
-    private const string OCCURRED_AT_FORMATS = 'date_format:Y-m-d\TH:i:sP,Y-m-d\TH:i:sp,Y-m-d\TH:i:sO';
-
     public function store(Request $request, ApiCreditService $credits, LineSetParser $lineParser): JsonResponse
     {
         $data = $this->validateEnvelope($request, [
@@ -54,7 +65,14 @@ class TransactionsController extends V1Controller
             'customer_ref' => ['required', 'string', 'regex:'.CustomerRef::PATTERN],
             'eligible_amount' => ['required', 'integer', 'min:1'],
             'sale_amount' => ['nullable', 'integer', 'min:1'],
-            'occurred_at' => ['required', self::OCCURRED_AT_FORMATS],
+            // OPTIONAL (PLAN §1): omitted means NOW. ISO 8601 with an
+            // offset, or a plain wall clock read as Maldives time
+            // (App\Http\Support\OccurredAt).
+            'occurred_at' => ['sometimes', 'nullable', OccurredAt::rule()],
+            // Per-sale rate override (PLAN §1): a 2-decimal percent, string
+            // or JSON number. Applies to THIS sale only; may only raise the
+            // rate the sale would otherwise earn.
+            'cashback_rate_percent' => ['sometimes', 'nullable', PercentRate::cashback()],
             'branch_id' => ['nullable', 'integer'],
             // Optional line-item split (docs/openapi.yaml): each line names
             // one of the merchant's product-category slugs
@@ -77,6 +95,10 @@ class TransactionsController extends V1Controller
             ]);
         }
 
+        $overrideRateBp = isset($data['cashback_rate_percent'])
+            ? Percent::toBasisPoints($data['cashback_rate_percent'])
+            : null;
+
         $lines = null;
 
         if (isset($data['lines'])) {
@@ -95,10 +117,11 @@ class TransactionsController extends V1Controller
                 invoiceNo: $data['invoice_no'],
                 eligible: Laari::of((int) $data['eligible_amount']),
                 saleAmount: isset($data['sale_amount']) ? Laari::of((int) $data['sale_amount']) : null,
-                occurredAt: CarbonImmutable::parse($data['occurred_at']),
+                occurredAt: OccurredAt::fromRequest($data),
                 branchId: $branchId,
                 idempotencyKey: $request->header('Idempotency-Key'),
                 lines: $lines,
+                overrideRateBp: $overrideRateBp,
             );
         } catch (CustomerNotFoundException $exception) {
             return $this->error(422, 'customer_not_found', $exception->getMessage());
@@ -106,6 +129,19 @@ class TransactionsController extends V1Controller
             return $this->error(422, 'future_dated', 'occurred_at is in the future beyond the permitted clock-skew allowance.');
         } catch (NoEffectiveRateException) {
             return $this->error(422, 'no_effective_rate', 'No cashback rate is effective at occurred_at — contact the platform.');
+        } catch (RateNotPricedException $exception) {
+            // The override is structurally legal but the ACTIVE fee tier
+            // schedule prices no fee for it — unsellable until the platform
+            // publishes a wider table.
+            return $this->error(422, RateNotPricedException::CODE, $exception->getMessage(), meta: [
+                'ceiling_percent' => Percent::format($exception->ceilingBp()),
+            ]);
+        } catch (RateBelowAdvertisedException $exception) {
+            // PLAN §1: the advertised rate is a public promise — an
+            // override may only boost it.
+            return $this->error(422, RateBelowAdvertisedException::CODE, $exception->getMessage(), meta: [
+                'advertised_cashback_rate_percent' => Percent::format($exception->advertisedBp),
+            ]);
         } catch (MerchantNotActiveException) {
             // Closed or never-approved merchant (draft / pending_review /
             // rejected) — the credential should not exist or should already
@@ -163,7 +199,8 @@ class TransactionsController extends V1Controller
 
         $data = $this->validateEnvelope($request, [
             'reason' => ['required', 'string', 'in:customer_refund,till_void,duplicate,other'],
-            'occurred_at' => ['required', self::OCCURRED_AT_FORMATS],
+            // Same optional/flexible grammar as the create path.
+            'occurred_at' => ['sometimes', 'nullable', OccurredAt::rule()],
         ]);
 
         try {
@@ -171,7 +208,7 @@ class TransactionsController extends V1Controller
                 $transaction,
                 $this->actor($merchant),
                 $data['reason'],
-                CarbonImmutable::parse($data['occurred_at']),
+                OccurredAt::fromRequest($data),
             );
         } catch (FutureDatedTransactionException) {
             return $this->error(422, 'future_dated', 'occurred_at is in the future beyond the permitted clock-skew allowance.');

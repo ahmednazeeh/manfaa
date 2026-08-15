@@ -91,8 +91,8 @@ it('prices the mixed basket per line with exact hand-derived integers, totals = 
         ->assertJsonPath('data.state', 'awaiting_validation')
         // Row-level bp are the STANDING base-rate snapshot; per-line truth
         // lives in the lines.
-        ->assertJsonPath('data.rate_bp', 500)
-        ->assertJsonPath('data.fee_bp', 100)
+        ->assertJsonPath('data.cashback_rate_percent', '5.00')
+        ->assertJsonPath('data.platform_fee_percent', '1.00')
         ->assertJsonPath('data.cashback_laari', 2750)
         ->assertJsonPath('data.fee_laari', 638);
 
@@ -100,20 +100,20 @@ it('prices the mixed basket per line with exact hand-derived integers, totals = 
     $response->assertJsonPath('data.lines.0.category', 'fruits')
         ->assertJsonPath('data.lines.0.priced_by', 'excluded')
         ->assertJsonPath('data.lines.0.amount_laari', 30000)
-        ->assertJsonPath('data.lines.0.effective_rate_bp', 0)
-        ->assertJsonPath('data.lines.0.fee_bp', 0)
+        ->assertJsonPath('data.lines.0.cashback_rate_percent', '0.00')
+        ->assertJsonPath('data.lines.0.platform_fee_percent', '0.00')
         ->assertJsonPath('data.lines.0.cashback_laari', 0)
         ->assertJsonPath('data.lines.0.fee_laari', 0)
         ->assertJsonPath('data.lines.1.category', 'veggies')
         ->assertJsonPath('data.lines.1.priced_by', 'category')
-        ->assertJsonPath('data.lines.1.effective_rate_bp', 200)
-        ->assertJsonPath('data.lines.1.fee_bp', 75)
+        ->assertJsonPath('data.lines.1.cashback_rate_percent', '2.00')
+        ->assertJsonPath('data.lines.1.platform_fee_percent', '0.75')
         ->assertJsonPath('data.lines.1.cashback_laari', 500)
         ->assertJsonPath('data.lines.1.fee_laari', 188)
         ->assertJsonPath('data.lines.2.category', null)
         ->assertJsonPath('data.lines.2.priced_by', 'standing')
-        ->assertJsonPath('data.lines.2.effective_rate_bp', 500)
-        ->assertJsonPath('data.lines.2.fee_bp', 100)
+        ->assertJsonPath('data.lines.2.cashback_rate_percent', '5.00')
+        ->assertJsonPath('data.lines.2.platform_fee_percent', '1.00')
         ->assertJsonPath('data.lines.2.cashback_laari', 2250)
         ->assertJsonPath('data.lines.2.fee_laari', 450);
 
@@ -237,7 +237,7 @@ it('zeroes a below-minimum lined credit but still snapshots the lines with their
         ->assertJsonPath('data.reason_code', 'below_minimum')
         ->assertJsonPath('data.cashback_laari', 0)
         ->assertJsonPath('data.fee_laari', 0)
-        ->assertJsonPath('data.lines.1.effective_rate_bp', 200)
+        ->assertJsonPath('data.lines.1.cashback_rate_percent', '2.00')
         ->assertJsonPath('data.lines.1.cashback_laari', 0)
         ->assertJsonPath('data.lines.1.fee_laari', 0);
 
@@ -290,8 +290,8 @@ it('prices the identical basket identically through /v1 (parity with the manual 
 
     $response->assertJsonPath('status', 'created')
         ->assertJsonPath('transaction.state', 'awaiting_validation')
-        ->assertJsonPath('transaction.rate_bp', 500)
-        ->assertJsonPath('transaction.fee_bp', 100)
+        ->assertJsonPath('transaction.cashback_rate_percent', '5.00')
+        ->assertJsonPath('transaction.platform_fee_percent', '1.00')
         ->assertJsonPath('transaction.cashback_laari', 2750)
         ->assertJsonPath('transaction.fee_laari', 638)
         ->assertJsonPath('transaction.lines.0.priced_by', 'excluded')

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\V1;
 
+use App\Domain\Money\Percent;
 use App\Domain\Platform\FeeTierScheduleResolver;
 use App\Domain\Promotions\PromotionResolver;
 use App\Models\Merchant;
@@ -13,7 +14,10 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 /**
- * GET /v1/merchants/me/rate — the till's advisory rate display (§9.2). The
+ * GET /v1/merchants/me/rate — the till's advisory rate display (§9.2). Every
+ * rate here is a 2-decimal percent STRING (PLAN §1 wire format:
+ * `cashback_rate_percent` / `platform_fee_percent`); basis points are the
+ * platform's internal representation and never reach a vendor. The
  * server always recomputes authoritatively at occurred_at; what the till
  * caches can only ever under-promise, because rate DECREASES take effect at
  * 00:00 next day (business timezone) and are surfaced here ahead of time as
@@ -63,8 +67,10 @@ class MerchantRateController extends V1Controller
         // stale fee the moment a published schedule diverges.
         if ($pending !== null && $pending->rate_bp < $current->rate_bp) {
             $pendingDecrease = [
-                'rate_bp' => $pending->rate_bp,
-                'fee_bp' => $feeTiers->feeBpAt($pending->rate_bp, $pending->effective_from->utc()),
+                'cashback_rate_percent' => Percent::format($pending->rate_bp),
+                'platform_fee_percent' => Percent::format(
+                    $feeTiers->feeBpAt($pending->rate_bp, $pending->effective_from->utc()),
+                ),
                 'effective_at' => $pending->effective_from
                     ->setTimezone((string) config('app.business_timezone', 'Indian/Maldives'))
                     ->toIso8601String(),
@@ -72,8 +78,8 @@ class MerchantRateController extends V1Controller
         }
 
         $response = [
-            'rate_bp' => $current->rate_bp,
-            'fee_bp' => $feeTiers->feeBpAt($current->rate_bp, $now),
+            'cashback_rate_percent' => Percent::format($current->rate_bp),
+            'platform_fee_percent' => Percent::format($feeTiers->feeBpAt($current->rate_bp, $now)),
             'currency' => 'MVR',
             'min_eligible_laari' => $merchant->min_eligible_laari,
             'pending_decrease' => $pendingDecrease,
@@ -83,8 +89,8 @@ class MerchantRateController extends V1Controller
 
         if ($promotion !== null && $promotion->rate_bp > $current->rate_bp) {
             $response['active_promotion'] = [
-                'rate_bp' => $promotion->rate_bp,
-                'fee_bp' => $feeTiers->feeBpAt($promotion->rate_bp, $now),
+                'cashback_rate_percent' => Percent::format($promotion->rate_bp),
+                'platform_fee_percent' => Percent::format($feeTiers->feeBpAt($promotion->rate_bp, $now)),
                 'branch_id' => $promotion->branch_id,
                 'min_purchase_laari' => (int) ($promotion->min_purchase_laari ?? 0),
                 'ends_at' => $promotion->ends_at

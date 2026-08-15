@@ -118,7 +118,7 @@ it('consumes the per-customer cap only through promo-priced lines, in submitted 
     ]))
         ->assertCreated()
         ->assertJsonPath('data.lines.0.priced_by', 'promotion')
-        ->assertJsonPath('data.lines.0.effective_rate_bp', 600)
+        ->assertJsonPath('data.lines.0.cashback_rate_percent', '6.00')
         ->assertJsonPath('data.lines.0.cashback_laari', 1200)
         ->assertJsonPath('data.lines.0.fee_laari', 200);
 
@@ -131,7 +131,7 @@ it('consumes the per-customer cap only through promo-priced lines, in submitted 
     ]))
         ->assertCreated()
         ->assertJsonPath('data.lines.0.priced_by', 'category')
-        ->assertJsonPath('data.lines.0.effective_rate_bp', 200)
+        ->assertJsonPath('data.lines.0.cashback_rate_percent', '2.00')
         ->assertJsonPath('data.lines.0.cashback_laari', 400)
         ->assertJsonPath('data.lines.0.fee_laari', 150);
 
@@ -149,7 +149,7 @@ it('consumes the per-customer cap only through promo-priced lines, in submitted 
     ]))
         ->assertCreated()
         ->assertJsonPath('data.lines.0.priced_by', 'promotion')
-        ->assertJsonPath('data.lines.0.effective_rate_bp', 600)
+        ->assertJsonPath('data.lines.0.cashback_rate_percent', '6.00')
         ->assertJsonPath('data.lines.0.cashback_laari', 270)
         ->assertJsonPath('data.lines.0.fee_laari', 45);
 
@@ -259,7 +259,7 @@ it('lets a lined credit consume cap a later SINGLE-RATE credit must respect, and
         'occurred_at' => now()->subHour()->toIso8601String(),
     ])
         ->assertCreated()
-        ->assertJsonPath('data.rate_bp', 500)
+        ->assertJsonPath('data.cashback_rate_percent', '5.00')
         ->assertJsonPath('data.cashback_laari', 1250);
 
     expect(Transaction::query()->latest('id')->first()->promotion_id)->toBeNull();

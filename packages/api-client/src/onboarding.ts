@@ -2,9 +2,11 @@ import { z } from 'zod';
 import { apiFetch } from './client';
 import { MerchantStaffRoleSchema } from './merchant';
 import {
+  CashbackPercentInputSchema,
   dataWrapped,
   MerchantChannelSchema,
   MerchantStatusSchema,
+  PercentSchema,
 } from './resources';
 
 /**
@@ -19,8 +21,11 @@ import {
  *  - the ADMIN approval queue (approve → active / reject with a reason) and
  *    CRUD over the superadmin-curated store categories.
  *
- * All rates are integer basis points; convert percent inputs with the
- * shared parsePercentToBp helper — never floats.
+ * Every rate here travels as a 2-decimal percent string (PLAN §1 wire
+ * format) — `cashback_rate_percent`, `rate_bounds.min_percent` /
+ * `max_percent`. Basis points are the API's internal representation and
+ * never appear in a body; convert with the shared percent helpers when you
+ * need arithmetic — never floats.
  */
 
 interface RequestOptions {
@@ -193,16 +198,20 @@ export const MerchantSetupStateSchema = z.object({
     contact_email: z.string().nullable(),
     contact_phone: z.string().nullable(),
     logo_url: z.string().nullable(),
-    /** The initial standing rate; null until the rate step writes one. */
-    rate_bp: z.number().int().nullable(),
+    /**
+     * The initial standing rate as a 2-decimal percent string; null until
+     * the rate step writes one.
+     */
+    cashback_rate_percent: PercentSchema.nullable(),
   }),
   /**
-   * §4 structural minimum and the ACTIVE fee tier schedule's own ceiling —
-   * a rate above `max_bp` answers 422 `rate_not_priced`.
+   * §4 structural minimum and the ACTIVE fee tier schedule's own ceiling,
+   * both percent strings — a rate above `max_percent` answers 422
+   * `rate_not_priced`.
    */
   rate_bounds: z.object({
-    min_bp: z.number().int(),
-    max_bp: z.number().int(),
+    min_percent: PercentSchema,
+    max_percent: PercentSchema,
   }),
   /** The curated list (active rows only), in admin sort order. */
   categories: z.array(StoreCategoryOptionSchema),
@@ -325,8 +334,11 @@ export function uploadMerchantSettingsLogo(
 }
 
 export const UpdateMerchantSetupRateRequestSchema = z.object({
-  /** Integer basis points — use parsePercentToBp on the percent input. */
-  rate_bp: z.number().int().min(50).max(2000),
+  /**
+   * A 2-decimal percent — the string "2.5" or the JSON number 2.5. §4
+   * bounds 0.50%–20.00%; the live schedule ceiling is enforced server-side.
+   */
+  cashback_rate_percent: CashbackPercentInputSchema,
 });
 export type UpdateMerchantSetupRateRequest = z.infer<
   typeof UpdateMerchantSetupRateRequestSchema
@@ -335,7 +347,8 @@ export type UpdateMerchantSetupRateRequest = z.infer<
 /**
  * PATCH /api/merchant/setup/rate — writes the store's INITIAL standing
  * rate. 422 `rate_not_priced` above the active fee tier schedule's ceiling
- * (`rate_bounds.max_bp`); 409 `setup_not_editable` outside draft/rejected.
+ * (`rate_bounds.max_percent`); 409 `setup_not_editable` outside
+ * draft/rejected.
  */
 export function updateMerchantSetupRate(
   body: UpdateMerchantSetupRateRequest,
@@ -376,8 +389,8 @@ export type StoreReviewState = z.infer<typeof StoreReviewStateSchema>;
 
 /**
  * One store in the review queue — everything the merchant entered in the
- * wizard. `rate_bp` is null while the rate step is unset; `setup_state` is
- * the raw completed-step map.
+ * wizard. `cashback_rate_percent` is null while the rate step is unset;
+ * `setup_state` is the raw completed-step map.
  */
 export const StoreReviewSchema = z.object({
   id: z.number().int(),
@@ -390,7 +403,7 @@ export const StoreReviewSchema = z.object({
   contact_email: z.string().nullable(),
   contact_phone: z.string().nullable(),
   logo_url: z.string().nullable(),
-  rate_bp: z.number().int().nullable(),
+  cashback_rate_percent: PercentSchema.nullable(),
   setup_state: z.record(z.string(), z.boolean()),
   submitted_at: z.string().nullable(),
   rejected_at: z.string().nullable(),

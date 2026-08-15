@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Domain\Discovery;
 
+use App\Domain\Money\Percent;
 use App\Domain\Onboarding\MerchantLogo;
 use App\Models\Merchant;
 use App\Models\MerchantBranch;
@@ -254,8 +255,11 @@ final class DiscoveryService
             'category' => $entry['category'],
             'logo_url' => $entry['logo_url'],
             'channel' => $entry['channel'],
-            'rate_bp' => $entry['rate_bp'],
-            'standing_rate_bp' => $entry['standing_rate_bp'],
+            // PLAN §1 wire format: 2-decimal percent strings. The cached
+            // entry keeps integer basis points; the conversion happens
+            // here, at the response boundary, by exact integer math.
+            'cashback_rate_percent' => Percent::format($entry['rate_bp']),
+            'standing_cashback_rate_percent' => Percent::format($entry['standing_rate_bp']),
             'promo_ends_at' => $entry['promo_ends_at'],
         ];
     }
@@ -275,8 +279,8 @@ final class DiscoveryService
             'category' => $entry['category'],
             'logo_url' => $entry['logo_url'],
             'channel' => $entry['channel'],
-            'rate_bp' => $entry['rate_bp'],
-            'standing_rate_bp' => $entry['standing_rate_bp'],
+            'cashback_rate_percent' => Percent::format($entry['rate_bp']),
+            'standing_cashback_rate_percent' => Percent::format($entry['standing_rate_bp']),
             'promo_ends_at' => $entry['promo_ends_at'],
             'distance_m' => $entry['distance_m'],
         ];
@@ -427,7 +431,7 @@ final class DiscoveryService
 
         // The store's ACTIVE product categories (Task #25) for the rates
         // table — "Fruits — excluded, Veggies — 2%, everything else —
-        // standing_rate_bp". Names + mode + rate only: no ids, no slugs —
+        // standing_cashback_rate_percent". Names + mode + rate only: no ids, no slugs —
         // the public page displays terms, it does not integrate.
         $categoryRates = MerchantProductCategory::query()
             ->where('merchant_id', $merchant->id)
@@ -439,7 +443,9 @@ final class DiscoveryService
                 'name_en' => $category->name_en,
                 'name_dv' => $category->name_dv,
                 'mode' => $category->mode,
-                'rate_bp' => $category->mode === 'rate' ? $category->rate_bp : null,
+                'cashback_rate_percent' => $category->mode === 'rate'
+                    ? Percent::format((int) $category->rate_bp)
+                    : null,
             ])
             ->all();
 
@@ -450,17 +456,17 @@ final class DiscoveryService
             'logo_url' => $this->logoUrl($merchant->slug, $merchant->logo_path),
             'channel' => $merchant->channel,
             'featured' => (bool) $merchant->featured,
-            'rate_bp' => $promo?->rate_bp ?? $standing->rate_bp,
-            'standing_rate_bp' => $standing->rate_bp,
+            'cashback_rate_percent' => Percent::format($promo?->rate_bp ?? $standing->rate_bp),
+            'standing_cashback_rate_percent' => Percent::format($standing->rate_bp),
             'promotion' => $promo === null ? null : [
-                'rate_bp' => $promo->rate_bp,
+                'cashback_rate_percent' => Percent::format($promo->rate_bp),
                 'ends_at' => $promo->ends_at->toIso8601String(),
                 'min_purchase_laari' => $promo->min_purchase_laari,
             ],
             // The merchant's own eligibility wording, verbatim (§11: shown to
             // customers, never used in computation). Null when unset.
             'cashback_basis' => $merchant->eligibility_basis,
-            // "Everything else" earns the standing_rate_bp above; excluded
+            // "Everything else" earns the standing rate above; excluded
             // categories earn nothing, even during promotions.
             'category_rates' => $categoryRates,
             'branches' => $branches

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Admin;
 
+use App\Domain\Money\Percent;
 use App\Domain\Onboarding\OnboardingException;
 use App\Domain\Onboarding\OnboardingService;
 use App\Http\Controllers\Controller;
@@ -59,7 +60,9 @@ class StoreReviewController extends Controller
                 'contact_email' => $merchant->contact_email,
                 'contact_phone' => $merchant->contact_phone,
                 'logo_url' => $this->onboarding->logoUrl($merchant),
-                'rate_bp' => $this->onboarding->currentRateBp($merchant),
+                // PLAN §1 wire format: 2-decimal percent string, null when
+                // the store has not set a rate yet.
+                'cashback_rate_percent' => Percent::formatOrNull($this->onboarding->currentRateBp($merchant)),
                 'setup_state' => (object) ((array) ($merchant->setup_state ?? [])),
                 'submitted_at' => $merchant->submitted_at?->toIso8601String(),
                 'rejected_at' => $merchant->rejected_at?->toIso8601String(),

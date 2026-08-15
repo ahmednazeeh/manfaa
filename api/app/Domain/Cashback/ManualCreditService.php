@@ -23,6 +23,7 @@ final readonly class ManualCreditService
 
     /**
      * @param  list<LineInput>|null  $lines  parsed line splits (LineSetParser) — null for a single-rate credit
+     * @param  int|null  $overrideRateBp  per-sale rate override in basis points (wire: `cashback_rate_percent`)
      */
     public function credit(
         Merchant $merchant,
@@ -33,6 +34,7 @@ final readonly class ManualCreditService
         ?Laari $saleAmount,
         CarbonImmutable $occurredAt,
         ?array $lines = null,
+        ?int $overrideRateBp = null,
     ): Transaction {
         if ($merchant->status !== 'active') {
             throw MerchantNotActiveException::for($merchant);
@@ -48,6 +50,7 @@ final readonly class ManualCreditService
             saleAmount: $saleAmount,
             occurredAt: $occurredAt,
             lines: $lines,
+            overrideRateBp: $overrideRateBp,
         );
     }
 }

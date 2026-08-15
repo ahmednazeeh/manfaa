@@ -50,8 +50,8 @@ it('omits active_promotion entirely when none is live — the base contract stay
     promoRate()
         ->assertOk()
         ->assertExactJson([
-            'rate_bp' => 200,
-            'fee_bp' => 75,
+            'cashback_rate_percent' => '2.00',
+            'platform_fee_percent' => '0.75',
             'currency' => 'MVR',
             'min_eligible_laari' => 5000,
             'pending_decrease' => null,
@@ -63,10 +63,10 @@ it('surfaces a live published promotion with its tiered fee, window end and mini
 
     promoRate()
         ->assertOk()
-        ->assertJsonPath('rate_bp', 200)
-        ->assertJsonPath('fee_bp', 75)
-        ->assertJsonPath('active_promotion.rate_bp', 500)
-        ->assertJsonPath('active_promotion.fee_bp', 100)
+        ->assertJsonPath('cashback_rate_percent', '2.00')
+        ->assertJsonPath('platform_fee_percent', '0.75')
+        ->assertJsonPath('active_promotion.cashback_rate_percent', '5.00')
+        ->assertJsonPath('active_promotion.platform_fee_percent', '1.00')
         ->assertJsonPath('active_promotion.branch_id', null)
         ->assertJsonPath('active_promotion.min_purchase_laari', 100000)
         ->assertJsonPath(
@@ -81,7 +81,7 @@ it('carries the branch scope so a till at another branch can tell the promo is n
 
     promoRate()
         ->assertOk()
-        ->assertJsonPath('active_promotion.rate_bp', 500)
+        ->assertJsonPath('active_promotion.cashback_rate_percent', '5.00')
         ->assertJsonPath('active_promotion.branch_id', $branch->id);
 });
 
@@ -108,6 +108,6 @@ it('never advertises a promo the standing rate has already overtaken — it woul
 
     promoRate()
         ->assertOk()
-        ->assertJsonPath('rate_bp', 500)
+        ->assertJsonPath('cashback_rate_percent', '5.00')
         ->assertJsonMissingPath('active_promotion');
 });

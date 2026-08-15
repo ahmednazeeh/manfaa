@@ -46,11 +46,11 @@ beforeEach(function () {
 
 it('freezes the standing rate for a suspended store', function () {
     // Active: the change goes through.
-    $this->postJson('/api/merchant/rate', ['rate_bp' => 300])->assertOk();
+    $this->postJson('/api/merchant/rate', ['cashback_rate_percent' => '3.00'])->assertOk();
 
     ($this->suspend)();
 
-    $response = $this->postJson('/api/merchant/rate', ['rate_bp' => 900])
+    $response = $this->postJson('/api/merchant/rate', ['cashback_rate_percent' => '9.00'])
         ->assertStatus(409)
         ->assertJsonPath('code', 'store_not_trading');
 
@@ -65,7 +65,7 @@ it('freezes the standing rate for a suspended store', function () {
 
 it('freezes promotion creation and publication for a suspended store', function () {
     $draft = $this->postJson('/api/merchant/promotions', [
-        'rate_bp' => 500,
+        'cashback_rate_percent' => '5.00',
         'starts_at' => now()->addDay()->toIso8601String(),
         'ends_at' => now()->addDays(5)->toIso8601String(),
     ])->assertCreated()->json('data.id');
@@ -80,7 +80,7 @@ it('freezes promotion creation and publication for a suspended store', function 
         ->assertJsonPath('code', 'store_not_trading');
 
     $this->postJson('/api/merchant/promotions', [
-        'rate_bp' => 800,
+        'cashback_rate_percent' => '8.00',
         'starts_at' => now()->addDay()->toIso8601String(),
         'ends_at' => now()->addDays(5)->toIso8601String(),
     ])->assertStatus(409)->assertJsonPath('code', 'store_not_trading');
@@ -106,7 +106,7 @@ it('freezes the product-category rate card for a suspended store', function () {
         ->assertStatus(409)
         ->assertJsonPath('code', 'store_not_trading');
 
-    $this->patchJson('/api/merchant/product-categories/'.$id, ['mode' => 'rate', 'rate_bp' => 500])
+    $this->patchJson('/api/merchant/product-categories/'.$id, ['mode' => 'rate', 'cashback_rate_percent' => '5.00'])
         ->assertStatus(409)
         ->assertJsonPath('code', 'store_not_trading');
 
@@ -119,7 +119,7 @@ it('freezes the product-category rate card for a suspended store', function () {
 it('freezes the offer for a CLOSED store too', function () {
     ($this->suspend)('closed');
 
-    $this->postJson('/api/merchant/rate', ['rate_bp' => 300])
+    $this->postJson('/api/merchant/rate', ['cashback_rate_percent' => '3.00'])
         ->assertStatus(409)
         ->assertJsonPath('code', 'store_not_trading');
 });
@@ -146,7 +146,7 @@ it('keeps the pre-approval refusal distinct from the suspension freeze', functio
 
     // A store awaiting review gets the wizard message and the wizard code —
     // the two conflicts are different conversations.
-    $this->postJson('/api/merchant/rate', ['rate_bp' => 300])
+    $this->postJson('/api/merchant/rate', ['cashback_rate_percent' => '3.00'])
         ->assertStatus(409)
         ->assertJsonPath('code', 'store_not_approved');
 });

@@ -155,8 +155,8 @@ it('walks the receipt-first settlement lifecycle over HTTP: credits → preview 
             ->assertCreated()
             ->assertJsonPath('data.state', 'awaiting_validation')
             ->assertJsonPath('data.backdated', false)
-            ->assertJsonPath('data.rate_bp', 200)
-            ->assertJsonPath('data.fee_bp', 75)
+            ->assertJsonPath('data.cashback_rate_percent', '2.00')
+            ->assertJsonPath('data.platform_fee_percent', '0.75')
             ->json('data.id');
     }
 
@@ -488,7 +488,7 @@ it('takes a 30-day-old credit straight to payable, settles it the same day, and 
         ->assertJsonPath('data.transaction_count', 1)
         ->assertJsonPath('data.discount.eligible', true)
         ->assertJsonPath('data.discount.reason_code', 'eligible')
-        ->assertJsonPath('data.discount.rate_bp', 500)
+        ->assertJsonPath('data.discount.rate_percent', '5.00')
         ->assertJsonPath('data.discount_laari', 38)
         ->assertJsonPath('data.amount_due_before_discount_laari', 2_750)
         ->assertJsonPath('data.amount_due_laari', 2_712);
@@ -522,7 +522,7 @@ it('takes a 30-day-old credit straight to payable, settles it the same day, and 
         ->assertJsonPath('data.state', 'payment_review')
         ->assertJsonPath('data.amount_due_laari', 2_712)
         ->assertJsonPath('data.discount_laari', 38)
-        ->assertJsonPath('data.discount_rate_bp', 500)
+        ->assertJsonPath('data.discount_rate_percent', '5.00')
         ->assertJsonPath('data.discount_reason', 'eligible')
         ->json('data.id');
 

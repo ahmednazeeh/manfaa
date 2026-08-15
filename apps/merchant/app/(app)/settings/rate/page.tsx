@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { parsePercentToBp } from '@manfaa/api-client';
+import { parsePercentToBp, percentToBp } from '@manfaa/api-client';
 import { format } from 'date-fns';
 import {
   CircleCheck,
@@ -11,7 +11,12 @@ import {
   TriangleAlert,
 } from 'lucide-react';
 import { type MerchantRate, type RateChangeSummary } from '@/lib/api';
-import { formatBp } from '@/lib/estimate';
+import {
+  formatBp,
+  formatRate,
+  formatRateOrDash,
+  trimRate,
+} from '@/lib/estimate';
 import {
   apiErrorMessage,
   isRateNotPriced,
@@ -47,10 +52,12 @@ import { ErrorBlock, LoadingBlock } from '@/components/app/async-states';
 
 /**
  * The standing-rate screen (owner only via the settings layout gate; the
- * API re-enforces 403). The merchant thinks in PERCENT: the input takes an
- * exact-2dp percent string, converted to integer basis points with the
- * shared parsePercentToBp helper — string decomposition, never a float —
- * and every displayed rate goes back through the percent formatter.
+ * API re-enforces 403). Everything on this page is a PERCENT: the API sends
+ * rates as 2-decimal percent strings (PLAN §1 wire format) and they are
+ * displayed as they arrive, trimmed. Basis points appear only where this
+ * page does its own arithmetic — the range check on what the owner typed
+ * and the §4 tier-cliff comparison — via the shared exact-2dp string
+ * parsers, never a float.
  *
  * §7 timing rules the copy must be honest about: increases apply
  * immediately, decreases at the next business-day midnight (a stale till
@@ -98,7 +105,7 @@ function RateWindowCard({ rate }: { rate: MerchantRate }) {
                 Customer cashback
               </div>
               <div className="text-2xl font-semibold">
-                {formatBp(current.rate_bp)}
+                {formatRate(current.cashback_rate_percent)}
               </div>
             </div>
             <div>
@@ -107,7 +114,7 @@ function RateWindowCard({ rate }: { rate: MerchantRate }) {
                   prices — the page must still render so the owner can lower
                   the rate back into the priced range. */}
               <div className="text-2xl font-semibold">
-                {current.fee_bp === null ? '—' : formatBp(current.fee_bp)}
+                {formatRateOrDash(current.platform_fee_percent)}
               </div>
             </div>
             <div>
@@ -115,7 +122,7 @@ function RateWindowCard({ rate }: { rate: MerchantRate }) {
                 You pay per sale
               </div>
               <div className="text-2xl font-semibold">
-                {current.all_in_bp === null ? '—' : formatBp(current.all_in_bp)}
+                {formatRateOrDash(current.all_in_percent)}
               </div>
             </div>
           </div>
@@ -135,13 +142,15 @@ function RateWindowCard({ rate }: { rate: MerchantRate }) {
             </AlertIcon>
             <AlertContent>
               <AlertTitle>
-                Scheduled change: {formatBp(pending.rate_bp)} cashback
+                Scheduled change: {formatRate(pending.cashback_rate_percent)}{' '}
+                cashback
               </AlertTitle>
               <AlertDescription>
                 Takes effect{' '}
                 {format(new Date(pending.effective_from), 'dd MMM yyyy, HH:mm')}
-                {pending.fee_bp !== null && pending.all_in_bp !== null
-                  ? ` — platform fee ${formatBp(pending.fee_bp)}, all-in ${formatBp(pending.all_in_bp)}`
+                {pending.platform_fee_percent !== null &&
+                pending.all_in_percent !== null
+                  ? ` — platform fee ${formatRate(pending.platform_fee_percent)}, all-in ${formatRate(pending.all_in_percent)}`
                   : ''}
                 . Submitting a new change below replaces it.
               </AlertDescription>
@@ -162,7 +171,7 @@ function ChangeSummaryAlert({ change }: { change: RateChangeSummary }) {
       <AlertContent>
         <AlertTitle>
           Cashback rate {change.applies === 'immediately' ? 'is now' : 'will be'}{' '}
-          {formatBp(change.new.rate_bp)}
+          {formatRate(change.new.cashback_rate_percent)}
         </AlertTitle>
         <AlertDescription>
           {change.applies === 'immediately'
@@ -172,18 +181,20 @@ function ChangeSummaryAlert({ change }: { change: RateChangeSummary }) {
                 'dd MMM yyyy, HH:mm',
               )} — the advertised rate is honoured until then.`}{' '}
           {change.tier_changed &&
-          change.previous.fee_bp !== null &&
-          change.previous.all_in_bp !== null
-            ? `This moved your fee tier from ${formatBp(
-                change.previous.fee_bp,
-              )} to ${formatBp(change.new.fee_bp)} — all-in cost ${formatBp(
-                change.previous.all_in_bp,
-              )} to ${formatBp(change.new.all_in_bp)}.`
+          change.previous.platform_fee_percent !== null &&
+          change.previous.all_in_percent !== null
+            ? `This moved your fee tier from ${formatRate(
+                change.previous.platform_fee_percent,
+              )} to ${formatRate(
+                change.new.platform_fee_percent,
+              )} — all-in cost ${formatRate(
+                change.previous.all_in_percent,
+              )} to ${formatRate(change.new.all_in_percent)}.`
             : `Platform fee ${
                 change.tier_changed ? 'is now' : 'stays at'
-              } ${formatBp(
-                change.new.fee_bp,
-              )} — all-in cost ${formatBp(change.new.all_in_bp)}.`}
+              } ${formatRate(
+                change.new.platform_fee_percent,
+              )} — all-in cost ${formatRate(change.new.all_in_percent)}.`}
         </AlertDescription>
       </AlertContent>
     </Alert>
@@ -197,6 +208,20 @@ function RateChangeForm({ rate }: { rate: MerchantRate }) {
   const [input, setInput] = useState('');
   const [summary, setSummary] = useState<RateChangeSummary | null>(null);
   const [notPriced, setNotPriced] = useState<string | null>(null);
+
+  /**
+   * The page's OWN arithmetic — the range check, the "already your rate"
+   * test, the §4 tier-cliff comparison — is integer basis points, because
+   * "4.99" and "5.00" are one tier apart and text cannot see that. The
+   * API's percent strings are converted here, once; every rate SHOWN below
+   * is the string the server sent.
+   */
+  const currentBp =
+    current === null ? null : percentToBp(current.cashback_rate_percent);
+  const currentFeeBp =
+    current === null || current.platform_fee_percent === null
+      ? null
+      : percentToBp(current.platform_fee_percent);
 
   const trimmed = input.trim();
   const newBp = trimmed === '' ? null : parsePercentToBp(trimmed);
@@ -214,7 +239,7 @@ function RateChangeForm({ rate }: { rate: MerchantRate }) {
 
   const validBp = inputError === null ? newBp : null;
   const isSameAsCurrent =
-    validBp !== null && current !== null && validBp === current.rate_bp;
+    validBp !== null && currentBp !== null && validBp === currentBp;
 
   // Pre-submit tier-cliff hint from the §4 static bands; the FROM side is
   // the authoritative current fee. The server confirms the actual fee on
@@ -223,10 +248,9 @@ function RateChangeForm({ rate }: { rate: MerchantRate }) {
   const tierCliff =
     validBp !== null &&
     prospectiveFee !== null &&
-    current !== null &&
-    current.fee_bp !== null &&
+    currentFeeBp !== null &&
     !isSameAsCurrent &&
-    prospectiveFee !== current.fee_bp;
+    prospectiveFee !== currentFeeBp;
 
   // A same-rate submit is a no-op — except when a change is scheduled, where
   // the API treats it as "keep my current rate": the pending row is replaced.
@@ -269,7 +293,9 @@ function RateChangeForm({ rate }: { rate: MerchantRate }) {
               id="new-rate"
               inputMode="decimal"
               placeholder={
-                current === null ? 'e.g. 5.00' : formatBp(current.rate_bp).replace('%', '')
+                current === null
+                  ? 'e.g. 5.00'
+                  : trimRate(current.cashback_rate_percent)
               }
               value={input}
               aria-invalid={inputError !== null}
@@ -305,8 +331,9 @@ function RateChangeForm({ rate }: { rate: MerchantRate }) {
 
         {tierCliff &&
           current !== null &&
-          current.fee_bp !== null &&
-          current.all_in_bp !== null &&
+          currentBp !== null &&
+          current.platform_fee_percent !== null &&
+          current.all_in_percent !== null &&
           prospectiveFee !== null &&
           validBp !== null && (
           <Alert variant="warning" appearance="light">
@@ -316,11 +343,12 @@ function RateChangeForm({ rate }: { rate: MerchantRate }) {
             <AlertContent>
               <AlertTitle>This change moves your fee tier.</AlertTitle>
               <AlertDescription>
-                {validBp > current.rate_bp ? 'Raising' : 'Lowering'} from{' '}
-                {formatBp(current.rate_bp)} to {formatBp(validBp)} moves your
-                fee tier from {formatBp(current.fee_bp)} to{' '}
+                {validBp > currentBp ? 'Raising' : 'Lowering'} from{' '}
+                {formatRate(current.cashback_rate_percent)} to{' '}
+                {formatBp(validBp)} moves your fee tier from{' '}
+                {formatRate(current.platform_fee_percent)} to{' '}
                 {formatBp(prospectiveFee)} — your all-in cost goes from{' '}
-                {formatBp(current.all_in_bp)} to{' '}
+                {formatRate(current.all_in_percent)} to{' '}
                 {formatBp(validBp + prospectiveFee)} of each eligible sale.
                 The platform&apos;s fee schedule confirms the exact fee when
                 the change is applied.
@@ -329,19 +357,19 @@ function RateChangeForm({ rate }: { rate: MerchantRate }) {
           </Alert>
         )}
 
-        {validBp !== null && current !== null && !isSameAsCurrent && (
+        {validBp !== null && currentBp !== null && !isSameAsCurrent && (
           <Alert variant="info" appearance="light">
             <AlertIcon>
               <Info />
             </AlertIcon>
             <AlertContent>
               <AlertTitle>
-                {validBp > current.rate_bp
+                {validBp > currentBp
                   ? 'Increases apply immediately.'
                   : 'Decreases apply at midnight tonight.'}
               </AlertTitle>
               <AlertDescription>
-                {validBp > current.rate_bp
+                {validBp > currentBp
                   ? 'The higher rate starts with the next recorded sale.'
                   : 'The current rate is honoured until 00:00 (Maldives time), so an advertised rate is never cut mid-day.'}
               </AlertDescription>

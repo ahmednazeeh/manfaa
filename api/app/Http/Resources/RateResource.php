@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Resources;
 
+use App\Domain\Money\Percent;
 use App\Domain\Platform\FeeTierScheduleResolver;
 use App\Models\MerchantRate;
 use Carbon\CarbonImmutable;
@@ -12,8 +13,14 @@ use Illuminate\Http\Resources\Json\JsonResource;
 
 /**
  * One merchant_rates window for the merchant panel, carrying the §4
- * tier-cliff warning data alongside the raw rate: the platform fee the rate
- * lands on and the resulting all-in cost, all integer basis points.
+ * tier-cliff warning data alongside the rate itself: the platform fee the
+ * rate lands on and the resulting all-in cost.
+ *
+ * WIRE FORMAT (PLAN §1, decision 2026-08-15): every rate here is a
+ * 2-decimal percent STRING — `cashback_rate_percent`,
+ * `platform_fee_percent`, `all_in_percent`. Basis points are the internal
+ * representation and never appear in a response; the conversion is exact
+ * integer math (App\Domain\Money\Percent).
  *
  * The fee comes from the admin-managed fee tier schedule (the same source
  * the billing path prices from), resolved AT the instant the rate is or
@@ -41,7 +48,7 @@ class RateResource extends JsonResource
         // the schedule in force) renders with null fee fields instead of
         // failing the whole panel — the rate page IS the merchant's
         // self-rescue path, so it must stay reachable in that state.
-        return self::tryDescribeBp($rate->rate_bp, $effectiveFrom->isAfter($now) ? $effectiveFrom : $now) + [
+        return self::tryDescribe($rate->rate_bp, $effectiveFrom->isAfter($now) ? $effectiveFrom : $now) + [
             'effective_from' => $rate->effective_from->setTimezone($timezone)->toIso8601String(),
             'effective_to' => $rate->effective_to?->setTimezone($timezone)->toIso8601String(),
         ];
@@ -59,35 +66,35 @@ class RateResource extends JsonResource
      * The §4 cost picture of one rate: fee tier and all-in merchant cost,
      * priced under the fee tier schedule effective at $at (now by default).
      *
-     * @return array{rate_bp: int, fee_bp: int, all_in_bp: int}
+     * @return array{cashback_rate_percent: string, platform_fee_percent: string, all_in_percent: string}
      */
-    public static function describeBp(int $rateBp, ?CarbonImmutable $at = null): array
+    public static function describe(int $rateBp, ?CarbonImmutable $at = null): array
     {
         $feeBp = app(FeeTierScheduleResolver::class)->feeBpAt($rateBp, $at ?? CarbonImmutable::now('UTC'));
 
         return [
-            'rate_bp' => $rateBp,
-            'fee_bp' => $feeBp,
-            'all_in_bp' => $rateBp + $feeBp,
+            'cashback_rate_percent' => Percent::format($rateBp),
+            'platform_fee_percent' => Percent::format($feeBp),
+            'all_in_percent' => Percent::format($rateBp + $feeBp),
         ];
     }
 
     /**
-     * describeBp for surfaces that must survive an UNPRICED rate (a legacy
-     * stranded standing rate being displayed or rescued): fee fields are
-     * null instead of throwing. The coverage invariant keeps this the rare
-     * exception, never the norm.
+     * describe() for surfaces that must survive an UNPRICED rate (a legacy
+     * stranded standing rate being displayed or rescued): the fee fields
+     * are null instead of throwing. The coverage invariant keeps this the
+     * rare exception, never the norm.
      *
-     * @return array{rate_bp: int, fee_bp: int|null, all_in_bp: int|null}
+     * @return array{cashback_rate_percent: string, platform_fee_percent: string|null, all_in_percent: string|null}
      */
-    public static function tryDescribeBp(int $rateBp, ?CarbonImmutable $at = null): array
+    public static function tryDescribe(int $rateBp, ?CarbonImmutable $at = null): array
     {
         $feeBp = app(FeeTierScheduleResolver::class)->tryFeeBpAt($rateBp, $at ?? CarbonImmutable::now('UTC'));
 
         return [
-            'rate_bp' => $rateBp,
-            'fee_bp' => $feeBp,
-            'all_in_bp' => $feeBp === null ? null : $rateBp + $feeBp,
+            'cashback_rate_percent' => Percent::format($rateBp),
+            'platform_fee_percent' => Percent::formatOrNull($feeBp),
+            'all_in_percent' => $feeBp === null ? null : Percent::format($rateBp + $feeBp),
         ];
     }
 }

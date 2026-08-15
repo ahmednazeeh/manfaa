@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Domain\Settlement;
 
 use App\Domain\Money\Laari;
+use App\Domain\Money\Percent;
 
 /**
  * One prompt-payment discount evaluation (PLAN §1). Immutable, integer laari
@@ -115,7 +116,9 @@ final readonly class PromptDiscountResult
         return [
             'eligible' => $this->eligible,
             'reason_code' => $this->reason->value,
-            'rate_bp' => $this->rateBp,
+            // PLAN §1 wire format: the discount rate as a 2-decimal
+            // percent string; basis points stay internal.
+            'rate_percent' => Percent::format($this->rateBp),
             'max_age_days' => $this->maxAgeDays,
             'discount_laari' => $this->discountLaari,
             'discount_mvr' => Laari::of($this->discountLaari)->formatMvr(),

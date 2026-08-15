@@ -3,6 +3,7 @@
 namespace App\Http\Resources;
 
 use App\Domain\Money\Laari;
+use App\Domain\Money\Percent;
 use App\Domain\Platform\BankAccountService;
 use App\Domain\Settlement\SettlementState;
 use App\Models\Settlement;
@@ -37,7 +38,9 @@ class SettlementResource extends JsonResource
             // "settle everything to save 5% of the fee".
             'discount_laari' => (int) $this->discount_laari,
             'discount_mvr' => Laari::of((int) $this->discount_laari)->formatMvr(),
-            'discount_rate_bp' => $this->discount_rate_bp === null ? null : (int) $this->discount_rate_bp,
+            'discount_rate_percent' => Percent::formatOrNull(
+                $this->discount_rate_bp === null ? null : (int) $this->discount_rate_bp,
+            ),
             'discount_reason' => $this->discount_reason,
             'amount_due_laari' => $this->amount_due_laari,
             'amount_received_laari' => $this->amount_received_laari,

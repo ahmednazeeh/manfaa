@@ -85,13 +85,13 @@ it('refuses to publish a schedule whose ceiling is below a live standing rate', 
 
     // Merchant legally sells 15% under the wide schedule.
     $this->actingAs($this->owner, 'merchant')
-        ->postJson('/api/merchant/rate', ['rate_bp' => 1500])
+        ->postJson('/api/merchant/rate', ['cashback_rate_percent' => '15.00'])
         ->assertOk();
 
     // Narrowing to 10% would strand that rate: every credit for the
     // merchant would fail from the moment it takes effect.
     postSchedule(CarbonImmutable::now()->addDay(), [
-        ['from_bp' => 50, 'to_bp' => 1000, 'fee_bp' => 50],
+        ['from_percent' => '0.50', 'to_percent' => '10.00', 'fee_percent' => '0.50'],
     ])
         ->assertStatus(422)
         ->assertSee('15.00');
@@ -100,7 +100,7 @@ it('refuses to publish a schedule whose ceiling is below a live standing rate', 
 
     // A ceiling that still covers the sold rate is fine.
     postSchedule(CarbonImmutable::now()->addDay(), [
-        ['from_bp' => 50, 'to_bp' => 1500, 'fee_bp' => 50],
+        ['from_percent' => '0.50', 'to_percent' => '15.00', 'fee_percent' => '0.50'],
     ])->assertCreated();
 });
 
@@ -108,7 +108,7 @@ it('refuses a ceiling below a published promotion it would cover — drafts neve
     // Published 8% promotion next week (seeded 50-1000 schedule prices it).
     $published = $this->actingAs($this->owner, 'merchant')
         ->postJson('/api/merchant/promotions', [
-            'rate_bp' => 800,
+            'cashback_rate_percent' => '8.00',
             'starts_at' => now()->addDays(2)->toIso8601String(),
             'ends_at' => now()->addDays(9)->toIso8601String(),
         ])->assertCreated()->json('data.id');
@@ -120,21 +120,21 @@ it('refuses a ceiling below a published promotion it would cover — drafts neve
     // so they must never veto the admin.
     $this->actingAs($this->owner, 'merchant')
         ->postJson('/api/merchant/promotions', [
-            'rate_bp' => 900,
+            'cashback_rate_percent' => '9.00',
             'starts_at' => now()->addDays(2)->toIso8601String(),
             'ends_at' => now()->addDays(9)->toIso8601String(),
         ])->assertCreated();
 
     // Below the published promo: refused (it cannot be cancelled — §7).
     postSchedule(CarbonImmutable::now()->addDay(), [
-        ['from_bp' => 50, 'to_bp' => 499, 'fee_bp' => 50],
+        ['from_percent' => '0.50', 'to_percent' => '4.99', 'fee_percent' => '0.50'],
     ])
         ->assertStatus(422)
         ->assertSee('8.00');
 
     // Covering the published promo but not the draft: accepted.
     postSchedule(CarbonImmutable::now()->addDay(), [
-        ['from_bp' => 50, 'to_bp' => 800, 'fee_bp' => 50],
+        ['from_percent' => '0.50', 'to_percent' => '8.00', 'fee_percent' => '0.50'],
     ])->assertCreated();
 
     // The now-stale 9% draft still LISTS (null fee — its window is governed
@@ -143,9 +143,9 @@ it('refuses a ceiling below a published promotion it would cover — drafts neve
     $staleDraftId = $this->actingAs($this->owner, 'merchant')
         ->getJson('/api/merchant/promotions?status=draft')
         ->assertOk()
-        ->assertJsonPath('data.0.rate_bp', 900)
-        ->assertJsonPath('data.0.fee_bp', null)
-        ->assertJsonPath('data.0.all_in_bp', null)
+        ->assertJsonPath('data.0.cashback_rate_percent', '9.00')
+        ->assertJsonPath('data.0.platform_fee_percent', null)
+        ->assertJsonPath('data.0.all_in_percent', null)
         ->json('data.0.id');
 
     $this->actingAs($this->owner, 'merchant')
@@ -162,7 +162,7 @@ it('bounds the guard at the next later schedule — rates only in force after it
     // 15% promotion published for day 5-6.
     $promoId = $this->actingAs($this->owner, 'merchant')
         ->postJson('/api/merchant/promotions', [
-            'rate_bp' => 1500,
+            'cashback_rate_percent' => '15.00',
             'starts_at' => now()->addDays(5)->toIso8601String(),
             'ends_at' => now()->addDays(6)->toIso8601String(),
         ])->assertCreated()->json('data.id');
@@ -172,18 +172,18 @@ it('bounds the guard at the next later schedule — rates only in force after it
 
     // A wide schedule already takes over at day 2 . . .
     postSchedule(CarbonImmutable::now()->addDays(2), [
-        ['from_bp' => 50, 'to_bp' => 2000, 'fee_bp' => 40],
+        ['from_percent' => '0.50', 'to_percent' => '20.00', 'fee_percent' => '0.40'],
     ])->assertCreated();
 
     // . . . so a narrowing covering ONLY [day 1, day 2) never governs the
     // promo window and is legal.
     postSchedule(CarbonImmutable::now()->addDay(), [
-        ['from_bp' => 50, 'to_bp' => 1000, 'fee_bp' => 50],
+        ['from_percent' => '0.50', 'to_percent' => '10.00', 'fee_percent' => '0.50'],
     ])->assertCreated();
 
     // But an open-ended narrowing at day 3 WOULD govern the window: refused.
     postSchedule(CarbonImmutable::now()->addDays(3), [
-        ['from_bp' => 50, 'to_bp' => 1000, 'fee_bp' => 50],
+        ['from_percent' => '0.50', 'to_percent' => '10.00', 'fee_percent' => '0.50'],
     ])->assertStatus(422);
 });
 
@@ -194,13 +194,13 @@ it('refuses a rate change that an already-published narrowing would strand', fun
 
     // Admin has already scheduled a narrowing to 10% for tonight.
     postSchedule(CarbonImmutable::now()->addHours(6), [
-        ['from_bp' => 50, 'to_bp' => 1000, 'fee_bp' => 50],
+        ['from_percent' => '0.50', 'to_percent' => '10.00', 'fee_percent' => '0.50'],
     ])->assertCreated();
 
     // 15% would be legal under the ACTIVE schedule but unpriced from
     // tonight — refused up front instead of stranding at 22:00.
     $this->actingAs($this->owner, 'merchant')
-        ->postJson('/api/merchant/rate', ['rate_bp' => 1500])
+        ->postJson('/api/merchant/rate', ['cashback_rate_percent' => '15.00'])
         ->assertStatus(422)
         ->assertJsonPath('code', 'rate_not_priced')
         ->assertJsonPath('message', 'The current fee schedule prices rates up to 10.00%.');
@@ -209,9 +209,9 @@ it('refuses a rate change that an already-published narrowing would strand', fun
 
     // A rate every current-and-future schedule prices goes through.
     $this->actingAs($this->owner, 'merchant')
-        ->postJson('/api/merchant/rate', ['rate_bp' => 900])
+        ->postJson('/api/merchant/rate', ['cashback_rate_percent' => '9.00'])
         ->assertOk()
-        ->assertJsonPath('data.current.rate_bp', 900);
+        ->assertJsonPath('data.current.cashback_rate_percent', '9.00');
 });
 
 it('refuses a promotion whose window an already-published narrowing covers, at draft and at publish', function () {
@@ -222,7 +222,7 @@ it('refuses a promotion whose window an already-published narrowing covers, at d
     // Draft 15% for next week while only the wide schedule governs: fine.
     $draftId = $this->actingAs($this->owner, 'merchant')
         ->postJson('/api/merchant/promotions', [
-            'rate_bp' => 1500,
+            'cashback_rate_percent' => '15.00',
             'starts_at' => now()->addDays(2)->toIso8601String(),
             'ends_at' => now()->addDays(9)->toIso8601String(),
         ])->assertCreated()->json('data.id');
@@ -230,7 +230,7 @@ it('refuses a promotion whose window an already-published narrowing covers, at d
     // Admin then schedules a narrowing to 10% for tonight (drafts do not
     // block it) — the draft's window is now governed by the narrow table.
     postSchedule(CarbonImmutable::now()->addHours(2), [
-        ['from_bp' => 50, 'to_bp' => 1000, 'fee_bp' => 50],
+        ['from_percent' => '0.50', 'to_percent' => '10.00', 'fee_percent' => '0.50'],
     ])->assertCreated();
 
     // Publish is refused: the window it would freeze cannot be priced, and
@@ -244,7 +244,7 @@ it('refuses a promotion whose window an already-published narrowing covers, at d
     // Same refusal already at draft time for early feedback.
     $this->actingAs($this->owner, 'merchant')
         ->postJson('/api/merchant/promotions', [
-            'rate_bp' => 1500,
+            'cashback_rate_percent' => '15.00',
             'starts_at' => now()->addDays(2)->toIso8601String(),
             'ends_at' => now()->addDays(9)->toIso8601String(),
         ])
@@ -255,7 +255,7 @@ it('refuses a promotion whose window an already-published narrowing covers, at d
     // sellable — the window bound works on promotions too.
     $earlyId = $this->actingAs($this->owner, 'merchant')
         ->postJson('/api/merchant/promotions', [
-            'rate_bp' => 1500,
+            'cashback_rate_percent' => '15.00',
             'starts_at' => now()->addMinutes(30)->toIso8601String(),
             'ends_at' => now()->addMinutes(90)->toIso8601String(),
         ])->assertCreated()->json('data.id');
@@ -292,13 +292,13 @@ it('lets a stranded merchant see their rate and rescue it: the decrease commits,
     $this->actingAs($this->owner, 'merchant')
         ->getJson('/api/merchant/rate')
         ->assertOk()
-        ->assertJsonPath('data.current.rate_bp', 1500)
-        ->assertJsonPath('data.current.fee_bp', null)
-        ->assertJsonPath('data.current.all_in_bp', null);
+        ->assertJsonPath('data.current.cashback_rate_percent', '15.00')
+        ->assertJsonPath('data.current.platform_fee_percent', null)
+        ->assertJsonPath('data.current.all_in_percent', null);
 
     // Still-unpriced target: refused, nothing committed.
     $this->actingAs($this->owner, 'merchant')
-        ->postJson('/api/merchant/rate', ['rate_bp' => 1200])
+        ->postJson('/api/merchant/rate', ['cashback_rate_percent' => '12.00'])
         ->assertStatus(422)
         ->assertJsonPath('code', 'rate_not_priced');
     expect(MerchantRate::query()->count())->toBe(1);
@@ -307,23 +307,23 @@ it('lets a stranded merchant see their rate and rescue it: the decrease commits,
     // (previous fee honestly null — it was never priced) and dispatches
     // merchant.rate_changed so tills learn the pending decrease.
     $this->actingAs($this->owner, 'merchant')
-        ->postJson('/api/merchant/rate', ['rate_bp' => 1000])
+        ->postJson('/api/merchant/rate', ['cashback_rate_percent' => '10.00'])
         ->assertOk()
-        ->assertJsonPath('data.current.rate_bp', 1500)
-        ->assertJsonPath('data.pending.rate_bp', 1000)
-        ->assertJsonPath('data.pending.fee_bp', 50)
-        ->assertJsonPath('change.previous.rate_bp', 1500)
-        ->assertJsonPath('change.previous.fee_bp', null)
-        ->assertJsonPath('change.previous.all_in_bp', null)
-        ->assertJsonPath('change.new.rate_bp', 1000)
-        ->assertJsonPath('change.new.fee_bp', 50)
+        ->assertJsonPath('data.current.cashback_rate_percent', '15.00')
+        ->assertJsonPath('data.pending.cashback_rate_percent', '10.00')
+        ->assertJsonPath('data.pending.platform_fee_percent', '0.50')
+        ->assertJsonPath('change.previous.cashback_rate_percent', '15.00')
+        ->assertJsonPath('change.previous.platform_fee_percent', null)
+        ->assertJsonPath('change.previous.all_in_percent', null)
+        ->assertJsonPath('change.new.cashback_rate_percent', '10.00')
+        ->assertJsonPath('change.new.platform_fee_percent', '0.50')
         ->assertJsonPath('change.applies', 'next_business_midnight');
 
     expect(MerchantRate::query()->count())->toBe(2);
 
     $delivery = WebhookDelivery::query()->sole();
-    expect($delivery->payload['data']['rate_bp'])->toBe(1000)
-        ->and($delivery->payload['data']['fee_bp'])->toBe(50)
-        ->and($delivery->payload['data']['previous_rate_bp'])->toBe(1500)
-        ->and($delivery->payload['data']['previous_fee_bp'])->toBeNull();
+    expect($delivery->payload['data']['cashback_rate_percent'])->toBe('10.00')
+        ->and($delivery->payload['data']['platform_fee_percent'])->toBe('0.50')
+        ->and($delivery->payload['data']['previous_cashback_rate_percent'])->toBe('15.00')
+        ->and($delivery->payload['data']['previous_platform_fee_percent'])->toBeNull();
 });

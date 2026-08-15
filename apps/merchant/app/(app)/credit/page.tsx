@@ -3,7 +3,10 @@
 import { useMemo, useState } from 'react';
 import {
   ApiError,
+  bpToPercentString,
   parseMvrToLaari,
+  parsePercentToBp,
+  percentToBp,
   type ProductCategory,
   type Transaction,
 } from '@manfaa/api-client';
@@ -20,15 +23,26 @@ import {
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
-import { estimateLaariAtBp, formatBp } from '@/lib/estimate';
 import {
+  estimateFeeBpFor,
+  estimateLaariAtBp,
+  formatBp,
+  formatRate,
+  formatRateOrDash,
+} from '@/lib/estimate';
+import {
+  advertisedRatePercent,
   apiErrorMessage,
+  isRateBelowAdvertised,
+  isRateNotPriced,
+  rateNotPricedMessage,
   useCreateCredit,
   useCustomerLookup,
   useProductCategories,
   usePromotions,
   useRate,
 } from '@/lib/queries';
+import { hasRoleAtLeast } from '@/lib/roles';
 import {
   Alert,
   AlertContent,
@@ -48,6 +62,7 @@ import {
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
+import { useLayout } from '@/components/app-layout/context';
 import {
   Toolbar,
   ToolbarDescription,
@@ -74,11 +89,29 @@ import {
  * hold, duplicate-invoice rejection. This screen confirms the customer by
  * masked name first (§11 phone-recycling control) and previews the cost as
  * an ESTIMATE at the current rate only.
+ *
+ * Two PLAN §1 capabilities live here:
+ *
+ *  - **Custom cashback for this sale** — an optional, collapsed-by-default
+ *    `cashback_rate_percent` that applies to THIS sale only, for MANAGERS
+ *    and owners (staff key sales in at the store's own terms; the API
+ *    answers 403 `manager_required` otherwise). It may only RAISE what the
+ *    sale already earns (the standing rate, or a live promotion): the
+ *    advertised rate is a public promise, and the customer is told the
+ *    higher figure. The server re-checks both bounds and answers
+ *    `rate_below_advertised` / `rate_not_priced`.
+ *  - **Sale time is optional** — leave the field empty and the server
+ *    records the sale as now. An empty field is never sent as an empty
+ *    string; the key is simply absent.
  */
 
 /** Maldives is UTC+05:00 year-round — occurred_at is sent with it explicit. */
 const BUSINESS_UTC_OFFSET = '+05:00';
 const BUSINESS_OFFSET_MS = 5 * 60 * 60 * 1000;
+
+/** §4 structural bounds for a per-sale rate, integer bp (§4 / PLAN §1). */
+const MIN_RATE_BP = 50;
+const MAX_RATE_BP = 2000;
 
 /**
  * §1 default refund/validation window, which is ALSO the ceiling a
@@ -323,7 +356,7 @@ function ResultCard({
           <span className="text-muted-foreground">
             Customer cashback{' '}
             {transaction.lines === undefined || transaction.lines.length === 0
-              ? `(${formatBp(transaction.rate_bp)})`
+              ? `(${formatRate(transaction.cashback_rate_percent)})`
               : `(${t('creditSplit.perLine')})`}
           </span>
           <MoneyText
@@ -333,7 +366,7 @@ function ResultCard({
           <span className="text-muted-foreground">
             Platform fee{' '}
             {transaction.lines === undefined || transaction.lines.length === 0
-              ? `(${formatBp(transaction.fee_bp)})`
+              ? `(${formatRate(transaction.platform_fee_percent)})`
               : `(${t('creditSplit.perLine')})`}
           </span>
           <MoneyText laari={transaction.fee_laari} className="sm:col-span-2" />
@@ -368,6 +401,12 @@ function initialSplitRows(): SplitRow[] {
 
 export default function CreditPage() {
   const { t } = useTranslation();
+  const { me } = useLayout();
+  // PLAN §1 staff roles: rate authority is manager and above. Keying a sale
+  // in is staff work, but choosing what it pays is not — the API answers
+  // 403 `manager_required` to a staff account that sends
+  // `cashback_rate_percent`, so the control is not rendered for one.
+  const canSetCustomRate = hasRoleAtLeast(me.role, 'manager');
   const [code, setCode] = useState('');
   const [invoiceNo, setInvoiceNo] = useState('');
   const [eligibleInput, setEligibleInput] = useState('');
@@ -377,6 +416,10 @@ export default function CreditPage() {
   const [splitEnabled, setSplitEnabled] = useState(false);
   const [splitRows, setSplitRows] = useState<SplitRow[]>(initialSplitRows);
   const [backdatedConfirmed, setBackdatedConfirmed] = useState(false);
+  // The per-sale rate override is opt-in and collapsed: the standing rate
+  // is the normal case and must stay a single-glance screen.
+  const [overrideOpen, setOverrideOpen] = useState(false);
+  const [overrideInput, setOverrideInput] = useState('');
 
   const rate = useRate();
   const lookup = useCustomerLookup(code);
@@ -405,8 +448,13 @@ export default function CreditPage() {
       (promotion) => promotion.is_live && promotion.branch_id === null,
     );
     if (live.length === 0) return null;
+    // "Highest rate wins" is a comparison, so it is made in integer bp —
+    // "4.99" sorts after "5.00" as text.
     return live.reduce((best, promotion) =>
-      promotion.rate_bp > best.rate_bp ? promotion : best,
+      percentToBp(promotion.cashback_rate_percent) >
+      percentToBp(best.cashback_rate_percent)
+        ? promotion
+        : best,
     );
   }, [promotionsQuery.data]);
 
@@ -427,10 +475,22 @@ export default function CreditPage() {
     (saleLaari === null ||
       (eligibleLaari !== null && saleLaari < eligibleLaari));
 
+  /**
+   * PLAN §1: the sale time is OPTIONAL. The field is prefilled with now for
+   * the ordinary case, and clearing it means "record this as now" — the key
+   * is then omitted from the request entirely, never sent empty.
+   */
+  const occurredProvided = occurredAt.trim() !== '';
   const occurredEpoch = useMemo(
-    () => (occurredAt ? Date.parse(toBusinessIso(occurredAt)) : Number.NaN),
+    () =>
+      occurredAt.trim() === ''
+        ? Number.NaN
+        : Date.parse(toBusinessIso(occurredAt)),
     [occurredAt],
   );
+  /** A typed-in time that is not a real instant (partial datetime entry). */
+  const occurredUnparseable =
+    occurredProvided && !Number.isFinite(occurredEpoch);
   const futureDated =
     Number.isFinite(occurredEpoch) &&
     occurredEpoch > Date.now() + 5 * 60 * 1000;
@@ -474,6 +534,73 @@ export default function CreditPage() {
       ? livePromo
       : null;
 
+  /**
+   * Every rate below is read as integer basis points because the screen
+   * COMPARES rates (is the override above what is advertised?) and prices
+   * an estimate from them. What is shown to the merchant is either the
+   * server's own percent string or the exact percent they typed.
+   */
+  const standingRateBp =
+    currentRate === null
+      ? null
+      : percentToBp(currentRate.cashback_rate_percent);
+  const standingFeeBp =
+    currentRate === null || currentRate.platform_fee_percent === null
+      ? null
+      : percentToBp(currentRate.platform_fee_percent);
+  const promoRateBp =
+    appliedPromo === null
+      ? null
+      : percentToBp(appliedPromo.cashback_rate_percent);
+  const promoFeeBp =
+    appliedPromo === null || appliedPromo.platform_fee_percent === null
+      ? null
+      : percentToBp(appliedPromo.platform_fee_percent);
+
+  /**
+   * The rate this sale already earns — the floor a custom rate may not dip
+   * below, mirroring CreditRecorder's own max(standing, live promotion).
+   * Null only when the store has no standing rate at all, where the server
+   * refuses the credit outright.
+   */
+  const advertisedBp =
+    standingRateBp === null && promoRateBp === null
+      ? null
+      : Math.max(standingRateBp ?? 0, promoRateBp ?? 0);
+
+  const overrideTrimmed = overrideInput.trim();
+  const typedOverrideBp =
+    overrideTrimmed === '' ? null : parsePercentToBp(overrideTrimmed);
+  const overrideError =
+    !overrideOpen || overrideTrimmed === ''
+      ? null
+      : typedOverrideBp === null
+        ? t('credit.customRateFormat')
+        : typedOverrideBp < MIN_RATE_BP || typedOverrideBp > MAX_RATE_BP
+          ? t('credit.customRateRange', {
+              min: formatBp(MIN_RATE_BP),
+              max: formatBp(MAX_RATE_BP),
+            })
+          : advertisedBp !== null && typedOverrideBp < advertisedBp
+            ? t('credit.customRateTooLow', { rate: formatBp(advertisedBp) })
+            : null;
+  /** The override actually in force: opened, typed, and legal. */
+  const overrideBp =
+    canSetCustomRate && overrideOpen && overrideError === null
+      ? typedOverrideBp
+      : null;
+
+  /**
+   * The sale's BASE rate: the override when one is set, the standing rate
+   * otherwise — exactly the substitution the server makes. The fee follows
+   * the applied rate; for an override the panel estimates it from the §4
+   * static bands, since the server has only quoted the fee for the standing
+   * rate.
+   */
+  const baseRateBp = overrideBp ?? standingRateBp;
+  const baseFeeBp =
+    overrideBp !== null ? estimateFeeBpFor(overrideBp) : standingFeeBp;
+
   const splitActive = splitEnabled && activeCategories.length > 0;
 
   const splitAnalysis = useMemo(
@@ -481,32 +608,37 @@ export default function CreditPage() {
       analyzeSplit(
         splitRows,
         activeCategories,
-        currentRate?.rate_bp ?? null,
-        currentRate?.fee_bp ?? null,
-        appliedPromo?.rate_bp ?? null,
-        appliedPromo?.fee_bp ?? null,
+        {
+          rateBp: baseRateBp,
+          feeBp: baseFeeBp,
+          fromOverride: overrideBp !== null,
+        },
+        { rateBp: promoRateBp, feeBp: promoFeeBp },
         eligibleLaari !== null && !eligibleInvalid ? eligibleLaari : null,
       ),
     [
       splitRows,
       activeCategories,
-      currentRate,
-      appliedPromo,
+      baseRateBp,
+      baseFeeBp,
+      overrideBp,
+      promoRateBp,
+      promoFeeBp,
       eligibleLaari,
       eligibleInvalid,
     ],
   );
 
-  // No fee preview when the standing rate has no priced fee (stranded
+  // No fee preview when the applied rate has no priced fee (a stranded
   // legacy rate — the server refuses credits in that state anyway).
   const preview =
     eligibleLaari !== null &&
     !eligibleInvalid &&
-    currentRate &&
-    currentRate.fee_bp !== null
+    baseRateBp !== null &&
+    baseFeeBp !== null
       ? {
-          cashback: estimateLaariAtBp(eligibleLaari, currentRate.rate_bp),
-          fee: estimateLaariAtBp(eligibleLaari, currentRate.fee_bp),
+          cashback: estimateLaariAtBp(eligibleLaari, baseRateBp),
+          fee: estimateLaariAtBp(eligibleLaari, baseFeeBp),
         }
       : null;
 
@@ -516,9 +648,12 @@ export default function CreditPage() {
     eligibleLaari !== null &&
     !eligibleInvalid &&
     !saleInvalid &&
-    occurredAt !== '' &&
-    Number.isFinite(occurredEpoch) &&
+    // An empty sale time is valid — it means now.
+    !occurredUnparseable &&
     !futureDated &&
+    // A half-typed custom rate must never fall back to the standing one
+    // silently: fix it or close the control.
+    overrideError === null &&
     // An irreversible, immediately-payable credit is never one click away.
     (!backdatedWarning || backdatedConfirmed) &&
     (!splitActive || splitAnalysis.submittable) &&
@@ -533,6 +668,8 @@ export default function CreditPage() {
     setOccurredAt(nowLocalValue());
     setSplitRows(initialSplitRows());
     setBackdatedConfirmed(false);
+    setOverrideInput('');
+    setOverrideOpen(false);
   };
 
   /** Changing the sale time re-opens the question, so the tick resets. */
@@ -552,7 +689,14 @@ export default function CreditPage() {
         ...(saleLaari !== null && !saleInvalid
           ? { sale_amount: saleLaari }
           : {}),
-        occurred_at: toBusinessIso(occurredAt),
+        // PLAN §1: omitted means NOW. An empty field sends no key at all —
+        // never an empty string, which the server would refuse.
+        ...(occurredProvided ? { occurred_at: toBusinessIso(occurredAt) } : {}),
+        // PLAN §1 per-sale override: the wire wants a 2-decimal percent, and
+        // the panel has the exact bp it validated. Absent unless in force.
+        ...(overrideBp !== null
+          ? { cashback_rate_percent: bpToPercentString(overrideBp) }
+          : {}),
         // The split is OPTIONAL — with the toggle off the request stays
         // byte-identical to the single-rate path.
         ...(splitActive
@@ -580,6 +724,14 @@ export default function CreditPage() {
     submitError instanceof ApiError &&
     submitError.status === 422 &&
     apiErrorMessage(submitError, '').includes('active merchant');
+  /**
+   * The two refusals a custom rate can earn (PLAN §1). Both are answered in
+   * plain words next to the control that caused them — never as the raw
+   * server sentence, which names the wire field.
+   */
+  const rateBelowAdvertised = isRateBelowAdvertised(submitError);
+  const rateNotPriced = isRateNotPriced(submitError);
+  const refusedAgainst = advertisedRatePercent(submitError);
 
   return (
     <div className="container">
@@ -652,7 +804,12 @@ export default function CreditPage() {
               </div>
 
               <div className="flex flex-col gap-2.5">
-                <Label htmlFor="occurred-at">Sale date &amp; time</Label>
+                <Label htmlFor="occurred-at">
+                  Sale date &amp; time{' '}
+                  <span className="text-muted-foreground font-normal">
+                    ({t('common.optional')})
+                  </span>
+                </Label>
                 <Input
                   id="occurred-at"
                   type="datetime-local"
@@ -660,9 +817,24 @@ export default function CreditPage() {
                   max={nowLocalValue()}
                   onChange={(event) => changeOccurredAt(event.target.value)}
                 />
-                {futureDated && (
+                {futureDated ? (
                   <p className="text-xs text-destructive">
                     The sale time cannot be in the future.
+                  </p>
+                ) : !occurredProvided ? (
+                  <p className="text-xs text-muted-foreground">
+                    {t('credit.occurredAtNow')}{' '}
+                    <button
+                      type="button"
+                      className="underline underline-offset-2"
+                      onClick={() => changeOccurredAt(nowLocalValue())}
+                    >
+                      {t('credit.occurredAtSetNow')}
+                    </button>
+                  </p>
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    {t('credit.occurredAtHint')}
                   </p>
                 )}
               </div>
@@ -696,7 +868,7 @@ export default function CreditPage() {
                 <Label htmlFor="sale-amount">
                   Full sale amount{' '}
                   <span className="text-muted-foreground font-normal">
-                    (optional)
+                    ({t('common.optional')})
                   </span>
                 </Label>
                 <InputGroup>
@@ -722,6 +894,74 @@ export default function CreditPage() {
                 )}
               </div>
             </div>
+
+            {/* PLAN §1 "Per-sale rate override": a one-off cashback rate for
+                THIS sale. Collapsed by default — the standing rate is the
+                normal case — and it may only go UP: the rate the storefront
+                advertises is a promise, and the customer is told the higher
+                figure. The server re-checks both bounds. Manager and above
+                only, like every other rate control (staff key the sale in at
+                the store's own terms). */}
+            {canSetCustomRate ? (
+              <div className="flex flex-col gap-4">
+                <div className="flex items-center gap-2.5">
+                  <Switch
+                    id="custom-rate"
+                    size="sm"
+                    checked={overrideOpen}
+                    onCheckedChange={(checked) => {
+                      setOverrideOpen(checked);
+                      if (!checked) setOverrideInput('');
+                    }}
+                  />
+                  <Label htmlFor="custom-rate">
+                    {t('credit.customRateToggle')}
+                  </Label>
+                </div>
+                {overrideOpen ? (
+                  <div className="flex flex-col gap-2.5">
+                    <Label htmlFor="custom-rate-value">
+                      {t('credit.customRateLabel')}
+                    </Label>
+                    <InputGroup className="w-44">
+                      <Input
+                        id="custom-rate-value"
+                        inputMode="decimal"
+                        dir="ltr"
+                        placeholder={
+                          advertisedBp === null
+                            ? '0.00'
+                            : formatBp(advertisedBp).replace('%', '')
+                        }
+                        value={overrideInput}
+                        aria-invalid={overrideError !== null}
+                        onChange={(event) =>
+                          setOverrideInput(event.target.value)
+                        }
+                      />
+                      <InputAddon>%</InputAddon>
+                    </InputGroup>
+                    {overrideError !== null ? (
+                      <p className="text-xs text-destructive">
+                        {overrideError}
+                      </p>
+                    ) : (
+                      <p className="text-xs text-muted-foreground">
+                        {advertisedBp === null
+                          ? t('credit.customRateHintNoRate')
+                          : t('credit.customRateHint', {
+                              rate: formatBp(advertisedBp),
+                            })}
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    {t('credit.customRateToggleHint')}
+                  </p>
+                )}
+              </div>
+            ) : null}
 
             {activeCategories.length > 0 && (
               <div className="flex flex-col gap-4">
@@ -819,11 +1059,29 @@ export default function CreditPage() {
                       ? 'This invoice is already credited.'
                       : suspendedMerchant
                         ? 'Your store is suspended — new cashback is paused.'
-                        : apiErrorMessage(
-                            submitError,
-                            'Could not record the credit.',
-                          )}
+                        : rateBelowAdvertised
+                          ? t('credit.customRateRefusedTitle')
+                          : rateNotPriced
+                            ? t('credit.customRateNotPricedTitle')
+                            : apiErrorMessage(
+                                submitError,
+                                'Could not record the credit.',
+                              )}
                   </AlertTitle>
+                  {rateBelowAdvertised && (
+                    <AlertDescription>
+                      {refusedAgainst === null
+                        ? t('credit.customRateRefusedBodyNoRate')
+                        : t('credit.customRateRefusedBody', {
+                            rate: formatRate(refusedAgainst),
+                          })}
+                    </AlertDescription>
+                  )}
+                  {rateNotPriced && (
+                    <AlertDescription>
+                      {rateNotPricedMessage(submitError)}
+                    </AlertDescription>
+                  )}
                   {duplicateInvoice && (
                     <AlertDescription>
                       Each invoice can be credited once. If this is a different
@@ -918,7 +1176,11 @@ export default function CreditPage() {
               <>
                 <div className="flex justify-between gap-3">
                   <span className="text-muted-foreground">
-                    Customer cashback ({formatBp(currentRate.rate_bp)})
+                    Customer cashback (
+                    {overrideBp !== null
+                      ? formatBp(overrideBp)
+                      : formatRate(currentRate.cashback_rate_percent)}
+                    )
                   </span>
                   {preview ? (
                     <MoneyText laari={preview.cashback} />
@@ -929,9 +1191,9 @@ export default function CreditPage() {
                 <div className="flex justify-between gap-3">
                   <span className="text-muted-foreground">
                     Platform fee (
-                    {currentRate.fee_bp === null
-                      ? '—'
-                      : formatBp(currentRate.fee_bp)}
+                    {overrideBp !== null
+                      ? formatBp(estimateFeeBpFor(overrideBp))
+                      : formatRateOrDash(currentRate.platform_fee_percent)}
                     )
                   </span>
                   {preview ? (
@@ -943,9 +1205,9 @@ export default function CreditPage() {
                 <div className="flex justify-between gap-3 border-t border-border pt-2 font-medium">
                   <span>
                     You pay (
-                    {currentRate.all_in_bp === null
-                      ? '—'
-                      : formatBp(currentRate.all_in_bp)}
+                    {overrideBp !== null
+                      ? formatBp(overrideBp + estimateFeeBpFor(overrideBp))
+                      : formatRateOrDash(currentRate.all_in_percent)}
                     )
                   </span>
                   {preview ? (
@@ -955,7 +1217,9 @@ export default function CreditPage() {
                   )}
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Estimate — final amounts use the rate at the sale time.
+                  {overrideBp === null
+                    ? 'Estimate — final amounts use the rate at the sale time.'
+                    : t('credit.customRatePreviewNote')}
                 </p>
               </>
             )}

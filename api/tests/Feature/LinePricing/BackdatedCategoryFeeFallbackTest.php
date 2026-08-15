@@ -114,18 +114,18 @@ it('prices a backdated lined credit whose category rate exceeds the occurred_at 
     $this->postJson('/api/merchant/credits', backdatedGoldPayload())
         ->assertCreated()
         ->assertJsonPath('data.state', 'awaiting_validation')
-        ->assertJsonPath('data.rate_bp', 500)   // standing base-rate snapshot
-        ->assertJsonPath('data.fee_bp', 100)    // old schedule's 500bp tier
+        ->assertJsonPath('data.cashback_rate_percent', '5.00')   // standing base-rate snapshot
+        ->assertJsonPath('data.platform_fee_percent', '1.00')    // old schedule's 500bp tier
         ->assertJsonPath('data.cashback_laari', 1750)
         ->assertJsonPath('data.fee_laari', 150)
         ->assertJsonPath('data.lines.0.category', 'gold')
         ->assertJsonPath('data.lines.0.priced_by', 'category')
-        ->assertJsonPath('data.lines.0.effective_rate_bp', 1500)
-        ->assertJsonPath('data.lines.0.fee_bp', 100)
+        ->assertJsonPath('data.lines.0.cashback_rate_percent', '15.00')
+        ->assertJsonPath('data.lines.0.platform_fee_percent', '1.00')
         ->assertJsonPath('data.lines.0.cashback_laari', 1500)
         ->assertJsonPath('data.lines.0.fee_laari', 100)
         ->assertJsonPath('data.lines.1.priced_by', 'standing')
-        ->assertJsonPath('data.lines.1.effective_rate_bp', 500)
+        ->assertJsonPath('data.lines.1.cashback_rate_percent', '5.00')
         ->assertJsonPath('data.lines.1.cashback_laari', 250)
         ->assertJsonPath('data.lines.1.fee_laari', 50);
 
@@ -158,8 +158,8 @@ it('keeps schedule-era pricing for a lined credit occurring AFTER the wide sched
         'occurred_at' => now()->subHour()->toIso8601String(),
     ]))
         ->assertCreated()
-        ->assertJsonPath('data.lines.0.effective_rate_bp', 1500)
-        ->assertJsonPath('data.lines.0.fee_bp', 100)
+        ->assertJsonPath('data.lines.0.cashback_rate_percent', '15.00')
+        ->assertJsonPath('data.lines.0.platform_fee_percent', '1.00')
         ->assertJsonPath('data.lines.0.cashback_laari', 1500)
         ->assertJsonPath('data.lines.0.fee_laari', 100);
 });

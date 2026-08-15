@@ -90,8 +90,8 @@ it('records a sale with exact §4 ceiling integers and one balanced accrual jour
         ->assertJsonPath('reason', null)
         ->assertJsonPath('transaction.origin', 'pos')
         ->assertJsonPath('transaction.state', 'awaiting_validation')
-        ->assertJsonPath('transaction.rate_bp', 200)
-        ->assertJsonPath('transaction.fee_bp', 75)
+        ->assertJsonPath('transaction.cashback_rate_percent', '2.00')
+        ->assertJsonPath('transaction.platform_fee_percent', '0.75')
         ->assertJsonPath('transaction.eligible_laari', 118000)
         ->assertJsonPath('transaction.sale_laari', 125000)
         ->assertJsonPath('transaction.cashback_laari', 2360)
@@ -177,8 +177,8 @@ it('records a suspended merchant sale as 200 recorded_ineligible with zero laari
         ->assertJsonPath('transaction.cashback_laari', 0)
         ->assertJsonPath('transaction.fee_laari', 0)
         // The frozen rate is still present — the row evidences the terms the sale met.
-        ->assertJsonPath('transaction.rate_bp', 200)
-        ->assertJsonPath('transaction.fee_bp', 75);
+        ->assertJsonPath('transaction.cashback_rate_percent', '2.00')
+        ->assertJsonPath('transaction.platform_fee_percent', '0.75');
 
     $transaction = Transaction::query()->sole();
     $events = $transaction->events()->orderBy('id')->get();
@@ -237,8 +237,17 @@ it('rejects a future-dated occurred_at as 422 future_dated and releases the key 
     expect(Transaction::query()->count())->toBe(1);
 });
 
-it('rejects an offsetless occurred_at as 422 validation_failed in the error envelope', function () {
-    postSale(v1SalePayload(['occurred_at' => '2026-08-14 16:00:00']), (string) Str::uuid())
+it('reads an offsetless occurred_at as Maldives time (PLAN §1), not UTC', function () {
+    $local = now('Indian/Maldives')->subHour()->startOfSecond();
+
+    postSale(v1SalePayload(['occurred_at' => $local->format('Y-m-d H:i:s')]), (string) Str::uuid())
+        ->assertCreated();
+
+    expect(Transaction::query()->sole()->occurred_at->getTimestamp())->toBe($local->getTimestamp());
+});
+
+it('rejects an occurred_at that is neither ISO 8601 nor a plain wall clock', function () {
+    postSale(v1SalePayload(['occurred_at' => '14/08/2026 16:00']), (string) Str::uuid())
         ->assertUnprocessable()
         ->assertJsonPath('error.code', 'validation_failed')
         ->assertJsonStructure(['error' => ['code', 'message', 'errors' => ['occurred_at']]]);

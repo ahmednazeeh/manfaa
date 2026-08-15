@@ -86,8 +86,8 @@ it('clips the final grant to the remaining cap with the fee ceiling-derived from
     $this->postJson('/api/merchant/credits', capCreditPayload())
         ->assertCreated()
         ->assertJsonPath('data.state', 'awaiting_validation')
-        ->assertJsonPath('data.rate_bp', 500)
-        ->assertJsonPath('data.fee_bp', 100)
+        ->assertJsonPath('data.cashback_rate_percent', '5.00')
+        ->assertJsonPath('data.platform_fee_percent', '1.00')
         ->assertJsonPath('data.cashback_laari', 3000)
         ->assertJsonPath('data.fee_laari', 600);
 
@@ -115,8 +115,8 @@ it('floors a clipped grant at the standing rate — a promotion never pays less 
     // and the promo keeps its remaining headroom for a sale it can price.
     $this->postJson('/api/merchant/credits', capCreditPayload())
         ->assertCreated()
-        ->assertJsonPath('data.rate_bp', 200)
-        ->assertJsonPath('data.fee_bp', 75)
+        ->assertJsonPath('data.cashback_rate_percent', '2.00')
+        ->assertJsonPath('data.platform_fee_percent', '0.75')
         ->assertJsonPath('data.cashback_laari', 2500)
         ->assertJsonPath('data.fee_laari', 938);
 
@@ -127,8 +127,8 @@ it('floors a clipped grant at the standing rate — a promotion never pays less 
     // fee ceil(100 × 100/500) = 20.
     $this->postJson('/api/merchant/credits', capCreditPayload(['eligible_amount' => 5000]))
         ->assertCreated()
-        ->assertJsonPath('data.rate_bp', 500)
-        ->assertJsonPath('data.fee_bp', 100)
+        ->assertJsonPath('data.cashback_rate_percent', '5.00')
+        ->assertJsonPath('data.platform_fee_percent', '1.00')
         ->assertJsonPath('data.cashback_laari', 100)
         ->assertJsonPath('data.fee_laari', 20);
 
@@ -155,8 +155,8 @@ it('falls through to the next live promotion when the best one is exhausted for 
     // 125,000 @300bp → 3,750; fee from the 300bp §4 tier (75bp) → 938.
     $this->postJson('/api/merchant/credits', capCreditPayload())
         ->assertCreated()
-        ->assertJsonPath('data.rate_bp', 300)
-        ->assertJsonPath('data.fee_bp', 75)
+        ->assertJsonPath('data.cashback_rate_percent', '3.00')
+        ->assertJsonPath('data.platform_fee_percent', '0.75')
         ->assertJsonPath('data.cashback_laari', 3750)
         ->assertJsonPath('data.fee_laari', 938);
 
@@ -173,8 +173,8 @@ it('falls back to the STANDING rate once the cap is exhausted — the customer s
 
     $this->postJson('/api/merchant/credits', capCreditPayload())
         ->assertCreated()
-        ->assertJsonPath('data.rate_bp', 200)
-        ->assertJsonPath('data.fee_bp', 75)
+        ->assertJsonPath('data.cashback_rate_percent', '2.00')
+        ->assertJsonPath('data.platform_fee_percent', '0.75')
         ->assertJsonPath('data.cashback_laari', 2500)
         ->assertJsonPath('data.fee_laari', 938);
 
@@ -187,7 +187,7 @@ it('returns headroom when an on-promotion transaction is reversed — only non-r
 
     $this->postJson('/api/merchant/credits', capCreditPayload())
         ->assertCreated()
-        ->assertJsonPath('data.rate_bp', 500)
+        ->assertJsonPath('data.cashback_rate_percent', '5.00')
         ->assertJsonPath('data.cashback_laari', 6250);
 
     expect(Transaction::query()->orderByDesc('id')->first()->promotion_id)->toBe($this->promotion->id);
@@ -199,7 +199,7 @@ it('caps other customers independently — one customer exhausting the promo lea
 
     $this->postJson('/api/merchant/credits', capCreditPayload(['customer_code' => '104433']))
         ->assertCreated()
-        ->assertJsonPath('data.rate_bp', 500)
+        ->assertJsonPath('data.cashback_rate_percent', '5.00')
         ->assertJsonPath('data.cashback_laari', 6250);
 });
 
@@ -228,10 +228,10 @@ it('serialises two rapid credits under the advisory lock — the promotion sum c
     // standing 100, so the floor keeps the promo grant); second finds none
     // and earns at the standing rate.
     $first->assertCreated()
-        ->assertJsonPath('data.rate_bp', 500)
+        ->assertJsonPath('data.cashback_rate_percent', '5.00')
         ->assertJsonPath('data.cashback_laari', 100);
     $second->assertCreated()
-        ->assertJsonPath('data.rate_bp', 200)
+        ->assertJsonPath('data.cashback_rate_percent', '2.00')
         ->assertJsonPath('data.cashback_laari', 2500);
 
     expect($lockCalls)->toBeGreaterThanOrEqual(2);
@@ -270,7 +270,7 @@ it('keeps the ledger balanced across a whole capped sequence: normal, clipped, e
     // Exhausted: standing 200/75.
     $this->postJson('/api/merchant/credits', capCreditPayload())
         ->assertCreated()
-        ->assertJsonPath('data.rate_bp', 200)
+        ->assertJsonPath('data.cashback_rate_percent', '2.00')
         ->assertJsonPath('data.cashback_laari', 2500)
         ->assertJsonPath('data.fee_laari', 938);
 

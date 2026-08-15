@@ -69,8 +69,8 @@ it('credits at the promo 500bp inside the window — fee 100bp follows the promo
     $this->postJson('/api/merchant/credits', promoCreditPayload())
         ->assertCreated()
         ->assertJsonPath('data.state', 'awaiting_validation')
-        ->assertJsonPath('data.rate_bp', 500)
-        ->assertJsonPath('data.fee_bp', 100)
+        ->assertJsonPath('data.cashback_rate_percent', '5.00')
+        ->assertJsonPath('data.platform_fee_percent', '1.00')
         ->assertJsonPath('data.cashback_laari', intdiv(125000 * 500 + 9999, 10000))
         ->assertJsonPath('data.fee_laari', intdiv(125000 * 100 + 9999, 10000));
 
@@ -94,8 +94,8 @@ it('falls back to the standing rate below the promo minimum purchase — never r
     $this->postJson('/api/merchant/credits', promoCreditPayload(['eligible_amount' => 50000]))
         ->assertCreated()
         ->assertJsonPath('data.state', 'awaiting_validation')
-        ->assertJsonPath('data.rate_bp', 200)
-        ->assertJsonPath('data.fee_bp', 75)
+        ->assertJsonPath('data.cashback_rate_percent', '2.00')
+        ->assertJsonPath('data.platform_fee_percent', '0.75')
         ->assertJsonPath('data.cashback_laari', 1000)
         ->assertJsonPath('data.fee_laari', 375);
 
@@ -107,8 +107,8 @@ it('uses the standing rate outside the promo window (rate frozen at occurred_at)
         'occurred_at' => now()->subDays(2)->toIso8601String(),
     ]))
         ->assertCreated()
-        ->assertJsonPath('data.rate_bp', 200)
-        ->assertJsonPath('data.fee_bp', 75);
+        ->assertJsonPath('data.cashback_rate_percent', '2.00')
+        ->assertJsonPath('data.platform_fee_percent', '0.75');
 
     expect(Transaction::query()->sole()->promotion_id)->toBeNull();
 });
@@ -118,7 +118,7 @@ it('ignores draft and cancelled promotions — only PUBLISHED promotions price s
 
     $this->postJson('/api/merchant/credits', promoCreditPayload())
         ->assertCreated()
-        ->assertJsonPath('data.rate_bp', 200);
+        ->assertJsonPath('data.cashback_rate_percent', '2.00');
 
     expect(Transaction::query()->sole()->promotion_id)->toBeNull();
 });
@@ -170,8 +170,8 @@ it('lets the standing rate win when it has risen past the promo rate since publi
         'occurred_at' => now()->subMinutes(10)->toIso8601String(),
     ]))
         ->assertCreated()
-        ->assertJsonPath('data.rate_bp', 700)
-        ->assertJsonPath('data.fee_bp', 100);
+        ->assertJsonPath('data.cashback_rate_percent', '7.00')
+        ->assertJsonPath('data.platform_fee_percent', '1.00');
 
     expect(Transaction::query()->sole()->promotion_id)->toBeNull();
 });
@@ -185,7 +185,7 @@ it('freezes standing terms on a below-merchant-minimum sale even inside a promo 
         ->assertCreated()
         ->assertJsonPath('data.state', 'reversed')
         ->assertJsonPath('data.reason_code', 'below_minimum')
-        ->assertJsonPath('data.rate_bp', 200)
+        ->assertJsonPath('data.cashback_rate_percent', '2.00')
         ->assertJsonPath('data.cashback_laari', 0);
 
     expect(Transaction::query()->sole()->promotion_id)->toBeNull();

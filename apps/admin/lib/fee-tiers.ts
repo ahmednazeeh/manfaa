@@ -1,8 +1,11 @@
 import {
   bpToPercentString,
   formatBpPercent,
+  formatPercent,
   parsePercentToBp,
+  percentToBp,
   type FeeTierBand,
+  type FeeTierBandInput,
 } from '@manfaa/api-client';
 
 /**
@@ -10,12 +13,51 @@ import {
  * and Domain\Platform\TierScheduleService). The server remains authoritative
  * — this only lets the form flag the exact violation per row before submit.
  *
- * Humans type percent strings (up to 2 decimals); everything else is integer
- * basis points and integer laari. Conversion goes through the shared
- * percent.ts helpers — never a float.
+ * THREE representations, deliberately kept apart:
+ *
+ *  - the WIRE (`FeeTierBand`) — 2-decimal percent strings, PLAN §1: basis
+ *    points never appear in a request or response body;
+ *  - the FORM (`TierRowInput`) — whatever the admin has typed so far;
+ *  - the RULES (`TierBand`) — integer basis points, because contiguity
+ *    ("previous band's end + 0.01"), ceilings and the fee-vs-rate comparison
+ *    are integer arithmetic and nothing else is safe.
+ *
+ * Every crossing between them goes through the shared percent helpers —
+ * string decomposition, never a float.
  */
 
-export { bpToPercentString, formatBpPercent, parsePercentToBp };
+export {
+  bpToPercentString,
+  formatBpPercent,
+  formatPercent,
+  parsePercentToBp,
+  percentToBp,
+};
+
+/** One §4 band in the unit the rules are written in: integer basis points. */
+export interface TierBand {
+  from_bp: number;
+  to_bp: number;
+  fee_bp: number;
+}
+
+/** The API's percent bands as integer bp, for the rules and the previews. */
+export function bandsFromWire(tiers: FeeTierBand[]): TierBand[] {
+  return tiers.map((band) => ({
+    from_bp: percentToBp(band.from_percent),
+    to_bp: percentToBp(band.to_percent),
+    fee_bp: percentToBp(band.fee_percent),
+  }));
+}
+
+/** Validated bp bands as the wire's 2-decimal percent strings, for POST. */
+export function bandsToWire(bands: TierBand[]): FeeTierBandInput[] {
+  return bands.map((band) => ({
+    from_percent: bpToPercentString(band.from_bp),
+    to_percent: bpToPercentString(band.to_bp),
+    fee_percent: bpToPercentString(band.fee_bp),
+  }));
+}
 
 /** Coverage always starts at 0.50% cashback. */
 export const TIER_RANGE_MIN_BP = 50;
@@ -51,7 +93,7 @@ export interface TierRowIssues {
 
 export interface TierValidation {
   /** Non-null only when every rule passes. */
-  bands: FeeTierBand[] | null;
+  bands: TierBand[] | null;
   /** Parallel to the input rows. */
   rowIssues: TierRowIssues[];
   /** Whole-table failure, when no single row carries it. */
@@ -69,7 +111,7 @@ const PERCENT_FORMAT_MESSAGE = 'Percent with up to 2 decimals, e.g. 0.75.';
  */
 export function validateTierRows(rows: TierRowInput[]): TierValidation {
   const rowIssues: TierRowIssues[] = rows.map(() => ({}));
-  const bands: FeeTierBand[] = [];
+  const bands: TierBand[] = [];
   let scheduleError: string | null = null;
   // null once a broken row makes contiguity unknowable for later rows.
   let expectedFrom: number | null = TIER_RANGE_MIN_BP;
@@ -145,7 +187,7 @@ export function validateTierRows(rows: TierRowInput[]): TierValidation {
 }
 
 /** Resolves the fee for a rate under a band list; null when uncovered. */
-export function feeBpFor(bands: FeeTierBand[], rateBp: number): number | null {
+export function feeBpFor(bands: TierBand[], rateBp: number): number | null {
   for (const band of bands) {
     if (rateBp >= band.from_bp && rateBp <= band.to_bp) {
       return band.fee_bp;
@@ -183,7 +225,7 @@ export interface FixturePreview {
 }
 
 /** Computes the §4 example under the given bands; null when 200 bp is uncovered. */
-export function section4Preview(bands: FeeTierBand[]): FixturePreview | null {
+export function section4Preview(bands: TierBand[]): FixturePreview | null {
   const feeBp = feeBpFor(bands, SECTION4_FIXTURE_RATE_BP);
   if (feeBp === null) {
     return null;

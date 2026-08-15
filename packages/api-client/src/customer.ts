@@ -280,9 +280,10 @@ export function isCustomerStatusReasonKey(
 
 /**
  * A transaction as the CUSTOMER sees it: no internal state, no merchant
- * commercial terms (fee, fee_bp). `status_reason` is a translatable KEY, not
- * prose — e.g. merchant_settlement_window renders as "Store X settles within
- * 15 days"; null for confirmed/paid.
+ * commercial terms (the platform fee, and the rate the merchant is billed
+ * at — neither its amount nor its percent). `status_reason` is a
+ * translatable KEY, not prose — e.g. merchant_settlement_window renders as
+ * "Store X settles within 15 days"; null for confirmed/paid.
  */
 export const CustomerTransactionSchema = z.object({
   id: z.number().int(),

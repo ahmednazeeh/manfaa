@@ -1,7 +1,7 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import { formatBpPercent, type Settlement } from '@manfaa/api-client';
+import { formatPercent, type Settlement } from '@manfaa/api-client';
 import { MoneyText } from '@manfaa/ui';
 import { BadgePercent } from 'lucide-react';
 import { promptDiscountReasonLabel } from '@/lib/labels';
@@ -24,9 +24,9 @@ import { batchPrice } from './discount';
 
 /** The rate a batch was priced at, as a percent — null when nothing was granted. */
 function rateLabel(settlement: Settlement): string | null {
-  return settlement.discount_rate_bp === null
+  return settlement.discount_rate_percent === null
     ? null
-    : formatBpPercent(settlement.discount_rate_bp);
+    : formatPercent(settlement.discount_rate_percent);
 }
 
 /** Compact marker for a batch carrying a discount — headers and stat hints. */

@@ -51,7 +51,7 @@ it('paginates the directory alphabetically with default and capped page sizes', 
 
     // Every entry carries exactly the public directory contract.
     expect(array_keys($data[0]))->toBe([
-        'name', 'slug', 'category', 'logo_url', 'channel', 'rate_bp', 'standing_rate_bp', 'promo_ends_at',
+        'name', 'slug', 'category', 'logo_url', 'channel', 'cashback_rate_percent', 'standing_cashback_rate_percent', 'promo_ends_at',
     ]);
 
     // No logo uploaded — the slot is present and null, never absent.
@@ -177,12 +177,12 @@ it('boosts directory entries with a live published promotion only', function () 
     $data = $this->getJson('/api/discover/merchants')->assertOk()->json('data');
 
     $alphaEntry = collect($data)->firstWhere('slug', 'cafe-alpha');
-    expect($alphaEntry['rate_bp'])->toBe(500);
-    expect($alphaEntry['standing_rate_bp'])->toBe(200);
+    expect($alphaEntry['cashback_rate_percent'])->toBe('5.00');
+    expect($alphaEntry['standing_cashback_rate_percent'])->toBe('2.00');
     expect($alphaEntry['promo_ends_at'])->not->toBeNull();
 
     $bravoEntry = collect($data)->firstWhere('slug', 'grocer-bravo');
-    expect($bravoEntry['rate_bp'])->toBe(100);
+    expect($bravoEntry['cashback_rate_percent'])->toBe('1.00');
     expect($bravoEntry['promo_ends_at'])->toBeNull();
 });
 
@@ -205,13 +205,13 @@ it('never advertises a branch-scoped promotion on the directory or store page', 
     // Directory card quotes the standing rate with no promo end.
     $entry = collect($this->getJson('/api/discover/merchants')->assertOk()->json('data'))
         ->firstWhere('slug', 'cafe-alpha');
-    expect($entry['rate_bp'])->toBe(200);
+    expect($entry['cashback_rate_percent'])->toBe('2.00');
     expect($entry['promo_ends_at'])->toBeNull();
 
     // Store page hero shows no boost and no promotion block.
     $data = $this->getJson('/api/discover/merchants/cafe-alpha')->assertOk()->json('data');
-    expect($data['rate_bp'])->toBe(200);
-    expect($data['standing_rate_bp'])->toBe(200);
+    expect($data['cashback_rate_percent'])->toBe('2.00');
+    expect($data['standing_cashback_rate_percent'])->toBe('2.00');
     expect($data['promotion'])->toBeNull();
 });
 
@@ -260,11 +260,11 @@ it('serves the full public store page for an active merchant', function () {
 
     expect(array_keys($data))->toBe([
         'name', 'slug', 'category', 'logo_url', 'channel', 'featured',
-        'rate_bp', 'standing_rate_bp', 'promotion', 'cashback_basis', 'category_rates', 'branches', 'joined',
+        'cashback_rate_percent', 'standing_cashback_rate_percent', 'promotion', 'cashback_basis', 'category_rates', 'branches', 'joined',
     ]);
 
     // No product categories defined — the rates table is an empty list
-    // (never absent), and "everything else" is the standing_rate_bp above.
+    // (never absent), and "everything else" is the standing_cashback_rate_percent above.
     expect($data['category_rates'])->toBe([]);
 
     expect($data['name'])->toBe('Cafe Alpha');
@@ -274,11 +274,11 @@ it('serves the full public store page for an active merchant', function () {
     expect($data['channel'])->toBe('both');
     expect($data['featured'])->toBeTrue();
 
-    // Boosted now, usually 2% — all integer basis points.
-    expect($data['rate_bp'])->toBe(500);
-    expect($data['standing_rate_bp'])->toBe(200);
-    expect(array_keys($data['promotion']))->toBe(['rate_bp', 'ends_at', 'min_purchase_laari']);
-    expect($data['promotion']['rate_bp'])->toBe(500);
+    // Boosted now, usually 2% — 2-decimal percent strings on the wire.
+    expect($data['cashback_rate_percent'])->toBe('5.00');
+    expect($data['standing_cashback_rate_percent'])->toBe('2.00');
+    expect(array_keys($data['promotion']))->toBe(['cashback_rate_percent', 'ends_at', 'min_purchase_laari']);
+    expect($data['promotion']['cashback_rate_percent'])->toBe('5.00');
     expect($data['promotion']['min_purchase_laari'])->toBe(10000);
     expect($data['promotion']['ends_at'])->not->toBeNull();
 
@@ -318,8 +318,8 @@ it('serves a null cashback basis verbatim and no promotion when none boosts', fu
     expect($data)->toHaveKey('cashback_basis');
     expect($data['cashback_basis'])->toBeNull();
     expect($data['promotion'])->toBeNull();
-    expect($data['rate_bp'])->toBe(300);
-    expect($data['standing_rate_bp'])->toBe(300);
+    expect($data['cashback_rate_percent'])->toBe('3.00');
+    expect($data['standing_cashback_rate_percent'])->toBe('3.00');
     expect($data['branches'])->toBe([]);
 });
 

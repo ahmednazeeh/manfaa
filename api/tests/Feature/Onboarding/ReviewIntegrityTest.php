@@ -71,7 +71,7 @@ it('freezes profile, rate and promotion writes while the store is under review',
     ])->assertStatus(409)->assertJsonPath('code', 'store_not_approved');
 
     // Nor may the §7 rate endpoint reprice the reviewed 200bp.
-    $this->postJson('/api/merchant/rate', ['rate_bp' => 1000])
+    $this->postJson('/api/merchant/rate', ['cashback_rate_percent' => '10.00'])
         ->assertStatus(409)->assertJsonPath('code', 'store_not_approved');
 
     // Nor can promotions be staged to spring live at activation.
@@ -102,7 +102,7 @@ it('keeps the wizard as the only write path before approval', function (string $
     // step REPLACES the untraded initial row; this endpoint would append.
     $this->patchJson('/api/merchant/profile', ['channel' => 'both'])
         ->assertStatus(409)->assertJsonPath('code', 'store_not_approved');
-    $this->postJson('/api/merchant/rate', ['rate_bp' => 300])
+    $this->postJson('/api/merchant/rate', ['cashback_rate_percent' => '3.00'])
         ->assertStatus(409)->assertJsonPath('code', 'store_not_approved');
 
     expect(MerchantRate::query()->where('merchant_id', $owner->merchant->id)->count())->toBe(1);

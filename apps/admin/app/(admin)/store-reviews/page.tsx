@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import {
-  formatBpPercent,
+  formatPercent,
   listStoreCategories,
   listStoreReviews,
   type StoreReview,
@@ -192,10 +192,10 @@ export default function StoreReviewsPage() {
                           <ChannelBadge channel={review.channel} />
                         </TableCell>
                         <TableCell className="text-end">
-                          {review.rate_bp === null ? (
+                          {review.cashback_rate_percent === null ? (
                             <span className="text-muted-foreground">—</span>
                           ) : (
-                            formatBpPercent(review.rate_bp)
+                            formatPercent(review.cashback_rate_percent)
                           )}
                         </TableCell>
                         <TableCell>{dateColumn(state, review)}</TableCell>

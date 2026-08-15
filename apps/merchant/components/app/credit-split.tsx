@@ -3,13 +3,19 @@
 import { useMemo } from 'react';
 import {
   parseMvrToLaari,
+  percentToBp,
   type ProductCategory,
   type TransactionLine,
 } from '@manfaa/api-client';
 import { formatMoney, MoneyText } from '@manfaa/ui';
 import { Plus, Trash2, TriangleAlert } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { estimateFeeBpFor, estimateLaariAtBp, formatBp } from '@/lib/estimate';
+import {
+  estimateFeeBpFor,
+  estimateLaariAtBp,
+  formatBp,
+  formatRate,
+} from '@/lib/estimate';
 import {
   Alert,
   AlertContent,
@@ -39,11 +45,19 @@ import {
 /**
  * The credit screen's optional split-by-category editor (Task #25). Each
  * line prices at its own effective rate — excluded → nothing, category
- * override → its rate, the "Everything else" bucket → the standing rate —
- * and during a live promotion every NON-excluded line earns
+ * override → its rate, the "Everything else" bucket → the sale's BASE rate
+ * — and during a live promotion every NON-excluded line earns
  * max(promotion rate, its own rate); exclusions always hold. Everything
  * here is a client-side ESTIMATE mirroring the §4 per-line ceiling math;
  * the server prices authoritatively at the sale time.
+ *
+ * The BASE rate is the store's standing rate, or the per-sale
+ * `cashback_rate_percent` override when the cashier set one (PLAN §1): the
+ * override simply replaces the standing rate one rung higher, so lines that
+ * would price at standing price at the override instead, category rates and
+ * exclusions are untouched, and the promotion floor still lifts any line a
+ * live promo would pay more on. Since the server refuses an override below
+ * the advertised rate, no line can ever earn less than it would without one.
  */
 
 /** Sentinel for the default "Everything else" bucket (category: null). */
@@ -62,12 +76,32 @@ export type LinePricing =
   | { kind: 'excluded' }
   | { kind: 'category'; rateBp: number }
   | { kind: 'standing'; rateBp: number }
+  /** The default bucket under a per-sale rate override (PLAN §1). */
+  | { kind: 'override'; rateBp: number }
   | {
       kind: 'promotion';
       rateBp: number;
       /** The rate the line would earn without the promotion. */
       ownRateBp: number;
     };
+
+/**
+ * The sale's BASE terms: the standing rate, or the per-sale override when
+ * the cashier set one. `fromOverride` only changes the wording of the
+ * per-line hint — the pricing rule is identical either way.
+ */
+export interface SplitBaseTerms {
+  rateBp: number | null;
+  /** Null when the fee is unknown (stranded rate, or an override the panel prices statically). */
+  feeBp: number | null;
+  fromOverride: boolean;
+}
+
+/** The live promotion applying to this SALE, already resolved by the caller. */
+export interface SplitPromoTerms {
+  rateBp: number | null;
+  feeBp: number | null;
+}
 
 export interface AnalyzedLine {
   row: SplitRow;
@@ -109,20 +143,21 @@ function safeParseMvr(input: string): number | null {
 }
 
 /**
- * Pure analysis of the editor rows against the merchant's terms. The
- * promotion is already resolved by the caller: `promoRateBp` is non-null
- * only when a live merchant-wide promotion applies to this SALE (its
- * minimum purchase is met by the WHOLE eligible amount).
+ * Pure analysis of the editor rows against the merchant's terms. Both sides
+ * are already resolved by the caller: `base` is the standing rate or the
+ * per-sale override, and `promo.rateBp` is non-null only when a live
+ * merchant-wide promotion applies to this SALE (its minimum purchase is met
+ * by the WHOLE eligible amount).
  */
 export function analyzeSplit(
   rows: SplitRow[],
   categories: ProductCategory[],
-  standingRateBp: number | null,
-  standingFeeBp: number | null,
-  promoRateBp: number | null,
-  promoFeeBp: number | null,
+  base: SplitBaseTerms,
+  promo: SplitPromoTerms,
   eligibleLaari: number | null,
 ): SplitAnalysis {
+  const { rateBp: baseRateBp, feeBp: baseFeeBp, fromOverride } = base;
+  const { rateBp: promoRateBp, feeBp: promoFeeBp } = promo;
   const seen = new Set<string>();
   const lines: AnalyzedLine[] = rows.map((row) => {
     const duplicate = seen.has(row.category);
@@ -144,11 +179,20 @@ export function analyzeSplit(
       if (category !== null && category.mode === 'excluded') {
         pricing = { kind: 'excluded' };
       } else {
+        const categoryRateBp =
+          category !== null && category.cashback_rate_percent !== null
+            ? percentToBp(category.cashback_rate_percent)
+            : null;
         const own =
-          category !== null && category.rate_bp !== null
-            ? { kind: 'category' as const, rateBp: category.rate_bp }
-            : standingRateBp !== null
-              ? { kind: 'standing' as const, rateBp: standingRateBp }
+          categoryRateBp !== null
+            ? { kind: 'category' as const, rateBp: categoryRateBp }
+            : baseRateBp !== null
+              ? {
+                  kind: fromOverride
+                    ? ('override' as const)
+                    : ('standing' as const),
+                  rateBp: baseRateBp,
+                }
               : null;
         if (own !== null) {
           pricing =
@@ -172,8 +216,8 @@ export function analyzeSplit(
       } else {
         cashbackEstimate = estimateLaariAtBp(amountLaari, pricing.rateBp);
         const feeBp =
-          pricing.kind === 'standing'
-            ? (standingFeeBp ?? estimateFeeBpFor(pricing.rateBp))
+          pricing.kind === 'standing' || pricing.kind === 'override'
+            ? (baseFeeBp ?? estimateFeeBpFor(pricing.rateBp))
             : pricing.kind === 'promotion'
               ? (promoFeeBp ?? estimateFeeBpFor(pricing.rateBp))
               : estimateFeeBpFor(pricing.rateBp);
@@ -296,6 +340,14 @@ function PricingPreview({ line }: { line: AnalyzedLine }) {
       return (
         <p className="text-xs text-muted-foreground">
           {t('creditSplit.standingRate', {
+            rate: formatBp(line.pricing.rateBp),
+          })}
+        </p>
+      );
+    case 'override':
+      return (
+        <p className="text-xs text-muted-foreground">
+          {t('creditSplit.overrideRate', {
             rate: formatBp(line.pricing.rateBp),
           })}
         </p>
@@ -545,7 +597,7 @@ export function ResultLines({
               <TableCell>
                 <span className="inline-flex items-center gap-1.5">
                   <span className="tabular-nums">
-                    {formatBp(line.effective_rate_bp)}
+                    {formatRate(line.cashback_rate_percent)}
                   </span>
                   {line.priced_by === 'promotion' && (
                     <Badge variant="info" appearance="light" size="sm">

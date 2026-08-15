@@ -31,8 +31,8 @@ it('returns the current rate with tiered fee and no pending decrease', function 
     v1Get('/api/v1/merchants/me/rate')
         ->assertOk()
         ->assertExactJson([
-            'rate_bp' => 200,
-            'fee_bp' => 75,
+            'cashback_rate_percent' => '2.00',
+            'platform_fee_percent' => '0.75',
             'currency' => 'MVR',
             'min_eligible_laari' => 5000,
             'pending_decrease' => null,
@@ -53,10 +53,10 @@ it('surfaces a scheduled decrease as pending_decrease with its own tiered fee', 
 
     v1Get('/api/v1/merchants/me/rate')
         ->assertOk()
-        ->assertJsonPath('rate_bp', 200)
-        ->assertJsonPath('fee_bp', 75)
-        ->assertJsonPath('pending_decrease.rate_bp', 150)
-        ->assertJsonPath('pending_decrease.fee_bp', 50)
+        ->assertJsonPath('cashback_rate_percent', '2.00')
+        ->assertJsonPath('platform_fee_percent', '0.75')
+        ->assertJsonPath('pending_decrease.cashback_rate_percent', '1.50')
+        ->assertJsonPath('pending_decrease.platform_fee_percent', '0.50')
         ->assertJsonPath('pending_decrease.effective_at', $effective->setTimezone('Indian/Maldives')->toIso8601String());
 });
 

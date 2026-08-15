@@ -1,11 +1,81 @@
 import { z } from 'zod';
+import {
+  bpToPercentString,
+  isPercentDeltaString,
+  isPercentInput,
+  isPercentString,
+} from './percent';
 
 /**
  * Zod schemas mirroring the Laravel JsonResources shared by the merchant and
  * admin surfaces. Money is always integer laari (`z.number().int()`); the
  * `*_mvr` companions are pre-formatted decimal strings from the API (e.g.
  * "118.25") and are display-only — never parse them back into numbers.
+ *
+ * RATES follow the same idiom (PLAN §1 wire format, decision 2026-08-15):
+ * `rate_bp` / `fee_bp` appear in no request and no response. Every rate is a
+ * 2-decimal percent STRING — `cashback_rate_percent: "2.00"`,
+ * `platform_fee_percent: "0.75"`. Basis points stay the API's internal
+ * representation (storage, ledger, every computation) and never reach a
+ * client; convert with `percentToBp` from ./percent when you need to compare
+ * rates or drive a slider.
  */
+
+// ---------------------------------------------------------------------------
+// Rates on the wire (PLAN §1 wire format)
+// ---------------------------------------------------------------------------
+
+/** §4 structural cashback bounds, in basis points — the request grammar. */
+export const MIN_CASHBACK_BP = 50;
+export const MAX_CASHBACK_BP = 2000;
+/** A platform fee may sit below the cashback floor (the 0.25% first tier). */
+export const MIN_FEE_BP = 1;
+
+/**
+ * A rate as the API EMITS it: a 2-decimal percent string. Strict on
+ * purpose — a server that regressed to basis points ("200") must fail
+ * loudly here rather than reach a screen as "200%".
+ */
+export const PercentSchema = z
+  .string()
+  .refine(isPercentString, 'Expected a 2-decimal percent string, e.g. "2.00".');
+
+/**
+ * A DIFFERENCE between two rates, the one rate value that may be negative
+ * (`all_in_delta_percent`): "0.26", "-0.26".
+ */
+export const PercentDeltaSchema = z
+  .string()
+  .refine(
+    isPercentDeltaString,
+    'Expected a 2-decimal percent delta string, e.g. "-0.26".',
+  );
+
+/**
+ * A rate as a REQUEST may send it: a string ("2", "2.5", "2.50") or a JSON
+ * number (2, 2.5) with at most 2 decimals, bounded in basis points exactly
+ * as App\Rules\PercentRate bounds it server-side. Build the string with
+ * `bpToPercentString` when the form works in basis points.
+ */
+export function percentInput(minBp: number, maxBp: number) {
+  return z
+    .union([z.string(), z.number()])
+    .refine(
+      (value) => isPercentInput(value, minBp, maxBp),
+      `Expected a percent between ${bpToPercentString(minBp)} and ${bpToPercentString(maxBp)} with at most 2 decimal places.`,
+    );
+}
+
+/** A customer cashback rate on a request: §4's 0.50%–20.00%. */
+export const CashbackPercentInputSchema = percentInput(
+  MIN_CASHBACK_BP,
+  MAX_CASHBACK_BP,
+);
+export type CashbackPercentInput = z.infer<typeof CashbackPercentInputSchema>;
+
+/** A platform fee rate on a request: 0.01%–20.00%. */
+export const FeePercentInputSchema = percentInput(MIN_FEE_BP, MAX_CASHBACK_BP);
+export type FeePercentInput = z.infer<typeof FeePercentInputSchema>;
 
 // ---------------------------------------------------------------------------
 // Response envelopes
@@ -192,7 +262,7 @@ export function isTransactionReasonCode(
 /**
  * What a per-store product category does to the rate: `excluded` earns
  * nothing (even during promotions), `rate` overrides the standing rate with
- * the category's own `rate_bp`.
+ * the category's own `cashback_rate_percent`.
  */
 export const ProductCategoryModeSchema = z.enum(['excluded', 'rate']);
 export type ProductCategoryMode = z.infer<typeof ProductCategoryModeSchema>;
@@ -200,8 +270,10 @@ export type ProductCategoryMode = z.infer<typeof ProductCategoryModeSchema>;
 /**
  * WHY a line priced the way it did: `excluded` (category excluded → zeros),
  * `category` (the category's own rate override), `standing` (no category /
- * default bucket → merchant standing rate), `promotion` (a live promo beat
- * the line's own rate — only these lines consume the per-customer promo cap).
+ * default bucket → the sale's BASE rate, which is the per-sale
+ * `cashback_rate_percent` override when one was sent, otherwise the merchant
+ * standing rate), `promotion` (a live promo beat the line's own rate — only
+ * these lines consume the per-customer promo cap).
  */
 export const TransactionLinePricedBySchema = z.enum([
   'excluded',
@@ -219,13 +291,17 @@ export type TransactionLinePricedBy = z.infer<
  * else" bucket, which also has a null `category_name_en`). All money is
  * integer laari, per-line §4 ceiling; the transaction totals equal the SUM
  * of these stored integers.
+ *
+ * `cashback_rate_percent` is the rate this LINE actually priced at ("0.00"
+ * for an excluded category) and `platform_fee_percent` the fee that followed
+ * it — both 2-decimal percent strings.
  */
 export const TransactionLineSchema = z.object({
   category: z.string().nullable(),
   category_name_en: z.string().nullable(),
   amount_laari: z.number().int(),
-  effective_rate_bp: z.number().int(),
-  fee_bp: z.number().int(),
+  cashback_rate_percent: PercentSchema,
+  platform_fee_percent: PercentSchema,
   cashback_laari: z.number().int(),
   fee_laari: z.number().int(),
   priced_by: TransactionLinePricedBySchema,
@@ -242,8 +318,13 @@ export const TransactionSchema = z.object({
   currency: z.string(),
   eligible_laari: z.number().int(),
   sale_laari: z.number().int().nullable(),
-  rate_bp: z.number().int(),
-  fee_bp: z.number().int(),
+  /**
+   * The rate and fee FROZEN on this row at occurred_at, as 2-decimal
+   * percent strings. On a lined credit they are the base-rate snapshot —
+   * the per-line truth lives in `lines`.
+   */
+  cashback_rate_percent: PercentSchema,
+  platform_fee_percent: PercentSchema,
   cashback_laari: z.number().int(),
   fee_laari: z.number().int(),
   fee_gst_laari: z.number().int(),
@@ -261,8 +342,8 @@ export const TransactionSchema = z.object({
    * The pricing split of a lined credit, in submitted order. Present only
    * when the endpoint loads it (e.g. the credit POST response for a lined
    * credit); single-rate transactions keep the exact pre-lines shape. On a
-   * lined credit the row-level rate_bp/fee_bp are the standing-rate
-   * snapshot — the per-line truth lives here.
+   * lined credit the row-level percents are the base-rate snapshot — the
+   * per-line truth lives here.
    */
   lines: z.array(TransactionLineSchema).optional(),
 });
@@ -296,6 +377,37 @@ export const BACKDATED_IRREVERSIBLE_CODE = 'backdated_irreversible';
  */
 export const BACKDATED_STALE_GRACE_DAYS = 3;
 
+/** A wall clock with no offset — the API reads one as Maldives time. */
+const OFFSETLESS_INSTANT = /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}$/;
+
+/**
+ * The instant an `occurred_at` names, in epoch milliseconds, read exactly as
+ * the API reads it (App\Http\Support\OccurredAt):
+ *
+ *  - ISO 8601 WITH an offset ("…+05:00", "…Z", "…+0500") is taken as sent;
+ *  - a plain wall clock with NO offset ("2026-08-15 13:45:00",
+ *    "2026-08-15T13:45:00") is MALDIVES time — never the viewer's own
+ *    timezone, which is what `Date.parse` would assume and what would make a
+ *    panel abroad warn about the wrong sales;
+ *  - anything unparseable is null.
+ *
+ * Maldives is UTC+05:00 year-round (no DST), so pinning the offset is exact.
+ */
+export function parseOccurredAt(occurredAt: string | number | Date): number {
+  if (occurredAt instanceof Date) {
+    return occurredAt.getTime();
+  }
+  if (typeof occurredAt === 'number') {
+    return occurredAt;
+  }
+  const trimmed = occurredAt.trim();
+  return Date.parse(
+    OFFSETLESS_INSTANT.test(trimmed)
+      ? `${trimmed.replace(' ', 'T')}+05:00`
+      : trimmed,
+  );
+}
+
 /**
  * Would this sale be credited as BACKDATED — payable immediately and
  * merchant-irreversible? Mirrors the server rule exactly: occurred_at
@@ -303,19 +415,21 @@ export const BACKDATED_STALE_GRACE_DAYS = 3;
  * warns on true BEFORE submit, because the decision cannot be undone
  * afterwards.
  *
+ * `occurred_at` is now OPTIONAL on the credit (PLAN §1): omitting it means
+ * NOW, which is never backdated — pass undefined and this answers false.
+ *
  * @param validationWindowDays the merchant's own preferences value
  */
 export function isBackdatedOccurrence(
-  occurredAt: string | number | Date,
+  occurredAt: string | number | Date | undefined | null,
   validationWindowDays: number,
   now: Date = new Date(),
 ): boolean {
-  const occurred =
-    occurredAt instanceof Date
-      ? occurredAt.getTime()
-      : typeof occurredAt === 'number'
-        ? occurredAt
-        : Date.parse(occurredAt);
+  if (occurredAt === undefined || occurredAt === null || occurredAt === '') {
+    return false;
+  }
+
+  const occurred = parseOccurredAt(occurredAt);
 
   if (!Number.isFinite(occurred)) {
     return false;
@@ -340,14 +454,15 @@ export const PromotionStatusSchema = z.enum([
 export type PromotionStatus = z.infer<typeof PromotionStatusSchema>;
 
 /**
- * The §4 cost picture of one cashback rate, all integer basis points: the
- * platform fee tier the rate lands on and the resulting all-in merchant
- * cost. Mind the tier cliffs (e.g. 499 → 500 moves the fee tier).
+ * The §4 cost picture of one cashback rate, all 2-decimal percent strings:
+ * the platform fee tier the rate lands on and the resulting all-in merchant
+ * cost. Mind the tier cliffs — compare in basis points (`percentToBp`),
+ * never as text: "4.99" → "5.00" moves the fee tier.
  */
 export const RateDescriptionSchema = z.object({
-  rate_bp: z.number().int(),
-  fee_bp: z.number().int(),
-  all_in_bp: z.number().int(),
+  cashback_rate_percent: PercentSchema,
+  platform_fee_percent: PercentSchema,
+  all_in_percent: PercentSchema,
 });
 export type RateDescription = z.infer<typeof RateDescriptionSchema>;
 
@@ -356,15 +471,15 @@ export type RateDescription = z.infer<typeof RateDescriptionSchema>;
  * resolved from the promo rate's §4 tier exactly as they will be at credit
  * time. Timestamps are ISO 8601 in the business timezone (UTC+5).
  *
- * fee_bp/all_in_bp are null in exactly one degenerate case: a stale DRAFT
- * whose rate the fee schedule now governing its window no longer prices
- * (drafts never block an admin schedule change; publish would refuse this
- * draft). The listing must still render so the merchant can see and cancel
- * it.
+ * platform_fee_percent/all_in_percent are null in exactly one degenerate
+ * case: a stale DRAFT whose rate the fee schedule now governing its window
+ * no longer prices (drafts never block an admin schedule change; publish
+ * would refuse this draft). The listing must still render so the merchant
+ * can see and cancel it.
  */
 export const PromotionSchema = RateDescriptionSchema.extend({
-  fee_bp: z.number().int().nullable(),
-  all_in_bp: z.number().int().nullable(),
+  platform_fee_percent: PercentSchema.nullable(),
+  all_in_percent: PercentSchema.nullable(),
   id: z.number().int(),
   merchant_id: z.number().int(),
   branch_id: z.number().int().nullable(),
@@ -576,13 +691,13 @@ export const SettlementSchema = z.object({
   /**
    * PLAN §1 prompt-payment discount as GRANTED at submit — 5% off the
    * PLATFORM FEE, never off the customer's cashback. Already subtracted from
-   * `amount_due_laari`, so never subtract it again. `discount_rate_bp` is
-   * null when nothing was granted, and `discount_reason` says why (it is set
-   * on refusals too, which is what lets a panel explain the full price).
+   * `amount_due_laari`, so never subtract it again. `discount_rate_percent`
+   * is null when nothing was granted, and `discount_reason` says why (it is
+   * set on refusals too, which is what lets a panel explain the full price).
    */
   discount_laari: z.number().int(),
   discount_mvr: z.string(),
-  discount_rate_bp: z.number().int().nullable(),
+  discount_rate_percent: PercentSchema.nullable(),
   discount_reason: PromptDiscountReasonSchema.nullable(),
   amount_due_laari: z.number().int(),
   amount_received_laari: z.number().int(),

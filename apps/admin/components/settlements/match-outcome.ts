@@ -24,8 +24,8 @@ export interface MatchOutcome {
    * merchant receivable at allocation, not at submit.
    */
   discountAppliedLaari: number;
-  /** The rate that discount was granted at, null when none was. */
-  discountRateBp: number | null;
+  /** The rate that discount was granted at, null when none was. A 2-decimal percent string (PLAN §1). */
+  discountRatePercent: string | null;
   /**
    * Net movement of the merchant wallet attributable to this match: positive
    * when leftover cash was parked as merchant credit (overpayment or a
@@ -93,7 +93,7 @@ export function computeMatchOutcome(
     forgivenLaari: forgivenTotal(after) - forgivenTotal(before),
     discountAppliedLaari:
       discountConsumedLaari(after) - discountConsumedLaari(before),
-    discountRateBp: after.discount_rate_bp,
+    discountRatePercent: after.discount_rate_percent,
     walletDeltaLaari: walletPosition(after) - walletPosition(before),
   };
 }

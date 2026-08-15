@@ -58,7 +58,7 @@ it('takes a store from phone OTP to its first credited sale', function () {
         'eligibility_basis' => 'Full bill excluding service charge.',
     ])->assertOk();
 
-    $this->patchJson('/api/merchant/setup/rate', ['rate_bp' => 200])->assertOk();
+    $this->patchJson('/api/merchant/setup/rate', ['cashback_rate_percent' => '2.00'])->assertOk();
 
     $this->postJson('/api/merchant/setup/submit')->assertOk()
         ->assertJsonPath('data.status', 'pending_review');
@@ -86,7 +86,7 @@ it('takes a store from phone OTP to its first credited sale', function () {
     $store = $this->getJson('/api/discover/merchants/island-bakery')->assertOk()->json('data');
     expect($store['category'])->toBe('cafe')
         ->and($store['channel'])->toBe('in_store')
-        ->and($store['rate_bp'])->toBe(200)
+        ->and($store['cashback_rate_percent'])->toBe('2.00')
         ->and($store['cashback_basis'])->toBe('Full bill excluding service charge.');
 
     // The owner's session is still valid — first credit goes through at the

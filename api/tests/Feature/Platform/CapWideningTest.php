@@ -88,12 +88,12 @@ it('publishes a 50-2000 bp schedule through the admin endpoint', function () {
         ->postJson('/api/admin/platform/fee-tiers', [
             'effective_from' => CarbonImmutable::now()->addDay()->toIso8601String(),
             'tiers' => [
-                ['from_bp' => 50, 'to_bp' => 999, 'fee_bp' => 25],
-                ['from_bp' => 1000, 'to_bp' => 2000, 'fee_bp' => 130],
+                ['from_percent' => '0.50', 'to_percent' => '9.99', 'fee_percent' => '0.25'],
+                ['from_percent' => '10.00', 'to_percent' => '20.00', 'fee_percent' => '1.30'],
             ],
         ])
         ->assertCreated()
-        ->assertJsonPath('data.tiers.1.to_bp', 2000);
+        ->assertJsonPath('data.tiers.1.to_percent', '20.00');
 
     expect(FeeTierSchedule::query()->count())->toBe(2);
 });
@@ -103,7 +103,7 @@ it('keeps the seeded 50-1000 schedule valid and refuses a 15% merchant rate as r
     expect(app(TierScheduleService::class)->activeCeiling())->toBe(1000);
 
     $this->actingAs($this->owner, 'merchant')
-        ->postJson('/api/merchant/rate', ['rate_bp' => 1500])
+        ->postJson('/api/merchant/rate', ['cashback_rate_percent' => '15.00'])
         ->assertStatus(422)
         ->assertJsonPath('code', 'rate_not_priced')
         ->assertJsonPath('message', 'The current fee schedule prices rates up to 10.00%.');
@@ -121,13 +121,13 @@ it('accepts 15% once a wider schedule takes effect, and credits price the fee FR
         ->postJson('/api/admin/platform/fee-tiers', [
             'effective_from' => CarbonImmutable::now()->addHour()->toIso8601String(),
             'tiers' => [
-                ['from_bp' => 50, 'to_bp' => 999, 'fee_bp' => 25],
-                ['from_bp' => 1000, 'to_bp' => 2000, 'fee_bp' => 130],
+                ['from_percent' => '0.50', 'to_percent' => '9.99', 'fee_percent' => '0.25'],
+                ['from_percent' => '10.00', 'to_percent' => '20.00', 'fee_percent' => '1.30'],
             ],
         ])->assertCreated();
 
     $this->actingAs($this->owner, 'merchant')
-        ->postJson('/api/merchant/rate', ['rate_bp' => 1500])
+        ->postJson('/api/merchant/rate', ['cashback_rate_percent' => '15.00'])
         ->assertStatus(422)
         ->assertJsonPath('code', 'rate_not_priced');
 
@@ -136,13 +136,13 @@ it('accepts 15% once a wider schedule takes effect, and credits price the fee FR
     expect(app(TierScheduleService::class)->activeCeiling())->toBe(2000);
 
     $this->actingAs($this->owner, 'merchant')
-        ->postJson('/api/merchant/rate', ['rate_bp' => 1500])
+        ->postJson('/api/merchant/rate', ['cashback_rate_percent' => '15.00'])
         ->assertOk()
-        ->assertJsonPath('data.current.rate_bp', 1500)
+        ->assertJsonPath('data.current.cashback_rate_percent', '15.00')
         // Fee priced by the SCHEDULE's 1000-2000 band (130), not the static
         // map's 100 — display and billing read the same source.
-        ->assertJsonPath('data.current.fee_bp', 130)
-        ->assertJsonPath('data.current.all_in_bp', 1630);
+        ->assertJsonPath('data.current.platform_fee_percent', '1.30')
+        ->assertJsonPath('data.current.all_in_percent', '16.30');
 
     // A credit at 15%: cashback ceil(100000*1500/10000) = 15000 laari and
     // fee ceil(100000*130/10000) = 1300 laari, frozen from the schedule.
@@ -167,7 +167,7 @@ it('rejects a promotion above the active ceiling as rate_not_priced, at draft an
     // Draft via HTTP under the seeded 50-1000 schedule: 15% is not priced.
     $this->actingAs($this->owner, 'merchant')
         ->postJson('/api/merchant/promotions', [
-            'rate_bp' => 1500,
+            'cashback_rate_percent' => '15.00',
             'starts_at' => now()->addDay()->toIso8601String(),
             'ends_at' => now()->addDays(8)->toIso8601String(),
         ])
@@ -183,7 +183,7 @@ it('rejects a promotion above the active ceiling as rate_not_priced, at draft an
     $this->actingAs($this->admin, 'admin')->postJson('/api/admin/platform/fee-tiers', [
         'effective_from' => CarbonImmutable::now()->addHour()->toIso8601String(),
         'tiers' => [
-            ['from_bp' => 50, 'to_bp' => 2000, 'fee_bp' => 50],
+            ['from_percent' => '0.50', 'to_percent' => '20.00', 'fee_percent' => '0.50'],
         ],
     ])->assertCreated();
 
@@ -200,7 +200,7 @@ it('rejects a promotion above the active ceiling as rate_not_priced, at draft an
     $this->actingAs($this->admin, 'admin')->postJson('/api/admin/platform/fee-tiers', [
         'effective_from' => CarbonImmutable::now()->addHour()->toIso8601String(),
         'tiers' => [
-            ['from_bp' => 50, 'to_bp' => 1000, 'fee_bp' => 50],
+            ['from_percent' => '0.50', 'to_percent' => '10.00', 'fee_percent' => '0.50'],
         ],
     ])->assertCreated();
 

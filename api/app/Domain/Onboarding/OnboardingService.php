@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Domain\Onboarding;
 
 use App\Domain\Discovery\DiscoveryService;
+use App\Domain\Money\Percent;
+use App\Domain\Money\Rate;
 use App\Domain\Platform\TierScheduleService;
 use App\Models\AdminUser;
 use App\Models\Merchant;
@@ -68,11 +70,13 @@ final class OnboardingService
                 'contact_email' => $merchant->contact_email,
                 'contact_phone' => $merchant->contact_phone,
                 'logo_url' => $this->logoUrl($merchant),
-                'rate_bp' => $this->currentRateBp($merchant),
+                // PLAN §1 wire format: 2-decimal percent strings, null
+                // until the wizard's rate step is done.
+                'cashback_rate_percent' => Percent::formatOrNull($this->currentRateBp($merchant)),
             ],
             'rate_bounds' => [
-                'min_bp' => 50,
-                'max_bp' => $this->schedules->activeCeiling(),
+                'min_percent' => Percent::format(Rate::MIN_CASHBACK_BP),
+                'max_percent' => Percent::format($this->schedules->activeCeiling()),
             ],
             'categories' => StoreCategory::query()
                 ->where('active', true)

@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
-import { formatRateBp } from '@/lib/format';
+import { formatRate } from '@/lib/format';
 import { fetchStoreDetail } from '@/lib/server-api';
 import StorePageClient from './store-page-client';
 
@@ -29,9 +29,10 @@ export async function generateMetadata({
   }
   const { store } = result;
   return {
-    // Layout template appends "| Manfaa". Integer divide/mod formatting only.
-    title: `${store.name} — ${formatRateBp(store.rate_bp)} cashback`,
-    description: `Earn ${formatRateBp(store.rate_bp)} cashback in MVR at ${store.name} with Manfaa.`,
+    // Layout template appends "| Manfaa". The wire percent string is
+    // rendered verbatim (trailing zeros trimmed) — no number in the path.
+    title: `${store.name} — ${formatRate(store.cashback_rate_percent)} cashback`,
+    description: `Earn ${formatRate(store.cashback_rate_percent)} cashback in MVR at ${store.name} with Manfaa.`,
   };
 }
 

@@ -178,15 +178,15 @@ it('runs the full Phase 3 customer journey: OTP signup → promo publish → pri
     // per-customer cap. Published before the window opens — immutable after.
     $promotionId = p3ActingAs($owner)
         ->postJson('/api/merchant/promotions', [
-            'rate_bp' => 500,
+            'cashback_rate_percent' => '5.00',
             'starts_at' => '2026-08-10T00:00:00+05:00',
             'ends_at' => '2026-08-12T00:00:00+05:00',
             'min_purchase_laari' => 100_000,
             'max_cashback_per_customer_laari' => 30_000,
         ])
         ->assertCreated()
-        ->assertJsonPath('data.fee_bp', 100)
-        ->assertJsonPath('data.all_in_bp', 600)
+        ->assertJsonPath('data.platform_fee_percent', '1.00')
+        ->assertJsonPath('data.all_in_percent', '6.00')
         ->json('data.id');
 
     $this->postJson("/api/merchant/promotions/{$promotionId}/publish")
@@ -203,8 +203,8 @@ it('runs the full Phase 3 customer journey: OTP signup → promo publish → pri
         ->assertJsonPath('status', 'created')
         ->assertJsonPath('transaction.origin', 'pos')
         ->assertJsonPath('transaction.state', 'awaiting_validation')
-        ->assertJsonPath('transaction.rate_bp', 200)
-        ->assertJsonPath('transaction.fee_bp', 75)
+        ->assertJsonPath('transaction.cashback_rate_percent', '2.00')
+        ->assertJsonPath('transaction.platform_fee_percent', '0.75')
         ->assertJsonPath('transaction.cashback_laari', 1_000)
         ->assertJsonPath('transaction.fee_laari', 375);
 
@@ -217,8 +217,8 @@ it('runs the full Phase 3 customer journey: OTP signup → promo publish → pri
 
     p3VendorPost('/api/v1/transactions', p3Sale('INV-3002', 500_020, '2026-08-10T10:00:00+05:00'))
         ->assertCreated()
-        ->assertJsonPath('transaction.rate_bp', 500)
-        ->assertJsonPath('transaction.fee_bp', 100)
+        ->assertJsonPath('transaction.cashback_rate_percent', '5.00')
+        ->assertJsonPath('transaction.platform_fee_percent', '1.00')
         ->assertJsonPath('transaction.cashback_laari', 25_001)
         ->assertJsonPath('transaction.fee_laari', 5_001);
 
@@ -236,8 +236,8 @@ it('runs the full Phase 3 customer journey: OTP signup → promo publish → pri
 
     p3VendorPost('/api/v1/transactions', p3Sale('INV-3003', 200_000, '2026-08-10T11:00:00+05:00'))
         ->assertCreated()
-        ->assertJsonPath('transaction.rate_bp', 500)
-        ->assertJsonPath('transaction.fee_bp', 100)
+        ->assertJsonPath('transaction.cashback_rate_percent', '5.00')
+        ->assertJsonPath('transaction.platform_fee_percent', '1.00')
         ->assertJsonPath('transaction.cashback_laari', $clip->cashbackLaari)
         ->assertJsonPath('transaction.fee_laari', $clip->feeLaari);
 
@@ -254,8 +254,8 @@ it('runs the full Phase 3 customer journey: OTP signup → promo publish → pri
 
     expect($discover['increased'])->toHaveCount(1)
         ->and($discover['increased'][0]['slug'])->toBe($merchant->slug)
-        ->and($discover['increased'][0]['rate_bp'])->toBe(500)
-        ->and($discover['increased'][0]['standing_rate_bp'])->toBe(200)
+        ->and($discover['increased'][0]['cashback_rate_percent'])->toBe('5.00')
+        ->and($discover['increased'][0]['standing_cashback_rate_percent'])->toBe('2.00')
         ->and($discover['increased'][0]['promo_ends_at'])->not->toBeNull();
 
     // ── (i) Post-window sale: the promotion has lapsed purely temporally —
@@ -264,8 +264,8 @@ it('runs the full Phase 3 customer journey: OTP signup → promo publish → pri
 
     p3VendorPost('/api/v1/transactions', p3Sale('INV-3004', 100_000, '2026-08-12T09:00:00+05:00'))
         ->assertCreated()
-        ->assertJsonPath('transaction.rate_bp', 200)
-        ->assertJsonPath('transaction.fee_bp', 75)
+        ->assertJsonPath('transaction.cashback_rate_percent', '2.00')
+        ->assertJsonPath('transaction.platform_fee_percent', '0.75')
         ->assertJsonPath('transaction.cashback_laari', 2_000)
         ->assertJsonPath('transaction.fee_laari', 750);
 

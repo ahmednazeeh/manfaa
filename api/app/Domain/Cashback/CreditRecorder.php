@@ -8,6 +8,9 @@ use App\Domain\Ledger\Postings;
 use App\Domain\Money\CashbackCalculator;
 use App\Domain\Money\Laari;
 use App\Domain\Money\Rate;
+use App\Domain\Platform\RateNotPricedException;
+use App\Domain\Platform\TierScheduleService;
+use App\Domain\Promotions\PromotionResolver;
 use App\Models\Customer;
 use App\Models\Merchant;
 use App\Models\MerchantRate;
@@ -55,6 +58,30 @@ use Illuminate\Support\Facades\DB;
  * rate_bp/fee_bp remain the STANDING resolution (base-rate snapshot);
  * per-line truth lives in the lines. With $lines null, the single-rate
  * path below runs untouched.
+ *
+ * Per-sale rate override (PLAN §1, decision 2026-08-15): $overrideRateBp is
+ * a merchant-chosen rate for THIS SALE ONLY, arriving on the wire as
+ * `cashback_rate_percent`. It is validated here — once, for every origin —
+ * and then simply BECOMES THE BASE RATE the sale prices at, in place of the
+ * standing rate: the row freezes it, the fee tier follows it, and with line
+ * pricing every line that would otherwise price at standing prices at the
+ * override instead (category overrides and exclusions are untouched, and
+ * the promotion floor still lifts any line a live promo would pay more on).
+ * Two refusals, both before anything is written:
+ *
+ *  - above the ACTIVE fee tier schedule's ceiling → RateNotPricedException
+ *    (`rate_not_priced`): the platform fee for that rate is priced nowhere;
+ *  - below the rate the sale would otherwise earn — the standing rate, or a
+ *    live promotion covering this sale → RateBelowAdvertisedException
+ *    (`rate_below_advertised`): the advertised rate is a public promise, so
+ *    an override may only boost.
+ *
+ * Two rules keep that gate from doing harm of its own, both in
+ * assertOverridable and the $baseBp line below: an override EQUAL to the
+ * advertised rate is a no-op (it never displaces the promotion that
+ * advertised it, cap and all), and a ZEROED row — suspended-merchant
+ * ingestion, below-minimum — ignores the field entirely rather than
+ * refusing a sale that grants no cashback either way.
  */
 final readonly class CreditRecorder
 {
@@ -79,10 +106,15 @@ final readonly class CreditRecorder
         private Postings $postings,
         private CashbackCalculator $calculator,
         private TermsResolver $terms,
+        private TierScheduleService $schedules,
+        private PromotionResolver $promotions,
     ) {}
 
     /**
      * @param  list<LineInput>|null  $lines  parsed line splits (LineSetParser) — null for a single-rate credit
+     * @param  int|null  $overrideRateBp  per-sale rate override in basis points (wire: `cashback_rate_percent`)
+     *
+     * @throws RateNotPricedException|RateBelowAdvertisedException
      */
     public function record(
         Merchant $merchant,
@@ -97,6 +129,7 @@ final readonly class CreditRecorder
         ?string $idempotencyKey = null,
         ?string $ineligibleReason = null,
         ?array $lines = null,
+        ?int $overrideRateBp = null,
     ): Transaction {
         $customer = Customer::query()->where('customer_code', $customerCode)->first()
             ?? throw CustomerNotFoundException::forCode($customerCode);
@@ -129,8 +162,25 @@ final readonly class CreditRecorder
         $zeroed = $ineligible || $belowMinimum;
         $reason = $ineligible ? $ineligibleReason : ($belowMinimum ? 'below_minimum' : null);
 
+        // A per-sale override replaces the standing rate as the BASE rate
+        // this sale prices at — everything downstream (the row snapshot,
+        // the fee tier, the default line bucket, the promotion floor) then
+        // works exactly as it always has, one rung higher.
+        //
+        // A ZEROED row never consults it. Those sales grant no cashback at
+        // all, so no override could have been applied to them, and refusing
+        // one would break the two rules that outrank it: §7 "suspension
+        // stops creation, not ingestion" (a suspended merchant's till must
+        // still be ANSWERED, with the sale recorded ineligible) and §9.2
+        // "below-minimum sales return 200 — do not reject the POST". The
+        // row freezes the standing terms it failed against, exactly as it
+        // does with no override in the payload.
+        $baseBp = $overrideRateBp === null || $zeroed
+            ? $standingBp
+            : $this->assertOverridable($merchant, $branchId, $eligible, $occurredAt, $standingBp, $overrideRateBp);
+
         try {
-            return DB::transaction(function () use ($merchant, $actor, $origin, $customer, $invoiceNo, $eligible, $saleAmount, $occurredAt, $now, $branchId, $idempotencyKey, $standingBp, $zeroed, $reason, $backdated, $lines): Transaction {
+            return DB::transaction(function () use ($merchant, $actor, $origin, $customer, $invoiceNo, $eligible, $saleAmount, $occurredAt, $now, $branchId, $idempotencyKey, $baseBp, $zeroed, $reason, $backdated, $lines): Transaction {
                 $priced = null;
 
                 if ($lines === null) {
@@ -138,8 +188,8 @@ final readonly class CreditRecorder
                     // rows that actually accrue consult promotions — a zeroed row
                     // freezes the standing terms it failed against.
                     [$result, $promotionId] = $zeroed
-                        ? [$this->calculator->calculate($eligible, Rate::cashback($standingBp)), null]
-                        : $this->terms->resolve($merchant->id, $branchId, $eligible, $standingBp, $customer->id, $occurredAt);
+                        ? [$this->calculator->calculate($eligible, Rate::cashback($baseBp)), null]
+                        : $this->terms->resolve($merchant->id, $branchId, $eligible, $baseBp, $customer->id, $occurredAt);
 
                     $rateBp = $result->rateBp;
                     $feeBp = $result->feeBp;
@@ -157,7 +207,7 @@ final readonly class CreditRecorder
                         $branchId,
                         $lines,
                         $eligible,
-                        $standingBp,
+                        $baseBp,
                         $customer->id,
                         $occurredAt,
                         consultPromotions: ! $zeroed,
@@ -284,6 +334,80 @@ final readonly class CreditRecorder
         } catch (UniqueConstraintViolationException) {
             throw DuplicateInvoiceException::for($merchant, $invoiceNo);
         }
+    }
+
+    /**
+     * The per-sale override gate (PLAN §1). Answers the override in basis
+     * points when it may be applied, and throws otherwise — BEFORE the DB
+     * transaction opens, so a refusal writes nothing at all.
+     *
+     * Ceiling: the ACTIVE fee tier schedule, exactly like every other
+     * rate-setting path (a standing rate, a promotion, a product category).
+     * The override is a decision made NOW, so it is bounded by what the
+     * platform can price NOW — not by the older, possibly narrower schedule
+     * governing a backdated occurred_at. The fee for such a backdated
+     * override falls back to the static §4 map (TermsResolver::baseFeeBp),
+     * the same rescue category rates already use.
+     *
+     * Floor: the rate the sale would otherwise earn — the standing rate at
+     * occurred_at, or the best live PUBLISHED promotion actually covering
+     * this sale (branch scope and minimum purchase both matched, exactly as
+     * TermsResolver matches them). That number is what the customer was
+     * advertised, so it is the floor an override may never dip below. Note
+     * the promotion counts here even if its per-customer cap is exhausted
+     * for THIS customer: the advertised promise is a property of the offer,
+     * not of one customer's remaining headroom.
+     *
+     * AN OVERRIDE ONLY BOOSTS, SO AN EQUAL ONE CHANGES NOTHING. When the
+     * value is exactly the advertised rate the sale prices as if the field
+     * had never been sent: the standing rate is returned and the ordinary
+     * promotion walk runs. This is the whole difference between a boost and
+     * a silent change of terms. A live promotion's rate is advertised
+     * TOGETHER WITH ITS CAP (max_cashback_per_customer_laari), and taking
+     * the promo rate as the base rate would make the promotion stop
+     * boosting — TermsResolver breaks its candidate walk at
+     * `rate_bp <= base` — so the sale would pay the promo rate with the
+     * cap never consulted, the promotion never stamped, and the merchant's
+     * own exposure bound gone. That is exactly what a vendor echoing
+     * `active_promotion.cashback_rate_percent` from GET
+     * /v1/merchants/me/rate back into the sale would do, on every sale.
+     * Echoing the advertised number is now a no-op, which is what an
+     * integrator means by it.
+     *
+     * A value STRICTLY ABOVE the advertised rate is a deliberate
+     * instruction to pay more than the published offer, and is honoured as
+     * one: the sale prices at the override, and the promotion — which pays
+     * nothing here — neither stamps the row nor consumes any headroom, the
+     * same rule TermsResolver already applies to a promotion that priced
+     * nothing.
+     *
+     * @throws RateNotPricedException|RateBelowAdvertisedException
+     */
+    private function assertOverridable(
+        Merchant $merchant,
+        ?int $branchId,
+        Laari $eligible,
+        CarbonImmutable $occurredAt,
+        int $standingBp,
+        int $overrideBp,
+    ): int {
+        $this->schedules->assertPriced($overrideBp);
+
+        $advertisedBp = max(
+            $standingBp,
+            (int) ($this->promotions
+                ->candidatesAt($merchant->id, $branchId, $eligible->value(), $occurredAt)
+                ->first()?->rate_bp ?? 0),
+        );
+
+        if ($overrideBp < $advertisedBp) {
+            throw RateBelowAdvertisedException::for($overrideBp, $advertisedBp);
+        }
+
+        // Only a STRICT boost changes how the sale prices; an override equal
+        // to the advertised rate prices exactly as no override at all, so
+        // the promotion that advertised it still applies under its own cap.
+        return $overrideBp > $advertisedBp ? $overrideBp : $standingBp;
     }
 
     /**

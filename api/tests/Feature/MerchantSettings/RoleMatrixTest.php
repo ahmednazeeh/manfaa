@@ -57,11 +57,13 @@ beforeEach(function () {
  *
  * Tiers, in one line each:
  *   owner    everything;
- *   manager  rates, promotions, settlement mutations, branches, product
+ *   manager  rates — the standing one AND a per-sale override on a credit
+ *            — promotions, settlement mutations, branches, product
  *            categories, the profile READ — never the bank account, staff
  *            management, preferences, the logo, API credentials or the
  *            setup wizard;
- *   staff    credit entry, the customer lookup and every read model.
+ *   staff    credit entry at the store's own terms, the customer lookup and
+ *            every read model.
  *
  * @return array<string, array{method: string, uri: string, payload: array<string, mixed>|Closure, owner: int, manager: int, staff: int}>
  */
@@ -75,11 +77,20 @@ function merchantRoleMatrix(): array
         'occurred_at' => now()->subHour()->toIso8601String(),
     ];
 
+    // The same credit carrying a per-sale rate override (PLAN §1). 10.00%
+    // is the seeded schedule's ceiling, so it clears every standing rate an
+    // earlier row in this matrix may have set.
+    $overrideCreditPayload = fn (string $role): array => [
+        ...$creditPayload($role),
+        'invoice_no' => 'INV-MATRIX-OVERRIDE-'.strtoupper($role),
+        'cashback_rate_percent' => '10.00',
+    ];
+
     // Distinct rates per tier: each allowed tier performs a real INCREASE
     // (200 -> 300 -> 400), so neither call is a no-op that could answer
     // differently from the other.
     $ratePayload = fn (string $role): array => [
-        'rate_bp' => ['owner' => 300, 'manager' => 400, 'staff' => 500][$role],
+        'cashback_rate_percent' => ['owner' => '3.00', 'manager' => '4.00', 'staff' => '5.00'][$role],
     ];
 
     return [
@@ -98,6 +109,8 @@ function merchantRoleMatrix(): array
 
         // ---- Manager or above ------------------------------------------
         'rate change' => ['method' => 'POST', 'uri' => '/api/merchant/rate', 'payload' => $ratePayload, 'owner' => 200, 'manager' => 200, 'staff' => 403],
+        // Keying the sale in is staff work; choosing what it pays is not.
+        'manual credit with a rate override' => ['method' => 'POST', 'uri' => '/api/merchant/credits', 'payload' => $overrideCreditPayload, 'owner' => 201, 'manager' => 201, 'staff' => 403],
         'promotion create' => ['method' => 'POST', 'uri' => '/api/merchant/promotions', 'payload' => [], 'owner' => 422, 'manager' => 422, 'staff' => 403],
         'promotion publish' => ['method' => 'POST', 'uri' => '/api/merchant/promotions/999999/publish', 'payload' => [], 'owner' => 404, 'manager' => 404, 'staff' => 403],
         'promotion cancel' => ['method' => 'POST', 'uri' => '/api/merchant/promotions/999999/cancel', 'payload' => [], 'owner' => 404, 'manager' => 404, 'staff' => 403],
@@ -128,7 +141,7 @@ function merchantRoleMatrix(): array
         // The wizard's writes answer 409 setup_not_editable on an approved
         // store — the owner is past it, and nobody else may reach it at all.
         'setup profile' => ['method' => 'PATCH', 'uri' => '/api/merchant/setup/profile', 'payload' => ['channel' => 'online'], 'owner' => 409, 'manager' => 403, 'staff' => 403],
-        'setup rate' => ['method' => 'PATCH', 'uri' => '/api/merchant/setup/rate', 'payload' => ['rate_bp' => 300], 'owner' => 409, 'manager' => 403, 'staff' => 403],
+        'setup rate' => ['method' => 'PATCH', 'uri' => '/api/merchant/setup/rate', 'payload' => ['cashback_rate_percent' => '3.00'], 'owner' => 409, 'manager' => 403, 'staff' => 403],
         'setup submit' => ['method' => 'POST', 'uri' => '/api/merchant/setup/submit', 'payload' => [], 'owner' => 409, 'manager' => 403, 'staff' => 403],
         'setup logo' => ['method' => 'POST', 'uri' => '/api/merchant/setup/logo', 'payload' => [], 'owner' => 422, 'manager' => 403, 'staff' => 403],
         'settings logo' => ['method' => 'POST', 'uri' => '/api/merchant/settings/logo', 'payload' => [], 'owner' => 422, 'manager' => 403, 'staff' => 403],
@@ -159,7 +172,7 @@ it('names the tier a refusal needs in the machine-readable code', function () {
     // Two distinct codes so the panel can say WHICH tier is missing, not
     // just that the role is wrong.
     $this->actingAs($this->staff, 'merchant')
-        ->postJson('/api/merchant/rate', ['rate_bp' => 300])
+        ->postJson('/api/merchant/rate', ['cashback_rate_percent' => '3.00'])
         ->assertForbidden()
         ->assertJsonPath('code', 'manager_required');
 

@@ -4,7 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import {
-  formatBpPercent,
+  formatPercent,
   getAdminSettlement,
   matchAdminSettlementPayment,
   type Settlement,
@@ -125,9 +125,9 @@ function MatchOutcomeAlert({
               <li>
                 {formatMoney(outcome.discountAppliedLaari)} of the
                 prompt-payment discount
-                {outcome.discountRateBp === null
+                {outcome.discountRatePercent === null
                   ? ''
-                  : ` (${formatBpPercent(outcome.discountRateBp)} of the platform fee)`}{' '}
+                  : ` (${formatPercent(outcome.discountRatePercent)} of the platform fee)`}{' '}
                 counted as covered funds and posted against platform fee revenue
                 — that much of the lines was funded by the discount, not by cash
                 and not by forgiveness.
@@ -338,9 +338,9 @@ export default function SettlementDetailPage() {
             label="Prompt-payment discount"
             laari={-discountLaari}
             hint={
-              settlement.discount_rate_bp === null
+              settlement.discount_rate_percent === null
                 ? 'Off the platform fee'
-                : `${formatBpPercent(settlement.discount_rate_bp)} off the platform fee`
+                : `${formatPercent(settlement.discount_rate_percent)} off the platform fee`
             }
           />
         ) : null}
@@ -557,9 +557,9 @@ export default function SettlementDetailPage() {
                     <TableRow>
                       <TableCell colSpan={6} className="font-normal">
                         Less prompt-payment discount
-                        {settlement.discount_rate_bp === null
+                        {settlement.discount_rate_percent === null
                           ? ''
-                          : ` — ${formatBpPercent(settlement.discount_rate_bp)} of the platform fee`}
+                          : ` — ${formatPercent(settlement.discount_rate_percent)} of the platform fee`}
                         , covered funds at allocation
                       </TableCell>
                       <TableCell className="text-end">

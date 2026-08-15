@@ -5,6 +5,7 @@ import {
   bpToPercentString,
   parseMvrToLaari,
   parsePercentToBp,
+  percentToBp,
   type CreatePromotionRequest,
   type Promotion,
   type PromotionCostPreview,
@@ -12,7 +13,7 @@ import {
 import { MoneyText } from '@manfaa/ui';
 import { format } from 'date-fns';
 import { LoaderCircle, Plus, TriangleAlert, X } from 'lucide-react';
-import { formatBp } from '@/lib/estimate';
+import { formatBp, formatRate, formatRateOrDash } from '@/lib/estimate';
 import { hasRoleAtLeast } from '@/lib/roles';
 import {
   apiErrorMessage,
@@ -126,10 +127,15 @@ function safeParseMvr(input: string): number | null {
   }
 }
 
-/** Integer bp delta as trimmed percentage points: 26 -> "+0.26pp". */
-function formatPp(deltaBp: number): string {
-  const sign = deltaBp > 0 ? '+' : '';
-  return `${sign}${bpToPercentString(deltaBp).replace(/\.?0+$/, '')}pp`;
+/**
+ * The API's signed rate delta ("0.26", "-0.26") as trimmed percentage
+ * points: "+0.26pp", "-0.26pp", "0pp". The server's digits are trimmed and
+ * signed, never re-derived from a number.
+ */
+function formatPp(deltaPercent: string): string {
+  const value = deltaPercent.replace(/\.?0+$/, '');
+  const sign = value.startsWith('-') || value === '0' ? '' : '+';
+  return `${sign}${value}pp`;
 }
 
 function CostPreviewAlert({ preview }: { preview: PromotionCostPreview }) {
@@ -143,26 +149,29 @@ function CostPreviewAlert({ preview }: { preview: PromotionCostPreview }) {
       </AlertIcon>
       <AlertContent>
         <AlertTitle>
-          During the promotion you pay {formatBp(preview.promo.all_in_bp)} of
-          each eligible sale
+          During the promotion you pay {formatRate(preview.promo.all_in_percent)}{' '}
+          of each eligible sale
         </AlertTitle>
         <AlertDescription>
-          {formatBp(preview.promo.rate_bp)} cashback +{' '}
-          {formatBp(preview.promo.fee_bp)} platform fee.
-          {preview.standing !== null && preview.all_in_delta_bp !== null && (
-            <>
-              {' '}
-              That is {formatPp(preview.all_in_delta_bp)} versus your standing
-              all-in cost of {formatBp(preview.standing.all_in_bp)}.
-            </>
-          )}
+          {formatRate(preview.promo.cashback_rate_percent)} cashback +{' '}
+          {formatRate(preview.promo.platform_fee_percent)} platform fee.
+          {preview.standing !== null &&
+            preview.all_in_delta_percent !== null && (
+              <>
+                {' '}
+                That is {formatPp(preview.all_in_delta_percent)} versus your
+                standing all-in cost of{' '}
+                {formatRate(preview.standing.all_in_percent)}.
+              </>
+            )}
           {preview.tier_changed && preview.standing !== null && (
             <>
               {' '}
-              Boosting from {formatBp(preview.standing.rate_bp)} to{' '}
-              {formatBp(preview.promo.rate_bp)} moves your fee tier from{' '}
-              {formatBp(preview.standing.fee_bp)} to{' '}
-              {formatBp(preview.promo.fee_bp)}.
+              Boosting from{' '}
+              {formatRate(preview.standing.cashback_rate_percent)} to{' '}
+              {formatRate(preview.promo.cashback_rate_percent)} moves your fee
+              tier from {formatRate(preview.standing.platform_fee_percent)} to{' '}
+              {formatRate(preview.promo.platform_fee_percent)}.
             </>
           )}
         </AlertDescription>
@@ -172,14 +181,19 @@ function CostPreviewAlert({ preview }: { preview: PromotionCostPreview }) {
 }
 
 function PromotionBuilder({
-  standingRateBp,
+  standingRate,
   onCreated,
   onClose,
 }: {
-  standingRateBp: number | null;
+  /** The store's standing rate as the API states it, or null when unset. */
+  standingRate: string | null;
   onCreated: (preview: PromotionCostPreview) => void;
   onClose: () => void;
 }) {
+  // Shown as the server's own percent; compared as integer bp, because
+  // "a promotion must BOOST" is a comparison and 4.99 vs 5.00 is a tier.
+  const standingRateBp =
+    standingRate === null ? null : percentToBp(standingRate);
   const branches = useBranches();
   const createPromotion = useCreatePromotion();
 
@@ -200,8 +214,10 @@ function PromotionBuilder({
         ? 'Enter a percent with up to two decimal places, e.g. 7.50.'
         : rateBp < MIN_RATE_BP || rateBp > MAX_RATE_BP
           ? `Rates run from ${formatBp(MIN_RATE_BP)} to ${formatBp(MAX_RATE_BP)}.`
-          : standingRateBp !== null && rateBp <= standingRateBp
-            ? `A promotion must boost above your standing rate of ${formatBp(standingRateBp)}.`
+          : standingRateBp !== null &&
+              standingRate !== null &&
+              rateBp <= standingRateBp
+            ? `A promotion must boost above your standing rate of ${formatRate(standingRate)}.`
             : null;
   const validRateBp = rateError === null ? rateBp : null;
 
@@ -240,7 +256,9 @@ function PromotionBuilder({
     }
     setNotPriced(null);
     const body: CreatePromotionRequest = {
-      rate_bp: validRateBp,
+      // PLAN §1 wire format: the promo rate leaves as a 2-decimal percent
+      // string; the bp above is what the range and boost checks compared.
+      cashback_rate_percent: bpToPercentString(validRateBp),
       starts_at: toBusinessIso(startsAt),
       ends_at: toBusinessIso(endsAt),
       ...(minPurchaseLaari !== undefined
@@ -482,7 +500,8 @@ function DraftActions({
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              Publish the {formatBp(promotion.rate_bp)} promotion?
+              Publish the {formatRate(promotion.cashback_rate_percent)}{' '}
+              promotion?
             </AlertDialogTitle>
             <AlertDialogDescription>
               It runs {format(new Date(promotion.starts_at), 'dd MMM, HH:mm')}{' '}
@@ -522,7 +541,7 @@ export default function PromotionsPage() {
     return names;
   }, [branches.data]);
 
-  const standingRateBp = rate.data?.current?.rate_bp ?? null;
+  const standingRate = rate.data?.current?.cashback_rate_percent ?? null;
 
   return (
     <div className="container">
@@ -549,7 +568,7 @@ export default function PromotionsPage() {
       <div className="flex flex-col gap-5 pb-7.5">
         {canManage && builderOpen && (
           <PromotionBuilder
-            standingRateBp={standingRateBp}
+            standingRate={standingRate}
             onCreated={setPreview}
             onClose={() => setBuilderOpen(false)}
           />
@@ -591,21 +610,16 @@ export default function PromotionsPage() {
                   {promotions.data.map((promotion) => (
                     <TableRow key={promotion.id}>
                       <TableCell className="font-medium">
-                        {formatBp(promotion.rate_bp)}
+                        {formatRate(promotion.cashback_rate_percent)}
                       </TableCell>
                       {/* Null fee: a stale draft the current fee schedule no
                           longer prices — still listed so it can be cancelled;
                           publishing it is refused. */}
                       <TableCell className="text-secondary-foreground">
-                        {promotion.all_in_bp === null
-                          ? '—'
-                          : formatBp(promotion.all_in_bp)}
+                        {formatRateOrDash(promotion.all_in_percent)}
                         <span className="text-xs text-muted-foreground">
                           {' '}
-                          (fee{' '}
-                          {promotion.fee_bp === null
-                            ? '—'
-                            : formatBp(promotion.fee_bp)}
+                          (fee {formatRateOrDash(promotion.platform_fee_percent)}
                           )
                         </span>
                       </TableCell>

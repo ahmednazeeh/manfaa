@@ -2,11 +2,11 @@
 
 import { useState, type ComponentType, type ReactNode } from 'react';
 import Link from 'next/link';
-import { type DiscoveryEntry } from '@manfaa/api-client';
+import { percentToBp, type DiscoveryEntry } from '@manfaa/api-client';
 import { ArrowRight, MapPin } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { formatDate, formatRateBp, splitDistance } from '@/lib/format';
+import { formatDate, formatRate, splitDistance } from '@/lib/format';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { EmptyBlock } from '@/components/app/async-states';
@@ -16,8 +16,9 @@ import { ChannelChip, useCategoryLabel } from '@/components/app/store-labels';
 /**
  * Merchant discovery building blocks shared by the public landing page and
  * the authenticated /discover screen. Data comes from GET /api/discover
- * (public, no auth); rates are integer basis points end to end and only
- * formatRateBp turns them into display strings.
+ * (public, no auth); rates arrive as 2-decimal percent STRINGS (PLAN §1
+ * wire format), rendered verbatim by formatRate and compared — never
+ * rendered — through percentToBp.
  */
 
 export type GeoState =
@@ -106,7 +107,11 @@ const clickableCard =
 export function MerchantCard({ entry }: { entry: DiscoveryEntry }) {
   const { t } = useTranslation();
   const categoryLabel = useCategoryLabel();
-  const boosted = entry.rate_bp > entry.standing_rate_bp;
+  // A live promotion is exactly "now differs from usually" — compared in
+  // basis points, the unit rate arithmetic belongs in.
+  const boosted =
+    percentToBp(entry.cashback_rate_percent) >
+    percentToBp(entry.standing_cashback_rate_percent);
 
   return (
     <StoreLink slug={entry.slug}>
@@ -125,10 +130,12 @@ export function MerchantCard({ entry }: { entry: DiscoveryEntry }) {
             <span className="text-lg font-semibold text-mono">
               {boosted
                 ? t('discover.rateUsually', {
-                    rate: formatRateBp(entry.rate_bp),
-                    usual: formatRateBp(entry.standing_rate_bp),
+                    rate: formatRate(entry.cashback_rate_percent),
+                    usual: formatRate(entry.standing_cashback_rate_percent),
                   })
-                : t('discover.rate', { rate: formatRateBp(entry.rate_bp) })}
+                : t('discover.rate', {
+                    rate: formatRate(entry.cashback_rate_percent),
+                  })}
             </span>
 
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
@@ -189,7 +196,7 @@ export function PromoCard({ entry }: { entry: DiscoveryEntry }) {
 
             <div className="flex items-baseline gap-2">
               <span className="text-3xl font-bold tracking-tight text-primary">
-                {formatRateBp(entry.rate_bp)}
+                {formatRate(entry.cashback_rate_percent)}
               </span>
               <span className="text-sm text-muted-foreground">
                 {t('discover.cashbackLabel')}
@@ -199,7 +206,7 @@ export function PromoCard({ entry }: { entry: DiscoveryEntry }) {
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
               <span className="line-through">
                 {t('discover.usuallyRate', {
-                  rate: formatRateBp(entry.standing_rate_bp),
+                  rate: formatRate(entry.standing_cashback_rate_percent),
                 })}
               </span>
               <ChannelChip channel={entry.channel} />

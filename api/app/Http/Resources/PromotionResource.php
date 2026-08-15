@@ -12,8 +12,9 @@ use Illuminate\Http\Resources\Json\JsonResource;
 /**
  * One promotion for the merchant and admin panels. The fee is never stored
  * on the promotion — it follows the promo rate's §4 tier, resolved here for
- * display exactly as it will be resolved at credit time. Timestamps render
- * in the business timezone like every other panel surface.
+ * display exactly as it will be resolved at credit time. Rates render as
+ * 2-decimal percent strings (PLAN §1 wire format); timestamps render in the
+ * business timezone like every other panel surface.
  *
  * @mixin Promotion
  */
@@ -35,7 +36,7 @@ class PromotionResource extends JsonResource
         // see and cancel it. Publish refuses such a draft outright.
         $feeInstant = $this->starts_at->utc()->isAfter($now) ? $this->starts_at->utc() : $now;
 
-        return RateResource::tryDescribeBp($this->rate_bp, $feeInstant) + [
+        return RateResource::tryDescribe($this->rate_bp, $feeInstant) + [
             'id' => $this->id,
             'merchant_id' => $this->merchant_id,
             'branch_id' => $this->branch_id,

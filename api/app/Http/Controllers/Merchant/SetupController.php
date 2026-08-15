@@ -4,12 +4,14 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Merchant;
 
+use App\Domain\Money\Percent;
 use App\Domain\Onboarding\OnboardingException;
 use App\Domain\Onboarding\OnboardingService;
 use App\Domain\Platform\RateNotPricedException;
 use App\Http\Controllers\Controller;
 use App\Models\Merchant;
 use App\Models\MerchantUser;
+use App\Rules\PercentRate;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -91,11 +93,13 @@ class SetupController extends Controller
 
     public function updateRate(Request $request): JsonResponse
     {
-        // §4: integer basis points, 50 to the structural cap; the live fee
-        // tier schedule's own ceiling is enforced in the service
+        // PLAN §1 wire format: a 2-decimal percent ("2", "2.5", 2.5),
+        // converted to integer basis points by exact integer math. §4
+        // bounds are 0.50% to the structural cap; the live fee tier
+        // schedule's own ceiling is enforced in the service
         // (rate_not_priced below).
         $validated = $request->validate([
-            'rate_bp' => ['required', 'integer', 'min:50', 'max:2000'],
+            'cashback_rate_percent' => ['required', PercentRate::cashback()],
         ]);
 
         $merchant = $this->merchant($request);
@@ -104,7 +108,7 @@ class SetupController extends Controller
         $user = $request->user('merchant');
 
         try {
-            $this->onboarding->setRate($merchant, $user, (int) $validated['rate_bp']);
+            $this->onboarding->setRate($merchant, $user, Percent::toBasisPoints($validated['cashback_rate_percent']));
         } catch (OnboardingException $e) {
             return $this->onboardingError($e);
         } catch (RateNotPricedException $e) {

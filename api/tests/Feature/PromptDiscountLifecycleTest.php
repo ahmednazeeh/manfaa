@@ -168,8 +168,8 @@ it('walks the prompt-payment discount over HTTP: three credits → preview → d
         )
             ->assertCreated()
             ->assertJsonPath('data.state', 'awaiting_validation')
-            ->assertJsonPath('data.rate_bp', 200)
-            ->assertJsonPath('data.fee_bp', 75)
+            ->assertJsonPath('data.cashback_rate_percent', '2.00')
+            ->assertJsonPath('data.platform_fee_percent', '0.75')
             ->json('data.id');
     }
 
@@ -222,7 +222,7 @@ it('walks the prompt-payment discount over HTTP: three credits → preview → d
         // The grant, with the reason and the terms it was granted under.
         ->assertJsonPath('data.discount.eligible', true)
         ->assertJsonPath('data.discount.reason_code', 'eligible')
-        ->assertJsonPath('data.discount.rate_bp', 500)
+        ->assertJsonPath('data.discount.rate_percent', '5.00')
         ->assertJsonPath('data.discount.max_age_days', 10)
         ->assertJsonPath('data.discount.discount_laari', 132)
         ->assertJsonPath('data.discount.fee_discount_laari', 132)
@@ -272,7 +272,7 @@ it('walks the prompt-payment discount over HTTP: three credits → preview → d
         // the platform setting.
         ->assertJsonPath('data.discount_laari', 132)
         ->assertJsonPath('data.discount_mvr', '1.32')
-        ->assertJsonPath('data.discount_rate_bp', 500)
+        ->assertJsonPath('data.discount_rate_percent', '5.00')
         ->assertJsonPath('data.discount_reason', 'eligible')
         ->assertJsonPath('data.amount_due_laari', 9_493)
         ->assertJsonPath('data.amount_received_laari', 0)
@@ -392,7 +392,7 @@ it('walks the prompt-payment discount over HTTP: three credits → preview → d
         // the line is 12 days old against a 10-day window.
         ->assertJsonPath('data.discount.eligible', false)
         ->assertJsonPath('data.discount.reason_code', 'line_too_old')
-        ->assertJsonPath('data.discount.rate_bp', 500)
+        ->assertJsonPath('data.discount.rate_percent', '5.00')
         ->assertJsonPath('data.discount.max_age_days', 10)
         ->assertJsonPath('data.discount.discount_laari', 0)
         ->assertJsonPath('data.discount_laari', 0)
@@ -424,7 +424,7 @@ it('walks the prompt-payment discount over HTTP: three credits → preview → d
         ->assertJsonPath('data.state', 'payment_review')
         ->assertJsonPath('data.reference', 'ST-2026-00002')
         ->assertJsonPath('data.discount_laari', 0)
-        ->assertJsonPath('data.discount_rate_bp', null)
+        ->assertJsonPath('data.discount_rate_percent', null)
         ->assertJsonPath('data.discount_reason', 'line_too_old')
         ->assertJsonPath('data.amount_due_laari', 3_300)
         ->assertJsonCount(1, 'data.lines')

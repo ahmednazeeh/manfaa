@@ -478,7 +478,7 @@ export default function SettlementDetailPage({
               {settlement.discount_laari > 0 && (
                 <div className="flex flex-col gap-0.5">
                   <PromptDiscountRow
-                    rateBp={settlement.discount_rate_bp}
+                    ratePercent={settlement.discount_rate_percent}
                     discountLaari={settlement.discount_laari}
                   />
                   <span className="text-xs text-muted-foreground">

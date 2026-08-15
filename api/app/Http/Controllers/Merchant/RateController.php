@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Merchant;
 
 use App\Domain\Discovery\DiscoveryService;
+use App\Domain\Money\Percent;
 use App\Domain\Platform\FeeTierScheduleResolver;
 use App\Domain\Platform\RateNotPricedException;
 use App\Domain\Platform\TierScheduleService;
@@ -15,6 +16,7 @@ use App\Http\Resources\RateResource;
 use App\Models\Merchant;
 use App\Models\MerchantRate;
 use App\Models\MerchantUser;
+use App\Rules\PercentRate;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -70,13 +72,16 @@ class RateController extends Controller
             abort(403, 'Only a merchant owner or manager can change the cashback rate.');
         }
 
-        // §4: integer basis points 50–2000 (the structural cap), or 4.995%
-        // falls into no tier.
+        // PLAN §1 wire format: the rate arrives as a 2-decimal percent —
+        // "2", "2.5", "2.50" or the JSON number 2.5 — and is converted to
+        // integer basis points here, once, by exact integer math. §4 bounds
+        // (0.50%–20.00%, the structural cap) are the rule's own; a finer
+        // value than 0.01pp is refused, or 4.995% would fall into no tier.
         $validated = $request->validate([
-            'rate_bp' => ['required', 'integer', 'min:50', 'max:2000'],
+            'cashback_rate_percent' => ['required', PercentRate::cashback()],
         ]);
 
-        $rateBp = (int) $validated['rate_bp'];
+        $rateBp = Percent::toBasisPoints($validated['cashback_rate_percent']);
 
         $now = CarbonImmutable::now('UTC');
 
@@ -174,16 +179,17 @@ class RateController extends Controller
         // Emit AFTER commit — the queued job reads the delivery row, which
         // must be visible to the queue worker. A same-rate no-op still
         // notifies when it cancelled a scheduled change (tills hold a
-        // pending_decrease that is no longer real). previous_fee_bp is null
-        // when the outgoing rate was never priced by the schedule at
-        // effective_at (legacy stranded rate being rescued).
+        // pending_decrease that is no longer real).
+        // previous_platform_fee_percent is null when the outgoing rate was
+        // never priced by the schedule at effective_at (legacy stranded
+        // rate being rescued).
         if ($change['applied'] || $change['pending_replaced']) {
             $webhooks->dispatch(WebhookEvents::MERCHANT_RATE_CHANGED, [
                 'merchant_id' => $merchant->id,
-                'rate_bp' => $rateBp,
-                'fee_bp' => $newFeeBp,
-                'previous_rate_bp' => $previousRateBp,
-                'previous_fee_bp' => $previousFeeBp,
+                'cashback_rate_percent' => Percent::format($rateBp),
+                'platform_fee_percent' => Percent::format($newFeeBp),
+                'previous_cashback_rate_percent' => Percent::format($previousRateBp),
+                'previous_platform_fee_percent' => Percent::formatOrNull($previousFeeBp),
                 'effective_at' => $effectiveAt
                     ->setTimezone($this->businessTimezone())
                     ->toIso8601String(),
@@ -209,8 +215,8 @@ class RateController extends Controller
             // previous carries null fee fields when the outgoing rate was
             // unpriced (stranded) at effective_at.
             'change' => [
-                'previous' => RateResource::tryDescribeBp($previousRateBp, $effectiveAt),
-                'new' => RateResource::describeBp($rateBp, $effectiveAt),
+                'previous' => RateResource::tryDescribe($previousRateBp, $effectiveAt),
+                'new' => RateResource::describe($rateBp, $effectiveAt),
                 'effective_at' => $effectiveAt->setTimezone($this->businessTimezone())->toIso8601String(),
                 'applies' => $effectiveAt->isAfter(CarbonImmutable::now('UTC'))
                     ? 'next_business_midnight'

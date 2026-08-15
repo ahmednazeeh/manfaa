@@ -254,30 +254,41 @@ it('exposes both settings to the admin, with their ranges enforced', function ()
         // the incentive rewards nothing.
         ->and($config->promptDiscountMaxAgeDays())->toBeLessThan($config->settlementDueDays());
 
+    // PLAN §1 wire format: the rate travels as a 2-decimal percent STRING
+    // under its `_percent` name; laari and days keys keep their integers.
     $settings = $this->actingAs($admin, 'admin')
         ->getJson('/api/admin/platform/settings')
         ->assertOk()
-        ->assertJsonPath('data.prompt_discount_rate_bp.value', 500)
-        ->assertJsonPath('data.prompt_discount_rate_bp.default', 500)
-        ->assertJsonPath('data.prompt_discount_rate_bp.min', 0)
-        ->assertJsonPath('data.prompt_discount_rate_bp.max', 2_000)
-        ->assertJsonPath('data.prompt_discount_rate_bp.overridden', false)
+        ->assertJsonPath('data.prompt_discount_rate_percent.value', '5.00')
+        ->assertJsonPath('data.prompt_discount_rate_percent.default', '5.00')
+        ->assertJsonPath('data.prompt_discount_rate_percent.min', '0.00')
+        ->assertJsonPath('data.prompt_discount_rate_percent.max', '20.00')
+        ->assertJsonPath('data.prompt_discount_rate_percent.overridden', false)
         ->assertJsonPath('data.prompt_discount_max_age_days.value', 10)
         ->assertJsonPath('data.prompt_discount_max_age_days.min', 1)
         ->assertJsonPath('data.prompt_discount_max_age_days.max', 15)
         ->json('data');
 
-    expect($settings)->toHaveKeys(['prompt_discount_rate_bp', 'prompt_discount_max_age_days']);
+    expect($settings)->toHaveKeys(['prompt_discount_rate_percent', 'prompt_discount_max_age_days'])
+        ->and($settings)->not->toHaveKey('prompt_discount_rate_bp');
 
-    $this->patchJson('/api/admin/platform/settings/prompt_discount_rate_bp', ['value' => 750])
+    $this->patchJson('/api/admin/platform/settings/prompt_discount_rate_percent', ['value' => '7.50'])
         ->assertOk()
-        ->assertJsonPath('data.prompt_discount_rate_bp.value', 750)
-        ->assertJsonPath('data.prompt_discount_rate_bp.overridden', true);
+        ->assertJsonPath('data.prompt_discount_rate_percent.value', '7.50')
+        ->assertJsonPath('data.prompt_discount_rate_percent.overridden', true);
 
-    // Live immediately — the write busts the 60-second cache.
+    // Live immediately — the write busts the 60-second cache. Percent in,
+    // integer basis points stored.
     expect(app(PlatformConfig::class)->promptDiscountRateBp())->toBe(750);
 
-    $this->patchJson('/api/admin/platform/settings/prompt_discount_rate_bp', ['value' => 2_001])
+    // The bp name is not a wire key at all any more.
+    $this->patchJson('/api/admin/platform/settings/prompt_discount_rate_bp', ['value' => 750])
+        ->assertNotFound();
+
+    $this->patchJson('/api/admin/platform/settings/prompt_discount_rate_percent', ['value' => '20.01'])
+        ->assertUnprocessable();
+    // A finer value than 0.01pp has no basis-point representation.
+    $this->patchJson('/api/admin/platform/settings/prompt_discount_rate_percent', ['value' => '5.005'])
         ->assertUnprocessable();
     $this->patchJson('/api/admin/platform/settings/prompt_discount_max_age_days', ['value' => 16])
         ->assertUnprocessable();

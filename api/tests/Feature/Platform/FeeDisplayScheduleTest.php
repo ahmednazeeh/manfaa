@@ -67,9 +67,9 @@ it('quotes the published schedule fee, not the static §4 map, on the merchant p
     $this->actingAs($this->owner, 'merchant')
         ->getJson('/api/merchant/rate')
         ->assertOk()
-        ->assertJsonPath('data.current.rate_bp', 200)
-        ->assertJsonPath('data.current.fee_bp', 100)
-        ->assertJsonPath('data.current.all_in_bp', 300);
+        ->assertJsonPath('data.current.cashback_rate_percent', '2.00')
+        ->assertJsonPath('data.current.platform_fee_percent', '1.00')
+        ->assertJsonPath('data.current.all_in_percent', '3.00');
 });
 
 it('quotes the schedule fee on the V1 till endpoint, pricing a pending decrease at ITS effective date', function () {
@@ -107,18 +107,18 @@ it('quotes the schedule fee on the V1 till endpoint, pricing a pending decrease 
     $this->withHeader('Authorization', 'Bearer '.$token)
         ->getJson('/api/v1/merchants/me/rate')
         ->assertOk()
-        ->assertJsonPath('rate_bp', 200)
-        ->assertJsonPath('fee_bp', 100)
-        ->assertJsonPath('pending_decrease.rate_bp', 150)
-        ->assertJsonPath('pending_decrease.fee_bp', 70);
+        ->assertJsonPath('cashback_rate_percent', '2.00')
+        ->assertJsonPath('platform_fee_percent', '1.00')
+        ->assertJsonPath('pending_decrease.cashback_rate_percent', '1.50')
+        ->assertJsonPath('pending_decrease.platform_fee_percent', '0.70');
 
     // The merchant panel prices the pending window identically.
     $this->actingAs($this->owner, 'merchant')
         ->getJson('/api/merchant/rate')
         ->assertOk()
-        ->assertJsonPath('data.current.fee_bp', 100)
-        ->assertJsonPath('data.pending.rate_bp', 150)
-        ->assertJsonPath('data.pending.fee_bp', 70);
+        ->assertJsonPath('data.current.platform_fee_percent', '1.00')
+        ->assertJsonPath('data.pending.cashback_rate_percent', '1.50')
+        ->assertJsonPath('data.pending.platform_fee_percent', '0.70');
 });
 
 it('computes the rate-change webhook payload and tier-cliff warning from the schedule bands in force', function () {
@@ -145,28 +145,28 @@ it('computes the rate-change webhook payload and tier-cliff warning from the sch
     ]);
 
     $this->actingAs($this->owner, 'merchant')
-        ->postJson('/api/merchant/rate', ['rate_bp' => 300])
+        ->postJson('/api/merchant/rate', ['cashback_rate_percent' => '3.00'])
         ->assertOk()
-        ->assertJsonPath('data.current.rate_bp', 300)
-        ->assertJsonPath('data.current.fee_bp', 120)
-        ->assertJsonPath('change.previous.fee_bp', 30)
-        ->assertJsonPath('change.previous.all_in_bp', 230)
-        ->assertJsonPath('change.new.fee_bp', 120)
-        ->assertJsonPath('change.new.all_in_bp', 420)
+        ->assertJsonPath('data.current.cashback_rate_percent', '3.00')
+        ->assertJsonPath('data.current.platform_fee_percent', '1.20')
+        ->assertJsonPath('change.previous.platform_fee_percent', '0.30')
+        ->assertJsonPath('change.previous.all_in_percent', '2.30')
+        ->assertJsonPath('change.new.platform_fee_percent', '1.20')
+        ->assertJsonPath('change.new.all_in_percent', '4.20')
         ->assertJsonPath('change.tier_changed', true);
 
     $delivery = WebhookDelivery::query()->sole();
-    expect($delivery->payload['data']['fee_bp'])->toBe(120)
-        ->and($delivery->payload['data']['previous_fee_bp'])->toBe(30)
-        ->and($delivery->payload['data']['rate_bp'])->toBe(300)
-        ->and($delivery->payload['data']['previous_rate_bp'])->toBe(200);
+    expect($delivery->payload['data']['platform_fee_percent'])->toBe('1.20')
+        ->and($delivery->payload['data']['previous_platform_fee_percent'])->toBe('0.30')
+        ->and($delivery->payload['data']['cashback_rate_percent'])->toBe('3.00')
+        ->and($delivery->payload['data']['previous_cashback_rate_percent'])->toBe('2.00');
 });
 
 it('keeps quoting the seeded §4 defaults when no divergent schedule was ever published', function () {
     $this->actingAs($this->owner, 'merchant')
         ->getJson('/api/merchant/rate')
         ->assertOk()
-        ->assertJsonPath('data.current.rate_bp', 200)
-        ->assertJsonPath('data.current.fee_bp', 75)
-        ->assertJsonPath('data.current.all_in_bp', 275);
+        ->assertJsonPath('data.current.cashback_rate_percent', '2.00')
+        ->assertJsonPath('data.current.platform_fee_percent', '0.75')
+        ->assertJsonPath('data.current.all_in_percent', '2.75');
 });

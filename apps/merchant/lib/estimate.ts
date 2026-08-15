@@ -33,9 +33,40 @@ export function estimateLaariAtBp(eligibleLaari: number, bp: number): number {
  * 500 -> "5%", 250 -> "2.5%". Built on the shared percent helper
  * (exact integer decomposition, never a float) with trailing zeros
  * dropped for display.
+ *
+ * For a rate the API SENT, use formatRate below instead — the wire string
+ * is already exact and must not be round-tripped through a number.
  */
 export function formatBp(bp: number): string {
   return `${bpToPercentString(bp).replace(/\.?0+$/, '')}%`;
+}
+
+/**
+ * A rate as it arrives on the wire (PLAN §1: a 2-decimal percent STRING —
+ * "2.00", "0.75", "12.50") rendered the way this panel has always rendered
+ * rates: trailing zeros dropped, so "2.00" reads "2%" and "12.50" reads
+ * "12.5%".
+ *
+ * The server's digits are passed through verbatim — trimmed, never parsed
+ * and re-formatted — so there is no number in the display path at all.
+ * Basis points are still the unit for ARITHMETIC (percentToBp), never for
+ * showing a rate the API already expressed as a percent.
+ */
+export function formatRate(percent: string): string {
+  return `${trimRate(percent)}%`;
+}
+
+/** formatRate for the nullable rate fields (an unpriced fee, no discount). */
+export function formatRateOrDash(percent: string | null): string {
+  return percent === null ? '—' : formatRate(percent);
+}
+
+/**
+ * The same trimming without the % sign — for an input's value or
+ * placeholder, where the sign lives in the field's addon.
+ */
+export function trimRate(percent: string): string {
+  return percent.replace(/\.?0+$/, '');
 }
 
 /**

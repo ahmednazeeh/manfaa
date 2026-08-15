@@ -63,8 +63,8 @@ it('keeps the single-rate path byte-identical: the §4 fixture verbatim, no line
             'occurred_at' => now()->subHour()->toIso8601String(),
         ])
             ->assertCreated()
-            ->assertJsonPath('data.rate_bp', 200)
-            ->assertJsonPath('data.fee_bp', 75)
+            ->assertJsonPath('data.cashback_rate_percent', '2.00')
+            ->assertJsonPath('data.platform_fee_percent', '0.75')
             ->assertJsonPath('data.cashback_laari', $cashback)
             ->assertJsonPath('data.fee_laari', $fee)
             // The response shape is unchanged: no `lines` key at all.
@@ -93,8 +93,8 @@ it('keeps the /v1 single-rate response shape unchanged (no lines key, same integ
         'occurred_at' => now()->subHour()->toIso8601String(),
     ])
         ->assertCreated()
-        ->assertJsonPath('transaction.rate_bp', 200)
-        ->assertJsonPath('transaction.fee_bp', 75)
+        ->assertJsonPath('transaction.cashback_rate_percent', '2.00')
+        ->assertJsonPath('transaction.platform_fee_percent', '0.75')
         ->assertJsonPath('transaction.cashback_laari', 2000)
         ->assertJsonPath('transaction.fee_laari', 750)
         ->assertJsonMissingPath('transaction.lines');

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Domain\Platform;
 
+use App\Domain\Money\Percent;
 use App\Models\PlatformSetting;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Schema;
@@ -41,6 +42,28 @@ final class PlatformConfig
         // on the due date would qualify. Capped at 15 so it can never be
         // set beyond the clock itself.
         'prompt_discount_max_age_days' => ['default' => 10, 'min' => 1, 'max' => 15],
+    ];
+
+    /**
+     * The keys whose value is a RATE. They are stored, cached and read as
+     * integer basis points like every other rate in the engine, and they
+     * travel on the wire as a 2-decimal percent STRING under a `_percent`
+     * name — PLAN §1 "API wire format": basis points never appear in a
+     * request or a response, and an internal admin knob is no exception.
+     * The platform would otherwise SET this rate in basis points
+     * (PATCH .../prompt_discount_rate_bp {"value": 750}) and REPORT the
+     * same rate in percent (SettlementResource.discount_rate_percent
+     * "7.50") — one number, two grammars.
+     *
+     * Every other key names its own unit the same way (`_laari`, `_days`),
+     * so the wire name stays self-describing. Renaming happens ONLY at the
+     * HTTP edge: PlatformConfig::get(), promptDiscountRateBp() and the
+     * platform_settings rows keep the bp key untouched.
+     *
+     * @var array<string, string> storage key => wire key
+     */
+    public const array PERCENT_KEYS = [
+        'prompt_discount_rate_bp' => 'prompt_discount_rate_percent',
     ];
 
     public function minPayoutLaari(): int
@@ -139,10 +162,36 @@ final class PlatformConfig
     }
 
     /**
+     * The storage key a wire key names, or null when the wire key is not a
+     * setting at all. A percent-typed key answers ONLY to its `_percent`
+     * name: its `_bp` name is off the wire, so a PATCH addressed to it is a
+     * 404 like any other unknown key.
+     */
+    public static function storageKey(string $wireKey): ?string
+    {
+        $storage = array_search($wireKey, self::PERCENT_KEYS, true);
+
+        if (is_string($storage)) {
+            return $storage;
+        }
+
+        if (isset(self::PERCENT_KEYS[$wireKey])) {
+            return null;
+        }
+
+        return array_key_exists($wireKey, self::KEYS) ? $wireKey : null;
+    }
+
+    /**
      * Every key with its effective value, default and allowed range — the
-     * admin GET payload.
+     * admin GET payload, keyed by WIRE name.
      *
-     * @return array<string, array{value: int, default: int, min: int, max: int, overridden: bool}>
+     * Rate keys carry 2-decimal percent strings ("5.00", "0.00", "20.00")
+     * for value, default, min and max; everything else stays the plain
+     * integer of its own unit (laari, days). `overridden` compares the
+     * stored integers, never the text.
+     *
+     * @return array<string, array{value: int|string, default: int|string, min: int|string, max: int|string, overridden: bool}>
      */
     public function all(): array
     {
@@ -150,12 +199,13 @@ final class PlatformConfig
 
         foreach (self::KEYS as $key => $spec) {
             $value = $this->get($key);
+            $percent = isset(self::PERCENT_KEYS[$key]);
 
-            $out[$key] = [
-                'value' => $value,
-                'default' => $spec['default'],
-                'min' => $spec['min'],
-                'max' => $spec['max'],
+            $out[self::PERCENT_KEYS[$key] ?? $key] = [
+                'value' => $percent ? Percent::format($value) : $value,
+                'default' => $percent ? Percent::format($spec['default']) : $spec['default'],
+                'min' => $percent ? Percent::format($spec['min']) : $spec['min'],
+                'max' => $percent ? Percent::format($spec['max']) : $spec['max'],
                 'overridden' => $value !== $spec['default'],
             ];
         }

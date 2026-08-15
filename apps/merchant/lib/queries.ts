@@ -3,6 +3,7 @@
 import {
   ApiError,
   bootstrapCsrf,
+  bpToPercentString,
   cancelMerchantPromotion,
   createMerchantBranch,
   createMerchantCredential,
@@ -476,6 +477,33 @@ export function rateNotPricedMessage(error: unknown): string {
   return `Rates above ${match[1]}% are not available yet — the platform has not priced its fee for them. They become available once a wider fee schedule is published.`;
 }
 
+/**
+ * 422 `code: rate_below_advertised` (PLAN §1 "Per-sale rate override"): a
+ * per-sale `cashback_rate_percent` was BELOW the rate the sale already
+ * earns — the standing rate, or a live promotion covering it. The
+ * advertised rate is a public promise, so a one-off override may only raise
+ * it. The body carries the rate it was measured against.
+ */
+export function isRateBelowAdvertised(error: unknown): boolean {
+  if (!(error instanceof ApiError) || error.status !== 422) return false;
+  const body = error.body as { code?: unknown } | undefined;
+  return body?.code === 'rate_below_advertised';
+}
+
+/**
+ * The rate a refused override was measured against ("2.00"), or null when
+ * the server did not name one — the caller then falls back to its own copy
+ * rather than inventing a figure.
+ */
+export function advertisedRatePercent(error: unknown): string | null {
+  if (!(error instanceof ApiError)) return null;
+  const body = error.body as
+    | { advertised_cashback_rate_percent?: unknown }
+    | undefined;
+  const advertised = body?.advertised_cashback_rate_percent;
+  return typeof advertised === 'string' ? advertised : null;
+}
+
 // ---------------------------------------------------------------------------
 // Settings (owner only — the API answers 403 owner_required for staff)
 // ---------------------------------------------------------------------------
@@ -777,7 +805,12 @@ export function useUpdateSetupRate() {
   const cache = useCacheSetupState();
   return useMutation({
     mutationFn: (rateBp: number) =>
-      updateMerchantSetupRate({ rate_bp: rateBp }),
+      // PLAN §1 wire format: the wizard's percent input is parsed to bp for
+      // the bounds check, then written back out as the wire's 2-decimal
+      // percent string.
+      updateMerchantSetupRate({
+        cashback_rate_percent: bpToPercentString(rateBp),
+      }),
     onSuccess: cache,
   });
 }

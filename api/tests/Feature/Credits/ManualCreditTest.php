@@ -60,8 +60,8 @@ it('credits MVR 1,250 at 200bp: cashback 2500, fee 938, awaiting validation, bal
         ->assertCreated()
         ->assertJsonPath('data.origin', 'manual')
         ->assertJsonPath('data.state', 'awaiting_validation')
-        ->assertJsonPath('data.rate_bp', 200)
-        ->assertJsonPath('data.fee_bp', 75)
+        ->assertJsonPath('data.cashback_rate_percent', '2.00')
+        ->assertJsonPath('data.platform_fee_percent', '0.75')
         ->assertJsonPath('data.cashback_laari', 2500)
         ->assertJsonPath('data.fee_laari', 938);
 
@@ -109,7 +109,7 @@ it('records a below-minimum credit with zero cashback, no journal, immediately r
         ->assertJsonPath('data.reason_code', 'below_minimum')
         ->assertJsonPath('data.cashback_laari', 0)
         ->assertJsonPath('data.fee_laari', 0)
-        ->assertJsonPath('data.rate_bp', 200);
+        ->assertJsonPath('data.cashback_rate_percent', '2.00');
 
     $transaction = Transaction::query()->sole();
     $events = $transaction->events()->orderBy('id')->get();
@@ -178,16 +178,30 @@ it('only produces zero cashback via the below-minimum path, never via rounding',
         ->and((new Balances)->journalsAllBalance())->toBeTrue();
 });
 
-it('rejects an occurred_at without an explicit UTC offset', function () {
-    // "16:00" Maldives wall-clock with no offset would be read as 16:00 UTC —
-    // five hours in the future, resolving the rate at the wrong instant.
-    $this->postJson('/api/merchant/credits', manualCreditPayload([
-        'occurred_at' => '2026-08-14 16:00:00',
-    ]))
-        ->assertUnprocessable()
-        ->assertJsonValidationErrors('occurred_at');
+it('reads an offsetless occurred_at as Maldives time, not UTC', function () {
+    // PLAN §1 (2026-08-15): a plain wall clock from a Maldivian till is
+    // Maldives time. Reading it as UTC would misdate the sale by five hours
+    // (and freeze the rate at the wrong instant), so the offsetless form is
+    // interpreted, not refused.
+    $local = now('Indian/Maldives')->subHour()->startOfSecond();
 
-    expect(Transaction::query()->count())->toBe(0);
+    $this->postJson('/api/merchant/credits', manualCreditPayload([
+        'occurred_at' => $local->format('Y-m-d H:i:s'),
+    ]))->assertCreated();
+
+    expect(Transaction::query()->sole()->occurred_at->getTimestamp())
+        ->toBe($local->getTimestamp());
+});
+
+it('defaults occurred_at to now when it is omitted', function () {
+    $payload = manualCreditPayload();
+    unset($payload['occurred_at']);
+
+    $this->postJson('/api/merchant/credits', $payload)
+        ->assertCreated()
+        ->assertJsonPath('data.state', 'awaiting_validation');
+
+    expect(Transaction::query()->sole()->occurred_at->diffInSeconds(now()))->toBeLessThan(5);
 });
 
 it('stores a Maldives wall-clock occurred_at as the correct UTC instant', function () {
@@ -258,8 +272,8 @@ it('freezes the rate effective at occurred_at, not the current rate', function (
         'occurred_at' => now()->subDays(20)->toIso8601String(),
     ]))
         ->assertCreated()
-        ->assertJsonPath('data.rate_bp', 100)
-        ->assertJsonPath('data.fee_bp', 50)
+        ->assertJsonPath('data.cashback_rate_percent', '1.00')
+        ->assertJsonPath('data.platform_fee_percent', '0.50')
         ->assertJsonPath('data.cashback_laari', intdiv(125000 * 100 + 9999, 10000))
         ->assertJsonPath('data.fee_laari', intdiv(125000 * 50 + 9999, 10000));
 

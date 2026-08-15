@@ -1,11 +1,15 @@
 'use client';
 
 import { useState } from 'react';
-import { parsePercentToBp, type ProductCategory } from '@manfaa/api-client';
+import {
+  bpToPercentString,
+  parsePercentToBp,
+  type ProductCategory,
+} from '@manfaa/api-client';
 import { Ban, LoaderCircle, Pencil, Plus, RotateCcw } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
-import { formatBp } from '@/lib/estimate';
+import { formatBp, formatRateOrDash, trimRate } from '@/lib/estimate';
 import {
   apiErrorMessage,
   isRateNotPriced,
@@ -93,9 +97,9 @@ function formFromCategory(category: ProductCategory): CategoryFormState {
     nameDv: category.name_dv ?? '',
     mode: category.mode,
     ratePercent:
-      category.rate_bp === null
+      category.cashback_rate_percent === null
         ? ''
-        : formatBp(category.rate_bp).replace('%', ''),
+        : trimRate(category.cashback_rate_percent),
     sort: String(category.sort),
   };
 }
@@ -353,7 +357,13 @@ export default function ProductCategoriesSettingsPage() {
     };
     createCategory.mutate(
       values.mode === 'rate'
-        ? { ...base, mode: 'rate', rate_bp: values.rateBp as number }
+        ? {
+            ...base,
+            mode: 'rate',
+            // PLAN §1 wire format: a 2-decimal percent string out; the bp
+            // above is what the form's range check compared.
+            cashback_rate_percent: bpToPercentString(values.rateBp as number),
+          }
         : { ...base, mode: 'excluded' },
       {
         onSuccess: (response) => {
@@ -388,7 +398,10 @@ export default function ProductCategoriesSettingsPage() {
           mode: values.mode,
           // Switching to excluded must clear the rate explicitly — the
           // server validates the FINAL (post-merge) mode/rate pair.
-          rate_bp: values.mode === 'rate' ? (values.rateBp as number) : null,
+          cashback_rate_percent:
+            values.mode === 'rate'
+              ? bpToPercentString(values.rateBp as number)
+              : null,
           sort: values.sort,
         },
       },
@@ -501,9 +514,7 @@ export default function ProductCategoriesSettingsPage() {
                           </Badge>
                         ) : (
                           <span className="font-medium tabular-nums">
-                            {category.rate_bp === null
-                              ? '—'
-                              : formatBp(category.rate_bp)}
+                            {formatRateOrDash(category.cashback_rate_percent)}
                           </span>
                         )}
                       </TableCell>

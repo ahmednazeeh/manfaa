@@ -8,7 +8,7 @@ import { MoneyText } from '@manfaa/ui';
 import { BadgePercent, Clock } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { addDaysToInstant, formatBusinessDate } from '@/lib/dates';
-import { formatBp } from '@/lib/estimate';
+import { formatRate, trimRate } from '@/lib/estimate';
 import { promptDiscountReasonLabel } from '@/lib/labels';
 import {
   Alert,
@@ -40,9 +40,17 @@ import { Button } from '@/components/ui/button';
  * the quote is a promise.
  */
 
-/** "5%" — the platform's configured rate, formatted from integer bp. */
-export function discountRateLabel(rateBp: number): string {
-  return formatBp(rateBp);
+/**
+ * "5%" — the platform's configured rate, as the API states it (PLAN §1: a
+ * 2-decimal percent string, "5.00"), trimmed for display.
+ */
+export function discountRateLabel(ratePercent: string): string {
+  return formatRate(ratePercent);
+}
+
+/** True when the platform has switched the discount off entirely ("0.00"). */
+export function isDiscountDisabled(ratePercent: string): boolean {
+  return trimRate(ratePercent) === '0';
 }
 
 /**
@@ -50,10 +58,10 @@ export function discountRateLabel(rateBp: number): string {
  * The amount is negated for display only — the integer is the server's.
  */
 export function PromptDiscountRow({
-  rateBp,
+  ratePercent,
   discountLaari,
 }: {
-  rateBp: number | null;
+  ratePercent: string | null;
   discountLaari: number;
 }) {
   const { t } = useTranslation();
@@ -62,9 +70,11 @@ export function PromptDiscountRow({
     <div className="flex justify-between gap-3">
       <span className="flex items-center gap-1.5 text-primary">
         <BadgePercent className="size-3.5 shrink-0" aria-hidden />
-        {rateBp === null
+        {ratePercent === null
           ? t('settlement.discountLineNoRate')
-          : t('settlement.discountLine', { rate: discountRateLabel(rateBp) })}
+          : t('settlement.discountLine', {
+              rate: discountRateLabel(ratePercent),
+            })}
       </span>
       <MoneyText laari={-discountLaari} className="text-primary" />
     </div>
@@ -123,9 +133,10 @@ export function PromptDiscountNotice({
 }) {
   const { t } = useTranslation();
 
-  // Switched off platform-wide (0bp): there is no incentive to explain, and
+  // Switched off platform-wide (0%): there is no incentive to explain, and
   // inventing one would be the exact failure this component guards against.
-  if (discount.rate_bp === 0 || discount.reason_code === 'disabled') {
+  if (isDiscountDisabled(discount.rate_percent) ||
+      discount.reason_code === 'disabled') {
     return null;
   }
 
@@ -136,7 +147,7 @@ export function PromptDiscountNotice({
     return null;
   }
 
-  const rate = discountRateLabel(discount.rate_bp);
+  const rate = discountRateLabel(discount.rate_percent);
   const days = discount.max_age_days;
 
   if (discount.eligible && variant === 'priced') {
@@ -236,11 +247,12 @@ export function PromptDiscountDeadline({
 }) {
   const { t } = useTranslation();
 
-  if (discount.rate_bp === 0 || discount.reason_code === 'disabled') {
+  if (isDiscountDisabled(discount.rate_percent) ||
+      discount.reason_code === 'disabled') {
     return null;
   }
 
-  const rate = discountRateLabel(discount.rate_bp);
+  const rate = discountRateLabel(discount.rate_percent);
   const days = discount.max_age_days;
 
   if (!discount.eligible) {

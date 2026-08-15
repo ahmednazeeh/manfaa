@@ -76,14 +76,14 @@ it('walks the full lined-credit lifecycle over HTTP: categories → credits → 
         ->assertCreated()
         ->assertJsonPath('data.slug', 'fruits')
         ->assertJsonPath('data.mode', 'excluded')
-        ->assertJsonPath('data.rate_bp', null);
+        ->assertJsonPath('data.cashback_rate_percent', null);
 
     $this->postJson('/api/merchant/product-categories', [
-        'name_en' => 'Veggies', 'mode' => 'rate', 'rate_bp' => 200, 'sort' => 2,
+        'name_en' => 'Veggies', 'mode' => 'rate', 'cashback_rate_percent' => '2.00', 'sort' => 2,
     ])
         ->assertCreated()
         ->assertJsonPath('data.slug', 'veggies')
-        ->assertJsonPath('data.rate_bp', 200);
+        ->assertJsonPath('data.cashback_rate_percent', '2.00');
 
     // Staff read the list — it feeds the credit form.
     $this->actingAs($this->staff, 'merchant');
@@ -120,19 +120,19 @@ it('walks the full lined-credit lifecycle over HTTP: categories → credits → 
     ])
         ->assertCreated()
         ->assertJsonPath('data.state', 'awaiting_validation')
-        ->assertJsonPath('data.rate_bp', 500)
-        ->assertJsonPath('data.fee_bp', 100)
+        ->assertJsonPath('data.cashback_rate_percent', '5.00')
+        ->assertJsonPath('data.platform_fee_percent', '1.00')
         ->assertJsonPath('data.cashback_laari', 2750)
         ->assertJsonPath('data.fee_laari', 638)
         ->assertJsonPath('data.lines.0.priced_by', 'excluded')
         ->assertJsonPath('data.lines.0.cashback_laari', 0)
         ->assertJsonPath('data.lines.0.fee_laari', 0)
         ->assertJsonPath('data.lines.1.priced_by', 'category')
-        ->assertJsonPath('data.lines.1.effective_rate_bp', 200)
+        ->assertJsonPath('data.lines.1.cashback_rate_percent', '2.00')
         ->assertJsonPath('data.lines.1.cashback_laari', 500)
         ->assertJsonPath('data.lines.1.fee_laari', 188)
         ->assertJsonPath('data.lines.2.priced_by', 'standing')
-        ->assertJsonPath('data.lines.2.effective_rate_bp', 500)
+        ->assertJsonPath('data.lines.2.cashback_rate_percent', '5.00')
         ->assertJsonPath('data.lines.2.cashback_laari', 2250)
         ->assertJsonPath('data.lines.2.fee_laari', 450);
 
@@ -146,7 +146,7 @@ it('walks the full lined-credit lifecycle over HTTP: categories → credits → 
     $this->actingAs($this->owner, 'merchant');
 
     $promoId = $this->postJson('/api/merchant/promotions', [
-        'rate_bp' => 600,
+        'cashback_rate_percent' => '6.00',
         'starts_at' => $this->base->addHour()->toIso8601String(),
         'ends_at' => $this->base->addDays(3)->toIso8601String(),
         'min_purchase_laari' => 60000,
@@ -198,18 +198,18 @@ it('walks the full lined-credit lifecycle over HTTP: categories → credits → 
     ])
         ->assertCreated()
         ->assertJsonPath('data.state', 'awaiting_validation')
-        ->assertJsonPath('data.rate_bp', 500) // row snapshot stays the STANDING base rate
+        ->assertJsonPath('data.cashback_rate_percent', '5.00') // row snapshot stays the STANDING base rate
         ->assertJsonPath('data.cashback_laari', 4500)
         ->assertJsonPath('data.fee_laari', 750)
         ->assertJsonPath('data.lines.0.priced_by', 'excluded')
-        ->assertJsonPath('data.lines.0.effective_rate_bp', 0)
+        ->assertJsonPath('data.lines.0.cashback_rate_percent', '0.00')
         ->assertJsonPath('data.lines.0.cashback_laari', 0)
         ->assertJsonPath('data.lines.1.priced_by', 'promotion')
-        ->assertJsonPath('data.lines.1.effective_rate_bp', 600)
+        ->assertJsonPath('data.lines.1.cashback_rate_percent', '6.00')
         ->assertJsonPath('data.lines.1.cashback_laari', 1800)
         ->assertJsonPath('data.lines.1.fee_laari', 300)
         ->assertJsonPath('data.lines.2.priced_by', 'promotion')
-        ->assertJsonPath('data.lines.2.effective_rate_bp', 600)
+        ->assertJsonPath('data.lines.2.cashback_rate_percent', '6.00')
         ->assertJsonPath('data.lines.2.cashback_laari', 2700)
         ->assertJsonPath('data.lines.2.fee_laari', 450);
 

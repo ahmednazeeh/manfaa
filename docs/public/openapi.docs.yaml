@@ -9,40 +9,61 @@ info:
     \ signed\noutbound webhooks (see the *Webhooks* section) so tills never cache stale\noffers.\n\n##\
     \ Money\n\n- Every amount is an **integer count of laari** (1/100 MVR). Field names\n  carry the unit:\
     \ `eligible_amount`, `cashback_laari`. JSON numbers with a\n  fractional part are rejected with `validation_failed`\
-    \ — never send\n  floats.\n- Every rate is an **integer count of basis points**: 2% is `200`.\n- Cashback\
-    \ and fee round **up** to the next whole laari per line\n  (`ceil(eligible × bp / 10000)`), customer-favourable,\
-    \ so any nonzero\n  eligible amount yields at least 1 laari.\n- Responses carry both the integer (`cashback_laari`)\
-    \ and a\n  pre-formatted string (`cashback_mvr`, e.g. `\"4,300.25\"`) for receipt\n  and till display.\
-    \ The integer is the value; the string is presentation.\n- `currency` is `MVR` only in v1.\n\n## Eligible\
-    \ amount\n\n`eligible_amount` is **the merchant's own figure and is taken at face\nvalue** — how it\
-    \ is derived (tax, service charge, excluded categories) is\nthe merchant's policy, defined in their\
-    \ agreement, never recomputed or\nsecond-guessed by the API. `sale_amount` is optional, reference-only,\
-    \ and\nnever used in any computation.\n\n## Rates\n\nThe rate applied is the merchant's rate **effective\
+    \ — never send\n  floats.\n- Every rate is a **2-decimal percent string**: 2% is `\"2.00\"`, the\n\
+    \  platform fee `\"0.75\"`. Basis points are the platform's internal\n  representation and **never\
+    \ appear in a request or a response** —\n  there is no `rate_bp` or `fee_bp` field on this API. Requests\
+    \ accept\n  a rate as a string (`\"2\"`, `\"2.5\"`, `\"2.50\"`) or as a JSON number\n  (`2`, `2.5`),\
+    \ with at most two decimals; more precision is\n  `validation_failed`.\n- Cashback and fee round **up**\
+    \ to the next whole laari per line\n  (`ceil(eligible × rate / 100)`, computed internally in basis\
+    \ points as\n  `ceil(eligible × bp / 10000)`), customer-favourable, so any nonzero\n  eligible amount\
+    \ yields at least 1 laari.\n- Responses carry both the integer (`cashback_laari`) and a\n  pre-formatted\
+    \ string (`cashback_mvr`, e.g. `\"4,300.25\"`) for receipt\n  and till display. The integer is the\
+    \ value; the string is presentation.\n- `currency` is `MVR` only in v1.\n\n## Eligible amount\n\n\
+    `eligible_amount` is **the merchant's own figure and is taken at face\nvalue** — how it is derived\
+    \ (tax, service charge, excluded categories) is\nthe merchant's policy, defined in their agreement,\
+    \ never recomputed or\nsecond-guessed by the API. `sale_amount` is optional, reference-only, and\n\
+    never used in any computation.\n\n## Rates\n\nThe rate applied is the merchant's rate **effective\
     \ at `occurred_at`**,\nfrozen onto the transaction. The till's displayed rate is advisory; the\nserver\
     \ recomputes authoritatively. Rate *decreases* take effect only at\n00:00 (UTC+5) the next day, so\
-    \ a stale till cache can only\nunder-promise, never over-promise.\n\n## Idempotency\n\nEvery write\
-    \ requires an `Idempotency-Key` header (a missing header is\n`422 idempotency_key_required`). Keys\
-    \ are scoped to the merchant\ncredential. A repeated key with an identical request body replays the\n\
-    original result with HTTP `200` and the response header\n`Idempotency-Replay: true`. A repeated key\
-    \ with a **different** body is\nrejected `422 idempotency_key_reuse_mismatch`. Independently,\n`(merchant,\
-    \ invoice_no)` is unique — the same sale arriving as two\n*distinct* requests (different keys) is\
-    \ rejected `409 duplicate_invoice`.\n\nUse a fresh UUID v4 per logical write. Replays for transaction\
-    \ creation\nare permanent (backed by the stored row); replays for reversals are\nguaranteed for at\
-    \ least 7 days after first use.\n\n**Retry rule:** on a network failure, timeout, or any `5xx`, retry\
-    \ with\nthe **same** `Idempotency-Key`. Every documented `4xx` is terminal — fix\nthe request or stop;\
-    \ do not blind-retry. Transient coordination codes\n(e.g. `409 idempotency_key_in_flight`, returned\
-    \ while a concurrent\nrequest holding the same key is still processing) are deliberately not\nin the\
-    \ registry and follow the same rule: not listed means retry with\nthe same key.\n\n## Timestamps\n\
-    \n`occurred_at` must be ISO 8601 **with an explicit UTC offset**\n(`2026-08-14T11:04:22+05:00`; `Z`\
-    \ is an offset). Offsetless local times\nare rejected `validation_failed`. Future-dated sales (beyond\
-    \ a 5-minute\nclock-skew allowance) are rejected `future_dated`. Sales older than the\nmerchant's\
-    \ validation window plus 3 days are **backdated**: accepted,\nbut they skip the refund window entirely\
-    \ and become payable\nIMMEDIATELY — `state: payable_unfunded`, `reason_code: backdated_final`,\n`backdated:\
-    \ true`, with the 15-day settlement clock starting at the\nmoment of the POST, not at `occurred_at`.\
-    \ A backdated sale can **never\nbe reversed through this API** (`409 backdated_irreversible`); a\n\
-    correction is an admin adjustment. Send today's sales today.\nAll response timestamps are ISO 8601\
-    \ UTC.\n\n## Errors\n\nEvery error response is the envelope `{\"error\": {\"code\", \"message\"}}`,\n\
-    with three exceptions raised by the platform edge before the vendor API\nproper: a missing/invalid/revoked\
+    \ a stale till cache can only\nunder-promise, never over-promise.\n\nA sale may carry an optional\
+    \ **per-sale override**,\n`cashback_rate_percent` on `POST /v1/transactions`, which prices that\n\
+    one sale (a staff discount day, a goodwill boost). It may only RAISE\nthe rate the sale would otherwise\
+    \ earn — below the standing rate, or\nbelow a live promotion covering the sale, is refused\n`rate_below_advertised`,\
+    \ because the advertised rate is a promise to\nthe customer. A rate the platform's fee schedule cannot\
+    \ price is\nrefused `rate_not_priced`. The override never changes the merchant's\nstanding rate: it\
+    \ applies to that sale and nothing else.\n\nBecause it only raises, an override **equal** to the rate\
+    \ the sale\nalready earns prices exactly as if the field were absent — so echoing\n`active_promotion.cashback_rate_percent`\
+    \ back into a sale leaves the\npromotion in charge of it, per-customer cap included. Only a value\n\
+    strictly above the advertised rate replaces it, and such a sale is\npriced by that number alone: no\
+    \ promotion is stamped on it and it\nconsumes no promotional headroom.\n\n## Idempotency\n\nEvery\
+    \ write requires an `Idempotency-Key` header (a missing header is\n`422 idempotency_key_required`).\
+    \ Keys are scoped to the merchant\ncredential. A repeated key with an identical request body replays\
+    \ the\noriginal result with HTTP `200` and the response header\n`Idempotency-Replay: true`. A repeated\
+    \ key with a **different** body is\nrejected `422 idempotency_key_reuse_mismatch`. Independently,\n\
+    `(merchant, invoice_no)` is unique — the same sale arriving as two\n*distinct* requests (different\
+    \ keys) is rejected `409 duplicate_invoice`.\n\nUse a fresh UUID v4 per logical write. Replays for\
+    \ transaction creation\nare permanent (backed by the stored row); replays for reversals are\nguaranteed\
+    \ for at least 7 days after first use.\n\n**Retry rule:** on a network failure, timeout, or any `5xx`,\
+    \ retry with\nthe **same** `Idempotency-Key`. Every documented `4xx` is terminal — fix\nthe request\
+    \ or stop; do not blind-retry. Transient coordination codes\n(e.g. `409 idempotency_key_in_flight`,\
+    \ returned while a concurrent\nrequest holding the same key is still processing) are deliberately\
+    \ not\nin the registry and follow the same rule: not listed means retry with\nthe same key.\n\n##\
+    \ Timestamps\n\n`occurred_at` is **optional — omit it and the sale is recorded as of\nnow**. When\
+    \ you do send it, two shapes are accepted:\n\n- ISO 8601 **with an explicit offset**: `2026-08-14T11:04:22+05:00`,\n\
+    \  `2026-08-14T06:04:22Z`, `2026-08-14T11:04:22+0500`. Read as sent.\n- A plain wall clock with **no\
+    \ offset**: `2026-08-14 11:04:22` or\n  `2026-08-14T11:04:22`, read as **Maldives time (UTC+5)** —\
+    \ so it\n  means the instant `2026-08-14T06:04:22Z`. This used to be refused,\n  because reading it\
+    \ as UTC would misdate the sale by five hours and\n  freeze the wrong rate; reading it as Maldives\
+    \ time answers the same\n  objection honestly, and it is what a till writing its own local clock\n\
+    \  means every time.\n\nAnything else is `validation_failed`. Future-dated sales (beyond a\n5-minute\
+    \ clock-skew allowance) are rejected `future_dated`. Sales older than the\nmerchant's validation window\
+    \ plus 3 days are **backdated**: accepted,\nbut they skip the refund window entirely and become payable\n\
+    IMMEDIATELY — `state: payable_unfunded`, `reason_code: backdated_final`,\n`backdated: true`, with\
+    \ the 15-day settlement clock starting at the\nmoment of the POST, not at `occurred_at`. A backdated\
+    \ sale can **never\nbe reversed through this API** (`409 backdated_irreversible`); a\ncorrection is\
+    \ an admin adjustment. Send today's sales today.\nAll response timestamps are ISO 8601 UTC.\n\n##\
+    \ Errors\n\nEvery error response is the envelope `{\"error\": {\"code\", \"message\"}}`,\nwith three\
+    \ exceptions raised by the platform edge before the vendor API\nproper: a missing/invalid/revoked\
     \ token is `401`\n`{\"message\": \"Unauthenticated.\"}`, a valid token lacking the required\nability\
     \ is `403` `{\"message\": \"Invalid ability provided.\"}`, and\nexceeding the rate limit (120 requests/minute\
     \ per token) is `429`\n`{\"message\": \"Too Many Attempts.\"}` with a `Retry-After` header.\nEverywhere\
@@ -56,7 +77,7 @@ info:
     \ host (our team runs it for\nyou at onboarding — the output below is what you receive). It is safe\
     \ to\nre-run and prints the same token every time.\n\n| Fixture | Value |\n|---|---|\n| Merchant |\
     \ **Sandbox Store** (`sandbox-store`) — minimum eligible sale `5000` laari (MVR 50), validation window\
-    \ 3 days |\n| Rate | `200` bp (2.00%) now, with a **scheduled decrease** to `150` bp at the next 00:00\
+    \ 3 days |\n| Rate | `\"2.00\"` now, with a **scheduled decrease** to `\"1.50\"` at the next 00:00\
     \ UTC+5 — so `GET /v1/merchants/me/rate` always shows a `pending_decrease` |\n| Branch | Sandbox Branch\
     \ (id printed by the command) |\n| POS vendor | Sandbox POS |\n| Token | Printed by the command. Carries\
     \ **all four abilities**. Sandbox-only. |\n\nPublished test customers:\n\n| Code | Name | Phone |\
@@ -97,47 +118,101 @@ info:
     \ `eligible_amount` is **your merchant's own eligible total** in laari, taken\n  at face value — how\
     \ it is derived (GST, service charge, exclusions) is the\n  merchant's agreement with Manfaa, never\
     \ recomputed by us.\n- `sale_amount` is optional, reference-only, never used in computation.\n- `occurred_at`\
-    \ must carry an **explicit UTC offset** (`+05:00`, or `Z`).\n  Malé local time without an offset is\
-    \ rejected `validation_failed`. The\n  cashback rate applied is the merchant's rate effective *at\
-    \ this instant*.\n- `branch_id` (optional) must be one of the merchant's branch ids from\n  onboarding.\n\
-    \n**`201` — created, cashback accrued** (2.00% of 1,180.00, rounded up per\nline, customer-favourable):\n\
-    \n```json\n{\n  \"status\": \"created\",\n  \"reason\": null,\n  \"transaction\": {\n    \"id\": 84521,\n\
-    \    \"origin\": \"pos\",\n    \"invoice_no\": \"INV-1001\",\n    \"state\": \"awaiting_validation\"\
-    ,\n    \"reason_code\": null,\n    \"currency\": \"MVR\",\n    \"eligible_laari\": 118000,\n    \"\
-    sale_laari\": 125000,\n    \"rate_bp\": 200,\n    \"fee_bp\": 75,\n    \"cashback_laari\": 2360,\n\
-    \    \"cashback_mvr\": \"23.60\",\n    \"fee_laari\": 885,\n    \"fee_mvr\": \"8.85\",\n    \"fee_gst_laari\"\
-    : 0,\n    \"occurred_at\": \"2026-08-14T06:04:22+00:00\",\n    \"received_at\": \"2026-08-14T06:04:23+00:00\"\
-    \n  }\n}\n```\n\n**Store `transaction.id` against the invoice** — a reversal addresses it.\n\nPrint\
-    \ the conditional wording on the receipt: the customer *will earn*\nMVR 23.60 once the merchant confirms\
-    \ — nothing is promised before then.\n\n**`200` — recorded, no cashback.** This endpoint never rejects\
-    \ a well-formed\nsale for business reasons; the two no-cashback outcomes come back as `200`\nwith\
-    \ a distinct `status` so the cashier always sees something truthful:\n\n*Below the merchant's minimum*\
-    \ (sandbox: `eligible_amount` under `5000`):\n\n```sh\ncurl -s -X POST $MANFAA_API/v1/transactions\
-    \ \\\n  -H \"Authorization: Bearer $MANFAA_TOKEN\" \\\n  -H \"Idempotency-Key: $(uuidgen)\" \\\n \
-    \ -H \"Content-Type: application/json\" \\\n  -d '{\"invoice_no\":\"INV-1002\",\"customer_ref\":\"\
-    111111\",\"eligible_amount\":4999,\"occurred_at\":\"2026-08-14T11:20:00+05:00\"}'\n```\n\n```json\n\
-    {\n  \"status\": \"below_minimum\",\n  \"reason\": \"below_minimum\",\n  \"transaction\": {\n    \"\
-    id\": 84524,\n    \"state\": \"reversed\",\n    \"reason_code\": \"below_minimum\",\n    \"eligible_laari\"\
-    : 4999,\n    \"rate_bp\": 200,\n    \"fee_bp\": 75,\n    \"cashback_laari\": 0,\n    \"cashback_mvr\"\
+    \ is **optional — omit it and we record the sale as of now**,\n  which is what a till posting a sale\
+    \ as it rings it up means anyway. When\n  you do send it, two shapes are accepted:\n  - **ISO 8601\
+    \ with an offset** — `2026-08-14T11:04:22+05:00`,\n    `2026-08-14T06:04:22Z`, `2026-08-14T11:04:22+0500`.\
+    \ Read exactly as sent.\n  - **A plain wall clock with no offset** — `2026-08-14 11:04:22` or\n  \
+    \  `2026-08-14T11:04:22` — read as **Maldives time (UTC+5)**, so it means\n    the instant `2026-08-14T06:04:22Z`.\
+    \ If your till writes `date('Y-m-d\n    H:i:s')` off its own clock, just send that.\n\n  Anything\
+    \ else (`15/08/2026 11:04`, a date with no time, seconds omitted)\n  is `422 validation_failed`. The\
+    \ cashback rate applied is the merchant's\n  rate effective *at this instant*.\n- `cashback_rate_percent`\
+    \ (optional) overrides the rate **for this sale\n  only** — see the box below.\n- `branch_id` (optional)\
+    \ must be one of the merchant's branch ids from\n  onboarding.\n\n**`201` — created, cashback accrued**\
+    \ (2.00% of 1,180.00, rounded up per\nline, customer-favourable):\n\n```json\n{\n  \"status\": \"\
+    created\",\n  \"reason\": null,\n  \"transaction\": {\n    \"id\": 84521,\n    \"origin\": \"pos\"\
+    ,\n    \"invoice_no\": \"INV-1001\",\n    \"state\": \"awaiting_validation\",\n    \"reason_code\"\
+    : null,\n    \"currency\": \"MVR\",\n    \"eligible_laari\": 118000,\n    \"sale_laari\": 125000,\n\
+    \    \"cashback_rate_percent\": \"2.00\",\n    \"platform_fee_percent\": \"0.75\",\n    \"cashback_laari\"\
+    : 2360,\n    \"cashback_mvr\": \"23.60\",\n    \"fee_laari\": 885,\n    \"fee_mvr\": \"8.85\",\n \
+    \   \"fee_gst_laari\": 0,\n    \"occurred_at\": \"2026-08-14T06:04:22+00:00\",\n    \"received_at\"\
+    : \"2026-08-14T06:04:23+00:00\"\n  }\n}\n```\n\n**Store `transaction.id` against the invoice** — a\
+    \ reversal addresses it.\n\n`cashback_rate_percent` and `platform_fee_percent` are the terms **frozen**\n\
+    on this row at `occurred_at`. They never change afterwards, even if the\nmerchant reprices tomorrow\
+    \ — and a reversal reverses the stored integers,\nnever a recomputation.\n\nPrint the conditional\
+    \ wording on the receipt: the customer *will earn*\nMVR 23.60 once the merchant confirms — nothing\
+    \ is promised before then.\n\n**`200` — recorded, no cashback.** This endpoint never rejects a well-formed\n\
+    sale for business reasons; the two no-cashback outcomes come back as `200`\nwith a distinct `status`\
+    \ so the cashier always sees something truthful:\n\n*Below the merchant's minimum* (sandbox: `eligible_amount`\
+    \ under `5000`):\n\n```sh\ncurl -s -X POST $MANFAA_API/v1/transactions \\\n  -H \"Authorization: Bearer\
+    \ $MANFAA_TOKEN\" \\\n  -H \"Idempotency-Key: $(uuidgen)\" \\\n  -H \"Content-Type: application/json\"\
+    \ \\\n  -d '{\"invoice_no\":\"INV-1002\",\"customer_ref\":\"111111\",\"eligible_amount\":4999,\"occurred_at\"\
+    :\"2026-08-14T11:20:00+05:00\"}'\n```\n\n```json\n{\n  \"status\": \"below_minimum\",\n  \"reason\"\
+    : \"below_minimum\",\n  \"transaction\": {\n    \"id\": 84524,\n    \"state\": \"reversed\",\n   \
+    \ \"reason_code\": \"below_minimum\",\n    \"eligible_laari\": 4999,\n    \"cashback_rate_percent\"\
+    : \"2.00\",\n    \"platform_fee_percent\": \"0.75\",\n    \"cashback_laari\": 0,\n    \"cashback_mvr\"\
     : \"0.00\",\n    \"fee_laari\": 0,\n    \"...\": \"other transaction fields as above\"\n  }\n}\n```\n\
     \nNot an error — do not retry. Show \"no cashback on this sale\" at the till.\n\n*Merchant suspended*\
     \ (settlement overdue past day 16 — you will have\nreceived the `merchant.suspended` webhook first).\
     \ The sandbox merchant is\nactive, so this one is not reproducible against `sandbox-store`; the shape\n\
     is:\n\n```json\n{\n  \"status\": \"recorded_ineligible\",\n  \"reason\": \"merchant_suspended\",\n\
     \  \"transaction\": {\n    \"id\": 84523,\n    \"state\": \"reversed\",\n    \"reason_code\": \"merchant_suspended\"\
-    ,\n    \"cashback_laari\": 0,\n    \"fee_laari\": 0,\n    \"rate_bp\": 200,\n    \"fee_bp\": 75,\n\
-    \    \"...\": \"other transaction fields as above\"\n  }\n}\n```\n\nKeep POSTing while suspended —\
-    \ sales are still recorded — but stop\nadvertising cashback until the `merchant.reinstated` webhook.\
-    \ Accrual resumes\nautomatically; already-recorded ineligible sales are **not** retro-credited.\n\n\
-    **`201` with `reason: \"backdated_final\"`** — a sale older than the merchant's\nvalidation window\
-    \ + 3 days is **backdated**. It is accepted, but it skips the\nrefund window entirely: it arrives\
-    \ in `state: \"payable_unfunded\"` with\n`\"backdated\": true`, the merchant's 15-day settlement clock\
-    \ starts at the\nmoment you POST it (not at `occurred_at`), and **it can never be reversed\nthrough\
-    \ this API** — `POST /v1/transactions/{id}/reverse` answers\n`409 backdated_irreversible` in every\
-    \ state, and no credit adjustment is\ncreated either. Corrections are admin adjustments, arranged\
-    \ with Manfaa.\n\nFlush your offline queue promptly: a queue that drains a week late turns\nordinary\
-    \ sales into irreversible ones. Branch on the `backdated` boolean, not\non `reason_code` — later transitions\
-    \ rewrite `reason_code`, but `backdated`\nis permanent.\n\n**A merchant account that is not trading\
+    ,\n    \"cashback_laari\": 0,\n    \"fee_laari\": 0,\n    \"cashback_rate_percent\": \"2.00\",\n \
+    \   \"platform_fee_percent\": \"0.75\",\n    \"...\": \"other transaction fields as above\"\n  }\n\
+    }\n```\n\nKeep POSTing while suspended — sales are still recorded — but stop\nadvertising cashback\
+    \ until the `merchant.reinstated` webhook. Accrual resumes\nautomatically; already-recorded ineligible\
+    \ sales are **not** retro-credited.\n\n**`201` with `reason: \"backdated_final\"`** — a sale older\
+    \ than the merchant's\nvalidation window + 3 days is **backdated**. It is accepted, but it skips the\n\
+    refund window entirely: it arrives in `state: \"payable_unfunded\"` with\n`\"backdated\": true`, the\
+    \ merchant's 15-day settlement clock starts at the\nmoment you POST it (not at `occurred_at`), and\
+    \ **it can never be reversed\nthrough this API** — `POST /v1/transactions/{id}/reverse` answers\n\
+    `409 backdated_irreversible` in every state, and no credit adjustment is\ncreated either. Corrections\
+    \ are admin adjustments, arranged with Manfaa.\n\nFlush your offline queue promptly: a queue that\
+    \ drains a week late turns\nordinary sales into irreversible ones. Branch on the `backdated` boolean,\
+    \ not\non `reason_code` — later transitions rewrite `reason_code`, but `backdated`\nis permanent.\n\
+    \n#### Per-sale rate override — `cashback_rate_percent`\n\nA sale may carry its own rate: a staff\
+    \ discount day, a launch hour, a\ngoodwill boost for one customer. Send `cashback_rate_percent` on\
+    \ the create\nrequest and it prices **that sale only** — the merchant's standing rate is\nuntouched,\
+    \ and nothing about the next sale changes.\n\n```sh\ncurl -s -X POST $MANFAA_API/v1/transactions \\\
+    \n  -H \"Authorization: Bearer $MANFAA_TOKEN\" \\\n  -H \"Idempotency-Key: $(uuidgen)\" \\\n  -H \"\
+    Content-Type: application/json\" \\\n  -d '{\n    \"invoice_no\": \"INV-1006\",\n    \"customer_ref\"\
+    : \"111111\",\n    \"eligible_amount\": 118000,\n    \"cashback_rate_percent\": \"5.00\"\n  }'\n```\n\
+    \nWith the sandbox merchant's standing 2.00%, that sale is credited at 5.00%:\n\n| | Rate | Worked\
+    \ integer | Result |\n|---|---|---|---:|\n| Cashback | `\"5.00\"` (500 bp internally) | ceil(118000\
+    \ × 500 / 10000) | **5900** laari |\n| Platform fee | `\"1.00\"` — the fee tier of the **applied**\
+    \ rate | ceil(118000 × 100 / 10000) | **1180** laari |\n\n```json\n{\n  \"status\": \"created\",\n\
+    \  \"reason\": null,\n  \"transaction\": {\n    \"id\": 84526,\n    \"state\": \"awaiting_validation\"\
+    ,\n    \"eligible_laari\": 118000,\n    \"cashback_rate_percent\": \"5.00\",\n    \"platform_fee_percent\"\
+    : \"1.00\",\n    \"cashback_laari\": 5900,\n    \"cashback_mvr\": \"59.00\",\n    \"fee_laari\": 1180,\n\
+    \    \"fee_mvr\": \"11.80\",\n    \"...\": \"other transaction fields as above\"\n  }\n}\n```\n\n\
+    Two rules, and both are refusals rather than silent adjustments:\n\n- **An override may only raise\
+    \ the rate.** Below the rate the sale would\n  otherwise earn — the standing rate, or a live promotion\
+    \ covering this sale\n  — it is `422 rate_below_advertised`, with the applicable rate in\n  `error.meta.advertised_cashback_rate_percent`.\
+    \ The advertised rate is a\n  public promise to the customer; a till must not be able to quietly pay\n\
+    \  less than the storefront says.\n\n  Because it only ever *raises*, an override **equal** to the\
+    \ rate the sale\n  already earns is accepted and changes nothing at all: the sale prices\n  exactly\
+    \ as if you had not sent the field. That matters during a\n  promotion. If you echo `active_promotion.cashback_rate_percent`\
+    \ from\n  `GET /v1/merchants/me/rate` back into the sale, the promotion still\n  prices it — including\
+    \ its `max_cashback_per_customer_laari` cap, which is\n  part of the offer the store published. Only\
+    \ a value strictly above the\n  promotion is a decision to pay more than the published offer, and\
+    \ that\n  sale is then priced by your number alone: no promotion is stamped on it,\n  and it consumes\
+    \ none of the customer's promotional headroom.\n\n  ```json\n  {\n    \"error\": {\n      \"code\"\
+    : \"rate_below_advertised\",\n      \"message\": \"cashback_rate_percent 1.50% is below the 2.00%\
+    \ this sale already earns — an override may only raise the advertised rate.\",\n      \"meta\": {\
+    \ \"advertised_cashback_rate_percent\": \"2.00\" }\n    }\n  }\n  ```\n\n- **The platform must be\
+    \ able to price the fee for it.** A rate above the\n  ceiling of the active fee schedule is `422 rate_not_priced`,\
+    \ with the\n  ceiling in `error.meta.ceiling_percent` (sandbox: `\"10.00\"`). Nothing you\n  can fix\
+    \ at the till — the merchant's plan has to be widened by Manfaa\n  first.\n\nBoth refusals are terminal\
+    \ for that request: fix the value (or drop the\nfield) and resend with a **fresh** `Idempotency-Key`.\
+    \ Nothing was recorded.\n\nThey apply only to a sale that actually earns cashback. On a sale that\n\
+    earns none either way — a **suspended** merchant (`200\nrecorded_ineligible`) or one **below the minimum**\
+    \ (`200 below_minimum`) —\nthe field is ignored rather than refused, and the sale is recorded exactly\n\
+    as it would be without it, frozen at the store's standing terms with\n`cashback_laari: 0`. Ingestion\
+    \ never stops for a rate that could not have\nbeen applied: the till still gets its `200` and the\
+    \ cashier still sees the\ntruth.\n\n**With `lines`:** the override becomes the rate of every line\
+    \ that would\notherwise price at the standing rate (the `category: null` bucket). Category\noverrides\
+    \ and exclusions are untouched — an override never pays an excluded\ncategory, and never overwrites\
+    \ the merchant's rate card — and a live\npromotion still lifts any line it would pay more on. No line\
+    \ ever earns less\nthan it would have without the override.\n\n**A merchant account that is not trading\
     \ answers `403 forbidden_ability`** in\nthe error envelope, with the message *\"This merchant account\
     \ is not active on\nthe platform.\"* — every status except `active` and `suspended`: a closed\naccount,\
     \ and a self-signed-up store that has not completed onboarding (still\nin setup, awaiting review,\
@@ -165,9 +240,9 @@ info:
     \ null` is the default \"everything else\" bucket. Rules:\n\n- amounts are laari integers ≥ 1 and\
     \ must sum to **exactly**\n  `eligible_amount` → otherwise `422 lines_sum_mismatch`;\n- each category\
     \ (and the null default) at most once →\n  `422 duplicate_category_line`;\n- unknown slug → `422 unknown_category`;\
-    \ deactivated →\n  `422 inactive_category`.\n\n**Worked example.** Merchant standing rate 5.00% (`500`\
-    \ bp), category\n`veggies` overridden to 2.00% (`200` bp), category `fruits` excluded. A\nMVR 1,000.00\
-    \ basket split 300.00 fruits + 250.00 veggies + 450.00 other:\n\n```sh\ncurl -s -X POST $MANFAA_API/v1/transactions\
+    \ deactivated →\n  `422 inactive_category`.\n\n**Worked example.** Merchant standing rate `\"5.00\"\
+    `, category `veggies`\noverridden to `\"2.00\"`, category `fruits` excluded. A MVR 1,000.00 basket\n\
+    split 300.00 fruits + 250.00 veggies + 450.00 other:\n\n```sh\ncurl -s -X POST $MANFAA_API/v1/transactions\
     \ \\\n  -H \"Authorization: Bearer $MANFAA_TOKEN\" \\\n  -H \"Idempotency-Key: $(uuidgen)\" \\\n \
     \ -H \"Content-Type: application/json\" \\\n  -d '{\n    \"invoice_no\": \"INV-2107\",\n    \"customer_ref\"\
     : \"111111\",\n    \"eligible_amount\": 100000,\n    \"occurred_at\": \"2026-08-15T10:30:00+05:00\"\
@@ -176,36 +251,43 @@ info:
     \ }\n    ]\n  }'\n```\n\nEvery line rounds **up** independently (§4 ceiling), then the transaction\n\
     totals are the *sums of the line integers* — never recomputed on the whole\namount:\n\n| Line | Amount\
     \ | Rate | Cashback | Fee tier | Fee |\n|---|---:|---|---:|---|---:|\n| fruits (excluded) | 30000\
-    \ | 0 | 0 | — | 0 |\n| veggies | 25000 | 200 bp | ceil(25000×200/10000) = **500** | 75 bp | ceil(25000×75/10000)\
-    \ = **188** |\n| default | 45000 | 500 bp | ceil(45000×500/10000) = **2250** | 100 bp | ceil(45000×100/10000)\
-    \ = **450** |\n| **Totals** | 100000 | | **2750** | | **638** |\n\n```json\n{\n  \"status\": \"created\"\
-    ,\n  \"reason\": null,\n  \"transaction\": {\n    \"id\": 84525,\n    \"state\": \"awaiting_validation\"\
-    ,\n    \"eligible_laari\": 100000,\n    \"rate_bp\": 500,\n    \"fee_bp\": 100,\n    \"cashback_laari\"\
-    : 2750,\n    \"cashback_mvr\": \"27.50\",\n    \"fee_laari\": 638,\n    \"fee_mvr\": \"6.38\",\n \
-    \   \"lines\": [\n      { \"category\": \"fruits\",  \"category_name_en\": \"Fruits\",  \"amount_laari\"\
-    : 30000, \"effective_rate_bp\": 0,   \"fee_bp\": 0,   \"cashback_laari\": 0,    \"fee_laari\": 0,\
-    \   \"priced_by\": \"excluded\", \"sort\": 0 },\n      { \"category\": \"veggies\", \"category_name_en\"\
-    : \"Veggies\", \"amount_laari\": 25000, \"effective_rate_bp\": 200, \"fee_bp\": 75,  \"cashback_laari\"\
-    : 500,  \"fee_laari\": 188, \"priced_by\": \"category\", \"sort\": 1 },\n      { \"category\": null,\
-    \      \"category_name_en\": null,      \"amount_laari\": 45000, \"effective_rate_bp\": 500, \"fee_bp\"\
-    : 100, \"cashback_laari\": 2250, \"fee_laari\": 450, \"priced_by\": \"standing\", \"sort\": 2 }\n\
-    \    ],\n    \"...\": \"other transaction fields as above\"\n  }\n}\n```\n\nNotes:\n\n- On a lined\
-    \ transaction, `rate_bp`/`fee_bp` at the transaction level are\n  the **standing-rate snapshot**;\
-    \ per-line truth is in `lines`\n  (`effective_rate_bp`, `priced_by`).\n- During a live promotion,\
-    \ every **non-excluded** line earns\n  max(promotion rate, its own rate) — `priced_by: \"promotion\"\
-    ` on the\n  lifted lines. Excluded categories stay excluded even during promotions.\n  A promotion's\
-    \ minimum purchase is judged against the whole\n  `eligible_amount`, not per line. Per-customer promotion\
-    \ caps clip only\n  the promotion-priced lines, in submitted order.\n- Reversals work unchanged —\
-    \ reverse the transaction by id; the stored\n  totals reverse as one.\n\n### 4.2 Reverse a sale —\
-    \ `POST /v1/transactions/{id}/reverse`\n\nAbility: `transactions:reverse`.\n\n> **Contractual obligation,\
-    \ not best-effort.** Under the vendor integration\n> agreement you MUST send a reversal for every\
-    \ refunded, voided, or\n> duplicated sale you previously POSTed. Without it, a refunded sale keeps\n\
-    > its cashback, the merchant is billed for it, and every till error runs in\n> the merchant's favour.\
-    \ Wire this into your refund/void flow, with the same\n> persist-then-send queue you use for sales.\n\
-    \n```sh\ncurl -s -X POST $MANFAA_API/v1/transactions/84521/reverse \\\n  -H \"Authorization: Bearer\
-    \ $MANFAA_TOKEN\" \\\n  -H \"Idempotency-Key: $(uuidgen)\" \\\n  -H \"Content-Type: application/json\"\
-    \ \\\n  -d '{\"reason\": \"customer_refund\", \"occurred_at\": \"2026-08-15T09:30:00+05:00\"}'\n```\n\
-    \n`reason` is one of `customer_refund`, `till_void`, `duplicate`, `other`.\nReversal always reverses\
+    \ | `\"0.00\"` | 0 | `\"0.00\"` | 0 |\n| veggies | 25000 | `\"2.00\"` | ceil(25000×200/10000) = **500**\
+    \ | `\"0.75\"` | ceil(25000×75/10000) = **188** |\n| default | 45000 | `\"5.00\"` | ceil(45000×500/10000)\
+    \ = **2250** | `\"1.00\"` | ceil(45000×100/10000) = **450** |\n| **Totals** | 100000 | | **2750**\
+    \ | | **638** |\n\n(The arithmetic is shown in basis points because that is exactly how the\nplatform\
+    \ computes it: `\"2.00\"` is 200 bp, and `ceil(amount × bp / 10000)` is\nthe §4 rule. On the wire\
+    \ you only ever see the percent string.)\n\n```json\n{\n  \"status\": \"created\",\n  \"reason\":\
+    \ null,\n  \"transaction\": {\n    \"id\": 84525,\n    \"state\": \"awaiting_validation\",\n    \"\
+    eligible_laari\": 100000,\n    \"cashback_rate_percent\": \"5.00\",\n    \"platform_fee_percent\"\
+    : \"1.00\",\n    \"cashback_laari\": 2750,\n    \"cashback_mvr\": \"27.50\",\n    \"fee_laari\": 638,\n\
+    \    \"fee_mvr\": \"6.38\",\n    \"lines\": [\n      { \"category\": \"fruits\",  \"category_name_en\"\
+    : \"Fruits\",  \"amount_laari\": 30000, \"cashback_rate_percent\": \"0.00\", \"platform_fee_percent\"\
+    : \"0.00\", \"cashback_laari\": 0,    \"fee_laari\": 0,   \"priced_by\": \"excluded\", \"sort\": 0\
+    \ },\n      { \"category\": \"veggies\", \"category_name_en\": \"Veggies\", \"amount_laari\": 25000,\
+    \ \"cashback_rate_percent\": \"2.00\", \"platform_fee_percent\": \"0.75\", \"cashback_laari\": 500,\
+    \  \"fee_laari\": 188, \"priced_by\": \"category\", \"sort\": 1 },\n      { \"category\": null,  \
+    \    \"category_name_en\": null,      \"amount_laari\": 45000, \"cashback_rate_percent\": \"5.00\"\
+    , \"platform_fee_percent\": \"1.00\", \"cashback_laari\": 2250, \"fee_laari\": 450, \"priced_by\"\
+    : \"standing\", \"sort\": 2 }\n    ],\n    \"...\": \"other transaction fields as above\"\n  }\n}\n\
+    ```\n\nNotes:\n\n- On a lined transaction, `cashback_rate_percent`/`platform_fee_percent` at\n  the\
+    \ transaction level are the **base-rate snapshot** (the standing rate,\n  or your per-sale override\
+    \ when you sent one); per-line truth is in `lines`\n  — each line carries the rate it actually earned,\
+    \ and `priced_by` says why.\n- During a live promotion, every **non-excluded** line earns\n  max(promotion\
+    \ rate, its own rate) — `priced_by: \"promotion\"` on the\n  lifted lines. Excluded categories stay\
+    \ excluded even during promotions.\n  A promotion's minimum purchase is judged against the whole\n\
+    \  `eligible_amount`, not per line. Per-customer promotion caps clip only\n  the promotion-priced\
+    \ lines, in submitted order.\n- Reversals work unchanged — reverse the transaction by id; the stored\n\
+    \  totals reverse as one.\n\n### 4.2 Reverse a sale — `POST /v1/transactions/{id}/reverse`\n\nAbility:\
+    \ `transactions:reverse`.\n\n> **Contractual obligation, not best-effort.** Under the vendor integration\n\
+    > agreement you MUST send a reversal for every refunded, voided, or\n> duplicated sale you previously\
+    \ POSTed. Without it, a refunded sale keeps\n> its cashback, the merchant is billed for it, and every\
+    \ till error runs in\n> the merchant's favour. Wire this into your refund/void flow, with the same\n\
+    > persist-then-send queue you use for sales.\n\n```sh\ncurl -s -X POST $MANFAA_API/v1/transactions/84521/reverse\
+    \ \\\n  -H \"Authorization: Bearer $MANFAA_TOKEN\" \\\n  -H \"Idempotency-Key: $(uuidgen)\" \\\n \
+    \ -H \"Content-Type: application/json\" \\\n  -d '{\"reason\": \"customer_refund\", \"occurred_at\"\
+    : \"2026-08-15T09:30:00+05:00\"}'\n```\n\n`reason` is one of `customer_refund`, `till_void`, `duplicate`,\
+    \ `other`.\n`occurred_at` follows the same rule as on creation — **optional** (omit it\nfor now),\
+    \ ISO 8601 with an offset, or a plain wall clock read as Maldives\ntime.\nReversal always reverses\
     \ the **stored** integers — never recomputed, even if\nthe rate has since changed.\n\nThe `200` body's\
     \ `outcome` tells you what actually happened:\n\n**`outcome: \"reversed\"`** — the transaction was\
     \ still pending; it moved to\n`state: \"reversed\"` and the accrual was undone in full:\n\n```json\n\
@@ -237,40 +319,48 @@ info:
     \ to a human, who arranges an adjustment with Manfaa.\n\n### 4.3 Rate for the till display — `GET\
     \ /v1/merchants/me/rate`\n\nAbility: `rates:read`.\n\n```sh\ncurl -s $MANFAA_API/v1/merchants/me/rate\
     \ \\\n  -H \"Authorization: Bearer $MANFAA_TOKEN\"\n```\n\nSandbox answer (the scheduled decrease\
-    \ is part of the fixtures):\n\n```json\n{\n  \"rate_bp\": 200,\n  \"fee_bp\": 75,\n  \"currency\"\
-    : \"MVR\",\n  \"min_eligible_laari\": 5000,\n  \"pending_decrease\": {\n    \"rate_bp\": 150,\n  \
-    \  \"fee_bp\": 50,\n    \"effective_at\": \"2026-08-15T00:00:00+05:00\"\n  }\n}\n```\n\nWhat you display\
-    \ is **advisory** — the server always recomputes at\n`occurred_at`. Rate *decreases* take effect only\
-    \ at 00:00 UTC+5 the next day\n(that is what `pending_decrease` announces); increases apply immediately.\
-    \ A\nstale cache can therefore only **under**-promise, never over-promise. Refresh\non the `merchant.rate_changed`\
-    \ webhook rather than polling. A merchant with\nno configured rate answers `422 no_effective_rate`.\n\
-    \n### 4.4 Confirm a customer — `GET /v1/customers/lookup`\n\nAbility: `customers:lookup`. The customer\
-    \ shows a 6-digit code (digits or\nQR); confirm the masked name **with the person at the till** before\
-    \ crediting\n— phone numbers get recycled in the Maldives, and a typo credits a stranger.\n\n```sh\n\
-    curl -s \"$MANFAA_API/v1/customers/lookup?ref=111111\" \\\n  -H \"Authorization: Bearer $MANFAA_TOKEN\"\
-    \n```\n\n```json\n{ \"ref\": \"111111\", \"valid\": true, \"masked_name\": \"Ais*** Moh***\" }\n```\n\
-    \nThe mask keeps the first three characters of each name part — enough to\nconfirm, nothing more.\
-    \ No balance, phone number, or other customer data ever\ncrosses this API.\n\nA known code that cannot\
-    \ currently earn (sandbox: `333333`) still answers\n`200`, with `valid: false` — show the cashier\
-    \ \"code exists but is blocked\".\nAn unknown code answers `404 customer_not_found`; re-read it with\
-    \ the\ncustomer (this is almost always a mistyped digit).\n\n### 4.5 Product categories — `GET /v1/merchants/me/product-categories`\n\
-    \nAbility: `rates:read`. The merchant's **active** product categories — the\nallowed `lines[].category`\
-    \ values for line-item pricing (§4.1):\n\n```sh\ncurl -s $MANFAA_API/v1/merchants/me/product-categories\
-    \ \\\n  -H \"Authorization: Bearer $MANFAA_TOKEN\"\n```\n\n```json\n{\n  \"data\": [\n    { \"category\"\
-    : \"fruits\",  \"name_en\": \"Fruits\",  \"name_dv\": \"މޭވާ\",     \"mode\": \"excluded\", \"rate_bp\"\
-    : null },\n    { \"category\": \"veggies\", \"name_en\": \"Veggies\", \"name_dv\": \"ތަރުކާރީ\", \"\
-    mode\": \"rate\",     \"rate_bp\": 200 }\n  ]\n}\n```\n\n`category` is the exact string to submit.\
-    \ `mode: \"excluded\"` lines earn\nnothing; `mode: \"rate\"` lines earn `rate_bp` instead of the standing\
-    \ rate;\nanything else goes on the `category: null` default line. The merchant can\nchange this list\
-    \ at any time — refresh it when a POST answers\n`unknown_category` or `inactive_category` rather than\
-    \ caching forever. A\nmerchant with no categories returns an empty `data` and you simply never\nsend\
-    \ `lines`.\n\n---\n\n## Webhooks\n\n\nWe POST signed events to the HTTPS endpoint you register with\
-    \ us (one\nendpoint per POS vendor, subscribed to the events you choose). At\nregistration you receive\
-    \ a signing secret (`whsec_…`) exactly once — store it\nlike a password.\n\n| Event | When | Do |\n\
-    |---|---|---|\n| `merchant.rate_changed` | Rate changed (decreases announce the next-midnight boundary)\
-    \ | Refresh the till's cached rate |\n| `merchant.suspended` | Automatic day-16 suspension | Stop\
-    \ advertising cashback; keep POSTing sales |\n| `merchant.reinstated` | Merchant settled and was reinstated\
-    \ | Resume advertising |\n| `transaction.reversed` | Any transaction reversed — including by Manfaa\
+    \ is part of the fixtures):\n\n```json\n{\n  \"cashback_rate_percent\": \"2.00\",\n  \"platform_fee_percent\"\
+    : \"0.75\",\n  \"currency\": \"MVR\",\n  \"min_eligible_laari\": 5000,\n  \"pending_decrease\": {\n\
+    \    \"cashback_rate_percent\": \"1.50\",\n    \"platform_fee_percent\": \"0.50\",\n    \"effective_at\"\
+    : \"2026-08-15T00:00:00+05:00\"\n  }\n}\n```\n\nWhile a published promotion is live and beating the\
+    \ standing rate, an\n`active_promotion` block appears alongside — display that as the offer:\n\n```json\n\
+    {\n  \"cashback_rate_percent\": \"2.00\",\n  \"platform_fee_percent\": \"0.75\",\n  \"currency\":\
+    \ \"MVR\",\n  \"min_eligible_laari\": 5000,\n  \"pending_decrease\": null,\n  \"active_promotion\"\
+    : {\n    \"cashback_rate_percent\": \"5.00\",\n    \"platform_fee_percent\": \"1.00\",\n    \"branch_id\"\
+    : null,\n    \"min_purchase_laari\": 10000,\n    \"ends_at\": \"2026-08-20T00:00:00+05:00\"\n  }\n\
+    }\n```\n\nWhat you display is **advisory** — the server always recomputes at\n`occurred_at`. Rate\
+    \ *decreases* take effect only at 00:00 UTC+5 the next day\n(that is what `pending_decrease` announces);\
+    \ increases apply immediately. A\nstale cache can therefore only **under**-promise, never over-promise.\
+    \ Refresh\non the `merchant.rate_changed` webhook rather than polling. A merchant with\nno configured\
+    \ rate answers `422 no_effective_rate`.\n\n### 4.4 Confirm a customer — `GET /v1/customers/lookup`\n\
+    \nAbility: `customers:lookup`. The customer shows a 6-digit code (digits or\nQR); confirm the masked\
+    \ name **with the person at the till** before crediting\n— phone numbers get recycled in the Maldives,\
+    \ and a typo credits a stranger.\n\n```sh\ncurl -s \"$MANFAA_API/v1/customers/lookup?ref=111111\"\
+    \ \\\n  -H \"Authorization: Bearer $MANFAA_TOKEN\"\n```\n\n```json\n{ \"ref\": \"111111\", \"valid\"\
+    : true, \"masked_name\": \"Ais*** Moh***\" }\n```\n\nThe mask keeps the first three characters of\
+    \ each name part — enough to\nconfirm, nothing more. No balance, phone number, or other customer data\
+    \ ever\ncrosses this API.\n\nA known code that cannot currently earn (sandbox: `333333`) still answers\n\
+    `200`, with `valid: false` — show the cashier \"code exists but is blocked\".\nAn unknown code answers\
+    \ `404 customer_not_found`; re-read it with the\ncustomer (this is almost always a mistyped digit).\n\
+    \n### 4.5 Product categories — `GET /v1/merchants/me/product-categories`\n\nAbility: `rates:read`.\
+    \ The merchant's **active** product categories — the\nallowed `lines[].category` values for line-item\
+    \ pricing (§4.1):\n\n```sh\ncurl -s $MANFAA_API/v1/merchants/me/product-categories \\\n  -H \"Authorization:\
+    \ Bearer $MANFAA_TOKEN\"\n```\n\n```json\n{\n  \"data\": [\n    { \"category\": \"fruits\",  \"name_en\"\
+    : \"Fruits\",  \"name_dv\": \"މޭވާ\",     \"mode\": \"excluded\", \"cashback_rate_percent\": null\
+    \ },\n    { \"category\": \"veggies\", \"name_en\": \"Veggies\", \"name_dv\": \"ތަރުކާރީ\", \"mode\"\
+    : \"rate\",     \"cashback_rate_percent\": \"2.00\" }\n  ]\n}\n```\n\n`category` is the exact string\
+    \ to submit. `mode: \"excluded\"` lines earn\nnothing; `mode: \"rate\"` lines earn their `cashback_rate_percent`\
+    \ instead of\nthe standing rate (`null` exactly when the category is excluded);\nanything else goes\
+    \ on the `category: null` default line. The merchant can\nchange this list at any time — refresh it\
+    \ when a POST answers\n`unknown_category` or `inactive_category` rather than caching forever. A\n\
+    merchant with no categories returns an empty `data` and you simply never\nsend `lines`.\n\n---\n\n\
+    ## Webhooks\n\n\nWe POST signed events to the HTTPS endpoint you register with us (one\nendpoint per\
+    \ POS vendor, subscribed to the events you choose). At\nregistration you receive a signing secret\
+    \ (`whsec_…`) exactly once — store it\nlike a password.\n\n| Event | When | Do |\n|---|---|---|\n\
+    | `merchant.rate_changed` | Rate changed (decreases announce the next-midnight boundary) | Refresh\
+    \ the till's cached rate |\n| `merchant.suspended` | Automatic day-16 suspension | Stop advertising\
+    \ cashback; keep POSTing sales |\n| `merchant.reinstated` | Merchant settled and was reinstated |\
+    \ Resume advertising |\n| `transaction.reversed` | Any transaction reversed — including by Manfaa\
     \ admins | Sync your local record; dedupe by `transaction_id` (your own reversals echo here too) |\n\
     \nEvery delivery carries:\n\n| Header | Meaning |\n|---|---|\n| `X-Manfaa-Signature` | Lowercase hex\
     \ `HMAC-SHA256(secret, raw_body)` |\n| `X-Manfaa-Timestamp` | Unix seconds of this delivery **attempt**\
@@ -279,44 +369,47 @@ info:
     \ received** —\nbefore parsing, never over a re-serialisation (your JSON library will not\nreproduce\
     \ our key order) — and compare in constant time.\n\n**Worked example.** Endpoint secret:\n\n```\n\
     whsec_sandboxSECRETsandboxSECRETsandboxSECRET000000000\n```\n\nRaw body (one line, 250 bytes, no trailing\
-    \ newline):\n\n```\n{\"id\":\"evt_01J5A8Z0T2N9GQK4WMB3XVRD6H\",\"data\":{\"fee_bp\":50,\"rate_bp\"\
-    :150,\"merchant_id\":12,\"effective_at\":\"2026-08-16T00:00:00+05:00\",\"previous_fee_bp\":75,\"previous_rate_bp\"\
-    :200},\"type\":\"merchant.rate_changed\",\"created_at\":\"2026-08-15T16:05:11+05:00\"}\n```\n\nExpected\
-    \ `X-Manfaa-Signature`:\n\n```\nbe5a5fe344884c02a4e0cc21fe169052d0305dac2fdaf95c25dd397c2d7f6636\n\
-    ```\n\nReproduce it on your machine:\n\n```sh\nprintf '%s' '{\"id\":\"evt_01J5A8Z0T2N9GQK4WMB3XVRD6H\"\
-    ,\"data\":{\"fee_bp\":50,\"rate_bp\":150,\"merchant_id\":12,\"effective_at\":\"2026-08-16T00:00:00+05:00\"\
-    ,\"previous_fee_bp\":75,\"previous_rate_bp\":200},\"type\":\"merchant.rate_changed\",\"created_at\"\
-    :\"2026-08-15T16:05:11+05:00\"}' \\\n  | openssl dgst -sha256 -hmac 'whsec_sandboxSECRETsandboxSECRETsandboxSECRET000000000'\n\
-    ```\n\nPHP:\n\n```php\n$computed = hash_hmac('sha256', $rawBody, $secret);          // $rawBody =\
-    \ file_get_contents('php://input')\n$valid    = hash_equals($computed, $signatureHeader);\n```\n\n\
-    Node.js:\n\n```js\nconst crypto = require('crypto');\nconst computed = crypto.createHmac('sha256',\
-    \ secret).update(rawBody).digest('hex'); // rawBody: Buffer, pre-parse\nconst valid = crypto.timingSafeEqual(Buffer.from(computed),\
-    \ Buffer.from(signatureHeader));\n```\n\nIf verification passes, parse the JSON and **deduplicate\
-    \ by the event `id`**\n(`evt_` + ULID) — delivery is at-least-once and may arrive out of order.\n\
-    `created_at` inside the signed body is the event's authoritative time; the\ntimestamp header is delivery\
-    \ telemetry only.\n\nAcknowledge with any `2xx` within **10 seconds**. Do the work after\nacknowledging,\
-    \ not before — a slow handler looks like a failure and triggers\na retry.\n\n---\n\n## Retry expectations\n\
-    \n\n**Your retries to us (writes):**\n\n1. Persist the sale + its `Idempotency-Key` locally *before*\
-    \ the first send.\n2. On network failure / timeout / any `5xx` / `429` / `idempotency_key_in_flight`:\n\
-    \   retry with the **same key**, backing off (e.g. 1 s, 5 s, 30 s, then every\n   few minutes until\
-    \ connectivity returns). The replay mechanics make this\n   safe indefinitely.\n3. On any documented\
-    \ `4xx`: stop. It is terminal — surface it, fix it.\n4. Sales sent late still work (the rate is resolved\
-    \ at `occurred_at`, not at\n   receipt), but anything older than the validation window + 3 days lands\
-    \ in\n   manual review — drain your offline queue promptly.\n\n**Our retries to you (webhooks):**\
-    \ a delivery that does not get a `2xx`\nwithin 10 seconds is retried with backoff at ~1 min, 5 min,\
-    \ 30 min, 2 h,\n8 h and 24 h after the first attempt (6 retries over ~35 hours). Retried\ndeliveries\
-    \ carry the identical body and signature with a fresh\n`X-Manfaa-Timestamp`. After the final failure\
-    \ the event is parked and\nsurfaced to Manfaa operations — never silently dropped — but do not rely\
-    \ on\nthat: monitor your endpoint's availability.\n\n---\n\n## Go-live checklist\n\n\n- [ ] Production\
-    \ token held per merchant (from us, or from the merchant's own Settings › API access), stored server-side,\
-    \ never in a client bundle\n- [ ] Fresh UUID per sale, persisted before send; same key reused on retry\n\
-    - [ ] `occurred_at` always carries the UTC offset; till clock NTP-synced\n- [ ] `transaction.id` stored\
-    \ against the invoice for reversals\n- [ ] **Reversal sent for every refund/void/duplicate** (contractual\
-    \ — §4.2)\n- [ ] `below_minimum` / `recorded_ineligible` handled as recorded-no-cashback, not errors\n\
-    - [ ] `adjustment_created` handled as success, adjustment id recorded\n- [ ] Customer masked name\
-    \ confirmed at the till before crediting\n- [ ] Webhook signature verified over raw bytes, events\
-    \ deduped by `id`\n- [ ] Rate cache refreshed on `merchant.rate_changed`, advertising stopped on `merchant.suspended`\n\
-    \nQuestions: **integrations@manfaa.app**.\n"
+    \ newline):\n\n```\n{\"id\":\"evt_01J5A8Z0T2N9GQK4WMB3XVRD6H\",\"data\":{\"merchant_id\":12,\"effective_at\"\
+    :\"2026-08-16T00:00:00+05:00\",\"platform_fee_percent\":\"0.50\",\"cashback_rate_percent\":\"1.50\"\
+    ,\"previous_platform_fee_percent\":\"0.75\",\"previous_cashback_rate_percent\":\"2.00\"},\"type\"\
+    :\"merchant.rate_changed\",\"created_at\":\"2026-08-15T16:05:11+05:00\"}\n```\n\nExpected `X-Manfaa-Signature`:\n\
+    \n```\nbe5a5fe344884c02a4e0cc21fe169052d0305dac2fdaf95c25dd397c2d7f6636\n```\n\nReproduce it on your\
+    \ machine:\n\n```sh\nprintf '%s' '{\"id\":\"evt_01J5A8Z0T2N9GQK4WMB3XVRD6H\",\"data\":{\"merchant_id\"\
+    :12,\"effective_at\":\"2026-08-16T00:00:00+05:00\",\"platform_fee_percent\":\"0.50\",\"cashback_rate_percent\"\
+    :\"1.50\",\"previous_platform_fee_percent\":\"0.75\",\"previous_cashback_rate_percent\":\"2.00\"},\"\
+    type\":\"merchant.rate_changed\",\"created_at\":\"2026-08-15T16:05:11+05:00\"}' \\\n  | openssl dgst\
+    \ -sha256 -hmac 'whsec_sandboxSECRETsandboxSECRETsandboxSECRET000000000'\n```\n\nPHP:\n\n```php\n\
+    $computed = hash_hmac('sha256', $rawBody, $secret);          // $rawBody = file_get_contents('php://input')\n\
+    $valid    = hash_equals($computed, $signatureHeader);\n```\n\nNode.js:\n\n```js\nconst crypto = require('crypto');\n\
+    const computed = crypto.createHmac('sha256', secret).update(rawBody).digest('hex'); // rawBody: Buffer,\
+    \ pre-parse\nconst valid = crypto.timingSafeEqual(Buffer.from(computed), Buffer.from(signatureHeader));\n\
+    ```\n\nIf verification passes, parse the JSON and **deduplicate by the event `id`**\n(`evt_` + ULID)\
+    \ — delivery is at-least-once and may arrive out of order.\n`created_at` inside the signed body is\
+    \ the event's authoritative time; the\ntimestamp header is delivery telemetry only.\n\nAcknowledge\
+    \ with any `2xx` within **10 seconds**. Do the work after\nacknowledging, not before — a slow handler\
+    \ looks like a failure and triggers\na retry.\n\n---\n\n## Retry expectations\n\n\n**Your retries\
+    \ to us (writes):**\n\n1. Persist the sale + its `Idempotency-Key` locally *before* the first send.\n\
+    2. On network failure / timeout / any `5xx` / `429` / `idempotency_key_in_flight`:\n   retry with\
+    \ the **same key**, backing off (e.g. 1 s, 5 s, 30 s, then every\n   few minutes until connectivity\
+    \ returns). The replay mechanics make this\n   safe indefinitely.\n3. On any documented `4xx`: stop.\
+    \ It is terminal — surface it, fix it.\n4. Sales sent late still work (the rate is resolved at `occurred_at`,\
+    \ not at\n   receipt), but anything older than the validation window + 3 days lands in\n   manual\
+    \ review — drain your offline queue promptly.\n\n**Our retries to you (webhooks):** a delivery that\
+    \ does not get a `2xx`\nwithin 10 seconds is retried with backoff at ~1 min, 5 min, 30 min, 2 h,\n\
+    8 h and 24 h after the first attempt (6 retries over ~35 hours). Retried\ndeliveries carry the identical\
+    \ body and signature with a fresh\n`X-Manfaa-Timestamp`. After the final failure the event is parked\
+    \ and\nsurfaced to Manfaa operations — never silently dropped — but do not rely on\nthat: monitor\
+    \ your endpoint's availability.\n\n---\n\n## Go-live checklist\n\n\n- [ ] Production token held per\
+    \ merchant (from us, or from the merchant's own Settings › API access), stored server-side, never\
+    \ in a client bundle\n- [ ] Fresh UUID per sale, persisted before send; same key reused on retry\n\
+    - [ ] `occurred_at` is omitted (meaning now), carries an explicit offset, or is a plain Maldives wall\
+    \ clock — and the till clock is NTP-synced\n- [ ] `transaction.id` stored against the invoice for\
+    \ reversals\n- [ ] **Reversal sent for every refund/void/duplicate** (contractual — §4.2)\n- [ ] `below_minimum`\
+    \ / `recorded_ineligible` handled as recorded-no-cashback, not errors\n- [ ] `adjustment_created`\
+    \ handled as success, adjustment id recorded\n- [ ] Customer masked name confirmed at the till before\
+    \ crediting\n- [ ] Webhook signature verified over raw bytes, events deduped by `id`\n- [ ] Rate cache\
+    \ refreshed on `merchant.rate_changed`, advertising stopped on `merchant.suspended`\n\nQuestions:\
+    \ **integrations@manfaa.app**.\n"
   contact:
     name: Manfaa integrations
     email: integrations@manfaa.app
@@ -366,6 +459,27 @@ paths:
         errors.
 
 
+        The single exception is an **unusable `cashback_rate_percent`
+
+        override on a sale that would earn cashback**: a rate below the one
+
+        the sale would otherwise earn (`422 rate_below_advertised`) or one
+
+        the platform cannot price (`422 rate_not_priced`). Those are refused
+
+        rather than quietly ignored — the till asked for terms we will not
+
+        honour, and printing a different number on the customer''s receipt
+
+        would be worse than an error. Omit the field and the sale prices
+
+        exactly as it always has. On a sale that earns nothing either way
+
+        (suspended merchant, below minimum) the field is ignored rather than
+
+        refused, and the sale is recorded with its `200` body as usual.
+
+
         | HTTP | Meaning |
 
         |---|---|
@@ -383,8 +497,9 @@ paths:
 
         | `409` | `duplicate_invoice`. |
 
-        | `422` | Validation failure — including offsetless or future-dated `occurred_at`, unknown `customer_ref`,
-        missing or mismatched `Idempotency-Key`. |
+        | `422` | Validation failure — including a malformed or future-dated `occurred_at`, unknown `customer_ref`,
+        an unusable `cashback_rate_percent` override on an accruing sale, missing or mismatched `Idempotency-Key`.
+        |
 
 
         A merchant account that is **not trading** is refused
@@ -427,12 +542,46 @@ paths:
                   occurred_at: '2026-08-14T11:04:22+05:00'
                   branch_id: 3
               minimal:
-                summary: Only the required fields
+                summary: Only the required fields — occurred_at omitted, so the sale is recorded now
                 value:
                   invoice_no: INV-1002
                   customer_ref: '482917'
                   eligible_amount: 50000
-                  occurred_at: '2026-08-14T11:09:00+05:00'
+              wallClockTimestamp:
+                summary: Offsetless till clock, read as Maldives time (UTC+5)
+                description: '`2026-08-14 11:09:00` is the instant
+
+                  `2026-08-14T06:09:00Z`. A till that writes its own local
+
+                  clock needs no timezone maths.
+
+                  '
+                value:
+                  invoice_no: INV-1005
+                  customer_ref: '482917'
+                  eligible_amount: 50000
+                  occurred_at: '2026-08-14 11:09:00'
+              rateOverride:
+                summary: Per-sale rate override — 5% on this sale only
+                description: 'The merchant''s standing rate is 2.00%; this one sale is
+
+                  credited at 5.00%. The response freezes
+
+                  `cashback_rate_percent: "5.00"` with the matching fee tier
+
+                  `platform_fee_percent: "1.00"`, and the standing rate is
+
+                  unchanged. A value BELOW the rate the sale would otherwise
+
+                  earn is refused `rate_below_advertised`.
+
+                  '
+                value:
+                  invoice_no: INV-1006
+                  customer_ref: '482917'
+                  eligible_amount: 118000
+                  cashback_rate_percent: '5.00'
+                  occurred_at: '2026-08-14T11:04:22+05:00'
               phoneKeyed:
                 summary: Online store, keyed by customer phone (origin api_phone)
                 value:
@@ -490,8 +639,8 @@ paths:
                       currency: MVR
                       eligible_laari: 118000
                       sale_laari: 125000
-                      rate_bp: 200
-                      fee_bp: 75
+                      cashback_rate_percent: '2.00'
+                      platform_fee_percent: '0.75'
                       cashback_laari: 2360
                       cashback_mvr: '23.60'
                       fee_laari: 885
@@ -519,9 +668,13 @@ paths:
 
                     totals are the SUMS of the stored line integers:
 
-                    cashback 2,750, fee 638. The row-level `rate_bp: 500` /
+                    cashback 2,750, fee 638. The row-level
 
-                    `fee_bp: 100` are the standing-rate base snapshot.
+                    `cashback_rate_percent: "5.00"` /
+
+                    `platform_fee_percent: "1.00"` are the standing-rate
+
+                    base snapshot.
 
                     '
                   value:
@@ -536,8 +689,8 @@ paths:
                       currency: MVR
                       eligible_laari: 100000
                       sale_laari: null
-                      rate_bp: 500
-                      fee_bp: 100
+                      cashback_rate_percent: '5.00'
+                      platform_fee_percent: '1.00'
                       cashback_laari: 2750
                       cashback_mvr: '27.50'
                       fee_laari: 638
@@ -549,8 +702,8 @@ paths:
                       - category: fruits
                         category_name_en: Fruits
                         amount_laari: 30000
-                        effective_rate_bp: 0
-                        fee_bp: 0
+                        cashback_rate_percent: '0.00'
+                        platform_fee_percent: '0.00'
                         cashback_laari: 0
                         fee_laari: 0
                         priced_by: excluded
@@ -558,8 +711,8 @@ paths:
                       - category: veggies
                         category_name_en: Veggies
                         amount_laari: 25000
-                        effective_rate_bp: 200
-                        fee_bp: 75
+                        cashback_rate_percent: '2.00'
+                        platform_fee_percent: '0.75'
                         cashback_laari: 500
                         fee_laari: 188
                         priced_by: category
@@ -567,12 +720,47 @@ paths:
                       - category: null
                         category_name_en: null
                         amount_laari: 45000
-                        effective_rate_bp: 500
-                        fee_bp: 100
+                        cashback_rate_percent: '5.00'
+                        platform_fee_percent: '1.00'
                         cashback_laari: 2250
                         fee_laari: 450
                         priced_by: standing
                         sort: 2
+                overridden:
+                  summary: Per-sale override applied — 5.00% frozen on the row
+                  description: 'Standing 2.00%, override "5.00" on this sale. Worked
+
+                    integers: cashback ceil(118,000 × 500 / 10,000) = 5,900;
+
+                    the fee follows the APPLIED rate into the 5.00%–20.00%
+
+                    band (1.00%), so ceil(118,000 × 100 / 10,000) = 1,180.
+
+                    The merchant''s standing rate is untouched.
+
+                    '
+                  value:
+                    status: created
+                    reason: null
+                    transaction:
+                      id: 84526
+                      origin: pos
+                      invoice_no: INV-1006
+                      state: awaiting_validation
+                      reason_code: null
+                      backdated: false
+                      currency: MVR
+                      eligible_laari: 118000
+                      sale_laari: null
+                      cashback_rate_percent: '5.00'
+                      platform_fee_percent: '1.00'
+                      cashback_laari: 5900
+                      cashback_mvr: '59.00'
+                      fee_laari: 1180
+                      fee_mvr: '11.80'
+                      fee_gst_laari: 0
+                      occurred_at: '2026-08-14T06:04:22+00:00'
+                      received_at: '2026-08-14T06:04:23+00:00'
                 backdated:
                   summary: Backdated sale — payable immediately, irreversible
                   value:
@@ -588,8 +776,8 @@ paths:
                       currency: MVR
                       eligible_laari: 50000
                       sale_laari: null
-                      rate_bp: 200
-                      fee_bp: 75
+                      cashback_rate_percent: '2.00'
+                      platform_fee_percent: '0.75'
                       cashback_laari: 1000
                       cashback_mvr: '10.00'
                       fee_laari: 375
@@ -631,8 +819,8 @@ paths:
                       currency: MVR
                       eligible_laari: 118000
                       sale_laari: 125000
-                      rate_bp: 200
-                      fee_bp: 75
+                      cashback_rate_percent: '2.00'
+                      platform_fee_percent: '0.75'
                       cashback_laari: 2360
                       cashback_mvr: '23.60'
                       fee_laari: 885
@@ -654,8 +842,8 @@ paths:
                       currency: MVR
                       eligible_laari: 200000
                       sale_laari: null
-                      rate_bp: 200
-                      fee_bp: 75
+                      cashback_rate_percent: '2.00'
+                      platform_fee_percent: '0.75'
                       cashback_laari: 0
                       cashback_mvr: '0.00'
                       fee_laari: 0
@@ -677,8 +865,8 @@ paths:
                       currency: MVR
                       eligible_laari: 3500
                       sale_laari: 3500
-                      rate_bp: 200
-                      fee_bp: 75
+                      cashback_rate_percent: '2.00'
+                      platform_fee_percent: '0.75'
                       cashback_laari: 0
                       cashback_mvr: '0.00'
                       fee_laari: 0
@@ -727,17 +915,29 @@ paths:
 
             Codes: `validation_failed` (shape errors — missing fields,
 
-            non-integer amounts, **offsetless `occurred_at`**, unknown
+            non-integer amounts, an `occurred_at` that is neither ISO 8601
 
-            `branch_id`), `future_dated` (`occurred_at` beyond the 5-minute
+            nor a plain wall clock, a `cashback_rate_percent` with more
 
-            skew allowance), `customer_not_found` (unknown `customer_ref` —
+            than two decimals, unknown `branch_id`), `future_dated`
 
-            confirm the code with the customer via
+            (`occurred_at` beyond the 5-minute skew allowance),
 
-            `GET /v1/customers/lookup`), `no_effective_rate` (merchant has no
+            `customer_not_found` (unknown `customer_ref` — confirm the code
 
-            rate effective at `occurred_at` — contact the platform),
+            with the customer via `GET /v1/customers/lookup`),
+
+            `no_effective_rate` (merchant has no rate effective at
+
+            `occurred_at` — contact the platform),
+
+            `rate_below_advertised` (the `cashback_rate_percent` override is
+
+            below the rate the sale already earns — an override may only
+
+            raise it), `rate_not_priced` (the override is above the ceiling
+
+            the platform''s fee schedule prices),
 
             `idempotency_key_required` (the write arrived without the
 
@@ -775,15 +975,33 @@ paths:
                     error:
                       code: idempotency_key_reuse_mismatch
                       message: This Idempotency-Key was already used with a different request body.
-                offsetlessOccurredAt:
-                  summary: occurred_at without a UTC offset
+                malformedOccurredAt:
+                  summary: occurred_at in a shape the API does not accept
+                  description: 'An offsetless wall clock (`2026-08-14 11:04:22`) is NOT
+
+                    an error — it is read as Maldives time. This is a
+
+                    genuinely unparseable value.
+
+                    '
                   value:
                     error:
                       code: validation_failed
                       message: The given data was invalid.
                       errors:
                         occurred_at:
-                        - The occurred_at field must be an ISO 8601 timestamp with an explicit UTC offset.
+                        - The occurred_at field must be ISO 8601 with an offset, or "YYYY-MM-DD HH:MM:SS"
+                          in Maldives time.
+                overPreciseRate:
+                  summary: cashback_rate_percent with more than 2 decimals
+                  value:
+                    error:
+                      code: validation_failed
+                      message: The given data was invalid.
+                      errors:
+                        cashback_rate_percent:
+                        - The cashback rate percent must be a percent between 0.50 and 20.00 with at most
+                          2 decimal places, for example "0.50".
                 floatAmount:
                   summary: Fractional eligible_amount
                   value:
@@ -803,6 +1021,34 @@ paths:
                     error:
                       code: customer_not_found
                       message: No customer matches ref "482917".
+                rateBelowAdvertised:
+                  summary: Override below the rate the sale already earns
+                  description: 'Standing 2.00%, override "1.50": refused. The advertised
+
+                    rate is a promise to the customer, so an override may
+
+                    only boost. `meta` carries the rate that applies, so the
+
+                    till can retry at or above it (with a fresh
+
+                    `Idempotency-Key`) or simply drop the field.
+
+                    '
+                  value:
+                    error:
+                      code: rate_below_advertised
+                      message: cashback_rate_percent 1.50% is below the 2.00% this sale already earns
+                        — an override may only raise the advertised rate.
+                      meta:
+                        advertised_cashback_rate_percent: '2.00'
+                rateNotPriced:
+                  summary: Override above the platform's priced ceiling
+                  value:
+                    error:
+                      code: rate_not_priced
+                      message: The current fee schedule prices rates up to 10.00%.
+                      meta:
+                        ceiling_percent: '10.00'
                 linesSumMismatch:
                   summary: Line amounts do not sum to eligible_amount
                   value:
@@ -889,8 +1135,8 @@ paths:
                       currency: MVR
                       eligible_laari: 118000
                       sale_laari: 125000
-                      rate_bp: 200
-                      fee_bp: 75
+                      cashback_rate_percent: '2.00'
+                      platform_fee_percent: '0.75'
                       cashback_laari: 2360
                       cashback_mvr: '23.60'
                       fee_laari: 885
@@ -920,8 +1166,8 @@ paths:
                       currency: MVR
                       eligible_laari: 118000
                       sale_laari: 125000
-                      rate_bp: 200
-                      fee_bp: 75
+                      cashback_rate_percent: '2.00'
+                      platform_fee_percent: '0.75'
                       cashback_laari: 2360
                       cashback_mvr: '23.60'
                       fee_laari: 885
@@ -951,8 +1197,8 @@ paths:
                       currency: MVR
                       eligible_laari: 100000
                       sale_laari: null
-                      rate_bp: 200
-                      fee_bp: 75
+                      cashback_rate_percent: '2.00'
+                      platform_fee_percent: '0.75'
                       cashback_laari: 2000
                       cashback_mvr: '20.00'
                       fee_laari: 750
@@ -1011,7 +1257,8 @@ paths:
                       meta:
                         state: payable_unfunded
         '422':
-          description: '`validation_failed` — missing `reason`, or offsetless / future-dated `occurred_at`.'
+          description: '`validation_failed` — missing `reason`, or an unparseable `occurred_at`; `future_dated`
+            when the reversal instant is in the future.'
           content:
             application/json:
               schema:
@@ -1063,22 +1310,45 @@ paths:
                 steady:
                   summary: No pending change
                   value:
-                    rate_bp: 200
-                    fee_bp: 75
+                    cashback_rate_percent: '2.00'
+                    platform_fee_percent: '0.75'
                     currency: MVR
                     min_eligible_laari: 5000
                     pending_decrease: null
                 decreaseScheduled:
                   summary: Decrease scheduled for midnight UTC+5
                   value:
-                    rate_bp: 200
-                    fee_bp: 75
+                    cashback_rate_percent: '2.00'
+                    platform_fee_percent: '0.75'
                     currency: MVR
                     min_eligible_laari: 5000
                     pending_decrease:
-                      rate_bp: 150
-                      fee_bp: 50
+                      cashback_rate_percent: '1.50'
+                      platform_fee_percent: '0.50'
                       effective_at: '2026-08-15T00:00:00+05:00'
+                livePromotion:
+                  summary: A live promotion boosting the standing rate
+                  description: '`active_promotion` appears ONLY while a published
+
+                    promotion is live and its rate beats the standing rate.
+
+                    Display it as the offer; the server still resolves
+
+                    authoritatively at `occurred_at`.
+
+                    '
+                  value:
+                    cashback_rate_percent: '2.00'
+                    platform_fee_percent: '0.75'
+                    currency: MVR
+                    min_eligible_laari: 5000
+                    pending_decrease: null
+                    active_promotion:
+                      cashback_rate_percent: '5.00'
+                      platform_fee_percent: '1.00'
+                      branch_id: null
+                      min_purchase_laari: 10000
+                      ends_at: '2026-08-20T00:00:00+05:00'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -1111,7 +1381,7 @@ paths:
 
         earn nothing (even during promotions); `mode: rate` lines earn
 
-        `rate_bp` instead of the standing rate. Amounts in no listed
+        their `cashback_rate_percent` instead of the standing rate. Amounts in no listed
 
         category belong on the default line (`category: null`), which earns
 
@@ -1149,12 +1419,12 @@ paths:
                       name_en: Fruits
                       name_dv: މޭވާ
                       mode: excluded
-                      rate_bp: null
+                      cashback_rate_percent: null
                     - category: veggies
                       name_en: Veggies
                       name_dv: ތަރުކާރީ
                       mode: rate
-                      rate_bp: 200
+                      cashback_rate_percent: '2.00'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -1330,10 +1600,10 @@ webhooks:
                   created_at: '2026-08-14T16:05:11+05:00'
                   data:
                     merchant_id: 12
-                    rate_bp: 150
-                    fee_bp: 50
-                    previous_rate_bp: 200
-                    previous_fee_bp: 75
+                    cashback_rate_percent: '1.50'
+                    platform_fee_percent: '0.50'
+                    previous_cashback_rate_percent: '2.00'
+                    previous_platform_fee_percent: '0.75'
                     effective_at: '2026-08-15T00:00:00+05:00'
       responses:
         '200':
@@ -1734,6 +2004,11 @@ components:
 
         | `no_effective_rate` | error | 422 | No — contact the platform |
 
+        | `rate_below_advertised` | error | 422 | Never with that value — an override may only raise the
+        advertised rate |
+
+        | `rate_not_priced` | error | 422 | No — the platform prices no fee for that rate |
+
         | `unknown_category` | error | 422 | Refresh the category list; fix the slug; fresh key |
 
         | `inactive_category` | error | 422 | Refresh the category list; resubmit; fresh key |
@@ -1781,6 +2056,8 @@ components:
       - future_dated
       - customer_not_found
       - no_effective_rate
+      - rate_below_advertised
+      - rate_not_priced
       - unknown_category
       - inactive_category
       - duplicate_category_line
@@ -1842,6 +2119,50 @@ components:
       type: integer
       format: int64
       description: An integer count of laari (1/100 MVR). Never fractional, never a float.
+    PercentString:
+      type: string
+      pattern: ^\d{1,2}\.\d{2}$
+      description: 'A rate, as a 2-decimal percent STRING — `"2.00"`, `"0.75"`,
+
+        `"12.50"`. Every rate on this API is quoted this way, the same
+
+        idiom `cashback_mvr` uses for money: exact digits, no float, no
+
+        locale. Internally the platform stores and computes rates as
+
+        integer basis points, but **basis points never appear on the
+
+        wire** — do not expect a `rate_bp` or `fee_bp` field anywhere.
+
+
+        Read one by splitting on the decimal point (or with a decimal
+
+        type). Never parse it into a binary float and multiply.
+
+        '
+      examples:
+      - '2.00'
+      - '0.75'
+      - '12.50'
+    PercentInput:
+      description: 'A rate on the way IN: a 2-decimal percent, sent either as a string
+
+        (`"2"`, `"2.5"`, `"2.50"`) or as a JSON number (`2`, `2.5`). At
+
+        most two decimal places — `"2.555"` is `validation_failed`, as are
+
+        negatives and non-numeric values. Sending a string is recommended:
+
+        it cannot be mangled by a JSON library''s float handling.
+
+        '
+      oneOf:
+      - type: string
+        pattern: ^\d{1,2}(\.\d{1,2})?$
+      - type: number
+      examples:
+      - '2.50'
+      - 2.5
     MvrString:
       type: string
       pattern: ^-?\d{1,3}(,\d{3})*\.\d{2}$
@@ -1899,7 +2220,6 @@ components:
       - invoice_no
       - customer_ref
       - eligible_amount
-      - occurred_at
       properties:
         invoice_no:
           type: string
@@ -1966,20 +2286,39 @@ components:
             '
         occurred_at:
           type: string
-          format: date-time
-          description: 'When the sale happened at the till. ISO 8601 **with an explicit
-
-            UTC offset** (`Z` counts). Offsetless values are rejected
-
-            `validation_failed`; future-dated values (beyond 5 minutes of
-
-            skew) are rejected `future_dated`. The rate applied is the one
-
-            effective at this instant.
-
-            '
+          description: "When the sale happened at the till. **Optional — omit it and\nthe platform uses\
+            \ NOW**, which is what a till posting a sale as\nit rings it up means anyway.\n\nTwo accepted\
+            \ shapes:\n\n- **ISO 8601 with an explicit offset** —\n  `2026-08-14T11:04:22+05:00`, `2026-08-14T06:04:22Z`,\
+            \ or\n  `2026-08-14T11:04:22+0500`. Read exactly as sent.\n- **A plain wall clock with NO\
+            \ offset** —\n  `2026-08-14 11:04:22` or `2026-08-14T11:04:22` — read as\n  **Maldives time\
+            \ (UTC+5)**, the only sensible reading of a\n  clock on a Maldivian till. `2026-08-14 11:04:22`\
+            \ is therefore\n  the instant `2026-08-14T06:04:22Z`.\n\nAnything else (a date without a time,\
+            \ `15/08/2026`, seconds\nomitted) is `422 validation_failed`. Future-dated values beyond\n\
+            5 minutes of clock skew are `422 future_dated`. The rate\napplied is the one effective at\
+            \ this instant.\n"
           examples:
           - '2026-08-14T11:04:22+05:00'
+          - '2026-08-14 11:04:22'
+        cashback_rate_percent:
+          allOf:
+          - $ref: '#/components/schemas/PercentInput'
+          description: "**Optional per-sale rate override** — a rate for THIS SALE\nonly, e.g. a staff\
+            \ discount day or a one-off goodwill boost.\nThe merchant's standing rate is untouched, and\
+            \ the rate that\nactually applied is frozen on the transaction as always\n(`transaction.cashback_rate_percent`),\
+            \ with the platform fee\nfollowing the APPLIED rate into its §4 tier.\n\nTwo rules, both refusals\
+            \ rather than silent adjustments:\n\n- it may only **raise** the rate the sale would otherwise\
+            \ earn\n  — the standing rate, or a live promotion covering this sale.\n  A lower value is\
+            \ `422 rate_below_advertised`, with the\n  advertised rate in\n  `error.meta.advertised_cashback_rate_percent`.\
+            \ The advertised\n  rate is a public promise to the customer;\n- it must be priced by the\
+            \ platform's active fee schedule. A\n  rate above its ceiling is `422 rate_not_priced`, with\
+            \ the\n  ceiling in `error.meta.ceiling_percent`.\n\nWith `lines`, the override becomes the\
+            \ rate of every line that\nwould otherwise price at the standing rate (the `category:\nnull`\
+            \ bucket). Category overrides and exclusions are untouched,\nand a live promotion still lifts\
+            \ any line it would pay more on\n— no line ever earns less than it would have without the\n\
+            override.\n"
+          examples:
+          - '5.00'
+          - 5
         branch_id:
           type:
           - integer
@@ -2004,7 +2343,8 @@ components:
             \ slugs are `422 unknown_category`;\n  deactivated ones are `422 inactive_category`.\n\nPricing\
             \ per line (§4 ceiling rounding per line, then summed —\ntotals are the sum of the stored\
             \ line integers): `excluded`\ncategories earn 0 (even during promotions); `rate` categories\n\
-            earn their own `rate_bp`; the default line earns the standing\nrate. A live promotion covering\
+            earn their own `cashback_rate_percent`; the default line earns\nthe standing rate — or the\
+            \ per-sale `cashback_rate_percent`\noverride, when one is sent. A live promotion covering\
             \ the sale (its minimum purchase\nis judged against the WHOLE `eligible_amount`) lifts every\n\
             non-excluded line to max(promotion rate, the line's own rate);\nper-customer promotion caps\
             \ clip only the promotion-priced\nlines, in submitted order. The response echoes the priced\n\
@@ -2028,9 +2368,9 @@ components:
       type: object
       description: 'One merchant product category as listed to vendors. `category` is
 
-        the exact `lines[].category` value. `rate_bp` is null exactly when
+        the exact `lines[].category` value. `cashback_rate_percent` is null
 
-        `mode` is `excluded`.
+        exactly when `mode` is `excluded`.
 
         '
       required:
@@ -2038,7 +2378,7 @@ components:
       - name_en
       - name_dv
       - mode
-      - rate_bp
+      - cashback_rate_percent
       properties:
         category:
           type: string
@@ -2054,11 +2394,12 @@ components:
           enum:
           - excluded
           - rate
-        rate_bp:
-          type:
-          - integer
-          - 'null'
-          description: The override cashback rate in basis points; null for excluded categories.
+        cashback_rate_percent:
+          oneOf:
+          - $ref: '#/components/schemas/PercentString'
+          - type: 'null'
+          description: The category's override cashback rate as a 2-decimal percent string; null for excluded
+            categories.
     TransactionLine:
       type: object
       description: 'One priced line of a lined transaction — an immutable snapshot of
@@ -2082,8 +2423,8 @@ components:
       - category
       - category_name_en
       - amount_laari
-      - effective_rate_bp
-      - fee_bp
+      - cashback_rate_percent
+      - platform_fee_percent
       - cashback_laari
       - fee_laari
       - priced_by
@@ -2100,12 +2441,15 @@ components:
           - 'null'
         amount_laari:
           $ref: '#/components/schemas/LaariAmount'
-        effective_rate_bp:
-          type: integer
-          description: The rate this line actually earned, in basis points (0 for excluded lines).
-        fee_bp:
-          type: integer
-          description: The platform fee tier for the line's effective rate (0 for excluded lines).
+        cashback_rate_percent:
+          allOf:
+          - $ref: '#/components/schemas/PercentString'
+          description: The rate this LINE actually earned, as a 2-decimal percent string (`"0.00"` for
+            an excluded line).
+        platform_fee_percent:
+          allOf:
+          - $ref: '#/components/schemas/PercentString'
+          description: The platform fee tier that followed the line's rate (`"0.00"` for an excluded line).
         cashback_laari:
           $ref: '#/components/schemas/LaariAmount'
         fee_laari:
@@ -2124,15 +2468,21 @@ components:
       type: object
       description: 'The transaction resource. Amounts are laari integers with paired
 
-        `*_mvr` presentation strings. `rate_bp`/`fee_bp` are the basis
+        `*_mvr` presentation strings; rates are 2-decimal percent strings
 
-        points frozen at `occurred_at` — they never change afterwards, even
+        (`PercentString`) — basis points never appear on the wire.
 
-        if the merchant''s rate does. On zero-cashback outcomes
+        `cashback_rate_percent` / `platform_fee_percent` are the terms
 
-        (`below_minimum`, `merchant_suspended`) the frozen rate is still
+        FROZEN at `occurred_at`: they never change afterwards, even if the
 
-        present: the row evidences the terms the sale met.
+        merchant''s rate does, and a per-sale `cashback_rate_percent`
+
+        override is frozen here exactly the same way. On zero-cashback
+
+        outcomes (`below_minimum`, `merchant_suspended`) the frozen rate is
+
+        still present: the row evidences the terms the sale met.
 
         '
       required:
@@ -2144,8 +2494,8 @@ components:
       - currency
       - eligible_laari
       - sale_laari
-      - rate_bp
-      - fee_bp
+      - cashback_rate_percent
+      - platform_fee_percent
       - cashback_laari
       - cashback_mvr
       - fee_laari
@@ -2212,16 +2562,22 @@ components:
           - 'null'
           format: int64
           description: The reference-only sale total, if supplied.
-        rate_bp:
-          type: integer
-          minimum: 50
-          maximum: 1000
-          description: Cashback rate in basis points, frozen at `occurred_at`.
-        fee_bp:
-          type: integer
-          minimum: 25
-          maximum: 100
-          description: Platform fee in basis points, tiered on `rate_bp`, frozen at `occurred_at`.
+        cashback_rate_percent:
+          allOf:
+          - $ref: '#/components/schemas/PercentString'
+          description: 'The cashback rate this sale was priced at, frozen at
+
+            `occurred_at` — the standing rate, a live promotion''s rate, or
+
+            the per-sale `cashback_rate_percent` override, whichever
+
+            applied.
+
+            '
+        platform_fee_percent:
+          allOf:
+          - $ref: '#/components/schemas/PercentString'
+          description: The platform fee, tiered on the APPLIED cashback rate and frozen with it.
         cashback_laari:
           $ref: '#/components/schemas/LaariAmount'
         cashback_mvr:
@@ -2246,13 +2602,17 @@ components:
 
             priced lines, in submitted order. Absent — not empty — on
 
-            single-rate transactions. When present, `rate_bp`/`fee_bp` on
+            single-rate transactions. When present,
 
-            the transaction are the standing-rate base snapshot; the
+            `cashback_rate_percent` / `platform_fee_percent` on the
 
-            per-line truth is here, and `cashback_laari`/`fee_laari` are
+            transaction are the BASE-rate snapshot (the standing rate, or
 
-            the sums of these line integers.
+            the per-sale override when one was sent); the per-line truth is
+
+            here, and `cashback_laari`/`fee_laari` are the sums of these
+
+            line integers.
 
             '
           items:
@@ -2298,7 +2658,6 @@ components:
       type: object
       required:
       - reason
-      - occurred_at
       properties:
         reason:
           type: string
@@ -2311,11 +2670,16 @@ components:
           - other
         occurred_at:
           type: string
-          format: date-time
-          description: When the refund/void happened at the till. ISO 8601 with explicit UTC offset, same
-            rules as on creation.
+          description: 'When the refund/void happened at the till. **Optional — omit it
+
+            for now.** Same two shapes as on creation: ISO 8601 with an
+
+            offset, or a plain wall clock read as Maldives time.
+
+            '
           examples:
           - '2026-08-15T09:30:00+05:00'
+          - '2026-08-15 09:30:00'
     ReverseResult:
       type: object
       description: 'Envelope for `POST /v1/transactions/{id}/reverse`. `outcome`
@@ -2415,22 +2779,20 @@ components:
       description: The merchant's current standing rate, for the till display. Advisory — the server recomputes
         authoritatively at `occurred_at`.
       required:
-      - rate_bp
-      - fee_bp
+      - cashback_rate_percent
+      - platform_fee_percent
       - currency
       - min_eligible_laari
       - pending_decrease
       properties:
-        rate_bp:
-          type: integer
-          minimum: 50
-          maximum: 1000
-          description: Current customer cashback rate, basis points.
-        fee_bp:
-          type: integer
-          minimum: 25
-          maximum: 100
-          description: Current platform fee, basis points (tiered on `rate_bp`).
+        cashback_rate_percent:
+          allOf:
+          - $ref: '#/components/schemas/PercentString'
+          description: Current customer cashback rate, as a 2-decimal percent string.
+        platform_fee_percent:
+          allOf:
+          - $ref: '#/components/schemas/PercentString'
+          description: Current platform fee, tiered on the cashback rate.
         currency:
           type: string
           const: MVR
@@ -2444,25 +2806,68 @@ components:
           - type: 'null'
           description: The scheduled decrease taking effect at 00:00 UTC+5, if one exists. Increases apply
             immediately and never appear here.
+        active_promotion:
+          allOf:
+          - $ref: '#/components/schemas/ActivePromotion'
+          description: 'Present ONLY while a published promotion is live AND genuinely
+
+            boosting (its rate above the standing rate) — the field is
+
+            absent otherwise, so the base contract stays byte-stable for
+
+            tills that predate promotions.
+
+            '
     PendingRateDecrease:
       type: object
       required:
-      - rate_bp
-      - fee_bp
+      - cashback_rate_percent
+      - platform_fee_percent
       - effective_at
       properties:
-        rate_bp:
-          type: integer
-          minimum: 50
-          maximum: 1000
-        fee_bp:
-          type: integer
-          minimum: 25
-          maximum: 100
+        cashback_rate_percent:
+          $ref: '#/components/schemas/PercentString'
+        platform_fee_percent:
+          $ref: '#/components/schemas/PercentString'
         effective_at:
           type: string
           format: date-time
           description: Always 00:00 UTC+5 on a following day.
+    ActivePromotion:
+      type: object
+      description: 'A live promotion boosting the merchant''s rate right now. Advisory,
+
+        exactly like the standing rate: the till applies `branch_id` and
+
+        `min_purchase_laari` for DISPLAY, and the server re-resolves
+
+        authoritatively at `occurred_at`.
+
+        '
+      required:
+      - cashback_rate_percent
+      - platform_fee_percent
+      - branch_id
+      - min_purchase_laari
+      - ends_at
+      properties:
+        cashback_rate_percent:
+          $ref: '#/components/schemas/PercentString'
+        platform_fee_percent:
+          $ref: '#/components/schemas/PercentString'
+        branch_id:
+          type:
+          - integer
+          - 'null'
+          format: int64
+          description: The branch the promotion is scoped to; null means every branch.
+        min_purchase_laari:
+          allOf:
+          - $ref: '#/components/schemas/LaariAmount'
+          description: Minimum eligible amount for the promotion to apply; `0` when there is none.
+        ends_at:
+          type: string
+          format: date-time
     CustomerLookupResult:
       type: object
       required:
@@ -2557,31 +2962,32 @@ components:
       type: object
       required:
       - merchant_id
-      - rate_bp
-      - fee_bp
-      - previous_rate_bp
-      - previous_fee_bp
+      - cashback_rate_percent
+      - platform_fee_percent
+      - previous_cashback_rate_percent
+      - previous_platform_fee_percent
       - effective_at
       properties:
         merchant_id:
           type: integer
           format: int64
-        rate_bp:
-          type: integer
-          minimum: 50
-          maximum: 1000
-        fee_bp:
-          type: integer
-          minimum: 25
-          maximum: 100
-        previous_rate_bp:
-          type: integer
-          minimum: 50
-          maximum: 1000
-        previous_fee_bp:
-          type: integer
-          minimum: 25
-          maximum: 100
+        cashback_rate_percent:
+          $ref: '#/components/schemas/PercentString'
+        platform_fee_percent:
+          $ref: '#/components/schemas/PercentString'
+        previous_cashback_rate_percent:
+          $ref: '#/components/schemas/PercentString'
+        previous_platform_fee_percent:
+          oneOf:
+          - $ref: '#/components/schemas/PercentString'
+          - type: 'null'
+          description: 'The fee the outgoing rate was billed at. Null in the rare case
+
+            where the outgoing rate was not priced by the fee schedule in
+
+            force at `effective_at` (a legacy rate being rescued).
+
+            '
         effective_at:
           type: string
           format: date-time

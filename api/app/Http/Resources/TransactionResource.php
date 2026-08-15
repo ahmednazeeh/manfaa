@@ -2,11 +2,15 @@
 
 namespace App\Http\Resources;
 
+use App\Domain\Money\Percent;
 use App\Models\Transaction;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
 /**
+ * The merchant panel's transaction shape. Rates are 2-decimal percent
+ * strings (PLAN §1 wire format) computed from the frozen basis points.
+ *
  * @mixin Transaction
  */
 class TransactionResource extends JsonResource
@@ -28,8 +32,8 @@ class TransactionResource extends JsonResource
             'currency' => $this->currency,
             'eligible_laari' => $this->eligible_laari,
             'sale_laari' => $this->sale_laari,
-            'rate_bp' => $this->rate_bp,
-            'fee_bp' => $this->fee_bp,
+            'cashback_rate_percent' => Percent::format($this->rate_bp),
+            'platform_fee_percent' => Percent::format($this->fee_bp),
             'cashback_laari' => $this->cashback_laari,
             'fee_laari' => $this->fee_laari,
             'fee_gst_laari' => $this->fee_gst_laari,

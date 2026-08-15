@@ -1,10 +1,13 @@
 import { z } from 'zod';
-import { apiFetch } from './client';
+import { ApiError, apiFetch } from './client';
 import {
+  CashbackPercentInputSchema,
   dataWrapped,
   MerchantChannelSchema,
   MerchantStatusSchema,
   paginated,
+  PercentDeltaSchema,
+  PercentSchema,
   ProductCategoryModeSchema,
   PromotionSchema,
   PromotionStatusSchema,
@@ -267,15 +270,18 @@ export type SettlementPickerBuckets = z.infer<
  * one more sale between preview and submit legitimately withdraws it. Never
  * send this back; there is no field for it on the submission.
  *
- * `discount_laari` is 5% (`rate_bp`) of the FEE total, ceiling, and the
+ * `discount_laari` is 5% (`rate_percent`) of the FEE total, ceiling, and the
  * customer's cashback is never reduced. `reason_code` is set on refusals
  * too, so the panel can say what settling everything today would save.
  */
 export const SettlementPreviewDiscountSchema = z.object({
   eligible: z.boolean(),
   reason_code: PromptDiscountReasonSchema,
-  /** The platform's configured rate, reported even when nothing was granted. */
-  rate_bp: z.number().int(),
+  /**
+   * The platform's configured rate as a 2-decimal percent string ("5.00"),
+   * reported even when nothing was granted.
+   */
+  rate_percent: PercentSchema,
   /** How young every line must be, in whole days, to qualify. */
   max_age_days: z.number().int(),
   discount_laari: z.number().int(),
@@ -518,8 +524,33 @@ export const CreateCreditRequestSchema = z.object({
   eligible_amount: z.number().int().min(0),
   /** Integer laari; must be >= eligible_amount when given. */
   sale_amount: z.number().int().optional(),
-  /** ISO 8601 with an explicit UTC offset, e.g. "2026-08-14T10:30:00+05:00". */
-  occurred_at: z.string(),
+  /**
+   * OPTIONAL (PLAN §1, decision 2026-08-15) — omit it and the sale is
+   * recorded as happening NOW, which is what a till ringing it up means.
+   * Two accepted shapes: ISO 8601 WITH an offset
+   * ("2026-08-15T13:45:00+05:00", "…Z", "…+0500"), or a plain wall clock
+   * with NO offset ("2026-08-15 13:45:00" / "2026-08-15T13:45:00"), which
+   * is read as MALDIVES time (Indian/Maldives) rather than refused. Any
+   * other shape is a 422 field error; future-dated is still refused, and
+   * the backdated rule is unchanged.
+   */
+  occurred_at: z.string().optional(),
+  /**
+   * PER-SALE RATE OVERRIDE (PLAN §1, decision 2026-08-15) — a 2-decimal
+   * percent applying to THIS sale only ("2.5", "3", or the JSON number
+   * 2.5). It may only ever RAISE what the sale would otherwise earn: below
+   * the standing rate, or below a live promotion covering the sale, the
+   * credit is refused 422 `rate_below_advertised` (the advertised rate is a
+   * public promise). Above the active fee tier schedule's ceiling it is
+   * refused 422 `rate_not_priced`. The applied rate is frozen on the row as
+   * always, and the fee tier follows it.
+   *
+   * With `lines`, the override becomes the rate for every line that would
+   * otherwise price at the standing rate; category overrides and exclusions
+   * are untouched, and the per-line promotion floor still holds — no line
+   * ever earns less than it would have without the override.
+   */
+  cashback_rate_percent: CashbackPercentInputSchema.optional(),
   /**
    * Optional line-item split. When present, SUM(amount_laari) must equal
    * eligible_amount (422 `lines_sum_mismatch`) and each line prices at its
@@ -536,14 +567,59 @@ export const CreateCreditResponseSchema = dataWrapped(TransactionSchema);
 export type CreateCreditResponse = z.infer<typeof CreateCreditResponseSchema>;
 
 /**
+ * The 422 `code`s a manual credit can be refused with, all readable via
+ * `apiErrorCode`:
+ *
+ *  - `rate_below_advertised` — the `cashback_rate_percent` override is below
+ *    the rate the sale already earns (standing, or a live promotion). The
+ *    body also carries `advertised_cashback_rate_percent`, the floor it had
+ *    to clear — read it with `advertisedRatePercent(error)`.
+ *  - `rate_not_priced` — the override is above the active fee tier
+ *    schedule's ceiling, so the platform prices no fee for it.
+ *  - `lines_sum_mismatch` / `unknown_category` / `inactive_category` /
+ *    `duplicate_category_line` — the line-split rules (Task #25).
+ */
+export const CREDIT_REFUSAL_CODES = [
+  'rate_below_advertised',
+  'rate_not_priced',
+  'lines_sum_mismatch',
+  'unknown_category',
+  'inactive_category',
+  'duplicate_category_line',
+] as const;
+export const CreditRefusalCodeSchema = z.enum(CREDIT_REFUSAL_CODES);
+export type CreditRefusalCode = (typeof CREDIT_REFUSAL_CODES)[number];
+
+/**
+ * The rate a `rate_below_advertised` refusal says the sale already earns, as
+ * the 2-decimal percent string the API sent ("2.00") — so the form can say
+ * "this sale already earns 2.00%" instead of a bare error. Null for any
+ * other failure.
+ */
+export function advertisedRatePercent(error: unknown): string | null {
+  if (!(error instanceof ApiError) || typeof error.body !== 'object') {
+    return null;
+  }
+  const advertised = (
+    error.body as { advertised_cashback_rate_percent?: unknown } | null
+  )?.advertised_cashback_rate_percent;
+  return typeof advertised === 'string' ? advertised : null;
+}
+
+/**
  * POST /api/merchant/credits — records a manual credit (201).
+ *
+ * `occurred_at` is OPTIONAL (PLAN §1): omit it for a sale happening now.
+ * `cashback_rate_percent` is the optional per-sale override, which may only
+ * raise the advertised rate (see CREDIT_REFUSAL_CODES).
  *
  * BACKDATED (PLAN §1): when `occurred_at` is older than the merchant's
  * validation window plus the grace days, the credit skips on_hold entirely —
  * it is payable immediately and the merchant can NEVER reverse it (admin
  * adjustment only). The response carries `backdated: true`. Warn before
  * submit with `isBackdatedOccurrence(occurred_at, validation_window_days)`,
- * which mirrors the server rule; afterwards there is nothing to undo.
+ * which mirrors the server rule; afterwards there is nothing to undo. A
+ * credit posted without `occurred_at` happens now and is never backdated.
  */
 export function createMerchantCredit(
   body: CreateCreditRequest,
@@ -564,8 +640,9 @@ export function createMerchantCredit(
  * One per-store product category. The `slug` is generated from `name_en` at
  * creation and is IMMUTABLE — it is the `lines[].category` key vendors and
  * the credit form submit, and transaction lines snapshot it; renames never
- * touch it. Mode/rate changes reprice FUTURE credits only. `rate_bp` is set
- * exactly when `mode` is `'rate'`, null when `'excluded'`.
+ * touch it. Mode/rate changes reprice FUTURE credits only.
+ * `cashback_rate_percent` is set exactly when `mode` is `'rate'`, null when
+ * `'excluded'`.
  */
 export const ProductCategorySchema = z.object({
   id: z.number().int(),
@@ -573,8 +650,8 @@ export const ProductCategorySchema = z.object({
   name_en: z.string(),
   name_dv: z.string().nullable(),
   mode: ProductCategoryModeSchema,
-  /** Integer basis points; null exactly when mode is "excluded". */
-  rate_bp: z.number().int().nullable(),
+  /** 2-decimal percent string; null exactly when mode is "excluded". */
+  cashback_rate_percent: PercentSchema.nullable(),
   active: z.boolean(),
   sort: z.number().int(),
   created_at: z.string().nullable(),
@@ -603,15 +680,16 @@ const productCategoryRequestBase = z.object({
 /**
  * The mode/rate pair is coherent by construction: an exclusion never
  * carries a rate, a rate override always does. Rates follow the standing-
- * rate sellability law — 50–2000 bp structurally, and rates the active fee
- * tier schedule does not price are refused server-side with a 422
- * `code: rate_not_priced`.
+ * rate sellability law — 0.50%–20.00% structurally, and rates the active
+ * fee tier schedule does not price are refused server-side with a 422
+ * `code: rate_not_priced`. The rate travels as a 2-decimal percent ("2.5"
+ * or the JSON number 2.5), never as basis points.
  */
 export const CreateProductCategoryRequestSchema = z.discriminatedUnion('mode', [
   productCategoryRequestBase.extend({ mode: z.literal('excluded') }),
   productCategoryRequestBase.extend({
     mode: z.literal('rate'),
-    rate_bp: z.number().int().min(50).max(2000),
+    cashback_rate_percent: CashbackPercentInputSchema,
   }),
 ]);
 export type CreateProductCategoryRequest = z.infer<
@@ -622,14 +700,14 @@ export type CreateProductCategoryRequest = z.infer<
  * Partial update; omitted keys are untouched. The server validates the
  * FINAL mode/rate pair (post-merge): mode `rate` must end up with a rate,
  * mode `excluded` must end up without one — so switching to `excluded`
- * means sending `{mode: 'excluded', rate_bp: null}`. The slug never
- * changes.
+ * means sending `{mode: 'excluded', cashback_rate_percent: null}`. The slug
+ * never changes.
  */
 export const UpdateProductCategoryRequestSchema = z.object({
   name_en: z.string().min(1).max(120).optional(),
   name_dv: z.string().max(120).nullable().optional(),
   mode: ProductCategoryModeSchema.optional(),
-  rate_bp: z.number().int().min(50).max(2000).nullable().optional(),
+  cashback_rate_percent: CashbackPercentInputSchema.nullable().optional(),
   sort: z.number().int().min(0).max(100000).optional(),
   active: z.boolean().optional(),
 });
@@ -689,13 +767,17 @@ export function updateMerchantProductCategory(
  * The §4 all-in cost picture returned alongside create and publish: what the
  * merchant pays per transaction during the promotion versus their standing
  * terms at the window start. `tier_changed` is the tier-cliff warning the UI
- * must surface (e.g. 499 → 500 bp: +0.01pp cashback costs +0.26pp all-in).
+ * must surface (e.g. 4.99% → 5.00%: +0.01pp cashback costs +0.26pp all-in).
  */
 export const PromotionCostPreviewSchema = z.object({
   promo: RateDescriptionSchema,
   /** Null when no standing rate is effective at the window start. */
   standing: RateDescriptionSchema.nullable(),
-  all_in_delta_bp: z.number().int().nullable(),
+  /**
+   * The all-in difference as a SIGNED 2-decimal percent string ("0.26",
+   * "-0.26"); null when there is no standing rate to compare against.
+   */
+  all_in_delta_percent: PercentDeltaSchema.nullable(),
   tier_changed: z.boolean(),
 });
 export type PromotionCostPreview = z.infer<typeof PromotionCostPreviewSchema>;
@@ -738,13 +820,18 @@ export function listMerchantPromotions(
 
 export const CreatePromotionRequestSchema = z.object({
   /**
-   * Integer basis points, 50–2000 (§4 structural cap), and must exceed the
-   * standing rate. Rates the ACTIVE fee tier schedule does not price are
-   * refused server-side with a 422 `code: rate_not_priced` — structurally
-   * legal but unsellable until the admin publishes a wider schedule.
+   * A 2-decimal percent, 0.50%–20.00% (§4 structural cap), which must
+   * exceed the standing rate. Rates the ACTIVE fee tier schedule does not
+   * price are refused server-side with a 422 `code: rate_not_priced` —
+   * structurally legal but unsellable until the admin publishes a wider
+   * schedule.
    */
-  rate_bp: z.number().int().min(50).max(2000),
-  /** ISO 8601 with an explicit UTC offset, e.g. "2026-09-01T00:00:00+05:00". */
+  cashback_rate_percent: CashbackPercentInputSchema,
+  /**
+   * ISO 8601 with an explicit UTC offset, e.g. "2026-09-01T00:00:00+05:00".
+   * A promotion WINDOW is a scheduling instant, not a sale instant, so both
+   * ends still require the offset — unlike a credit's `occurred_at`.
+   */
   starts_at: z.string(),
   ends_at: z.string(),
   /** Integer laari. */

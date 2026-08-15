@@ -57,10 +57,10 @@ it('lists the review queue with per-state counts and full wizard data', function
     expect($row['id'])->toBe($pending->id)
         ->and($row)->toHaveKeys([
             'name', 'slug', 'status', 'category', 'channel', 'eligibility_basis',
-            'contact_email', 'contact_phone', 'logo_url', 'rate_bp', 'setup_state',
+            'contact_email', 'contact_phone', 'logo_url', 'cashback_rate_percent', 'setup_state',
             'submitted_at', 'rejected_at', 'rejected_reason', 'created_at',
         ])
-        ->and($row['rate_bp'])->toBe(200)
+        ->and($row['cashback_rate_percent'])->toBe('2.00')
         ->and($row['channel'])->toBe('both')
         ->and($row['logo_url'])->toBeNull();
 
@@ -145,7 +145,7 @@ it('re-picking the rate after rejection still replaces the untraded initial row'
     $this->postJson("/api/admin/store-reviews/{$merchant->id}/reject", ['reason' => 'Rate too low for the category.'])->assertOk();
 
     $this->actingAs($owner, 'merchant');
-    $this->patchJson('/api/merchant/setup/rate', ['rate_bp' => 500])->assertOk();
+    $this->patchJson('/api/merchant/setup/rate', ['cashback_rate_percent' => '5.00'])->assertOk();
 
     $rates = MerchantRate::query()->where('merchant_id', $merchant->id)->get();
     expect($rates)->toHaveCount(1)

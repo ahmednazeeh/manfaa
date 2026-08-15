@@ -23,7 +23,7 @@ import { useTranslation } from 'react-i18next';
 import {
   formatDate,
   formatMonthYear,
-  formatRateBp,
+  formatRate,
   splitDistance,
 } from '@/lib/format';
 import { haversineMeters } from '@/lib/geo';
@@ -86,7 +86,7 @@ function CashbackHero({ store }: { store: StoreDetail }) {
       <CardContent className="flex flex-col gap-3 p-6">
         <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
           <span className="text-4xl font-bold tracking-tight text-primary">
-            {formatRateBp(store.rate_bp)}
+            {formatRate(store.cashback_rate_percent)}
           </span>
           <span className="text-base text-muted-foreground">
             {t('discover.cashbackLabel')}
@@ -94,7 +94,7 @@ function CashbackHero({ store }: { store: StoreDetail }) {
           {promo !== null && (
             <span className="text-sm text-muted-foreground line-through">
               {t('discover.usuallyRate', {
-                rate: formatRateBp(store.standing_rate_bp),
+                rate: formatRate(store.standing_cashback_rate_percent),
               })}
             </span>
           )}
@@ -195,7 +195,9 @@ function HowToEarn({ store }: { store: StoreDetail }) {
           icon={Banknote}
           step={3}
           title={t('store.stepPaidTitle')}
-          body={t('store.stepPaidBody', { rate: formatRateBp(store.rate_bp) })}
+          body={t('store.stepPaidBody', {
+            rate: formatRate(store.cashback_rate_percent),
+          })}
         />
       </ol>
     </section>
@@ -213,10 +215,10 @@ function HowToEarn({ store }: { store: StoreDetail }) {
  */
 function CategoryRatesTable({
   rows,
-  standingRateBp,
+  standingRatePercent,
 }: {
   rows: StoreCategoryRate[];
-  standingRateBp: number;
+  standingRatePercent: string;
 }) {
   const { t, i18n } = useTranslation();
 
@@ -245,9 +247,10 @@ function CategoryRatesTable({
               </span>
             ) : (
               <span className="font-medium text-mono">
-                {/* rate_bp is non-null whenever mode is "rate"; the standing
-                    rate is the schema-level fallback (unlisted ⇒ standing). */}
-                {formatRateBp(row.rate_bp ?? standingRateBp)}
+                {/* cashback_rate_percent is non-null whenever mode is
+                    "rate"; the standing rate is the schema-level fallback
+                    (unlisted ⇒ standing). */}
+                {formatRate(row.cashback_rate_percent ?? standingRatePercent)}
               </span>
             )}
           </li>
@@ -257,7 +260,7 @@ function CategoryRatesTable({
             {t('store.categoryEverythingElse')}
           </span>
           <span className="font-medium text-mono">
-            {formatRateBp(standingRateBp)}
+            {formatRate(standingRatePercent)}
           </span>
         </li>
       </ul>
@@ -285,7 +288,7 @@ function CashbackDetails({ store }: { store: StoreDetail }) {
                 {t('store.standingRateLabel')}
               </dt>
               <dd className="font-medium text-mono">
-                {formatRateBp(store.standing_rate_bp)}
+                {formatRate(store.standing_cashback_rate_percent)}
               </dd>
             </div>
             {promo !== null && (
@@ -296,7 +299,7 @@ function CashbackDetails({ store }: { store: StoreDetail }) {
                   })}
                 </dt>
                 <dd className="font-medium text-primary">
-                  {formatRateBp(promo.rate_bp)}
+                  {formatRate(promo.cashback_rate_percent)}
                 </dd>
               </div>
             )}
@@ -315,7 +318,7 @@ function CashbackDetails({ store }: { store: StoreDetail }) {
           {store.category_rates.length > 0 && (
             <CategoryRatesTable
               rows={store.category_rates}
-              standingRateBp={store.standing_rate_bp}
+              standingRatePercent={store.standing_cashback_rate_percent}
             />
           )}
 
@@ -444,7 +447,7 @@ function StoreCta({ store }: { store: StoreDetail }) {
           {me
             ? t('store.ctaSignedInBody', { name: store.name })
             : t('store.ctaBody', {
-                rate: formatRateBp(store.rate_bp),
+                rate: formatRate(store.cashback_rate_percent),
                 name: store.name,
               })}
         </p>

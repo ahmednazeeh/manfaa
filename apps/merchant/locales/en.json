@@ -15,7 +15,8 @@
     "hidePassword": "Hide password",
     "language": "Language",
     "toggleDarkMode": "Toggle dark mode",
-    "notSet": "Not set"
+    "notSet": "Not set",
+    "optional": "optional"
   },
   "channel": {
     "in_store": "In Store",
@@ -354,7 +355,8 @@
     "previewCashback": "Customer cashback (per line)",
     "previewFee": "Platform fee (per line)",
     "previewYouPay": "You pay",
-    "previewNote": "Estimate — each line is priced separately on the server at the sale time; a promotion's per-customer cap may reduce promo-priced lines."
+    "previewNote": "Estimate — each line is priced separately on the server at the sale time; a promotion's per-customer cap may reduce promo-priced lines.",
+    "overrideRate": "{{rate}} — your custom rate for this sale."
   },
   "settlement": {
     "title": "New settlement",
@@ -539,7 +541,23 @@
     "scanUnreadable": "That code isn't a Manfaa customer code. Ask the customer to open their Manfaa app, or type the 6-digit code.",
     "scanned": "Scanned code {{code}}",
     "scanManualHint": "You can always type the code by hand.",
-    "close": "Close"
+    "close": "Close",
+    "occurredAtHint": "Leave this empty to record the sale as right now.",
+    "occurredAtNow": "This sale will be recorded as right now.",
+    "occurredAtSetNow": "Set the current time",
+    "customRateToggle": "Custom cashback for this sale",
+    "customRateToggleHint": "Optional — pay this customer more than your usual rate, just for this sale. Your store's advertised rate is unchanged.",
+    "customRateLabel": "Cashback for this sale",
+    "customRateHint": "Must be {{rate}} or higher — the rate this sale already earns. You can only pay MORE than your advertised rate, never less, and the customer is told the higher figure.",
+    "customRateHintNoRate": "Your store has no cashback rate in effect yet — contact Manfaa before crediting customers.",
+    "customRateFormat": "Enter a percent with up to two decimal places, e.g. 7.50.",
+    "customRateRange": "Cashback runs from {{min}} to {{max}}.",
+    "customRateTooLow": "This sale already earns {{rate}}. A custom rate can only be higher — your advertised rate is a promise to the customer.",
+    "customRatePreviewNote": "Estimate at your custom rate — the platform fee follows the rate you pay. The server confirms both at the sale time.",
+    "customRateRefusedTitle": "That rate is lower than this sale already earns.",
+    "customRateRefusedBody": "This sale earns {{rate}} — your standing rate, or a promotion running right now. A custom rate can only raise it, because the customer was advertised that figure. Enter a higher rate, or switch the custom rate off.",
+    "customRateRefusedBodyNoRate": "A custom rate can only raise what this sale already earns, because the customer was advertised that figure. Enter a higher rate, or switch the custom rate off.",
+    "customRateNotPricedTitle": "That rate is not available yet."
   },
   "labels": {
     "state": {

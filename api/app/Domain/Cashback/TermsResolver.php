@@ -89,7 +89,7 @@ final class TermsResolver
         // the same table the migration seeds.
         $schedule = $this->feeTiers->at($occurredAt);
 
-        $standing = $this->calculator->calculate($eligible, Rate::cashback($standingBp), $schedule?->feeBpFor($standingBp));
+        $standing = $this->calculator->calculate($eligible, Rate::cashback($standingBp), $this->baseFeeBp($schedule, $standingBp));
 
         foreach ($this->promotions->candidatesAt($merchantId, $branchId, $eligible->value(), $occurredAt) as $promotion) {
             if ($promotion->rate_bp <= $standingBp) {
@@ -175,7 +175,7 @@ final class TermsResolver
         // The base-rate snapshot for the transaction row: the standing
         // terms at occurred_at, resolved exactly as the single-rate path
         // resolves them (rate + its fee tier under the schedule in force).
-        $standing = $this->calculator->calculate($eligible, Rate::cashback($standingBp), $schedule?->feeBpFor($standingBp));
+        $standing = $this->calculator->calculate($eligible, Rate::cashback($standingBp), $this->baseFeeBp($schedule, $standingBp));
 
         if ($consultPromotions) {
             foreach ($this->promotions->candidatesAt($merchantId, $branchId, $eligible->value(), $occurredAt) as $promotion) {
@@ -271,7 +271,7 @@ final class TermsResolver
             $ownBy = $category === null ? 'standing' : 'category';
             $amount = Laari::of($line->amountLaari);
 
-            $result = $this->calculator->calculate($amount, Rate::cashback($ownBp), $this->ownFeeBp($schedule, $ownBp));
+            $result = $this->calculator->calculate($amount, Rate::cashback($ownBp), $this->baseFeeBp($schedule, $ownBp));
             $by = $ownBy;
 
             if ($promotion !== null && $promotion->rate_bp > $ownBp) {
@@ -313,7 +313,15 @@ final class TermsResolver
     }
 
     /**
-     * The schedule fee for a line's OWN rate — with a survival fallback.
+     * The schedule fee for a rate the coverage invariant does NOT protect —
+     * a line's own category rate, or the sale's base rate when that base is
+     * a per-sale override — with a survival fallback.
+     *
+     * A per-sale override (PLAN §1) is validated against the ACTIVE
+     * schedule's ceiling at submission time, so a BACKDATED sale carrying
+     * one lands in exactly the category-rate situation described below: the
+     * narrower schedule in force at occurred_at may not price it. Same
+     * rescue, same reason.
      *
      * Category override rates carry no effective-dated history and are
      * validated now-forward only (ProductCategoriesController /
@@ -337,7 +345,7 @@ final class TermsResolver
      * every instant they are IN FORCE prices them, and both are
      * effective-dated so occurred_at always resolves a covered pairing.
      */
-    private function ownFeeBp(?TierSchedule $schedule, int $ownBp): ?int
+    private function baseFeeBp(?TierSchedule $schedule, int $ownBp): ?int
     {
         try {
             return $schedule?->feeBpFor($ownBp);

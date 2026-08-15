@@ -24,11 +24,22 @@ final readonly class Rate
     public const int MAX_CASHBACK_BP = 2000;
 
     /**
+     * The structural cashback floor (§4): 0.50%. Named so the wire parser
+     * (Percent) bounds a submitted percent against the same law.
+     */
+    public const int MIN_CASHBACK_BP = 50;
+
+    /**
+     * The smallest expressible platform fee: 1 bp (0.01%).
+     */
+    public const int MIN_FEE_BP = 1;
+
+    /**
      * Customer cashback rates: 50–2000 bp inclusive, per the §4 tier table.
      */
     public static function cashback(int $basisPoints): self
     {
-        if ($basisPoints < 50 || $basisPoints > self::MAX_CASHBACK_BP) {
+        if ($basisPoints < self::MIN_CASHBACK_BP || $basisPoints > self::MAX_CASHBACK_BP) {
             throw new OutOfRangeException(
                 sprintf('Cashback rate must be 50-%d basis points, got %d.', self::MAX_CASHBACK_BP, $basisPoints)
             );
@@ -46,9 +57,9 @@ final readonly class Rate
      */
     public static function fee(int $basisPoints): self
     {
-        if ($basisPoints < 1 || $basisPoints > self::MAX_CASHBACK_BP) {
+        if ($basisPoints < self::MIN_FEE_BP || $basisPoints > self::MAX_CASHBACK_BP) {
             throw new InvalidArgumentException(
-                sprintf('Fee rate must be 1-%d basis points, got %d.', self::MAX_CASHBACK_BP, $basisPoints)
+                sprintf('Fee rate must be %d-%d basis points, got %d.', self::MIN_FEE_BP, self::MAX_CASHBACK_BP, $basisPoints)
             );
         }
 

@@ -122,7 +122,7 @@ it('shows the discount on the preview, and says WHY when there is none', functio
         ->assertOk()
         ->assertJsonPath('data.discount.eligible', true)
         ->assertJsonPath('data.discount.reason_code', 'eligible')
-        ->assertJsonPath('data.discount.rate_bp', 500)
+        ->assertJsonPath('data.discount.rate_percent', '5.00')
         ->assertJsonPath('data.discount.max_age_days', 10)
         ->assertJsonPath('data.discount.discount_laari', 162)
         ->assertJsonPath('data.discount.discount_mvr', '1.62')
@@ -169,7 +169,7 @@ it('says the discount is disabled rather than pretending there is none to give',
         ->assertOk()
         ->assertJsonPath('data.discount.eligible', false)
         ->assertJsonPath('data.discount.reason_code', 'disabled')
-        ->assertJsonPath('data.discount.rate_bp', 0)
+        ->assertJsonPath('data.discount.rate_percent', '0.00')
         ->assertJsonPath('data.discount_laari', 0)
         ->assertJsonPath('data.amount_due_laari', 11_825);
 });
@@ -197,7 +197,7 @@ it('submits the previewed discounted amount over HTTP and carries the grant onto
         ->assertCreated()
         ->assertJsonPath('data.discount_laari', 162)
         ->assertJsonPath('data.discount_mvr', '1.62')
-        ->assertJsonPath('data.discount_rate_bp', 500)
+        ->assertJsonPath('data.discount_rate_percent', '5.00')
         ->assertJsonPath('data.discount_reason', 'eligible')
         ->assertJsonPath('data.amount_due_laari', 11_663)
         ->json('data');

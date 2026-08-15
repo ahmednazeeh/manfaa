@@ -1,10 +1,12 @@
 import {
   apiFetch,
   bootstrapCsrf,
+  bpToPercentString,
   dataWrapped,
   MerchantStaffRoleSchema,
   MerchantStatusSchema,
   paginated,
+  PercentSchema,
   RateDescriptionSchema,
   SettlementPaymentSchema,
   SettlementPreviewSchema,
@@ -90,15 +92,16 @@ export async function fetchMe(signal?: AbortSignal): Promise<MerchantMe> {
 // ---------------------------------------------------------------------------
 
 /**
- * One merchant_rates window with its §4 cost picture (integer basis
- * points). The fee fields are null in exactly one degenerate case: a legacy
- * "stranded" rate the fee schedule in force does not price — the panel must
- * still render (it is the merchant's self-rescue path), showing the fee as
- * unknown.
+ * One merchant_rates window with its §4 cost picture — 2-decimal percent
+ * strings on the wire (PLAN §1), basis points only inside the panel's own
+ * arithmetic. The fee fields are null in exactly one degenerate case: a
+ * legacy "stranded" rate the fee schedule in force does not price — the
+ * panel must still render (it is the merchant's self-rescue path), showing
+ * the fee as unknown.
  */
 export const RateWindowSchema = RateDescriptionSchema.extend({
-  fee_bp: z.number().int().nullable(),
-  all_in_bp: z.number().int().nullable(),
+  platform_fee_percent: PercentSchema.nullable(),
+  all_in_percent: PercentSchema.nullable(),
   effective_from: z.string(),
   effective_to: z.string().nullable(),
 });
@@ -142,8 +145,8 @@ export const RateChangeSummarySchema = z.object({
    * by this very change).
    */
   previous: RateDescriptionSchema.extend({
-    fee_bp: z.number().int().nullable(),
-    all_in_bp: z.number().int().nullable(),
+    platform_fee_percent: PercentSchema.nullable(),
+    all_in_percent: PercentSchema.nullable(),
   }),
   new: RateDescriptionSchema,
   /** ISO 8601 in the business timezone. */
@@ -161,16 +164,19 @@ export const ChangeRateResponseSchema = z.object({
 export type ChangeRateResponse = z.infer<typeof ChangeRateResponseSchema>;
 
 /**
- * POST /api/merchant/rate — owner only (403 otherwise). The rate is sent as
- * integer basis points; the panel converts the merchant's exact-2dp percent
- * input with the shared parsePercentToBp helper (string decomposition, no
- * floats). A structurally legal rate the ACTIVE fee tier schedule does not
- * price answers 422 `code: rate_not_priced`.
+ * POST /api/merchant/rate — owner only (403 otherwise). The wire carries a
+ * 2-decimal percent STRING (PLAN §1: `cashback_rate_percent`, never
+ * `rate_bp`). The panel still works in integer basis points internally —
+ * the merchant's typed percent goes through parsePercentToBp so the range
+ * checks and the §4 tier-cliff comparison are integer arithmetic — and this
+ * is the one place that turns that integer back into the wire's percent, by
+ * exact string decomposition. A structurally legal rate the ACTIVE fee tier
+ * schedule does not price answers 422 `code: rate_not_priced`.
  */
 export function changeRate(rateBp: number): Promise<ChangeRateResponse> {
   return apiFetch('/api/merchant/rate', ChangeRateResponseSchema, {
     method: 'POST',
-    body: { rate_bp: rateBp },
+    body: { cashback_rate_percent: bpToPercentString(rateBp) },
   });
 }
 

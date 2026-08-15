@@ -2,10 +2,12 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Domain\Money\Percent;
 use App\Domain\Platform\InvalidTierScheduleException;
 use App\Domain\Platform\TierScheduleService;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\PlatformFeeTierScheduleResource;
+use App\Rules\PercentRate;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -16,6 +18,11 @@ use InvalidArgumentException;
  * GET returns the schedule active now plus the full history; POST publishes
  * a new future-dated schedule (validated tier table, >= 1h lead time,
  * created_by audited). Nothing is ever updated or deleted.
+ *
+ * WIRE FORMAT (PLAN §1): bands are submitted and returned as 2-decimal
+ * percent strings — {from_percent, to_percent, fee_percent}. They are
+ * converted to integer basis points here, once, and the schedule is stored
+ * and evaluated in basis points exactly as before.
  */
 class PlatformFeeTiersController extends Controller
 {
@@ -36,18 +43,18 @@ class PlatformFeeTiersController extends Controller
         $validated = $request->validate([
             'effective_from' => ['required', 'date'],
             'tiers' => ['required', 'array', 'min:1'],
-            'tiers.*.from_bp' => ['required', 'integer'],
-            'tiers.*.to_bp' => ['required', 'integer'],
-            'tiers.*.fee_bp' => ['required', 'integer'],
+            'tiers.*.from_percent' => ['required', PercentRate::cashback()],
+            'tiers.*.to_percent' => ['required', PercentRate::cashback()],
+            'tiers.*.fee_percent' => ['required', PercentRate::fee()],
         ]);
 
         try {
             $schedule = $schedules->create(
                 array_map(
                     fn (array $tier): array => [
-                        'from_bp' => (int) $tier['from_bp'],
-                        'to_bp' => (int) $tier['to_bp'],
-                        'fee_bp' => (int) $tier['fee_bp'],
+                        'from_bp' => Percent::toBasisPoints($tier['from_percent']),
+                        'to_bp' => Percent::toBasisPoints($tier['to_percent']),
+                        'fee_bp' => Percent::toFeeBasisPoints($tier['fee_percent']),
                     ],
                     $validated['tiers'],
                 ),

@@ -1,15 +1,13 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import {
-  createAdminFeeTierSchedule,
-  type FeeTierBand,
-} from '@manfaa/api-client';
+import { createAdminFeeTierSchedule } from '@manfaa/api-client';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { CalendarClock, Plus, Trash2, TriangleAlert } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiErrorMessage } from '@/lib/api-error';
 import {
+  bandsToWire,
   bpToPercentString,
   formatBpPercent,
   MINIMUM_LEAD_TIME_MINUTES,
@@ -18,6 +16,7 @@ import {
   TIER_RANGE_MAX_BP,
   TIER_RANGE_MIN_BP,
   validateTierRows,
+  type TierBand,
   type TierRowInput,
 } from '@/lib/fee-tiers';
 import { formatDateTime } from '@/lib/format';
@@ -61,7 +60,7 @@ function toIsoWithOffset(local: string): string | null {
   return Number.isNaN(new Date(iso).getTime()) ? null : iso;
 }
 
-function bandsToRows(bands: FeeTierBand[]): TierRowInput[] {
+function bandsToRows(bands: TierBand[]): TierRowInput[] {
   return bands.map((band) => ({
     from_pct: bpToPercentString(band.from_bp),
     to_pct: bpToPercentString(band.to_bp),
@@ -98,7 +97,7 @@ function BpFinePrint({ pct }: { pct: string }) {
 export function ScheduleTiersDialog({
   currentBands,
 }: {
-  currentBands: FeeTierBand[] | null;
+  currentBands: TierBand[] | null;
 }) {
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
@@ -137,7 +136,9 @@ export function ScheduleTiersDialog({
     mutationFn: () =>
       createAdminFeeTierSchedule({
         effective_from: effectiveIso as string,
-        tiers: validation.bands as FeeTierBand[],
+        // PLAN §1 wire format: the validated integer bands leave as
+        // 2-decimal percent strings.
+        tiers: bandsToWire(validation.bands as TierBand[]),
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'fee-tiers'] });

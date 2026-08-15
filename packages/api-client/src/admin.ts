@@ -1,11 +1,14 @@
 import { z } from 'zod';
 import { apiBaseUrl, apiFetch, apiFetchBlob, apiFetchText } from './client';
 import {
+  CashbackPercentInputSchema,
   ClaimStateSchema,
   dataWrapped,
+  FeePercentInputSchema,
   MerchantStatusSchema,
   paginated,
   PayoutBatchSchema,
+  PercentSchema,
   PromotionSchema,
   SettlementPaymentSchema,
   SettlementSchema,
@@ -20,8 +23,9 @@ import {
  * lifecycle (Phase 1), the claims queue and promotions read model (Phase 3),
  * and the platform settings domain — platform bank accounts, the §4 fee tier
  * schedule, typed platform settings, and superadmin-only admin account
- * management. All amounts sent and received are integer laari; all rates are
- * integer basis points.
+ * management. All amounts sent and received are integer laari; all RATES
+ * travel as 2-decimal percent strings (PLAN §1 wire format) — basis points
+ * are the API's internal representation and never appear in a body.
  */
 
 interface RequestOptions {
@@ -695,13 +699,31 @@ export function updateAdminPlatformBankAccount(
 // Fee tier schedules (§4, admin-manageable, append-only)
 // ---------------------------------------------------------------------------
 
-/** One {from_bp, to_bp, fee_bp} band — all integer basis points. */
+/**
+ * One band of the §4 table as the API emits it: cashback range and the fee
+ * it carries, all 2-decimal percent strings (PLAN §1 wire format). The
+ * table is STORED in integer basis points; the conversion happens at the
+ * response boundary, so compare band edges with `percentToBp`, never as
+ * text.
+ */
 export const FeeTierBandSchema = z.object({
-  from_bp: z.number().int(),
-  to_bp: z.number().int(),
-  fee_bp: z.number().int(),
+  from_percent: PercentSchema,
+  to_percent: PercentSchema,
+  fee_percent: PercentSchema,
 });
 export type FeeTierBand = z.infer<typeof FeeTierBandSchema>;
+
+/**
+ * One band as a REQUEST may send it: a 2-decimal percent string ("0.50",
+ * "10") or a JSON number. The cashback edges obey §4's 0.50%–20.00%; the
+ * fee may sit below the cashback floor (the 0.25% first tier).
+ */
+export const FeeTierBandInputSchema = z.object({
+  from_percent: CashbackPercentInputSchema,
+  to_percent: CashbackPercentInputSchema,
+  fee_percent: FeePercentInputSchema,
+});
+export type FeeTierBandInput = z.infer<typeof FeeTierBandInputSchema>;
 
 /**
  * One effective-dated §4 tier table. Rows are append-only — never updated
@@ -749,10 +771,12 @@ export const CreateFeeTierScheduleRequestSchema = z.object({
   /** ISO 8601 with an explicit UTC offset; must be >= 1 hour in the future. */
   effective_from: z.string(),
   /**
-   * Must be ascending, contiguous, cover exactly 50–1000 bp, with every
-   * band's fee_bp a positive integer no greater than its from_bp.
+   * Must be ascending, contiguous and gapless, start at exactly 0.50%, end
+   * no higher than 20.00% (the schedule's own ceiling — rates above it are
+   * refused `rate_not_priced`), with every band's `fee_percent` positive
+   * and no greater than its `from_percent`.
    */
-  tiers: z.array(FeeTierBandSchema).min(1),
+  tiers: z.array(FeeTierBandInputSchema).min(1),
 });
 export type CreateFeeTierScheduleRequest = z.infer<
   typeof CreateFeeTierScheduleRequestSchema
@@ -779,15 +803,26 @@ export function createAdminFeeTierSchedule(
 // ---------------------------------------------------------------------------
 
 /**
- * One typed platform setting: the effective integer value, the hardcoded
- * default it falls back to, and the allowed range. All monetary values are
- * integer laari.
+ * One typed platform setting: the effective value, the hardcoded default it
+ * falls back to, and the allowed range.
+ *
+ * Each key names its own unit, and the unit decides the type:
+ * `_laari` and `_days` keys are plain integers in that unit, while a key
+ * holding a RATE (`_percent`) is a 2-decimal percent STRING — "5.00",
+ * "0.00", "20.00" — because basis points never appear on the wire
+ * (PLAN §1 "API wire format"), not even on an admin knob the platform
+ * stores in bp. Convert one with `percentToBp` / `bpToPercentString`.
  */
+export const PlatformSettingValueSchema = z.union([
+  z.number().int(),
+  z.string(),
+]);
+
 export const PlatformSettingSchema = z.object({
-  value: z.number().int(),
-  default: z.number().int(),
-  min: z.number().int(),
-  max: z.number().int(),
+  value: PlatformSettingValueSchema,
+  default: PlatformSettingValueSchema,
+  min: PlatformSettingValueSchema,
+  max: PlatformSettingValueSchema,
   overridden: z.boolean(),
 });
 export type PlatformSetting = z.infer<typeof PlatformSettingSchema>;
@@ -800,13 +835,14 @@ export const PlatformSettingKeySchema = z.enum([
   'default_validation_window_days',
   'default_min_eligible_laari',
   /**
-   * PLAN §1 prompt-payment discount: basis points off the PLATFORM FEE when a
-   * merchant settles everything outstanding promptly (0 disables it, 2000 is
-   * the ceiling), and how young every line must be, in whole days, to
-   * qualify. The window must stay shorter than `settlement_due_days` or the
-   * incentive rewards nothing; the range (1–15) enforces the outer bound.
+   * PLAN §1 prompt-payment discount: the percent taken off the PLATFORM FEE
+   * when a merchant settles everything outstanding promptly ("0.00" disables
+   * it, "20.00" is the ceiling), and how young every line must be, in whole
+   * days, to qualify. The window must stay shorter than
+   * `settlement_due_days` or the incentive rewards nothing; the range (1–15)
+   * enforces the outer bound.
    */
-  'prompt_discount_rate_bp',
+  'prompt_discount_rate_percent',
   'prompt_discount_max_age_days',
 ]);
 export type PlatformSettingKey = z.infer<typeof PlatformSettingKeySchema>;
@@ -830,8 +866,12 @@ export function getAdminPlatformSettings(
 }
 
 export const UpdatePlatformSettingRequestSchema = z.object({
-  /** Integer; validated server-side against the key's allowed range (422). */
-  value: z.number().int(),
+  /**
+   * The key's own unit: an integer for `_laari` / `_days` keys, a 2-decimal
+   * percent for a `_percent` key ("7.5", "7.50" or the number 7.5 — never
+   * basis points). Validated server-side against the allowed range (422).
+   */
+  value: PlatformSettingValueSchema,
 });
 export type UpdatePlatformSettingRequest = z.infer<
   typeof UpdatePlatformSettingRequestSchema

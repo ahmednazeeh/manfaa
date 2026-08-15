@@ -34,7 +34,7 @@ beforeEach(function () {
 function promotionPayload(array $overrides = []): array
 {
     return [
-        'rate_bp' => 500,
+        'cashback_rate_percent' => '5.00',
         'starts_at' => now()->addDay()->toIso8601String(),
         'ends_at' => now()->addDays(8)->toIso8601String(),
         'min_purchase_laari' => 100000,
@@ -47,36 +47,36 @@ it('creates a draft with the §4 all-in cost preview (fee follows the promo tier
     $this->postJson('/api/merchant/promotions', promotionPayload())
         ->assertCreated()
         ->assertJsonPath('data.status', 'draft')
-        ->assertJsonPath('data.rate_bp', 500)
-        ->assertJsonPath('data.fee_bp', 100)
-        ->assertJsonPath('data.all_in_bp', 600)
+        ->assertJsonPath('data.cashback_rate_percent', '5.00')
+        ->assertJsonPath('data.platform_fee_percent', '1.00')
+        ->assertJsonPath('data.all_in_percent', '6.00')
         ->assertJsonPath('data.min_purchase_laari', 100000)
         ->assertJsonPath('data.max_cashback_per_customer_laari', 30000)
         ->assertJsonPath('data.is_live', false)
         // §4 cliff data: promo terms vs the standing terms at window start.
-        ->assertJsonPath('cost_preview.promo.rate_bp', 500)
-        ->assertJsonPath('cost_preview.promo.fee_bp', 100)
-        ->assertJsonPath('cost_preview.promo.all_in_bp', 600)
-        ->assertJsonPath('cost_preview.standing.rate_bp', 200)
-        ->assertJsonPath('cost_preview.standing.fee_bp', 75)
-        ->assertJsonPath('cost_preview.standing.all_in_bp', 275)
-        ->assertJsonPath('cost_preview.all_in_delta_bp', 325)
+        ->assertJsonPath('cost_preview.promo.cashback_rate_percent', '5.00')
+        ->assertJsonPath('cost_preview.promo.platform_fee_percent', '1.00')
+        ->assertJsonPath('cost_preview.promo.all_in_percent', '6.00')
+        ->assertJsonPath('cost_preview.standing.cashback_rate_percent', '2.00')
+        ->assertJsonPath('cost_preview.standing.platform_fee_percent', '0.75')
+        ->assertJsonPath('cost_preview.standing.all_in_percent', '2.75')
+        ->assertJsonPath('cost_preview.all_in_delta_percent', '3.25')
         ->assertJsonPath('cost_preview.tier_changed', true);
 
     expect(Promotion::query()->sole()->status)->toBe('draft');
 });
 
 it('rejects a rate outside the structural 50–2000 bp bounds', function () {
-    $this->postJson('/api/merchant/promotions', promotionPayload(['rate_bp' => 49]))
+    $this->postJson('/api/merchant/promotions', promotionPayload(['cashback_rate_percent' => '0.49']))
         ->assertUnprocessable()
-        ->assertJsonValidationErrors('rate_bp');
+        ->assertJsonValidationErrors('cashback_rate_percent');
 
     // 2001 breaches the structural cap; 1001–2000 are structurally legal
     // but refused as rate_not_priced while the seeded 50–1000 schedule is
     // active (tests/Feature/Platform/CapWideningTest.php).
-    $this->postJson('/api/merchant/promotions', promotionPayload(['rate_bp' => 2001]))
+    $this->postJson('/api/merchant/promotions', promotionPayload(['cashback_rate_percent' => '20.01']))
         ->assertUnprocessable()
-        ->assertJsonValidationErrors('rate_bp');
+        ->assertJsonValidationErrors('cashback_rate_percent');
 
     expect(Promotion::query()->count())->toBe(0);
 });
@@ -92,12 +92,12 @@ it('rejects a window that ends before it starts', function () {
 
 it('rejects a promo rate that does not EXCEED the standing rate — a boost, never a stealth decrease', function () {
     // Equal to standing: not a boost.
-    $this->postJson('/api/merchant/promotions', promotionPayload(['rate_bp' => 200]))
+    $this->postJson('/api/merchant/promotions', promotionPayload(['cashback_rate_percent' => '2.00']))
         ->assertUnprocessable();
 
     // Below standing: a decrease in promo clothing — decreases have their
     // own §7 path (next business midnight), never this one.
-    $this->postJson('/api/merchant/promotions', promotionPayload(['rate_bp' => 100]))
+    $this->postJson('/api/merchant/promotions', promotionPayload(['cashback_rate_percent' => '1.00']))
         ->assertUnprocessable();
 
     expect(Promotion::query()->count())->toBe(0);
@@ -154,8 +154,8 @@ it('forbids every edit after publish: no update route, republish 409, domain ref
 
     // No update surface exists at all — the URI is not even routed (404,
     // not 405: no verb whatsoever is registered on /promotions/{id}).
-    $this->putJson("/api/merchant/promotions/{$id}", ['rate_bp' => 600])->assertNotFound();
-    $this->patchJson("/api/merchant/promotions/{$id}", ['rate_bp' => 600])->assertNotFound();
+    $this->putJson("/api/merchant/promotions/{$id}", ['cashback_rate_percent' => '6.00'])->assertNotFound();
+    $this->patchJson("/api/merchant/promotions/{$id}", ['cashback_rate_percent' => '6.00'])->assertNotFound();
 
     // Re-publishing a published promotion is refused.
     $this->postJson("/api/merchant/promotions/{$id}/publish")->assertConflict();

@@ -3,6 +3,7 @@
 import { useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   parsePercentToBp,
+  percentToBp,
   type MerchantChannel,
   type MerchantSetupState,
   type StoreCategoryOption,
@@ -16,7 +17,7 @@ import {
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
-import { formatBp } from '@/lib/estimate';
+import { formatBp, formatRate, trimRate } from '@/lib/estimate';
 import {
   merchantChannelHint,
   merchantChannelLabel,
@@ -88,7 +89,7 @@ function staticFeeBp(rateBp: number): number {
 /** Resume at the first step whose REQUIRED value is still missing. */
 function firstIncompleteStep(state: MerchantSetupState): number {
   if (!state.steps.profile || state.values.category === null) return 0;
-  if (state.values.rate_bp === null) return 2;
+  if (state.values.cashback_rate_percent === null) return 2;
   if ((state.values.eligibility_basis ?? '').trim() === '') return 3;
   return STEPS.length - 1;
 }
@@ -537,8 +538,13 @@ function RateStep({
   const { t } = useTranslation();
   const updateRate = useUpdateSetupRate();
 
-  const { min_bp: minBp, max_bp: maxBp } = state.rate_bounds;
-  const currentBp = state.values.rate_bp;
+  // The API states the bounds and the saved rate as 2-decimal percent
+  // strings (PLAN §1). This step compares them against what the owner types
+  // and adds a fee to them, so it reads them as integer bp once, here.
+  const currentPercent = state.values.cashback_rate_percent;
+  const minBp = percentToBp(state.rate_bounds.min_percent);
+  const maxBp = percentToBp(state.rate_bounds.max_percent);
+  const currentBp = currentPercent === null ? null : percentToBp(currentPercent);
 
   const [input, setInput] = useState('');
   const [notPriced, setNotPriced] = useState<string | null>(null);
@@ -552,15 +558,26 @@ function RateStep({
       : typedBp === null
         ? t('setup.rateFormatError')
         : typedBp < minBp
-          ? t('setup.rateMinError', { min: formatBp(minBp) })
+          ? t('setup.rateMinError', {
+              min: formatRate(state.rate_bounds.min_percent),
+            })
           : typedBp > maxBp
-            ? t('setup.rateMaxError', { max: formatBp(maxBp) })
+            ? t('setup.rateMaxError', {
+                max: formatRate(state.rate_bounds.max_percent),
+              })
             : null;
 
   const validTypedBp = inputError === null ? typedBp : null;
   // The preview shows the typed rate as soon as it is valid; otherwise the
-  // already-saved rate (resuming owners see their saved choice).
+  // already-saved rate (resuming owners see their saved choice). A saved
+  // rate is shown as the server's own percent; a typed one as typed.
   const previewBp = validTypedBp ?? currentBp;
+  const previewRate =
+    validTypedBp !== null
+      ? formatBp(validTypedBp)
+      : currentPercent === null
+        ? null
+        : formatRate(currentPercent);
   const previewFee = previewBp === null ? null : staticFeeBp(previewBp);
 
   const canContinue =
@@ -613,9 +630,9 @@ function RateStep({
               inputMode="decimal"
               dir="ltr"
               placeholder={
-                currentBp === null
+                currentPercent === null
                   ? t('setup.ratePlaceholder')
-                  : formatBp(currentBp).replace('%', '')
+                  : trimRate(currentPercent)
               }
               value={input}
               aria-invalid={inputError !== null}
@@ -631,23 +648,21 @@ function RateStep({
           ) : (
             <p className="text-xs text-muted-foreground">
               {t('setup.rateRangeHint', {
-                min: formatBp(minBp),
-                max: formatBp(maxBp),
+                min: formatRate(state.rate_bounds.min_percent),
+                max: formatRate(state.rate_bounds.max_percent),
               })}
             </p>
           )}
         </div>
 
-        {previewBp !== null && previewFee !== null && (
+        {previewBp !== null && previewRate !== null && previewFee !== null && (
           <div className="rounded-md border border-border p-4">
             <div className="grid grid-cols-3 gap-4">
               <div>
                 <div className="text-xs text-muted-foreground">
                   {t('setup.ratePreviewCashback')}
                 </div>
-                <div className="text-xl font-semibold">
-                  {formatBp(previewBp)}
-                </div>
+                <div className="text-xl font-semibold">{previewRate}</div>
               </div>
               <div>
                 <div className="text-xs text-muted-foreground">
@@ -807,7 +822,8 @@ function ReviewStep({
   const category = state.categories.find(
     (option) => option.slug === values.category,
   );
-  const rateBp = values.rate_bp;
+  const ratePercent = values.cashback_rate_percent;
+  const rateBp = ratePercent === null ? null : percentToBp(ratePercent);
   const feeBp = rateBp === null ? null : staticFeeBp(rateBp);
 
   const submit = () => {
@@ -897,10 +913,11 @@ function ReviewStep({
           )}
           {row(
             t('setup.reviewRate'),
-            rateBp !== null && feeBp !== null ? (
+            ratePercent !== null && rateBp !== null && feeBp !== null ? (
               <span dir="ltr">
-                {formatBp(rateBp)} · {t('setup.reviewFee')} {formatBp(feeBp)} ·{' '}
-                {t('setup.reviewAllIn')} {formatBp(rateBp + feeBp)}
+                {formatRate(ratePercent)} · {t('setup.reviewFee')}{' '}
+                {formatBp(feeBp)} · {t('setup.reviewAllIn')}{' '}
+                {formatBp(rateBp + feeBp)}
               </span>
             ) : (
               <span className="text-muted-foreground">

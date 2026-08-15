@@ -54,6 +54,7 @@ import {
 import { PaymentInstructions } from '@/components/settlement/payment-instructions';
 import {
   DiscountedFeeAmount,
+  isDiscountDisabled,
   PromptDiscountNotice,
   PromptDiscountRow,
 } from '@/components/settlement/prompt-discount';
@@ -289,7 +290,7 @@ export function SettlementWizard() {
                 buckets={catalogue.data.buckets}
                 selectedIds={Array.from(selectedIdSet)}
                 discountMaxAgeDays={
-                  catalogue.data.discount.rate_bp === 0
+                  isDiscountDisabled(catalogue.data.discount.rate_percent)
                     ? 0
                     : catalogue.data.discount.max_age_days
                 }
@@ -615,7 +616,7 @@ function ReviewStep({
             {discounted && (
               <div className="flex flex-col gap-0.5 border-t border-border pt-1.5">
                 <PromptDiscountRow
-                  rateBp={data.discount.rate_bp}
+                  ratePercent={data.discount.rate_percent}
                   discountLaari={data.discount_laari}
                 />
                 <span className="text-xs text-muted-foreground">

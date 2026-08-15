@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\V1;
 
+use App\Domain\Money\Percent;
 use App\Models\Merchant;
 use App\Models\MerchantProductCategory;
 use Illuminate\Http\JsonResponse;
@@ -38,7 +39,9 @@ class ProductCategoriesController extends V1Controller
                 'name_en' => $category->name_en,
                 'name_dv' => $category->name_dv,
                 'mode' => $category->mode,
-                'rate_bp' => $category->rate_bp,
+                // 2-decimal percent string (PLAN §1 wire format), null for
+                // an excluded category.
+                'cashback_rate_percent' => Percent::formatOrNull($category->rate_bp),
             ])->all(),
         ]);
     }

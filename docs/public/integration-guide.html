@@ -65,11 +65,13 @@
 <div class="table-scroll"><table><thead><tr><th>Environment</th><th>Base URL</th></tr></thead><tbody><tr><td>Sandbox</td><td><code>https://sandbox.api.manfaa.app/api</code></td></tr><tr><td>Production</td><td><code>https://api.manfaa.app/api</code></td></tr></tbody></table></div>
 <p>Everything below uses the sandbox. Nothing you do there mints real cashback.</p>
 <p><strong>The model in one paragraph:</strong> your till <strong>POSTs each eligible sale</strong> to us with the customer's 6-digit code; we compute cashback at the merchant's rate, run the settlement clock, and pay the customer. There is no polling — tills sit behind NAT, so all traffic is inbound to us, plus signed webhooks from us to you so your cached rate is never stale.</p>
-<p><strong>Money:</strong> every amount is an <strong>integer count of laari</strong> (1/100 rufiyaa). MVR 1,180.00 is <code>118000</code>. Never send a float — a fractional JSON number is rejected. Rates are integer basis points: 2% is <code>200</code>. Responses carry both the integer (<code>cashback_laari: 2360</code>) and a display string (<code>cashback_mvr: &quot;23.60&quot;</code>) for the receipt printer.</p>
+<p><strong>Money:</strong> every amount is an <strong>integer count of laari</strong> (1/100 rufiyaa). MVR 1,180.00 is <code>118000</code>. Never send a float — a fractional JSON number is rejected. Responses carry both the integer (<code>cashback_laari: 2360</code>) and a display string (<code>cashback_mvr: &quot;23.60&quot;</code>) for the receipt printer.</p>
+<p><strong>Rates:</strong> every rate on this API is a <strong>2-decimal percent string</strong> — 2% is <code>&quot;2.00&quot;</code>, the platform fee <code>&quot;0.75&quot;</code>, the same idiom as <code>cashback_mvr</code>. Basis points are how the platform stores and computes rates internally; they <strong>never appear in a request or a response</strong>, so there is no <code>rate_bp</code> or <code>fee_bp</code> field anywhere. Sending a rate, you may use a string (<code>&quot;2&quot;</code>, <code>&quot;2.5&quot;</code>, <code>&quot;2.50&quot;</code>) or a JSON number (<code>2</code>, <code>2.5</code>) with at most two decimals — a string is safer, since it cannot be reshaped by your JSON library's float handling. Read one by splitting on the <code>.</code> (or into a decimal type); never parse it to a binary float and multiply.</p>
+<p><em>(This is a clean break, not a versioned migration: no vendor is integrated yet, so <code>rate_bp</code>/<code>fee_bp</code> are simply gone rather than deprecated. If you built against an earlier draft of this guide, rename the fields — the numbers are the same, expressed as percent.)</em></p>
 <hr>
 <h2 id="1-sandbox-fixtures">1. Sandbox fixtures</h2>
 <p>Run <code>php artisan manfaa:sandbox</code> on the sandbox host (our team runs it for you at onboarding — the output below is what you receive). It is safe to re-run and prints the same token every time.</p>
-<div class="table-scroll"><table><thead><tr><th>Fixture</th><th>Value</th></tr></thead><tbody><tr><td>Merchant</td><td><strong>Sandbox Store</strong> (<code>sandbox-store</code>) — minimum eligible sale <code>5000</code> laari (MVR 50), validation window 3 days</td></tr><tr><td>Rate</td><td><code>200</code> bp (2.00%) now, with a <strong>scheduled decrease</strong> to <code>150</code> bp at the next 00:00 UTC+5 — so <code>GET /v1/merchants/me/rate</code> always shows a <code>pending_decrease</code></td></tr><tr><td>Branch</td><td>Sandbox Branch (id printed by the command)</td></tr><tr><td>POS vendor</td><td>Sandbox POS</td></tr><tr><td>Token</td><td>Printed by the command. Carries <strong>all four abilities</strong>. Sandbox-only.</td></tr></tbody></table></div>
+<div class="table-scroll"><table><thead><tr><th>Fixture</th><th>Value</th></tr></thead><tbody><tr><td>Merchant</td><td><strong>Sandbox Store</strong> (<code>sandbox-store</code>) — minimum eligible sale <code>5000</code> laari (MVR 50), validation window 3 days</td></tr><tr><td>Rate</td><td><code>&quot;2.00&quot;</code> now, with a <strong>scheduled decrease</strong> to <code>&quot;1.50&quot;</code> at the next 00:00 UTC+5 — so <code>GET /v1/merchants/me/rate</code> always shows a <code>pending_decrease</code></td></tr><tr><td>Branch</td><td>Sandbox Branch (id printed by the command)</td></tr><tr><td>POS vendor</td><td>Sandbox POS</td></tr><tr><td>Token</td><td>Printed by the command. Carries <strong>all four abilities</strong>. Sandbox-only.</td></tr></tbody></table></div>
 <p>Published test customers:</p>
 <div class="table-scroll"><table><thead><tr><th>Code</th><th>Name</th><th>Phone</th><th>Behaviour</th></tr></thead><tbody><tr><td><code>111111</code></td><td>Aisha Mohamed</td><td>+960 711-1111</td><td>Earns normally. Lookup: <code>valid: true</code>, <code>&quot;Ais*** Moh***&quot;</code></td></tr><tr><td><code>222222</code></td><td>Hassan Ibrahim</td><td>+960 722-2222</td><td>Earns normally</td></tr><tr><td><code>333333</code></td><td>Mariyam Saeed</td><td>+960 733-3333</td><td><strong>Suspended</strong> — lookup answers <code>200</code> with <code>valid: false</code>; use it to test your blocked-customer handling</td></tr></tbody></table></div>
 <p>Export the printed token for the examples below:</p>
@@ -127,9 +129,22 @@ export MANFAA_API=&quot;https://sandbox.api.manfaa.app/api&quot;</code></pre>
 <p>  at face value — how it is derived (GST, service charge, exclusions) is the   merchant's agreement with Manfaa, never recomputed by us.</p>
 <ul>
 <li><code>sale_amount</code> is optional, reference-only, never used in computation.</li>
-<li><code>occurred_at</code> must carry an <strong>explicit UTC offset</strong> (<code>+05:00</code>, or <code>Z</code>).</li>
+<li><code>occurred_at</code> is <strong>optional — omit it and we record the sale as of now</strong>,</li>
 </ul>
-<p>  Malé local time without an offset is rejected <code>validation_failed</code>. The   cashback rate applied is the merchant's rate effective <em>at this instant</em>.</p>
+<p>  which is what a till posting a sale as it rings it up means anyway. When   you do send it, two shapes are accepted:</p>
+<ul>
+<li><strong>ISO 8601 with an offset</strong> — <code>2026-08-14T11:04:22+05:00</code>,</li>
+</ul>
+<p>    <code>2026-08-14T06:04:22Z</code>, <code>2026-08-14T11:04:22+0500</code>. Read exactly as sent.</p>
+<ul>
+<li><strong>A plain wall clock with no offset</strong> — <code>2026-08-14 11:04:22</code> or</li>
+</ul>
+<p>    <code>2026-08-14T11:04:22</code> — read as <strong>Maldives time (UTC+5)</strong>, so it means     the instant <code>2026-08-14T06:04:22Z</code>. If your till writes <code>date('Y-m-d     H:i:s')</code> off its own clock, just send that.</p>
+<p>  Anything else (<code>15/08/2026 11:04</code>, a date with no time, seconds omitted)   is <code>422 validation_failed</code>. The cashback rate applied is the merchant's   rate effective <em>at this instant</em>.</p>
+<ul>
+<li><code>cashback_rate_percent</code> (optional) overrides the rate **for this sale</li>
+</ul>
+<p>  only** — see the box below.</p>
 <ul>
 <li><code>branch_id</code> (optional) must be one of the merchant's branch ids from</li>
 </ul>
@@ -147,8 +162,8 @@ export MANFAA_API=&quot;https://sandbox.api.manfaa.app/api&quot;</code></pre>
     &quot;currency&quot;: &quot;MVR&quot;,
     &quot;eligible_laari&quot;: 118000,
     &quot;sale_laari&quot;: 125000,
-    &quot;rate_bp&quot;: 200,
-    &quot;fee_bp&quot;: 75,
+    &quot;cashback_rate_percent&quot;: &quot;2.00&quot;,
+    &quot;platform_fee_percent&quot;: &quot;0.75&quot;,
     &quot;cashback_laari&quot;: 2360,
     &quot;cashback_mvr&quot;: &quot;23.60&quot;,
     &quot;fee_laari&quot;: 885,
@@ -159,6 +174,7 @@ export MANFAA_API=&quot;https://sandbox.api.manfaa.app/api&quot;</code></pre>
   }
 }</code></pre>
 <p><strong>Store <code>transaction.id</code> against the invoice</strong> — a reversal addresses it.</p>
+<p><code>cashback_rate_percent</code> and <code>platform_fee_percent</code> are the terms <strong>frozen</strong> on this row at <code>occurred_at</code>. They never change afterwards, even if the merchant reprices tomorrow — and a reversal reverses the stored integers, never a recomputation.</p>
 <p>Print the conditional wording on the receipt: the customer <em>will earn</em> MVR 23.60 once the merchant confirms — nothing is promised before then.</p>
 <p><strong><code>200</code> — recorded, no cashback.</strong> This endpoint never rejects a well-formed sale for business reasons; the two no-cashback outcomes come back as <code>200</code> with a distinct <code>status</code> so the cashier always sees something truthful:</p>
 <p><em>Below the merchant's minimum</em> (sandbox: <code>eligible_amount</code> under <code>5000</code>):</p>
@@ -175,8 +191,8 @@ export MANFAA_API=&quot;https://sandbox.api.manfaa.app/api&quot;</code></pre>
     &quot;state&quot;: &quot;reversed&quot;,
     &quot;reason_code&quot;: &quot;below_minimum&quot;,
     &quot;eligible_laari&quot;: 4999,
-    &quot;rate_bp&quot;: 200,
-    &quot;fee_bp&quot;: 75,
+    &quot;cashback_rate_percent&quot;: &quot;2.00&quot;,
+    &quot;platform_fee_percent&quot;: &quot;0.75&quot;,
     &quot;cashback_laari&quot;: 0,
     &quot;cashback_mvr&quot;: &quot;0.00&quot;,
     &quot;fee_laari&quot;: 0,
@@ -194,14 +210,58 @@ export MANFAA_API=&quot;https://sandbox.api.manfaa.app/api&quot;</code></pre>
     &quot;reason_code&quot;: &quot;merchant_suspended&quot;,
     &quot;cashback_laari&quot;: 0,
     &quot;fee_laari&quot;: 0,
-    &quot;rate_bp&quot;: 200,
-    &quot;fee_bp&quot;: 75,
+    &quot;cashback_rate_percent&quot;: &quot;2.00&quot;,
+    &quot;platform_fee_percent&quot;: &quot;0.75&quot;,
     &quot;...&quot;: &quot;other transaction fields as above&quot;
   }
 }</code></pre>
 <p>Keep POSTing while suspended — sales are still recorded — but stop advertising cashback until the <code>merchant.reinstated</code> webhook. Accrual resumes automatically; already-recorded ineligible sales are <strong>not</strong> retro-credited.</p>
 <p><strong><code>201</code> with <code>reason: &quot;backdated_final&quot;</code></strong> — a sale older than the merchant's validation window + 3 days is <strong>backdated</strong>. It is accepted, but it skips the refund window entirely: it arrives in <code>state: &quot;payable_unfunded&quot;</code> with <code>&quot;backdated&quot;: true</code>, the merchant's 15-day settlement clock starts at the moment you POST it (not at <code>occurred_at</code>), and <strong>it can never be reversed through this API</strong> — <code>POST /v1/transactions/{id}/reverse</code> answers <code>409 backdated_irreversible</code> in every state, and no credit adjustment is created either. Corrections are admin adjustments, arranged with Manfaa.</p>
 <p>Flush your offline queue promptly: a queue that drains a week late turns ordinary sales into irreversible ones. Branch on the <code>backdated</code> boolean, not on <code>reason_code</code> — later transitions rewrite <code>reason_code</code>, but <code>backdated</code> is permanent.</p>
+<h4 id="per-sale-rate-override-cashback_rate_percent">Per-sale rate override — <code>cashback_rate_percent</code></h4>
+<p>A sale may carry its own rate: a staff discount day, a launch hour, a goodwill boost for one customer. Send <code>cashback_rate_percent</code> on the create request and it prices <strong>that sale only</strong> — the merchant's standing rate is untouched, and nothing about the next sale changes.</p>
+<pre><code>curl -s -X POST $MANFAA_API/v1/transactions \
+  -H &quot;Authorization: Bearer $MANFAA_TOKEN&quot; \
+  -H &quot;Idempotency-Key: $(uuidgen)&quot; \
+  -H &quot;Content-Type: application/json&quot; \
+  -d '{
+    &quot;invoice_no&quot;: &quot;INV-1006&quot;,
+    &quot;customer_ref&quot;: &quot;111111&quot;,
+    &quot;eligible_amount&quot;: 118000,
+    &quot;cashback_rate_percent&quot;: &quot;5.00&quot;
+  }'</code></pre>
+<p>With the sandbox merchant's standing 2.00%, that sale is credited at 5.00%:</p>
+<div class="table-scroll"><table><thead><tr><th></th><th>Rate</th><th>Worked integer</th><th>Result</th></tr></thead><tbody><tr><td>Cashback</td><td><code>&quot;5.00&quot;</code> (500 bp internally)</td><td>ceil(118000 × 500 / 10000)</td><td><strong>5900</strong> laari</td></tr><tr><td>Platform fee</td><td><code>&quot;1.00&quot;</code> — the fee tier of the <strong>applied</strong> rate</td><td>ceil(118000 × 100 / 10000)</td><td><strong>1180</strong> laari</td></tr></tbody></table></div>
+<pre><code>{
+  &quot;status&quot;: &quot;created&quot;,
+  &quot;reason&quot;: null,
+  &quot;transaction&quot;: {
+    &quot;id&quot;: 84526,
+    &quot;state&quot;: &quot;awaiting_validation&quot;,
+    &quot;eligible_laari&quot;: 118000,
+    &quot;cashback_rate_percent&quot;: &quot;5.00&quot;,
+    &quot;platform_fee_percent&quot;: &quot;1.00&quot;,
+    &quot;cashback_laari&quot;: 5900,
+    &quot;cashback_mvr&quot;: &quot;59.00&quot;,
+    &quot;fee_laari&quot;: 1180,
+    &quot;fee_mvr&quot;: &quot;11.80&quot;,
+    &quot;...&quot;: &quot;other transaction fields as above&quot;
+  }
+}</code></pre>
+<p>Two rules, and both are refusals rather than silent adjustments:</p>
+<ul>
+<li><strong>An override may only raise the rate.</strong> Below the rate the sale would</li>
+</ul>
+<p>  otherwise earn — the standing rate, or a live promotion covering this sale   — it is <code>422 rate_below_advertised</code>, with the applicable rate in   <code>error.meta.advertised_cashback_rate_percent</code>. The advertised rate is a   public promise to the customer; a till must not be able to quietly pay   less than the storefront says.</p>
+<p>  Because it only ever <em>raises</em>, an override <strong>equal</strong> to the rate the sale   already earns is accepted and changes nothing at all: the sale prices   exactly as if you had not sent the field. That matters during a   promotion. If you echo <code>active_promotion.cashback_rate_percent</code> from   <code>GET /v1/merchants/me/rate</code> back into the sale, the promotion still   prices it — including its <code>max_cashback_per_customer_laari</code> cap, which is   part of the offer the store published. Only a value strictly above the   promotion is a decision to pay more than the published offer, and that   sale is then priced by your number alone: no promotion is stamped on it,   and it consumes none of the customer's promotional headroom.</p>
+<p>  ``<code>json   {     &quot;error&quot;: {       &quot;code&quot;: &quot;rate_below_advertised&quot;,       &quot;message&quot;: &quot;cashback_rate_percent 1.50% is below the 2.00% this sale already earns — an override may only raise the advertised rate.&quot;,       &quot;meta&quot;: { &quot;advertised_cashback_rate_percent&quot;: &quot;2.00&quot; }     }   }   </code>``</p>
+<ul>
+<li><strong>The platform must be able to price the fee for it.</strong> A rate above the</li>
+</ul>
+<p>  ceiling of the active fee schedule is <code>422 rate_not_priced</code>, with the   ceiling in <code>error.meta.ceiling_percent</code> (sandbox: <code>&quot;10.00&quot;</code>). Nothing you   can fix at the till — the merchant's plan has to be widened by Manfaa   first.</p>
+<p>Both refusals are terminal for that request: fix the value (or drop the field) and resend with a <strong>fresh</strong> <code>Idempotency-Key</code>. Nothing was recorded.</p>
+<p>They apply only to a sale that actually earns cashback. On a sale that earns none either way — a <strong>suspended</strong> merchant (<code>200 recorded_ineligible</code>) or one <strong>below the minimum</strong> (<code>200 below_minimum</code>) — the field is ignored rather than refused, and the sale is recorded exactly as it would be without it, frozen at the store's standing terms with <code>cashback_laari: 0</code>. Ingestion never stops for a rate that could not have been applied: the till still gets its <code>200</code> and the cashier still sees the truth.</p>
+<p><strong>With <code>lines</code>:</strong> the override becomes the rate of every line that would otherwise price at the standing rate (the <code>category: null</code> bucket). Category overrides and exclusions are untouched — an override never pays an excluded category, and never overwrites the merchant's rate card — and a live promotion still lifts any line it would pay more on. No line ever earns less than it would have without the override.</p>
 <p><strong>A merchant account that is not trading answers <code>403 forbidden_ability</code></strong> in the error envelope, with the message <em>&quot;This merchant account is not active on the platform.&quot;</em> — every status except <code>active</code> and <code>suspended</code>: a closed account, and a self-signed-up store that has not completed onboarding (still in setup, awaiting review, or sent back for changes). Suspended is not one of them: a suspended merchant's sales are still accepted, as <code>200 recorded_ineligible</code> above. Stop sending and contact us — retrying cannot succeed until the account is reinstated.</p>
 <h4 id="online-stores">Online stores</h4>
 <p>Web checkouts use the <strong>same endpoint, same contract</strong> — nothing above changes. Two ways to key the customer:</p>
@@ -229,7 +289,7 @@ export MANFAA_API=&quot;https://sandbox.api.manfaa.app/api&quot;</code></pre>
 <li>unknown slug → <code>422 unknown_category</code>; deactivated →</li>
 </ul>
 <p>  <code>422 inactive_category</code>.</p>
-<p><strong>Worked example.</strong> Merchant standing rate 5.00% (<code>500</code> bp), category <code>veggies</code> overridden to 2.00% (<code>200</code> bp), category <code>fruits</code> excluded. A MVR 1,000.00 basket split 300.00 fruits + 250.00 veggies + 450.00 other:</p>
+<p><strong>Worked example.</strong> Merchant standing rate <code>&quot;5.00&quot;</code>, category <code>veggies</code> overridden to <code>&quot;2.00&quot;</code>, category <code>fruits</code> excluded. A MVR 1,000.00 basket split 300.00 fruits + 250.00 veggies + 450.00 other:</p>
 <pre><code>curl -s -X POST $MANFAA_API/v1/transactions \
   -H &quot;Authorization: Bearer $MANFAA_TOKEN&quot; \
   -H &quot;Idempotency-Key: $(uuidgen)&quot; \
@@ -246,7 +306,8 @@ export MANFAA_API=&quot;https://sandbox.api.manfaa.app/api&quot;</code></pre>
     ]
   }'</code></pre>
 <p>Every line rounds <strong>up</strong> independently (§4 ceiling), then the transaction totals are the <em>sums of the line integers</em> — never recomputed on the whole amount:</p>
-<div class="table-scroll"><table><thead><tr><th>Line</th><th>Amount</th><th>Rate</th><th>Cashback</th><th>Fee tier</th><th>Fee</th></tr></thead><tbody><tr><td>fruits (excluded)</td><td>30000</td><td>0</td><td>0</td><td>—</td><td>0</td></tr><tr><td>veggies</td><td>25000</td><td>200 bp</td><td>ceil(25000×200/10000) = <strong>500</strong></td><td>75 bp</td><td>ceil(25000×75/10000) = <strong>188</strong></td></tr><tr><td>default</td><td>45000</td><td>500 bp</td><td>ceil(45000×500/10000) = <strong>2250</strong></td><td>100 bp</td><td>ceil(45000×100/10000) = <strong>450</strong></td></tr><tr><td><strong>Totals</strong></td><td>100000</td><td></td><td><strong>2750</strong></td><td></td><td><strong>638</strong></td></tr></tbody></table></div>
+<div class="table-scroll"><table><thead><tr><th>Line</th><th>Amount</th><th>Rate</th><th>Cashback</th><th>Fee tier</th><th>Fee</th></tr></thead><tbody><tr><td>fruits (excluded)</td><td>30000</td><td><code>&quot;0.00&quot;</code></td><td>0</td><td><code>&quot;0.00&quot;</code></td><td>0</td></tr><tr><td>veggies</td><td>25000</td><td><code>&quot;2.00&quot;</code></td><td>ceil(25000×200/10000) = <strong>500</strong></td><td><code>&quot;0.75&quot;</code></td><td>ceil(25000×75/10000) = <strong>188</strong></td></tr><tr><td>default</td><td>45000</td><td><code>&quot;5.00&quot;</code></td><td>ceil(45000×500/10000) = <strong>2250</strong></td><td><code>&quot;1.00&quot;</code></td><td>ceil(45000×100/10000) = <strong>450</strong></td></tr><tr><td><strong>Totals</strong></td><td>100000</td><td></td><td><strong>2750</strong></td><td></td><td><strong>638</strong></td></tr></tbody></table></div>
+<p>(The arithmetic is shown in basis points because that is exactly how the platform computes it: <code>&quot;2.00&quot;</code> is 200 bp, and <code>ceil(amount × bp / 10000)</code> is the §4 rule. On the wire you only ever see the percent string.)</p>
 <pre><code>{
   &quot;status&quot;: &quot;created&quot;,
   &quot;reason&quot;: null,
@@ -254,25 +315,25 @@ export MANFAA_API=&quot;https://sandbox.api.manfaa.app/api&quot;</code></pre>
     &quot;id&quot;: 84525,
     &quot;state&quot;: &quot;awaiting_validation&quot;,
     &quot;eligible_laari&quot;: 100000,
-    &quot;rate_bp&quot;: 500,
-    &quot;fee_bp&quot;: 100,
+    &quot;cashback_rate_percent&quot;: &quot;5.00&quot;,
+    &quot;platform_fee_percent&quot;: &quot;1.00&quot;,
     &quot;cashback_laari&quot;: 2750,
     &quot;cashback_mvr&quot;: &quot;27.50&quot;,
     &quot;fee_laari&quot;: 638,
     &quot;fee_mvr&quot;: &quot;6.38&quot;,
     &quot;lines&quot;: [
-      { &quot;category&quot;: &quot;fruits&quot;,  &quot;category_name_en&quot;: &quot;Fruits&quot;,  &quot;amount_laari&quot;: 30000, &quot;effective_rate_bp&quot;: 0,   &quot;fee_bp&quot;: 0,   &quot;cashback_laari&quot;: 0,    &quot;fee_laari&quot;: 0,   &quot;priced_by&quot;: &quot;excluded&quot;, &quot;sort&quot;: 0 },
-      { &quot;category&quot;: &quot;veggies&quot;, &quot;category_name_en&quot;: &quot;Veggies&quot;, &quot;amount_laari&quot;: 25000, &quot;effective_rate_bp&quot;: 200, &quot;fee_bp&quot;: 75,  &quot;cashback_laari&quot;: 500,  &quot;fee_laari&quot;: 188, &quot;priced_by&quot;: &quot;category&quot;, &quot;sort&quot;: 1 },
-      { &quot;category&quot;: null,      &quot;category_name_en&quot;: null,      &quot;amount_laari&quot;: 45000, &quot;effective_rate_bp&quot;: 500, &quot;fee_bp&quot;: 100, &quot;cashback_laari&quot;: 2250, &quot;fee_laari&quot;: 450, &quot;priced_by&quot;: &quot;standing&quot;, &quot;sort&quot;: 2 }
+      { &quot;category&quot;: &quot;fruits&quot;,  &quot;category_name_en&quot;: &quot;Fruits&quot;,  &quot;amount_laari&quot;: 30000, &quot;cashback_rate_percent&quot;: &quot;0.00&quot;, &quot;platform_fee_percent&quot;: &quot;0.00&quot;, &quot;cashback_laari&quot;: 0,    &quot;fee_laari&quot;: 0,   &quot;priced_by&quot;: &quot;excluded&quot;, &quot;sort&quot;: 0 },
+      { &quot;category&quot;: &quot;veggies&quot;, &quot;category_name_en&quot;: &quot;Veggies&quot;, &quot;amount_laari&quot;: 25000, &quot;cashback_rate_percent&quot;: &quot;2.00&quot;, &quot;platform_fee_percent&quot;: &quot;0.75&quot;, &quot;cashback_laari&quot;: 500,  &quot;fee_laari&quot;: 188, &quot;priced_by&quot;: &quot;category&quot;, &quot;sort&quot;: 1 },
+      { &quot;category&quot;: null,      &quot;category_name_en&quot;: null,      &quot;amount_laari&quot;: 45000, &quot;cashback_rate_percent&quot;: &quot;5.00&quot;, &quot;platform_fee_percent&quot;: &quot;1.00&quot;, &quot;cashback_laari&quot;: 2250, &quot;fee_laari&quot;: 450, &quot;priced_by&quot;: &quot;standing&quot;, &quot;sort&quot;: 2 }
     ],
     &quot;...&quot;: &quot;other transaction fields as above&quot;
   }
 }</code></pre>
 <p>Notes:</p>
 <ul>
-<li>On a lined transaction, <code>rate_bp</code>/<code>fee_bp</code> at the transaction level are</li>
+<li>On a lined transaction, <code>cashback_rate_percent</code>/<code>platform_fee_percent</code> at</li>
 </ul>
-<p>  the <strong>standing-rate snapshot</strong>; per-line truth is in <code>lines</code>   (<code>effective_rate_bp</code>, <code>priced_by</code>).</p>
+<p>  the transaction level are the <strong>base-rate snapshot</strong> (the standing rate,   or your per-sale override when you sent one); per-line truth is in <code>lines</code>   — each line carries the rate it actually earned, and <code>priced_by</code> says why.</p>
 <ul>
 <li>During a live promotion, every <strong>non-excluded</strong> line earns</li>
 </ul>
@@ -289,7 +350,7 @@ export MANFAA_API=&quot;https://sandbox.api.manfaa.app/api&quot;</code></pre>
   -H &quot;Idempotency-Key: $(uuidgen)&quot; \
   -H &quot;Content-Type: application/json&quot; \
   -d '{&quot;reason&quot;: &quot;customer_refund&quot;, &quot;occurred_at&quot;: &quot;2026-08-15T09:30:00+05:00&quot;}'</code></pre>
-<p><code>reason</code> is one of <code>customer_refund</code>, <code>till_void</code>, <code>duplicate</code>, <code>other</code>. Reversal always reverses the <strong>stored</strong> integers — never recomputed, even if the rate has since changed.</p>
+<p><code>reason</code> is one of <code>customer_refund</code>, <code>till_void</code>, <code>duplicate</code>, <code>other</code>. <code>occurred_at</code> follows the same rule as on creation — <strong>optional</strong> (omit it for now), ISO 8601 with an offset, or a plain wall clock read as Maldives time. Reversal always reverses the <strong>stored</strong> integers — never recomputed, even if the rate has since changed.</p>
 <p>The <code>200</code> body's <code>outcome</code> tells you what actually happened:</p>
 <p><strong><code>outcome: &quot;reversed&quot;</code></strong> — the transaction was still pending; it moved to <code>state: &quot;reversed&quot;</code> and the accrual was undone in full:</p>
 <pre><code>{
@@ -330,14 +391,29 @@ export MANFAA_API=&quot;https://sandbox.api.manfaa.app/api&quot;</code></pre>
   -H &quot;Authorization: Bearer $MANFAA_TOKEN&quot;</code></pre>
 <p>Sandbox answer (the scheduled decrease is part of the fixtures):</p>
 <pre><code>{
-  &quot;rate_bp&quot;: 200,
-  &quot;fee_bp&quot;: 75,
+  &quot;cashback_rate_percent&quot;: &quot;2.00&quot;,
+  &quot;platform_fee_percent&quot;: &quot;0.75&quot;,
   &quot;currency&quot;: &quot;MVR&quot;,
   &quot;min_eligible_laari&quot;: 5000,
   &quot;pending_decrease&quot;: {
-    &quot;rate_bp&quot;: 150,
-    &quot;fee_bp&quot;: 50,
+    &quot;cashback_rate_percent&quot;: &quot;1.50&quot;,
+    &quot;platform_fee_percent&quot;: &quot;0.50&quot;,
     &quot;effective_at&quot;: &quot;2026-08-15T00:00:00+05:00&quot;
+  }
+}</code></pre>
+<p>While a published promotion is live and beating the standing rate, an <code>active_promotion</code> block appears alongside — display that as the offer:</p>
+<pre><code>{
+  &quot;cashback_rate_percent&quot;: &quot;2.00&quot;,
+  &quot;platform_fee_percent&quot;: &quot;0.75&quot;,
+  &quot;currency&quot;: &quot;MVR&quot;,
+  &quot;min_eligible_laari&quot;: 5000,
+  &quot;pending_decrease&quot;: null,
+  &quot;active_promotion&quot;: {
+    &quot;cashback_rate_percent&quot;: &quot;5.00&quot;,
+    &quot;platform_fee_percent&quot;: &quot;1.00&quot;,
+    &quot;branch_id&quot;: null,
+    &quot;min_purchase_laari&quot;: 10000,
+    &quot;ends_at&quot;: &quot;2026-08-20T00:00:00+05:00&quot;
   }
 }</code></pre>
 <p>What you display is <strong>advisory</strong> — the server always recomputes at <code>occurred_at</code>. Rate <em>decreases</em> take effect only at 00:00 UTC+5 the next day (that is what <code>pending_decrease</code> announces); increases apply immediately. A stale cache can therefore only <strong>under</strong>-promise, never over-promise. Refresh on the <code>merchant.rate_changed</code> webhook rather than polling. A merchant with no configured rate answers <code>422 no_effective_rate</code>.</p>
@@ -354,18 +430,18 @@ export MANFAA_API=&quot;https://sandbox.api.manfaa.app/api&quot;</code></pre>
   -H &quot;Authorization: Bearer $MANFAA_TOKEN&quot;</code></pre>
 <pre><code>{
   &quot;data&quot;: [
-    { &quot;category&quot;: &quot;fruits&quot;,  &quot;name_en&quot;: &quot;Fruits&quot;,  &quot;name_dv&quot;: &quot;މޭވާ&quot;,     &quot;mode&quot;: &quot;excluded&quot;, &quot;rate_bp&quot;: null },
-    { &quot;category&quot;: &quot;veggies&quot;, &quot;name_en&quot;: &quot;Veggies&quot;, &quot;name_dv&quot;: &quot;ތަރުކާރީ&quot;, &quot;mode&quot;: &quot;rate&quot;,     &quot;rate_bp&quot;: 200 }
+    { &quot;category&quot;: &quot;fruits&quot;,  &quot;name_en&quot;: &quot;Fruits&quot;,  &quot;name_dv&quot;: &quot;މޭވާ&quot;,     &quot;mode&quot;: &quot;excluded&quot;, &quot;cashback_rate_percent&quot;: null },
+    { &quot;category&quot;: &quot;veggies&quot;, &quot;name_en&quot;: &quot;Veggies&quot;, &quot;name_dv&quot;: &quot;ތަރުކާރީ&quot;, &quot;mode&quot;: &quot;rate&quot;,     &quot;cashback_rate_percent&quot;: &quot;2.00&quot; }
   ]
 }</code></pre>
-<p><code>category</code> is the exact string to submit. <code>mode: &quot;excluded&quot;</code> lines earn nothing; <code>mode: &quot;rate&quot;</code> lines earn <code>rate_bp</code> instead of the standing rate; anything else goes on the <code>category: null</code> default line. The merchant can change this list at any time — refresh it when a POST answers <code>unknown_category</code> or <code>inactive_category</code> rather than caching forever. A merchant with no categories returns an empty <code>data</code> and you simply never send <code>lines</code>.</p>
+<p><code>category</code> is the exact string to submit. <code>mode: &quot;excluded&quot;</code> lines earn nothing; <code>mode: &quot;rate&quot;</code> lines earn their <code>cashback_rate_percent</code> instead of the standing rate (<code>null</code> exactly when the category is excluded); anything else goes on the <code>category: null</code> default line. The merchant can change this list at any time — refresh it when a POST answers <code>unknown_category</code> or <code>inactive_category</code> rather than caching forever. A merchant with no categories returns an empty <code>data</code> and you simply never send <code>lines</code>.</p>
 <hr>
 <h2 id="5-errors">5. Errors</h2>
 <p>Apart from the auth-layer <code>401</code>/<code>403</code> and throttling <code>429</code> (§2), every error is the envelope:</p>
 <pre><code>{ &quot;error&quot;: { &quot;code&quot;: &quot;duplicate_invoice&quot;, &quot;message&quot;: &quot;…&quot;, &quot;meta&quot;: { &quot;transaction_id&quot;: 84521 } } }</code></pre>
 <p>Match on <code>error.code</code> — messages are human-readable and may change. <code>errors</code> (per-field messages) appears only with <code>validation_failed</code>; <code>meta</code> carries machine-readable context where noted.</p>
 <p>The complete code registry (also in <code>openapi.yaml</code> → <code>MachineCode</code>):</p>
-<div class="table-scroll"><table><thead><tr><th>Code</th><th>Where</th><th>HTTP</th><th>Retry?</th></tr></thead><tbody><tr><td><code>unauthorized</code></td><td>error envelope (auth edge cases; the usual 401 body is <code>{&quot;message&quot;: &quot;Unauthenticated.&quot;}</code>)</td><td>401</td><td>After fixing credentials</td></tr><tr><td><code>forbidden_ability</code></td><td>error envelope (merchant not active — closed, or never approved; the usual missing-ability 403 body is <code>{&quot;message&quot;: &quot;Invalid ability provided.&quot;}</code>)</td><td>403</td><td>After fixing token abilities; never while the merchant is not active</td></tr><tr><td><code>validation_failed</code></td><td>error envelope, with per-field <code>errors</code></td><td>422</td><td>Fix request; resend with a <strong>fresh</strong> key</td></tr><tr><td><code>idempotency_key_required</code></td><td>error envelope — write sent without the header</td><td>422</td><td>Add the header and resend</td></tr><tr><td><code>idempotency_key_reuse_mismatch</code></td><td>error envelope — same key, different body</td><td>422</td><td>Never — fix key generation</td></tr><tr><td><code>future_dated</code></td><td>error envelope — <code>occurred_at</code> beyond 5-minute skew</td><td>422</td><td>Fix the till clock; resend with a fresh key</td></tr><tr><td><code>customer_not_found</code></td><td>error envelope</td><td>422 (create) / 404 (lookup)</td><td>Re-confirm the code with the customer</td></tr><tr><td><code>no_effective_rate</code></td><td>error envelope</td><td>422</td><td>No — contact Manfaa</td></tr><tr><td><code>unknown_category</code></td><td>error envelope — <code>lines[].category</code> is not one of this merchant's slugs</td><td>422</td><td>Refresh §4.5, fix the slug; fresh key</td></tr><tr><td><code>inactive_category</code></td><td>error envelope — the category was deactivated</td><td>422</td><td>Refresh §4.5, resubmit; fresh key</td></tr><tr><td><code>duplicate_category_line</code></td><td>error envelope — a category (or the null default) appears twice</td><td>422</td><td>Merge the lines; fresh key</td></tr><tr><td><code>lines_sum_mismatch</code></td><td>error envelope — line amounts ≠ <code>eligible_amount</code></td><td>422</td><td>Fix the split; fresh key</td></tr><tr><td><code>duplicate_invoice</code></td><td>error envelope; existing id in <code>meta.transaction_id</code></td><td>409</td><td>Never — sale already recorded</td></tr><tr><td><code>invalid_state</code></td><td>error envelope; current state in <code>meta.state</code></td><td>409</td><td>Never — terminal state</td></tr><tr><td><code>backdated_irreversible</code></td><td>error envelope; current state in <code>meta.state</code></td><td>409</td><td>Never — admin adjustment only</td></tr><tr><td><code>transaction_not_found</code></td><td>error envelope</td><td>404</td><td>Never</td></tr><tr><td><code>merchant_suspended</code></td><td><code>reason</code> in a <code>200 recorded_ineligible</code> body</td><td>—</td><td>n/a — recorded, no cashback</td></tr><tr><td><code>below_minimum</code></td><td><code>reason</code> in a <code>200 below_minimum</code> body</td><td>—</td><td>n/a — recorded, zero cashback</td></tr><tr><td><code>backdated_final</code></td><td><code>reason</code> in a <code>201</code> body, <code>state: payable_unfunded</code></td><td>—</td><td>n/a — accepted, payable now, irreversible</td></tr><tr><td><code>locked_in_settlement</code></td><td><code>cause</code> in a <code>200 adjustment_created</code> body</td><td>—</td><td>n/a — adjustment created</td></tr><tr><td><code>already_confirmed</code></td><td><code>cause</code> in a <code>200 adjustment_created</code> body</td><td>—</td><td>n/a — adjustment created</td></tr></tbody></table></div>
+<div class="table-scroll"><table><thead><tr><th>Code</th><th>Where</th><th>HTTP</th><th>Retry?</th></tr></thead><tbody><tr><td><code>unauthorized</code></td><td>error envelope (auth edge cases; the usual 401 body is <code>{&quot;message&quot;: &quot;Unauthenticated.&quot;}</code>)</td><td>401</td><td>After fixing credentials</td></tr><tr><td><code>forbidden_ability</code></td><td>error envelope (merchant not active — closed, or never approved; the usual missing-ability 403 body is <code>{&quot;message&quot;: &quot;Invalid ability provided.&quot;}</code>)</td><td>403</td><td>After fixing token abilities; never while the merchant is not active</td></tr><tr><td><code>validation_failed</code></td><td>error envelope, with per-field <code>errors</code></td><td>422</td><td>Fix request; resend with a <strong>fresh</strong> key</td></tr><tr><td><code>idempotency_key_required</code></td><td>error envelope — write sent without the header</td><td>422</td><td>Add the header and resend</td></tr><tr><td><code>idempotency_key_reuse_mismatch</code></td><td>error envelope — same key, different body</td><td>422</td><td>Never — fix key generation</td></tr><tr><td><code>future_dated</code></td><td>error envelope — <code>occurred_at</code> beyond 5-minute skew</td><td>422</td><td>Fix the till clock; resend with a fresh key</td></tr><tr><td><code>customer_not_found</code></td><td>error envelope</td><td>422 (create) / 404 (lookup)</td><td>Re-confirm the code with the customer</td></tr><tr><td><code>no_effective_rate</code></td><td>error envelope</td><td>422</td><td>No — contact Manfaa</td></tr><tr><td><code>rate_below_advertised</code></td><td>error envelope — the <code>cashback_rate_percent</code> override is below the rate the sale already earns; advertised rate in <code>meta.advertised_cashback_rate_percent</code></td><td>422</td><td>Raise the value or drop the field; fresh key</td></tr><tr><td><code>rate_not_priced</code></td><td>error envelope — the override is above the ceiling the platform prices; ceiling in <code>meta.ceiling_percent</code></td><td>422</td><td>No — contact Manfaa</td></tr><tr><td><code>unknown_category</code></td><td>error envelope — <code>lines[].category</code> is not one of this merchant's slugs</td><td>422</td><td>Refresh §4.5, fix the slug; fresh key</td></tr><tr><td><code>inactive_category</code></td><td>error envelope — the category was deactivated</td><td>422</td><td>Refresh §4.5, resubmit; fresh key</td></tr><tr><td><code>duplicate_category_line</code></td><td>error envelope — a category (or the null default) appears twice</td><td>422</td><td>Merge the lines; fresh key</td></tr><tr><td><code>lines_sum_mismatch</code></td><td>error envelope — line amounts ≠ <code>eligible_amount</code></td><td>422</td><td>Fix the split; fresh key</td></tr><tr><td><code>duplicate_invoice</code></td><td>error envelope; existing id in <code>meta.transaction_id</code></td><td>409</td><td>Never — sale already recorded</td></tr><tr><td><code>invalid_state</code></td><td>error envelope; current state in <code>meta.state</code></td><td>409</td><td>Never — terminal state</td></tr><tr><td><code>backdated_irreversible</code></td><td>error envelope; current state in <code>meta.state</code></td><td>409</td><td>Never — admin adjustment only</td></tr><tr><td><code>transaction_not_found</code></td><td>error envelope</td><td>404</td><td>Never</td></tr><tr><td><code>merchant_suspended</code></td><td><code>reason</code> in a <code>200 recorded_ineligible</code> body</td><td>—</td><td>n/a — recorded, no cashback</td></tr><tr><td><code>below_minimum</code></td><td><code>reason</code> in a <code>200 below_minimum</code> body</td><td>—</td><td>n/a — recorded, zero cashback</td></tr><tr><td><code>backdated_final</code></td><td><code>reason</code> in a <code>201</code> body, <code>state: payable_unfunded</code></td><td>—</td><td>n/a — accepted, payable now, irreversible</td></tr><tr><td><code>locked_in_settlement</code></td><td><code>cause</code> in a <code>200 adjustment_created</code> body</td><td>—</td><td>n/a — adjustment created</td></tr><tr><td><code>already_confirmed</code></td><td><code>cause</code> in a <code>200 adjustment_created</code> body</td><td>—</td><td>n/a — adjustment created</td></tr></tbody></table></div>
 <p>Transient coordination codes (e.g. <code>idempotency_key_in_flight</code>, <code>409</code>) are not part of the registry: <strong>anything not listed above — and any <code>5xx</code> — is retryable with the same <code>Idempotency-Key</code>.</strong></p>
 <hr>
 <h2 id="6-webhooks">6. Webhooks</h2>
@@ -378,11 +454,11 @@ export MANFAA_API=&quot;https://sandbox.api.manfaa.app/api&quot;</code></pre>
 <p><strong>Worked example.</strong> Endpoint secret:</p>
 <pre><code>whsec_sandboxSECRETsandboxSECRETsandboxSECRET000000000</code></pre>
 <p>Raw body (one line, 250 bytes, no trailing newline):</p>
-<pre><code>{&quot;id&quot;:&quot;evt_01J5A8Z0T2N9GQK4WMB3XVRD6H&quot;,&quot;data&quot;:{&quot;fee_bp&quot;:50,&quot;rate_bp&quot;:150,&quot;merchant_id&quot;:12,&quot;effective_at&quot;:&quot;2026-08-16T00:00:00+05:00&quot;,&quot;previous_fee_bp&quot;:75,&quot;previous_rate_bp&quot;:200},&quot;type&quot;:&quot;merchant.rate_changed&quot;,&quot;created_at&quot;:&quot;2026-08-15T16:05:11+05:00&quot;}</code></pre>
+<pre><code>{&quot;id&quot;:&quot;evt_01J5A8Z0T2N9GQK4WMB3XVRD6H&quot;,&quot;data&quot;:{&quot;merchant_id&quot;:12,&quot;effective_at&quot;:&quot;2026-08-16T00:00:00+05:00&quot;,&quot;platform_fee_percent&quot;:&quot;0.50&quot;,&quot;cashback_rate_percent&quot;:&quot;1.50&quot;,&quot;previous_platform_fee_percent&quot;:&quot;0.75&quot;,&quot;previous_cashback_rate_percent&quot;:&quot;2.00&quot;},&quot;type&quot;:&quot;merchant.rate_changed&quot;,&quot;created_at&quot;:&quot;2026-08-15T16:05:11+05:00&quot;}</code></pre>
 <p>Expected <code>X-Manfaa-Signature</code>:</p>
 <pre><code>be5a5fe344884c02a4e0cc21fe169052d0305dac2fdaf95c25dd397c2d7f6636</code></pre>
 <p>Reproduce it on your machine:</p>
-<pre><code>printf '%s' '{&quot;id&quot;:&quot;evt_01J5A8Z0T2N9GQK4WMB3XVRD6H&quot;,&quot;data&quot;:{&quot;fee_bp&quot;:50,&quot;rate_bp&quot;:150,&quot;merchant_id&quot;:12,&quot;effective_at&quot;:&quot;2026-08-16T00:00:00+05:00&quot;,&quot;previous_fee_bp&quot;:75,&quot;previous_rate_bp&quot;:200},&quot;type&quot;:&quot;merchant.rate_changed&quot;,&quot;created_at&quot;:&quot;2026-08-15T16:05:11+05:00&quot;}' \
+<pre><code>printf '%s' '{&quot;id&quot;:&quot;evt_01J5A8Z0T2N9GQK4WMB3XVRD6H&quot;,&quot;data&quot;:{&quot;merchant_id&quot;:12,&quot;effective_at&quot;:&quot;2026-08-16T00:00:00+05:00&quot;,&quot;platform_fee_percent&quot;:&quot;0.50&quot;,&quot;cashback_rate_percent&quot;:&quot;1.50&quot;,&quot;previous_platform_fee_percent&quot;:&quot;0.75&quot;,&quot;previous_cashback_rate_percent&quot;:&quot;2.00&quot;},&quot;type&quot;:&quot;merchant.rate_changed&quot;,&quot;created_at&quot;:&quot;2026-08-15T16:05:11+05:00&quot;}' \
   | openssl dgst -sha256 -hmac 'whsec_sandboxSECRETsandboxSECRETsandboxSECRET000000000'</code></pre>
 <p>PHP:</p>
 <pre><code>$computed = hash_hmac('sha256', $rawBody, $secret);          // $rawBody = file_get_contents('php://input')
@@ -412,7 +488,7 @@ const valid = crypto.timingSafeEqual(Buffer.from(computed), Buffer.from(signatur
 <ul>
 <li>[ ] Production token held per merchant (from us, or from the merchant's own Settings › API access), stored server-side, never in a client bundle</li>
 <li>[ ] Fresh UUID per sale, persisted before send; same key reused on retry</li>
-<li>[ ] <code>occurred_at</code> always carries the UTC offset; till clock NTP-synced</li>
+<li>[ ] <code>occurred_at</code> is omitted (meaning now), carries an explicit offset, or is a plain Maldives wall clock — and the till clock is NTP-synced</li>
 <li>[ ] <code>transaction.id</code> stored against the invoice for reversals</li>
 <li>[ ] <strong>Reversal sent for every refund/void/duplicate</strong> (contractual — §4.2)</li>
 <li>[ ] <code>below_minimum</code> / <code>recorded_ineligible</code> handled as recorded-no-cashback, not errors</li>

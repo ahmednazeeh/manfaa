@@ -2,24 +2,25 @@ import { format, parseISO } from 'date-fns';
 
 /**
  * Display-only formatting helpers. Money arithmetic stays in integer laari
- * and rates stay in integer basis points everywhere — floats appear only in
- * non-monetary display maths (distances).
+ * and rate arithmetic in integer basis points (`percentToBp`) everywhere —
+ * floats appear only in non-monetary display maths (distances).
  */
 
-/** Integer basis points -> percent string: 200 -> "2%", 550 -> "5.5%". */
-export function formatRateBp(bp: number): string {
-  if (!Number.isSafeInteger(bp)) {
-    throw new TypeError(`rate_bp must be a safe integer, got ${bp}`);
-  }
-  const whole = Math.trunc(bp / 100);
-  const frac = bp % 100;
-  if (frac === 0) {
-    return `${whole}%`;
-  }
-  if (frac % 10 === 0) {
-    return `${whole}.${frac / 10}%`;
-  }
-  return `${whole}.${String(frac).padStart(2, '0')}%`;
+/**
+ * A rate as it arrives on the wire (PLAN §1: a 2-decimal percent STRING —
+ * "2.00", "0.75", "12.50") rendered the way this storefront has always
+ * rendered rates: trailing zeros dropped, so "2.00" reads "2%" and "5.50"
+ * reads "5.5%".
+ *
+ * The server's digits are passed through verbatim — trimmed, never parsed
+ * and re-formatted — so no number exists in the display path at all and a
+ * digit cannot be lost. Rates that need COMPARING (is a promo live?) go
+ * through `percentToBp` instead; basis points remain the only unit for
+ * rate arithmetic, never for showing a rate the API already sent as a
+ * percent.
+ */
+export function formatRate(percent: string): string {
+  return `${percent.replace(/\.?0+$/, '')}%`;
 }
 
 /** Masks an account number to its last four digits: "•••• 1234". */

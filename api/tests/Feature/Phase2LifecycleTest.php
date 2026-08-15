@@ -205,8 +205,8 @@ it('runs the full Phase 2 vendor lifecycle: credential → POS ingest → replay
         ->assertJsonPath('status', 'created')
         ->assertJsonPath('transaction.origin', 'pos')
         ->assertJsonPath('transaction.state', 'awaiting_validation')
-        ->assertJsonPath('transaction.rate_bp', 200)
-        ->assertJsonPath('transaction.fee_bp', 75)
+        ->assertJsonPath('transaction.cashback_rate_percent', '2.00')
+        ->assertJsonPath('transaction.platform_fee_percent', '0.75')
         ->assertJsonPath('transaction.cashback_laari', 2_360)
         ->assertJsonPath('transaction.fee_laari', 885);
 
@@ -245,11 +245,11 @@ it('runs the full Phase 2 vendor lifecycle: credential → POS ingest → replay
     Carbon::setTestNow(CarbonImmutable::parse('2026-08-01T22:00:00+05:00'));
 
     p2ActingAs($owner)
-        ->postJson('/api/merchant/rate', ['rate_bp' => 100])
+        ->postJson('/api/merchant/rate', ['cashback_rate_percent' => '1.00'])
         ->assertOk()
-        ->assertJsonPath('data.current.rate_bp', 200)
-        ->assertJsonPath('data.pending.rate_bp', 100)
-        ->assertJsonPath('data.pending.fee_bp', 50)
+        ->assertJsonPath('data.current.cashback_rate_percent', '2.00')
+        ->assertJsonPath('data.pending.cashback_rate_percent', '1.00')
+        ->assertJsonPath('data.pending.platform_fee_percent', '0.50')
         ->assertJsonPath('change.applies', 'next_business_midnight')
         ->assertJsonPath('change.effective_at', '2026-08-02T00:00:00+05:00');
 
@@ -261,15 +261,15 @@ it('runs the full Phase 2 vendor lifecycle: credential → POS ingest → replay
 
     p2VendorPost('/api/v1/transactions', p2Sale('INV-2003', 61_500, '2026-08-01T23:59:00+05:00'), (string) Str::uuid())
         ->assertCreated()
-        ->assertJsonPath('transaction.rate_bp', 200)
-        ->assertJsonPath('transaction.fee_bp', 75)
+        ->assertJsonPath('transaction.cashback_rate_percent', '2.00')
+        ->assertJsonPath('transaction.platform_fee_percent', '0.75')
         ->assertJsonPath('transaction.cashback_laari', 1_230)
         ->assertJsonPath('transaction.fee_laari', 462);
 
     p2VendorPost('/api/v1/transactions', p2Sale('INV-2004', 61_500, '2026-08-02T00:01:00+05:00'), (string) Str::uuid())
         ->assertCreated()
-        ->assertJsonPath('transaction.rate_bp', 100)
-        ->assertJsonPath('transaction.fee_bp', 50)
+        ->assertJsonPath('transaction.cashback_rate_percent', '1.00')
+        ->assertJsonPath('transaction.platform_fee_percent', '0.50')
         ->assertJsonPath('transaction.cashback_laari', 615)
         ->assertJsonPath('transaction.fee_laari', 308);
 
@@ -489,8 +489,8 @@ it('runs the full Phase 2 vendor lifecycle: credential → POS ingest → replay
         ->assertJsonPath('transaction.state', 'reversed')
         ->assertJsonPath('transaction.cashback_laari', 0)
         ->assertJsonPath('transaction.fee_laari', 0)
-        ->assertJsonPath('transaction.rate_bp', 100)
-        ->assertJsonPath('transaction.fee_bp', 50);
+        ->assertJsonPath('transaction.cashback_rate_percent', '1.00')
+        ->assertJsonPath('transaction.platform_fee_percent', '0.50');
 
     expect(Transaction::query()->count())->toBe(7)
         // 10 before the incentive, plus one prompt-payment discount journal

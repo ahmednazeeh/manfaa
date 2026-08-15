@@ -10,7 +10,8 @@ use Illuminate\Http\Resources\Json\JsonResource;
 /**
  * A transaction as the CUSTOMER sees it (§6 mapping): the simplified status,
  * a translatable reason key, and the amounts that concern them. Internal
- * state and the merchant's commercial terms (fee, fee_bp) never appear here.
+ * state and the merchant's commercial terms (the platform fee, the rate the
+ * merchant is billed at) never appear here.
  *
  * @mixin Transaction
  */

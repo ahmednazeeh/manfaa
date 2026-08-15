@@ -34,19 +34,19 @@ it('lets the owner create excluded and rate categories with generated slugs', fu
         ->assertCreated()
         ->assertJsonPath('data.slug', 'fresh-fruits')
         ->assertJsonPath('data.mode', 'excluded')
-        ->assertJsonPath('data.rate_bp', null)
+        ->assertJsonPath('data.cashback_rate_percent', null)
         ->assertJsonPath('data.active', true);
 
     $this->postJson('/api/merchant/product-categories', [
         'name_en' => 'Veggies',
         'mode' => 'rate',
-        'rate_bp' => 200,
+        'cashback_rate_percent' => '2.00',
         'sort' => 20,
     ])
         ->assertCreated()
         ->assertJsonPath('data.slug', 'veggies')
         ->assertJsonPath('data.mode', 'rate')
-        ->assertJsonPath('data.rate_bp', 200);
+        ->assertJsonPath('data.cashback_rate_percent', '2.00');
 
     // Staff can READ the list — it feeds the credit form.
     $this->actingAs($this->staff, 'merchant');
@@ -61,7 +61,7 @@ it('refuses category writes from staff with manager_required', function () {
     $this->actingAs($this->staff, 'merchant');
 
     $this->postJson('/api/merchant/product-categories', [
-        'name_en' => 'Veggies', 'mode' => 'rate', 'rate_bp' => 200,
+        'name_en' => 'Veggies', 'mode' => 'rate', 'cashback_rate_percent' => '2.00',
     ])->assertForbidden()->assertJsonPath('code', 'manager_required');
 
     expect(MerchantProductCategory::query()->count())->toBe(0);
@@ -73,7 +73,7 @@ it('lets a manager write categories — the line-item rate card is manager work'
     $this->actingAs($manager, 'merchant');
 
     $id = $this->postJson('/api/merchant/product-categories', [
-        'name_en' => 'Veggies', 'mode' => 'rate', 'rate_bp' => 200,
+        'name_en' => 'Veggies', 'mode' => 'rate', 'cashback_rate_percent' => '2.00',
     ])->assertCreated()->json('data.id');
 
     $this->patchJson("/api/merchant/product-categories/{$id}", ['mode' => 'excluded'])
@@ -86,7 +86,7 @@ it('refuses category writes on a pending-review store with store_not_approved', 
     $this->actingAs($this->owner, 'merchant');
 
     $this->postJson('/api/merchant/product-categories', [
-        'name_en' => 'Veggies', 'mode' => 'rate', 'rate_bp' => 200,
+        'name_en' => 'Veggies', 'mode' => 'rate', 'cashback_rate_percent' => '2.00',
     ])->assertStatus(409)->assertJsonPath('code', 'store_not_approved');
 });
 
@@ -94,7 +94,7 @@ it('keeps the slug immutable across renames and rejects explicit slug input', fu
     $this->actingAs($this->owner, 'merchant');
 
     $id = $this->postJson('/api/merchant/product-categories', [
-        'name_en' => 'Veggies', 'mode' => 'rate', 'rate_bp' => 200,
+        'name_en' => 'Veggies', 'mode' => 'rate', 'cashback_rate_percent' => '2.00',
     ])->assertCreated()->json('data.id');
 
     // Rename is allowed; the slug NEVER moves (it is the public line key).
@@ -116,7 +116,7 @@ it('uniquifies colliding slugs per merchant with numeric suffixes', function () 
 
     $this->postJson('/api/merchant/product-categories', ['name_en' => 'Fruits', 'mode' => 'excluded'])
         ->assertCreated()->assertJsonPath('data.slug', 'fruits');
-    $this->postJson('/api/merchant/product-categories', ['name_en' => 'Fruits', 'mode' => 'rate', 'rate_bp' => 100])
+    $this->postJson('/api/merchant/product-categories', ['name_en' => 'Fruits', 'mode' => 'rate', 'cashback_rate_percent' => '1.00'])
         ->assertCreated()->assertJsonPath('data.slug', 'fruits-2');
 
     // Another merchant may reuse the same slug — uniqueness is per merchant.
@@ -127,61 +127,61 @@ it('uniquifies colliding slugs per merchant with numeric suffixes', function () 
         ->assertCreated()->assertJsonPath('data.slug', 'fruits');
 });
 
-it('validates rate_bp: structural 50..2000 plus the active schedule ceiling (rate_not_priced)', function () {
+it('validates cashback_rate_percent: structural 0.50%..20.00% plus the active schedule ceiling (rate_not_priced)', function () {
     $this->actingAs($this->owner, 'merchant');
 
     // Structural bounds are plain validation failures.
-    $this->postJson('/api/merchant/product-categories', ['name_en' => 'A', 'mode' => 'rate', 'rate_bp' => 30])
-        ->assertUnprocessable()->assertJsonValidationErrors('rate_bp');
-    $this->postJson('/api/merchant/product-categories', ['name_en' => 'A', 'mode' => 'rate', 'rate_bp' => 2500])
-        ->assertUnprocessable()->assertJsonValidationErrors('rate_bp');
+    $this->postJson('/api/merchant/product-categories', ['name_en' => 'A', 'mode' => 'rate', 'cashback_rate_percent' => '0.30'])
+        ->assertUnprocessable()->assertJsonValidationErrors('cashback_rate_percent');
+    $this->postJson('/api/merchant/product-categories', ['name_en' => 'A', 'mode' => 'rate', 'cashback_rate_percent' => '25.00'])
+        ->assertUnprocessable()->assertJsonValidationErrors('cashback_rate_percent');
 
     // A rate without a mode=rate, or a rate on an exclusion, is malformed.
     $this->postJson('/api/merchant/product-categories', ['name_en' => 'A', 'mode' => 'rate'])
-        ->assertUnprocessable()->assertJsonValidationErrors('rate_bp');
-    $this->postJson('/api/merchant/product-categories', ['name_en' => 'A', 'mode' => 'excluded', 'rate_bp' => 200])
-        ->assertUnprocessable()->assertJsonValidationErrors('rate_bp');
+        ->assertUnprocessable()->assertJsonValidationErrors('cashback_rate_percent');
+    $this->postJson('/api/merchant/product-categories', ['name_en' => 'A', 'mode' => 'excluded', 'cashback_rate_percent' => '2.00'])
+        ->assertUnprocessable()->assertJsonValidationErrors('cashback_rate_percent');
 
     // 1200 bp is structurally legal but the seeded active schedule prices
     // only 50..1000 — refused app-side with the sellability code.
-    $this->postJson('/api/merchant/product-categories', ['name_en' => 'A', 'mode' => 'rate', 'rate_bp' => 1200])
+    $this->postJson('/api/merchant/product-categories', ['name_en' => 'A', 'mode' => 'rate', 'cashback_rate_percent' => '12.00'])
         ->assertUnprocessable()->assertJsonPath('code', 'rate_not_priced');
 
     expect(MerchantProductCategory::query()->count())->toBe(0);
 
     // The same ceiling governs updates.
-    $id = $this->postJson('/api/merchant/product-categories', ['name_en' => 'A', 'mode' => 'rate', 'rate_bp' => 1000])
+    $id = $this->postJson('/api/merchant/product-categories', ['name_en' => 'A', 'mode' => 'rate', 'cashback_rate_percent' => '10.00'])
         ->assertCreated()->json('data.id');
-    $this->patchJson("/api/merchant/product-categories/{$id}", ['rate_bp' => 1200])
+    $this->patchJson("/api/merchant/product-categories/{$id}", ['cashback_rate_percent' => '12.00'])
         ->assertUnprocessable()->assertJsonPath('code', 'rate_not_priced');
 });
 
 it('switches modes coherently: rate requires a rate, excluded drops it', function () {
     $this->actingAs($this->owner, 'merchant');
 
-    $id = $this->postJson('/api/merchant/product-categories', ['name_en' => 'Veggies', 'mode' => 'rate', 'rate_bp' => 200])
+    $id = $this->postJson('/api/merchant/product-categories', ['name_en' => 'Veggies', 'mode' => 'rate', 'cashback_rate_percent' => '2.00'])
         ->assertCreated()->json('data.id');
 
     // rate → excluded: the rate is dropped with the mode.
     $this->patchJson("/api/merchant/product-categories/{$id}", ['mode' => 'excluded'])
         ->assertOk()
         ->assertJsonPath('data.mode', 'excluded')
-        ->assertJsonPath('data.rate_bp', null);
+        ->assertJsonPath('data.cashback_rate_percent', null);
 
     // excluded → rate without a rate is refused.
     $this->patchJson("/api/merchant/product-categories/{$id}", ['mode' => 'rate'])
-        ->assertUnprocessable()->assertJsonValidationErrors('rate_bp');
+        ->assertUnprocessable()->assertJsonValidationErrors('cashback_rate_percent');
 
-    $this->patchJson("/api/merchant/product-categories/{$id}", ['mode' => 'rate', 'rate_bp' => 300])
+    $this->patchJson("/api/merchant/product-categories/{$id}", ['mode' => 'rate', 'cashback_rate_percent' => '3.00'])
         ->assertOk()
         ->assertJsonPath('data.mode', 'rate')
-        ->assertJsonPath('data.rate_bp', 300);
+        ->assertJsonPath('data.cashback_rate_percent', '3.00');
 });
 
 it('deactivates softly and scopes updates to the owning merchant', function () {
     $this->actingAs($this->owner, 'merchant');
 
-    $id = $this->postJson('/api/merchant/product-categories', ['name_en' => 'Veggies', 'mode' => 'rate', 'rate_bp' => 200])
+    $id = $this->postJson('/api/merchant/product-categories', ['name_en' => 'Veggies', 'mode' => 'rate', 'cashback_rate_percent' => '2.00'])
         ->assertCreated()->json('data.id');
 
     $this->patchJson("/api/merchant/product-categories/{$id}", ['active' => false])
@@ -227,8 +227,8 @@ it('lists ACTIVE categories to vendors under rates:read', function () {
         ->assertOk();
 
     expect($response->json('data'))->toBe([
-        ['category' => 'fruits', 'name_en' => 'Fruits', 'name_dv' => null, 'mode' => 'excluded', 'rate_bp' => null],
-        ['category' => 'veggies', 'name_en' => 'Veggies', 'name_dv' => 'ތަރުކާރީ', 'mode' => 'rate', 'rate_bp' => 200],
+        ['category' => 'fruits', 'name_en' => 'Fruits', 'name_dv' => null, 'mode' => 'excluded', 'cashback_rate_percent' => null],
+        ['category' => 'veggies', 'name_en' => 'Veggies', 'name_dv' => 'ތަރުކާރީ', 'mode' => 'rate', 'cashback_rate_percent' => '2.00'],
     ]);
 });
 
@@ -237,11 +237,12 @@ it('renders ACTIVE category rates on the public store page without ids or slugs'
 
     $data = $this->getJson('/api/discover/merchants/'.$this->merchant->slug)->assertOk()->json('data');
 
-    // "Everything else" is the standing_rate_bp; names + mode + rate only.
-    expect($data['standing_rate_bp'])->toBe(500)
+    // "Everything else" is the standing_cashback_rate_percent; names + mode
+    // + rate only.
+    expect($data['standing_cashback_rate_percent'])->toBe('5.00')
         ->and($data['category_rates'])->toBe([
-            ['name_en' => 'Fruits', 'name_dv' => null, 'mode' => 'excluded', 'rate_bp' => null],
-            ['name_en' => 'Veggies', 'name_dv' => 'ތަރުކާރީ', 'mode' => 'rate', 'rate_bp' => 200],
+            ['name_en' => 'Fruits', 'name_dv' => null, 'mode' => 'excluded', 'cashback_rate_percent' => null],
+            ['name_en' => 'Veggies', 'name_dv' => 'ތަރުކާރީ', 'mode' => 'rate', 'cashback_rate_percent' => '2.00'],
         ]);
 });
 

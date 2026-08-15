@@ -4,7 +4,9 @@ import { ReactNode, useState } from 'react';
 import {
   approveStoreReview,
   formatBpPercent,
+  formatPercent,
   getAdminFeeTierSchedules,
+  percentToBp,
   rejectStoreReview,
   type StoreReview,
 } from '@manfaa/api-client';
@@ -12,7 +14,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Check, Eye, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiErrorMessage } from '@/lib/api-error';
-import { feeBpFor } from '@/lib/fee-tiers';
+import { bandsFromWire, feeBpFor } from '@/lib/fee-tiers';
 import { formatDateTime } from '@/lib/format';
 import {
   AlertDialog,
@@ -145,10 +147,16 @@ export function ReviewSheet({
     reject.mutate({ reason: trimmed });
   };
 
-  const currentBands = tiers.data?.data.current?.tiers ?? null;
+  // The rate arrives as a percent string (PLAN §1); resolving which §4 band
+  // it falls in is a comparison, so both sides are read as integer bp.
+  const wireBands = tiers.data?.data.current?.tiers ?? null;
+  const rateBp =
+    review.cashback_rate_percent === null
+      ? null
+      : percentToBp(review.cashback_rate_percent);
   const feeBp =
-    review.rate_bp !== null && currentBands !== null
-      ? feeBpFor(currentBands, review.rate_bp)
+    rateBp !== null && wireBands !== null
+      ? feeBpFor(bandsFromWire(wireBands), rateBp)
       : null;
 
   const stepEntries = Object.entries(review.setup_state);
@@ -220,16 +228,16 @@ export function ReviewSheet({
                   <ChannelBadge channel={review.channel} />
                 </Field>
                 <Field label="Cashback rate">
-                  {review.rate_bp === null ? (
+                  {review.cashback_rate_percent === null ? (
                     <Empty>Not set</Empty>
                   ) : (
                     <span className="font-medium">
-                      {formatBpPercent(review.rate_bp)}
+                      {formatPercent(review.cashback_rate_percent)}
                     </span>
                   )}
                 </Field>
                 <Field label="Merchant all-in">
-                  {review.rate_bp === null ? (
+                  {rateBp === null || review.cashback_rate_percent === null ? (
                     <Empty>—</Empty>
                   ) : tiers.isPending && open ? (
                     <span className="text-muted-foreground">Pricing…</span>
@@ -237,10 +245,10 @@ export function ReviewSheet({
                     <Empty>Rate not priced by the active fee schedule</Empty>
                   ) : (
                     <span className="font-medium">
-                      {formatBpPercent(review.rate_bp + feeBp)}
+                      {formatBpPercent(rateBp + feeBp)}
                       <span className="ms-1 font-normal text-muted-foreground">
-                        ({formatBpPercent(review.rate_bp)} cashback +{' '}
-                        {formatBpPercent(feeBp)} fee)
+                        ({formatPercent(review.cashback_rate_percent)} cashback
+                        + {formatBpPercent(feeBp)} fee)
                       </span>
                     </span>
                   )}
@@ -328,8 +336,8 @@ export function ReviewSheet({
                           directory, search and its store page — on the next
                           discovery refresh. Its owner can start crediting
                           cashback at{' '}
-                          {review.rate_bp !== null
-                            ? formatBpPercent(review.rate_bp)
+                          {review.cashback_rate_percent !== null
+                            ? formatPercent(review.cashback_rate_percent)
                             : 'the configured rate'}
                           .
                         </AlertDialogDescription>

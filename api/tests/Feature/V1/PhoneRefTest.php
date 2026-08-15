@@ -92,7 +92,7 @@ it('records a +960 phone-keyed sale with origin api_phone at Pending', function 
         ->assertJsonPath('transaction.origin', 'api_phone')
         // awaiting_validation is customer-facing Pending (§6).
         ->assertJsonPath('transaction.state', 'awaiting_validation')
-        ->assertJsonPath('transaction.rate_bp', 200)
+        ->assertJsonPath('transaction.cashback_rate_percent', '2.00')
         ->assertJsonPath('transaction.cashback_laari', 2360)
         ->assertJsonPath('transaction.fee_laari', 885);
 

@@ -44,10 +44,10 @@ it('walks the wizard: profile, rate, submit — and resumes mid-way from GET set
     expect($state['status'])->toBe('draft')
         ->and($state['steps'])->toBe(['profile' => false, 'logo' => false, 'rate' => false])
         ->and($state['values']['category'])->toBeNull()
-        ->and($state['values']['rate_bp'])->toBeNull()
+        ->and($state['values']['cashback_rate_percent'])->toBeNull()
         ->and(collect($state['categories'])->pluck('slug'))->toContain('grocery', 'restaurant', 'other')
         ->and($state['categories'][0])->toHaveKeys(['slug', 'name_en', 'name_dv'])
-        ->and($state['rate_bounds'])->toBe(['min_bp' => 50, 'max_bp' => 1000]);
+        ->and($state['rate_bounds'])->toBe(['min_percent' => '0.50', 'max_percent' => '10.00']);
 
     // Step 1: profile.
     $this->patchJson('/api/merchant/setup/profile', [
@@ -64,13 +64,13 @@ it('walks the wizard: profile, rate, submit — and resumes mid-way from GET set
     $resumed = $this->getJson('/api/merchant/setup')->assertOk()->json('data');
     expect($resumed['steps'])->toBe(['profile' => true, 'logo' => false, 'rate' => false])
         ->and($resumed['values']['eligibility_basis'])->toBe('Full invoice total excluding delivery.')
-        ->and($resumed['values']['rate_bp'])->toBeNull();
+        ->and($resumed['values']['cashback_rate_percent'])->toBeNull();
 
     // Step 2: the initial rate, effective immediately.
-    $this->patchJson('/api/merchant/setup/rate', ['rate_bp' => 200])
+    $this->patchJson('/api/merchant/setup/rate', ['cashback_rate_percent' => '2.00'])
         ->assertOk()
         ->assertJsonPath('data.steps.rate', true)
-        ->assertJsonPath('data.values.rate_bp', 200);
+        ->assertJsonPath('data.values.cashback_rate_percent', '2.00');
 
     $rates = MerchantRate::query()->where('merchant_id', $merchant->id)->get();
     expect($rates)->toHaveCount(1)
@@ -94,8 +94,8 @@ it('walks the wizard: profile, rate, submit — and resumes mid-way from GET set
 it('re-picking the rate before launch REPLACES the never-used initial row', function () {
     wizardOwner();
 
-    $this->patchJson('/api/merchant/setup/rate', ['rate_bp' => 200])->assertOk();
-    $this->patchJson('/api/merchant/setup/rate', ['rate_bp' => 350])->assertOk();
+    $this->patchJson('/api/merchant/setup/rate', ['cashback_rate_percent' => '2.00'])->assertOk();
+    $this->patchJson('/api/merchant/setup/rate', ['cashback_rate_percent' => '3.50'])->assertOk();
 
     $rates = MerchantRate::query()->get();
     expect($rates)->toHaveCount(1)
@@ -106,20 +106,20 @@ it('bounds the rate by the ACTIVE fee tier schedule ceiling, not just the struct
     wizardOwner();
 
     // Structural violations fail validation outright.
-    $this->patchJson('/api/merchant/setup/rate', ['rate_bp' => 30])->assertUnprocessable();
-    $this->patchJson('/api/merchant/setup/rate', ['rate_bp' => 2500])->assertUnprocessable();
-    $this->patchJson('/api/merchant/setup/rate', ['rate_bp' => 199.5])->assertUnprocessable();
+    $this->patchJson('/api/merchant/setup/rate', ['cashback_rate_percent' => '0.30'])->assertUnprocessable();
+    $this->patchJson('/api/merchant/setup/rate', ['cashback_rate_percent' => '25.00'])->assertUnprocessable();
+    $this->patchJson('/api/merchant/setup/rate', ['cashback_rate_percent' => '1.995'])->assertUnprocessable();
 
     // Inside the structural cap but above the seeded schedule's 1000 bp
     // ceiling: refused with the published rate_not_priced code (§4 note).
-    $this->patchJson('/api/merchant/setup/rate', ['rate_bp' => 1200])
+    $this->patchJson('/api/merchant/setup/rate', ['cashback_rate_percent' => '12.00'])
         ->assertUnprocessable()
         ->assertJsonPath('code', 'rate_not_priced');
 
     expect(MerchantRate::query()->count())->toBe(0);
 
     // The ceiling itself is sellable.
-    $this->patchJson('/api/merchant/setup/rate', ['rate_bp' => 1000])->assertOk();
+    $this->patchJson('/api/merchant/setup/rate', ['cashback_rate_percent' => '10.00'])->assertOk();
 });
 
 it('refuses submit while required pieces are missing, naming each one', function () {
@@ -167,7 +167,7 @@ it('locks every wizard write while the store is pending review', function () {
 
     $this->patchJson('/api/merchant/setup/profile', ['category' => 'grocery'])
         ->assertStatus(409)->assertJsonPath('code', 'setup_not_editable');
-    $this->patchJson('/api/merchant/setup/rate', ['rate_bp' => 200])
+    $this->patchJson('/api/merchant/setup/rate', ['cashback_rate_percent' => '2.00'])
         ->assertStatus(409)->assertJsonPath('code', 'setup_not_editable');
     $this->postJson('/api/merchant/setup/submit')
         ->assertStatus(409)->assertJsonPath('code', 'setup_not_editable');

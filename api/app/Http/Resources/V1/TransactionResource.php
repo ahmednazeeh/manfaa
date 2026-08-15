@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Resources\V1;
 
 use App\Domain\Money\Laari;
+use App\Domain\Money\Percent;
 use App\Http\Resources\TransactionLineResource;
 use App\Models\Transaction;
 use Illuminate\Http\Request;
@@ -14,6 +15,10 @@ use Illuminate\Http\Resources\Json\JsonResource;
  * The vendor-facing transaction shape (docs/openapi.yaml, Transaction):
  * laari integers paired with pre-formatted MVR presentation strings, and
  * every timestamp normalised to UTC ISO 8601.
+ *
+ * Rates follow the same idiom (PLAN §1 wire format): the FROZEN rate and
+ * fee this row was priced at, as 2-decimal percent strings — never basis
+ * points, which are the internal representation only.
  *
  * @mixin Transaction
  */
@@ -39,8 +44,8 @@ class TransactionResource extends JsonResource
             'currency' => $this->currency,
             'eligible_laari' => $this->eligible_laari,
             'sale_laari' => $this->sale_laari,
-            'rate_bp' => $this->rate_bp,
-            'fee_bp' => $this->fee_bp,
+            'cashback_rate_percent' => Percent::format($this->rate_bp),
+            'platform_fee_percent' => Percent::format($this->fee_bp),
             'cashback_laari' => $this->cashback_laari,
             'cashback_mvr' => Laari::of($this->cashback_laari)->formatMvr(),
             'fee_laari' => $this->fee_laari,

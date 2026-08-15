@@ -1,8 +1,11 @@
 'use client';
 
-import type { FeeTierBand } from '@manfaa/api-client';
 import { MoneyText } from '@manfaa/ui';
-import { formatBpPercent, type FixturePreview } from '@/lib/fee-tiers';
+import {
+  formatBpPercent,
+  type FixturePreview,
+  type TierBand,
+} from '@/lib/fee-tiers';
 import {
   Table,
   TableBody,
@@ -15,18 +18,23 @@ import {
 /**
  * A §4 tier table rendered the way the plan writes it: cashback range →
  * platform fee, with the merchant all-in column (cashback + fee) so the
- * 499 → 500 bp cliff is visible at a glance.
+ * 4.99% → 5.00% cliff is visible at a glance.
+ *
+ * The two basis-point columns are the ENGINE's unit, shown because an admin
+ * reasoning about a one-hundredth-of-a-percent boundary needs the integer.
+ * They are not wire fields — the API states every rate as a percent string
+ * (PLAN §1) and this panel converts once, on the way in.
  */
-export function FeeTierTable({ bands }: { bands: FeeTierBand[] }) {
+export function FeeTierTable({ bands }: { bands: TierBand[] }) {
   return (
     <div className="overflow-x-auto">
       <Table>
         <TableHeader>
           <TableRow>
             <TableHead>Customer cashback</TableHead>
-            <TableHead className="text-end">rate_bp</TableHead>
+            <TableHead className="text-end">Cashback (bp)</TableHead>
             <TableHead className="text-end">Platform fee</TableHead>
-            <TableHead className="text-end">fee_bp</TableHead>
+            <TableHead className="text-end">Fee (bp)</TableHead>
             <TableHead className="text-end">Merchant all-in</TableHead>
           </TableRow>
         </TableHeader>

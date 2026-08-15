@@ -35,6 +35,7 @@ final readonly class ApiCreditService
 
     /**
      * @param  list<LineInput>|null  $lines  parsed line splits (LineSetParser) — null for a single-rate credit
+     * @param  int|null  $overrideRateBp  per-sale rate override in basis points (wire: `cashback_rate_percent`)
      */
     public function credit(
         Merchant $merchant,
@@ -47,6 +48,7 @@ final readonly class ApiCreditService
         ?int $branchId = null,
         ?string $idempotencyKey = null,
         ?array $lines = null,
+        ?int $overrideRateBp = null,
     ): Transaction {
         // Only active and suspended merchants may reach the recorder (§7:
         // suspension stops cashback creation, not ingestion). Closed is
@@ -85,6 +87,7 @@ final readonly class ApiCreditService
             idempotencyKey: $idempotencyKey,
             ineligibleReason: $merchant->status === 'suspended' ? 'merchant_suspended' : null,
             lines: $lines,
+            overrideRateBp: $overrideRateBp,
         );
     }
 }

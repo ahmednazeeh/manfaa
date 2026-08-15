@@ -9,10 +9,19 @@ export {
   type ApiFetchOptions,
 } from './client';
 export { formatLaari, parseMvrToLaari } from './money';
+// The ONE percent <-> basis-points conversion (PLAN §1 wire format): rates
+// are 2-decimal percent STRINGS on every request and response, and basis
+// points exist only for arithmetic inside an app. Integer/string math only.
 export {
   bpToPercentString,
   formatBpPercent,
+  formatPercent,
+  isPercentDeltaString,
+  isPercentInput,
+  isPercentString,
   parsePercentToBp,
+  percentDeltaToBp,
+  percentToBp,
 } from './percent';
 export {
   LoginRequestSchema,

@@ -80,10 +80,10 @@ it('runs signup → resume → submit → reject → resubmit → approve → pu
         ->and($resumed['steps'])->toBe(['profile' => true, 'logo' => false, 'rate' => false])
         ->and($resumed['values']['category'])->toBe('grocery')
         ->and($resumed['values']['channel'])->toBe('both')
-        ->and($resumed['values']['rate_bp'])->toBeNull();
+        ->and($resumed['values']['cashback_rate_percent'])->toBeNull();
 
     // --- Complete and submit → pending_review, still publicly invisible ---
-    $this->patchJson('/api/merchant/setup/rate', ['rate_bp' => 200])->assertOk();
+    $this->patchJson('/api/merchant/setup/rate', ['cashback_rate_percent' => '2.00'])->assertOk();
     $this->postJson('/api/merchant/setup/submit')->assertOk()
         ->assertJsonPath('data.status', 'pending_review');
 
@@ -103,7 +103,7 @@ it('runs signup → resume → submit → reject → resubmit → approve → pu
         'channel' => 'in_store',
         'eligibility_basis' => 'Food and beverage only.',
     ])->assertOk();
-    $this->patchJson('/api/merchant/setup/rate', ['rate_bp' => 100])->assertOk();
+    $this->patchJson('/api/merchant/setup/rate', ['cashback_rate_percent' => '1.00'])->assertOk();
     $this->postJson('/api/merchant/setup/submit')->assertOk()
         ->assertJsonPath('data.status', 'pending_review');
 
@@ -147,7 +147,7 @@ it('runs signup → resume → submit → reject → resubmit → approve → pu
     $this->getJson('/api/discover/merchants/reef-corner')->assertOk()
         ->assertJsonPath('data.channel', 'both')
         ->assertJsonPath('data.category', 'grocery')
-        ->assertJsonPath('data.rate_bp', 200)
+        ->assertJsonPath('data.cashback_rate_percent', '2.00')
         ->assertJsonPath('data.cashback_basis', 'Full invoice total excluding delivery and service charge.');
 
     // --- The pending sibling stays invisible — its 404 is indistinguishable

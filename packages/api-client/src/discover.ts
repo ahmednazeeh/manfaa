@@ -3,6 +3,7 @@ import { apiFetch } from './client';
 import {
   dataWrapped,
   MerchantChannelSchema,
+  PercentSchema,
   ProductCategoryModeSchema,
 } from './resources';
 
@@ -17,9 +18,11 @@ interface RequestOptions {
 }
 
 /**
- * One discoverable merchant. `rate_bp` is the rate the customer gets NOW;
- * `standing_rate_bp` is the "usually" rate — when they differ, a published
- * promotion is live and `promo_ends_at` says until when.
+ * One discoverable merchant. `cashback_rate_percent` is the rate the
+ * customer gets NOW; `standing_cashback_rate_percent` is the "usually" rate
+ * — when they differ, a published promotion is live and `promo_ends_at`
+ * says until when. Both are 2-decimal percent strings (PLAN §1 wire
+ * format): render them as sent, and compare with `percentToBp`.
  */
 export const DiscoveryEntrySchema = z.object({
   name: z.string(),
@@ -29,8 +32,8 @@ export const DiscoveryEntrySchema = z.object({
   logo_url: z.string().nullable(),
   /** Never rendered as the literal "both" — display "In Store & Online". */
   channel: MerchantChannelSchema,
-  rate_bp: z.number().int(),
-  standing_rate_bp: z.number().int(),
+  cashback_rate_percent: PercentSchema,
+  standing_cashback_rate_percent: PercentSchema,
   promo_ends_at: z.string().nullable(),
   /** Metres to the nearest branch; null without coordinates. */
   distance_m: z.number().int().nullable(),
@@ -88,8 +91,8 @@ export const DirectoryEntrySchema = z.object({
   logo_url: z.string().nullable(),
   /** Never rendered as the literal "both" — display "In Store & Online". */
   channel: MerchantChannelSchema,
-  rate_bp: z.number().int(),
-  standing_rate_bp: z.number().int(),
+  cashback_rate_percent: PercentSchema,
+  standing_cashback_rate_percent: PercentSchema,
   promo_ends_at: z.string().nullable(),
 });
 export type DirectoryEntry = z.infer<typeof DirectoryEntrySchema>;
@@ -165,7 +168,7 @@ export function getDirectory(
  * Promotions are immutable once published, so rate and end are safe to show.
  */
 export const StorePromotionSchema = z.object({
-  rate_bp: z.number().int(),
+  cashback_rate_percent: PercentSchema,
   ends_at: z.string(),
   min_purchase_laari: z.number().int().nullable(),
 });
@@ -173,17 +176,17 @@ export type StorePromotion = z.infer<typeof StorePromotionSchema>;
 
 /**
  * One row of the public category-rates table (Task #25): "Fruits —
- * excluded, Veggies — 2%, everything else — standing_rate_bp". Display
+ * excluded, Veggies — 2%, everything else — the standing rate". Display
  * names + mode + rate only — deliberately no ids and no slugs; the public
  * page displays terms, it does not integrate. Excluded categories earn
- * nothing, even during promotions; `rate_bp` is null exactly when `mode`
- * is "excluded".
+ * nothing, even during promotions; `cashback_rate_percent` is null exactly
+ * when `mode` is "excluded".
  */
 export const StoreCategoryRateSchema = z.object({
   name_en: z.string(),
   name_dv: z.string().nullable(),
   mode: ProductCategoryModeSchema,
-  rate_bp: z.number().int().nullable(),
+  cashback_rate_percent: PercentSchema.nullable(),
 });
 export type StoreCategoryRate = z.infer<typeof StoreCategoryRateSchema>;
 
@@ -196,8 +199,9 @@ export const StoreBranchSchema = z.object({
 export type StoreBranch = z.infer<typeof StoreBranchSchema>;
 
 /**
- * The public store page. `rate_bp` is the rate the customer gets NOW (the
- * promo rate when one is live); `standing_rate_bp` is the "usually" rate.
+ * The public store page. `cashback_rate_percent` is the rate the customer
+ * gets NOW (the promo rate when one is live);
+ * `standing_cashback_rate_percent` is the "usually" rate.
  * `cashback_basis` is the merchant's own eligibility wording, verbatim —
  * displayed to customers, never used in computation.
  */
@@ -210,14 +214,15 @@ export const StoreDetailSchema = z.object({
   /** Never rendered as the literal "both" — display "In Store & Online". */
   channel: MerchantChannelSchema,
   featured: z.boolean(),
-  rate_bp: z.number().int(),
-  standing_rate_bp: z.number().int(),
+  cashback_rate_percent: PercentSchema,
+  standing_cashback_rate_percent: PercentSchema,
   promotion: StorePromotionSchema.nullable(),
   cashback_basis: z.string().nullable(),
   /**
    * The store's ACTIVE product categories, merchant sort order. Empty for
    * stores without category overrides — "everything else" always earns
-   * `standing_rate_bp` and is NOT a row here; the UI appends that line.
+   * `standing_cashback_rate_percent` and is NOT a row here; the UI appends
+   * that line.
    */
   category_rates: z.array(StoreCategoryRateSchema),
   branches: z.array(StoreBranchSchema),

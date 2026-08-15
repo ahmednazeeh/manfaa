@@ -10,11 +10,15 @@ use App\Domain\Cashback\LineSetParser;
 use App\Domain\Cashback\ManualCreditService;
 use App\Domain\Cashback\MerchantNotActiveException;
 use App\Domain\Cashback\NoEffectiveRateException;
+use App\Domain\Cashback\RateBelowAdvertisedException;
 use App\Domain\Money\Laari;
+use App\Domain\Money\Percent;
+use App\Domain\Platform\RateNotPricedException;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\TransactionResource;
+use App\Http\Support\OccurredAt;
 use App\Models\MerchantUser;
-use Carbon\CarbonImmutable;
+use App\Rules\PercentRate;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -32,10 +36,13 @@ class CreditController extends Controller
             'invoice_no' => ['required', 'string', 'max:64'],
             'eligible_amount' => ['required', 'integer', 'min:0'],
             'sale_amount' => ['nullable', 'integer', 'gte:eligible_amount'],
-            // ISO 8601 with an explicit UTC offset (§9.2). An offset-less
-            // wall-clock string would be read as UTC and freeze the rate at
-            // the wrong instant, so it is rejected outright.
-            'occurred_at' => ['required', 'date_format:Y-m-d\TH:i:sP,Y-m-d\TH:i:sp,Y-m-d\TH:i:sO'],
+            // OPTIONAL (PLAN §1): omitted means NOW. ISO 8601 with an
+            // offset, or a plain wall clock read as Maldives time
+            // (App\Http\Support\OccurredAt).
+            'occurred_at' => ['sometimes', 'nullable', OccurredAt::rule()],
+            // Per-sale rate override (PLAN §1): a 2-decimal percent for
+            // THIS sale only, never below the rate it would otherwise earn.
+            'cashback_rate_percent' => ['sometimes', 'nullable', PercentRate::cashback()],
             // Optional line-item split (Task #25): each line names one of
             // the merchant's product-category slugs, or null for the
             // default "everything else" bucket. Line amounts must sum to
@@ -50,6 +57,25 @@ class CreditController extends Controller
         $user = $request->user('merchant');
 
         $eligible = Laari::of((int) $validated['eligible_amount']);
+
+        // PLAN §1 staff roles: rate authority is MANAGER and above. Keying
+        // a sale in is staff work, so this route carries no role gate — but
+        // a per-sale override is a pricing decision, the same authority the
+        // rate screen needs (403 `manager_required` there). Without this
+        // check a staff account would be a bigger per-sale spending lever
+        // than the standing rate it is deliberately denied: one sale at the
+        // schedule ceiling costs the merchant several times the standing
+        // terms, and nothing else bounds it.
+        if (isset($validated['cashback_rate_percent']) && ! $user->hasRoleAtLeast('manager')) {
+            return new JsonResponse([
+                'message' => 'Only a merchant owner or manager can set a custom cashback rate for a sale.',
+                'code' => 'manager_required',
+            ], 403);
+        }
+
+        $overrideRateBp = isset($validated['cashback_rate_percent'])
+            ? Percent::toBasisPoints($validated['cashback_rate_percent'])
+            : null;
 
         $lines = null;
 
@@ -72,8 +98,9 @@ class CreditController extends Controller
                 invoiceNo: $validated['invoice_no'],
                 eligible: $eligible,
                 saleAmount: isset($validated['sale_amount']) ? Laari::of((int) $validated['sale_amount']) : null,
-                occurredAt: CarbonImmutable::parse($validated['occurred_at']),
+                occurredAt: OccurredAt::fromRequest($validated),
                 lines: $lines,
+                overrideRateBp: $overrideRateBp,
             );
         } catch (CustomerNotFoundException $e) {
             abort(404, $e->getMessage());
@@ -81,6 +108,19 @@ class CreditController extends Controller
             abort(409, $e->getMessage());
         } catch (MerchantNotActiveException|FutureDatedTransactionException|NoEffectiveRateException $e) {
             abort(422, $e->getMessage());
+        } catch (RateNotPricedException $e) {
+            // A rate override the ACTIVE fee tier schedule cannot price.
+            return new JsonResponse([
+                'message' => $e->getMessage(),
+                'code' => RateNotPricedException::CODE,
+            ], 422);
+        } catch (RateBelowAdvertisedException $e) {
+            // PLAN §1: an override may only raise the advertised rate.
+            return new JsonResponse([
+                'message' => $e->getMessage(),
+                'code' => RateBelowAdvertisedException::CODE,
+                'advertised_cashback_rate_percent' => Percent::format($e->advertisedBp),
+            ], 422);
         }
 
         // Only lined credits expose their pricing split; single-rate

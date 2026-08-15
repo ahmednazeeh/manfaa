@@ -7,7 +7,7 @@ import {
 import { useQuery } from '@tanstack/react-query';
 import { TriangleAlert } from 'lucide-react';
 import { apiErrorMessage } from '@/lib/api-error';
-import { formatBpPercent } from '@/lib/fee-tiers';
+import { bandsFromWire, formatBpPercent, formatPercent } from '@/lib/fee-tiers';
 import { formatDateTime } from '@/lib/format';
 import { Alert, AlertDescription, AlertIcon } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
@@ -36,11 +36,16 @@ function scheduleStatus(
   return { label: 'Superseded', variant: 'secondary' };
 }
 
+/**
+ * The schedule as one line. The API already states each edge as a
+ * 2-decimal percent (PLAN §1), so this is pure display — nothing is
+ * converted to reach it.
+ */
 function bandSummary(schedule: FeeTierSchedule): string {
   return schedule.tiers
     .map(
       (band) =>
-        `${formatBpPercent(band.from_bp)}–${formatBpPercent(band.to_bp)} → ${formatBpPercent(band.fee_bp)}`,
+        `${formatPercent(band.from_percent)}–${formatPercent(band.to_percent)} → ${formatPercent(band.fee_percent)}`,
     )
     .join(' · ');
 }
@@ -54,12 +59,17 @@ export default function FeeTiersPage() {
   const current = query.data?.data.current ?? null;
   const history = query.data?.data.history ?? [];
 
+  // The table, the editor and the worked example all reason about the
+  // 4.99%/5.00% boundary, so the wire's percent bands are read as integer
+  // basis points once, here.
+  const currentBands = current === null ? null : bandsFromWire(current.tiers);
+
   return (
     <div className="flex flex-col">
       <PageHeader
         title="Fee tiers"
         description="The §4 schedule: the platform fee charged on each cashback rate band. Rates and fees are frozen onto every sale at its occurred_at — schedule changes only ever touch the future."
-        actions={<ScheduleTiersDialog currentBands={current?.tiers ?? null} />}
+        actions={<ScheduleTiersDialog currentBands={currentBands} />}
       />
 
       {query.isError ? (
@@ -87,14 +97,14 @@ export default function FeeTiersPage() {
                 <div className="p-5">
                   <Skeleton className="h-32 w-full" />
                 </div>
-              ) : current ? (
+              ) : currentBands !== null ? (
                 <>
-                  <FeeTierTable bands={current.tiers} />
+                  <FeeTierTable bands={currentBands} />
                   <p className="px-5 pb-5 text-xs text-muted-foreground">
                     Worked example (§4): a {formatBpPercent(200)} cashback rate
                     falls in the{' '}
                     {(() => {
-                      const band = current.tiers.find(
+                      const band = currentBands.find(
                         (tier) => 200 >= tier.from_bp && 200 <= tier.to_bp,
                       );
                       return band

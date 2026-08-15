@@ -20,9 +20,10 @@ import {
 } from '@/components/settings/platform-setting-row';
 
 /**
- * Plain-language meaning of each key. Values are integers server-side
- * (laari or days); the row component converts to and from MVR strings
- * without ever passing money through a float.
+ * Plain-language meaning of each key. The API sends each value in the unit
+ * its name declares — integer laari, whole days, or a 2-decimal percent
+ * string for a rate — and the row component converts to and from the
+ * display text without ever passing money or a rate through a float.
  */
 const SETTING_META: Record<PlatformSettingKey, SettingMeta> = {
   min_payout_laari: {
@@ -55,11 +56,11 @@ const SETTING_META: Record<PlatformSettingKey, SettingMeta> = {
       'Sales below this earn no cashback — they are still recorded, with a below-minimum reason, so the till sees something truthful. Applied to new merchants.',
     unit: 'mvr',
   },
-  prompt_discount_rate_bp: {
+  prompt_discount_rate_percent: {
     label: 'Prompt-payment discount',
     description:
       'Taken off the PLATFORM FEE — never off the customer’s cashback — when a merchant settles every outstanding transaction and each one is still inside the age window below. Set to 0% to switch the incentive off entirely.',
-    unit: 'bp',
+    unit: 'percent',
   },
   prompt_discount_max_age_days: {
     label: 'Prompt-payment age window',
@@ -87,10 +88,12 @@ function crossKeyNotice(
     return null;
   }
 
-  const window = settings.settlement_due_days?.value;
-  const maxAge = settings.prompt_discount_max_age_days?.value;
+  // Both are `_days` keys, so both arrive as plain integers; Number() only
+  // satisfies the union the map's value type carries for `_percent` keys.
+  const window = Number(settings.settlement_due_days?.value);
+  const maxAge = Number(settings.prompt_discount_max_age_days?.value);
 
-  if (window === undefined || maxAge === undefined || maxAge < window) {
+  if (!Number.isFinite(window) || !Number.isFinite(maxAge) || maxAge < window) {
     return null;
   }
 

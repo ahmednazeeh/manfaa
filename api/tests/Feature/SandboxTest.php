@@ -71,11 +71,11 @@ it('prints the plaintext token from the command, and the token works against /v1
     $this->withHeaders(['Authorization' => 'Bearer '.$token])
         ->getJson('/api/v1/merchants/me/rate')
         ->assertOk()
-        ->assertJsonPath('rate_bp', 200)
-        ->assertJsonPath('fee_bp', 75)
+        ->assertJsonPath('cashback_rate_percent', '2.00')
+        ->assertJsonPath('platform_fee_percent', '0.75')
         ->assertJsonPath('min_eligible_laari', 5000)
-        ->assertJsonPath('pending_decrease.rate_bp', 150)
-        ->assertJsonPath('pending_decrease.fee_bp', 50);
+        ->assertJsonPath('pending_decrease.cashback_rate_percent', '1.50')
+        ->assertJsonPath('pending_decrease.platform_fee_percent', '0.50');
 
     // The published customer refs behave as the guide documents.
     $this->withHeaders(['Authorization' => 'Bearer '.$token])

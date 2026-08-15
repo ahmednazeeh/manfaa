@@ -110,7 +110,7 @@ it('lets an owner issue a credential: plaintext once, audited to the merchant us
     // The token is a real vendor credential: it reads the rate...
     asVendor($plain)->getJson('/api/v1/merchants/me/rate')
         ->assertOk()
-        ->assertJsonPath('rate_bp', 200);
+        ->assertJsonPath('cashback_rate_percent', '2.00');
 
     // ...and records a sale, which is the whole point of the wizard.
     asVendor($plain)
