@@ -520,80 +520,51 @@ No integrations. The riskiest logic, built first and in isolation.
 
 ---
 
-## 13b. Build queue (live status — updated 2026-08-14 end of session)
+## 13b. Build queue (status — 2026-08-15, autonomous run complete)
 
-Phases 0–3 plus seven post-launch rounds are BUILT, DEPLOYED and LIVE at
-manfaa.app / merchant. / admin. / api. — 574 tests green through seven
-adversarial review rounds (30+ serious findings confirmed and fixed).
-DONE beyond the phases: merchant module (Credit Customer screen, settings,
-staff roles), platform settings (bank accounts, effective-dated fee tiers,
-params, admin mgmt), public storefront (search, /store/{slug} pages, public
-merged /discover with landing search, logo slots + initials avatars,
-marketplace teaser), 20% cap with schedule-driven sellability + percent
-inputs everywhere, MsgOwl SMS live, claims feature-flagged off
-(merchant-mediated), theme toggles, light-first defaults.
+Phases 0–3 plus TWELVE post-launch rounds are BUILT, DEPLOYED and LIVE at
+manfaa.app / merchant. / admin. / api. — **839 tests, 14,070 assertions green**,
+twelve adversarial review rounds (50+ serious findings confirmed and fixed).
 
-Everything below is the remaining backlog, in execution order. Workflows must
-not overlap on the same app directory.
+### Done beyond the phases
+Merchant module (Credit Customer with QR scan + masked-name lookup, settings,
+three-tier roles) · platform settings (bank accounts, effective-dated fee tiers
+with a coverage invariant, operational parameters, admin management) · public
+storefront (merged searchable /discover, /store/{slug} pages, logo + initials
+avatars, marketplace teaser) · 20% cap with schedule-driven sellability and
+percent inputs · store self-signup → setup wizard → superadmin approval,
+channel enum, curated categories · product-category overrides with line-item
+pricing · receipt-first settlements with private slips and admin reject ·
+backdated credits immediately payable and irreversible · admin hold-review
+queue · human reason labels everywhere (typed exhaustive maps + audit script) ·
+merchant self-serve API credential wizard · MsgOwl SMS · claims
+feature-flagged off (merchant-mediated).
 
-### Queued (in order)
-0a. **Task #24 — store onboarding wizard + storefront listing upgrade**
-   (decisions in §1): self-signup with phone OTP → resumable setup wizard
-   (logo, channel, curated category, terms, rate) → pending review → admin
-   approval queue; channel enum in_store/online/both (display "In Store &
-   Online", never "both"); superadmin-curated store categories; card layout
-   logo|name|%|channel; authed visitors never see "Create account" on /.
-0b. **Task #25 — product-category overrides with line-item pricing**
-   (HIGH-RISK money change, full review round mandatory): per-store product
-   categories (excluded or rate override), credits + /v1 accept
-   lines[{category, amount}] summing to eligible, per-line §4 ceiling
-   pricing + stored splits, promo precedence = max(promo, category) for
-   non-excluded lines, store page renders the category table.
-0c. **Task #26 — Manager role** (Owner / Manager / Staff three-tier).
-1. **Task #23 — receipt-first settlement flow + backdated policy + QR scan**
-   (decisions already in §1 log): merchant settlement wizard ends with slip
-   upload + bank ref, submit lands in payment_review (no settlement without
-   receipt); admin match/REJECT with slip preview; backdated credits skip
-   on_hold — immediately payable + merchant-irreversible with warning;
-   QR scan on /credit via BarcodeDetector.
-2. **Task #22 — admin hold-review queue + human reason labels** (on_hold now
-   fraud/velocity only): one-method Release with atomic clock stamping,
-   Reject with mirrored ledger; i18n label maps for every reason code —
-   no raw snake_case anywhere.
-3. **Task #21 — merchant branding + self-serve API wizard** (after above;
-   touches apps/merchant + api + public store page): logo upload (media
-   storage; shown on store page + discovery cards), business NAME change
-   (merchant-editable per user decision), Terms & Exclusions fields (terms
-   text + structured exclusions list) surfaced on /store/{slug}; API create
-   wizard in merchant panel — owner self-serve credential issuance reusing
-   CredentialService (pick partner + abilities, token shown once, list/
-   revoke own credentials, integration-guide links, issuance rate-limited
-   and audited).
-   **API-wizard half DONE** (2026-08-15): POST/DELETE /merchant/credentials
-   owner-only behind EnsureMerchantApproved, free-text partner `label` (the
-   pos_vendors registry stays admin-curated), merchant-user issuance audit
-   in its own columns, 5 issuances/hour per merchant (429) + 10 live
-   credentials (422 credential_cap_reached), suspended stores refused (409
-   store_not_trading) while revocation stays open; Settings › API access
-   wizard with plain-language abilities and the acknowledge-locked one-time
-   token panel. Branding half still open.
-4. **Task #17 — Phase 3 minors**: customer-code range excluding 7xxxxx/9xxxxx
-   (truncated-phone collision), OTP register/verify races, LogSmsSender
-   masking (MsgOwl now primary in prod — log driver is dev-only), claims-
-   against-inactive-merchant validation (dormant flow), write-off path-back
-   policy decision.
+### Queue: EMPTY. Next work needs a product decision.
+
+### Open decisions awaiting the owner
+1. **Category-terms resolution instant** (documented above §1): product-category
+   overrides resolve at submission time from a mutable row while every other
+   rate resolves at occurred_at. Add effective-dated history, or accept?
+2. **Promo × category precedence** — flagged assumption above; confirm or change.
+3. **Defaulter path back** after a 90-day write-off: manual reinstatement only
+   (as-built) or automatic once cleared?
 
 ### Operational to-dos (not code)
-- Change admin + test-merchant passwords (both in chat transcript).
-- Rotate Cloudflare token + origin key; confirm SSL mode Full (strict).
-- Replace MsgOwl sender id (currently IsleBooks') with a Manfaa id.
-- Native review of the Dhivehi machine-draft locale.
+- Rotate: admin + test-merchant passwords, Cloudflare token, origin key
+  (all appeared in a chat transcript). Confirm Cloudflare SSL = Full (strict).
+- Replace the MsgOwl sender id (currently IsleBooks') with a Manfaa id.
+- Native review of the Dhivehi machine-draft locales (customer + merchant apps;
+  apps/admin is intentionally English-only — no i18n runtime).
 - SPF/DKIM/DMARC before any outbound email.
 - Bank bulk payout file format (§14) — blocks real payout runs.
-- Commit + push the current round (landing, MsgOwl, claims flag, settings
-  module, storefront) once the running workflows land green.
+- Publish docs/integration-guide.md at a served URL (the API wizard links to
+  https://manfaa.app/docs/integration-guide, currently unserved) or repoint
+  NEXT_PUBLIC_INTEGRATION_GUIDE_URL / NEXT_PUBLIC_SANDBOX_GUIDE_URL.
+- Consolidate the suspended-store refusal onto EnsureMerchantApproved:trading
+  (CredentialController currently emits the same code independently).
 - Config caches stay OFF on this box (tests + production share the checkout;
-  TestCase hard-fails if a config cache exists). Re-evaluate at scale.
+  TestCase hard-fails if one exists). Re-evaluate at scale.
 
 ## 14. Open items
 
