@@ -5,8 +5,8 @@ import type { DiscoveryOffer } from '@manfaa/api-client';
 import { Sparkles } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { formatRate } from '@/lib/format';
+import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
-import { ScrollRow } from '@/components/app/scroll-row';
 import { StoreAvatar } from '@/components/app/store-avatar';
 import { useCategoryLabel, useStoreName } from '@/components/app/store-labels';
 
@@ -14,15 +14,16 @@ import { useCategoryLabel, useStoreName } from '@/components/app/store-labels';
  * Featured offers — the curated image banners above the directory.
  *
  * Each banner is a wide card: badge, store mark, headline, blurb, the live
- * cashback figure, and the artwork itself. The image is the reason the
- * section exists, so it gets real space rather than a thumbnail, and the
- * copy sits over a tint rather than over the picture — text on an arbitrary
- * uploaded image is a contrast bet the platform cannot win.
+ * cashback figure, and the artwork itself. The copy sits over a tint rather
+ * than over the picture — text on an arbitrary uploaded image is a contrast
+ * bet the platform cannot win — and the artwork takes a THIRD of the card,
+ * not a half: at half it stopped reading as the illustration to an offer
+ * and started reading as two panels arguing.
  *
- * A horizontal scroller rather than an auto-advancing carousel: a banner
- * that moves on its own takes the decision away from the reader mid-sentence
- * and needs a pause control to be usable at all. Swiping is the gesture
- * people already use here.
+ * The cards lay out as a grid that fills its row, so one offer is a full
+ * banner rather than a stub floating in white space. No auto-advancing
+ * carousel: a banner that moves on its own takes the decision away from the
+ * reader mid-sentence and needs a pause control to be usable at all.
  *
  * Every merchant fact rendered here is served live by the API — the rate
  * shown is what the store pays right now, and an offer whose store has
@@ -52,7 +53,14 @@ export function FeaturedOffers({ offers }: { offers: DiscoveryOffer[] }) {
         {t('discover.featuredOffers')}
       </h2>
 
-      <ScrollRow label={t('discover.featuredOffers')} className="gap-4">
+      {/* One offer spans the row; from two on they pair up. A curated
+          section holds a handful, so this never becomes a wall. */}
+      <ul
+        className={cn(
+          'grid gap-4',
+          offers.length > 1 && 'md:grid-cols-2',
+        )}
+      >
         {offers.map((offer) => {
           const category = categoryLabel(offer.merchant.category);
           const badge = localised(offer.badge, offer.badge_dv);
@@ -60,7 +68,7 @@ export function FeaturedOffers({ offers }: { offers: DiscoveryOffer[] }) {
           const title = localised(offer.title, offer.title_dv) ?? offer.title;
 
           return (
-            <li key={offer.id} className="w-[19rem] shrink-0 snap-start sm:w-[26rem]">
+            <li key={offer.id}>
               <Link
                 href={`/store/${offer.merchant.slug}`}
                 className="group flex h-full min-h-36 overflow-hidden rounded-2xl border border-border bg-brand-soft transition-colors hover:border-brand/40 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
@@ -95,7 +103,7 @@ export function FeaturedOffers({ offers }: { offers: DiscoveryOffer[] }) {
                   )}
 
                   <div className="mt-auto flex flex-wrap items-baseline gap-x-2 pt-1">
-                    <span className="text-2xl font-bold tracking-tight text-brand">
+                    <span className="text-xl font-bold tracking-tight text-brand">
                       {formatRate(offer.merchant.cashback_rate_percent)}
                     </span>
                     <span className="text-xs text-muted-foreground">
@@ -110,11 +118,12 @@ export function FeaturedOffers({ offers }: { offers: DiscoveryOffer[] }) {
                   )}
                 </div>
 
-                {/* The artwork owns the trailing third and bleeds to the
-                    card's edges. Its height is governed by the copy, never
-                    by whatever the admin uploaded, so the row stays level
-                    whether the picture is a wide banner or a square. */}
-                <div className="w-32 shrink-0 self-stretch overflow-hidden sm:w-44">
+                {/* The artwork takes a third of whatever width the card
+                    gets, floored so it survives a narrow phone and capped
+                    so a full-width banner does not turn into a mural. Its
+                    height is governed by the copy, never by whatever the
+                    admin uploaded, so a row of banners stays level. */}
+                <div className="w-1/3 min-w-24 max-w-72 shrink-0 self-stretch overflow-hidden">
                   <img
                     src={offer.image_url}
                     alt=""
@@ -126,7 +135,7 @@ export function FeaturedOffers({ offers }: { offers: DiscoveryOffer[] }) {
             </li>
           );
         })}
-      </ScrollRow>
+      </ul>
     </section>
   );
 }

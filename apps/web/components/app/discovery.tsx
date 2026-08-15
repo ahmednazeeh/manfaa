@@ -182,9 +182,10 @@ export function MerchantCard({ entry }: { entry: DiscoveryEntry }) {
         className="absolute inset-0 z-0 rounded-xl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
       />
 
-      <div className="p-3 pb-0">
+      <div className="p-2 pb-0">
         {/* Square, so an uploaded square logo fills the slot instead of
-            being letterboxed inside a 4:3 box. */}
+            being letterboxed inside a 4:3 box — edge to edge, with the
+            card's own padding as the only frame it needs. */}
         <div className="aspect-square w-full overflow-hidden rounded-lg">
           <StoreAvatar
             name={name}
@@ -195,13 +196,15 @@ export function MerchantCard({ entry }: { entry: DiscoveryEntry }) {
         </div>
       </div>
 
-      <div className="flex grow flex-col gap-1.5 p-4 pt-3">
-        <span className="line-clamp-2 text-base font-semibold text-mono">
+      <div className="flex grow flex-col gap-1 p-3 pt-2.5">
+        <span className="line-clamp-2 text-sm font-semibold text-mono">
           {name}
         </span>
 
         <div className="flex flex-wrap items-baseline gap-x-2">
-          <span className="text-2xl font-bold tracking-tight text-brand">
+          {/* The rate leads the card, but a shelf is a row of these: at
+              display size it shouted over the name it belongs to. */}
+          <span className="text-lg font-bold tracking-tight text-brand">
             {t('discover.rate', {
               rate: formatRate(entry.cashback_rate_percent),
             })}
@@ -224,7 +227,7 @@ export function MerchantCard({ entry }: { entry: DiscoveryEntry }) {
           )}
         </div>
 
-        <div className="mt-auto flex flex-wrap items-center gap-x-2 gap-y-1 pt-2 text-2xs text-muted-foreground">
+        <div className="mt-auto flex flex-wrap items-center gap-x-2 gap-y-1 pt-1.5 text-2xs text-muted-foreground">
           {entry.distance_m !== null && (
             <DistanceLine meters={entry.distance_m} />
           )}
@@ -311,7 +314,7 @@ export function StoreShelf({
       <ShelfHeader icon={icon} title={title} viewAllHref={viewAllHref} />
       <ScrollRow label={title}>
         {entries.map((entry) => (
-          <li key={entry.slug} className="w-44 shrink-0 snap-start sm:w-48">
+          <li key={entry.slug} className="w-36 shrink-0 snap-start sm:w-40">
             <MerchantCard entry={entry} />
           </li>
         ))}
@@ -363,10 +366,12 @@ export function DiscoverySection({
 }
 
 /** The shared card grid — narrower columns than a text list, because the
- *  card is now a portrait tile rather than a row. */
+ *  card is a compact portrait tile rather than a row. The column count
+ *  keeps climbing on wide screens: a directory reads as a directory, not
+ *  as a handful of oversized posters. */
 export function MerchantGrid({ entries }: { entries: DiscoveryEntry[] }) {
   return (
-    <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7">
       {entries.map((entry) => (
         <MerchantCard key={entry.slug} entry={entry} />
       ))}

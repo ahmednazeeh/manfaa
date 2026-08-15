@@ -69,8 +69,9 @@ const SIZE_CLASSES = {
   /**
    * Card hero: fills the slot the caller sizes (an aspect-ratio box), with
    * initials big enough to be the card's brand mark rather than a badge.
+   * No radius of its own — the caller's box already clips.
    */
-  tile: 'size-full rounded-lg text-3xl tracking-tight sm:text-4xl',
+  tile: 'size-full text-2xl tracking-tight sm:text-3xl',
 } as const;
 
 export function StoreAvatar({
@@ -90,8 +91,13 @@ export function StoreAvatar({
     return (
       <span
         className={cn(
-          'flex shrink-0 items-center justify-center overflow-hidden border border-border bg-background',
-          size === 'tile' && 'p-3',
+          'flex shrink-0 items-center justify-center overflow-hidden bg-background',
+          // At tile size the logo IS the card's hero, so it runs to the
+          // edges: no inner padding and no second border inside the card's
+          // own. Merchants upload square marks and a square slot was the
+          // point — insetting one inside a white box put the letterboxing
+          // back by another name.
+          size !== 'tile' && 'border border-border',
           SIZE_CLASSES[size],
           className,
         )}
