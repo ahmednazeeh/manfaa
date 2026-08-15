@@ -202,11 +202,66 @@ paths:
         The row-level pair stays the BASE snapshot the sale was priced
         against, so on a mixed basket it deliberately does not match what
         the sale returned; `effective_cashback_rate_percent` is that figure.
-        The examples are named in pairs: pick the "Mixed basket with line
-        items" request, then open the **201** tab and choose the response
-        called "Reply to Mixed basket" — the response selector is
-        independent of the request one, so the body shown beside a request
-        is not automatically its answer.
+        The request and response selectors above are INDEPENDENT — changing
+        the request does not change the body shown beside it — so the
+        categorised call is worked end to end here instead, where the two
+        halves cannot drift apart.
+
+        ```json
+        // POST /v1/transactions  — a basket of three categories
+        {
+          "invoice_no": "INV-2107",
+          "customer_ref": "482917",
+          "eligible_amount": 100000,
+          "lines": [
+            { "category": "fruits",  "amount_laari": 30000 },
+            { "category": "veggies", "amount_laari": 25000 },
+            { "category": null,      "amount_laari": 45000 }
+          ]
+        }
+        ```
+
+        With fruit excluded, vegetables overridden to 2.00% and the store's
+        standing rate at 5.00%, the reply prices each line on its own terms
+        and totals the stored integers:
+
+        ```json
+        {
+          "status": "created",
+          "transaction": {
+            "eligible_laari": 100000,
+            "eligible_mvr": "1,000.00",
+
+            // The BASE terms the sale was priced against — NOT what it earned.
+            "cashback_rate_percent": "5.00",
+            "platform_fee_percent": "1.00",
+
+            // What it actually earned: 2,750 / 100,000.
+            "effective_cashback_rate_percent": "2.75",
+            "effective_platform_fee_percent": "0.64",
+
+            "cashback_laari": 2750, "cashback_mvr": "27.50",
+            "fee_laari": 638,       "fee_mvr": "6.38",
+
+            "lines": [
+              { "category": "fruits",  "amount_laari": 30000,
+                "cashback_rate_percent": "0.00", "platform_fee_percent": "0.00",
+                "cashback_laari": 0,    "fee_laari": 0,   "priced_by": "excluded" },
+              { "category": "veggies", "amount_laari": 25000,
+                "cashback_rate_percent": "2.00", "platform_fee_percent": "0.75",
+                "cashback_laari": 500,  "fee_laari": 188, "priced_by": "category" },
+              { "category": null,      "amount_laari": 45000,
+                "cashback_rate_percent": "5.00", "platform_fee_percent": "1.00",
+                "cashback_laari": 2250, "fee_laari": 450, "priced_by": "standing" }
+            ]
+          }
+        }
+        ```
+
+        Three different cashback percentages, three different fee
+        percentages, one sale. `cashback_laari` is the SUM of the lines
+        (0 + 500 + 2,250), never the whole 100,000 repriced at any single
+        rate — which would have given 5,000.
 
         This endpoint **never rejects a well-formed sale for business
         reasons** — below-minimum sales and sales from suspended merchants
@@ -444,7 +499,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/TransactionWriteResult'
               examples:
-                created:
+                simplest:
                   summary: 'Reply to “Simplest” — one rate for the whole sale'
                   description: |
                     The answer to the **Simplest** request example. Worked
@@ -470,7 +525,9 @@ paths:
                       backdated: false
                       currency: MVR
                       eligible_laari: 118000
+                      eligible_mvr: '1,180.00'
                       sale_laari: null
+                      sale_mvr: null
                       cashback_rate_percent: '2.00'
                       platform_fee_percent: '0.75'
                       effective_cashback_rate_percent: '2.00'
@@ -480,9 +537,10 @@ paths:
                       fee_laari: 885
                       fee_mvr: '8.85'
                       fee_gst_laari: 0
+                      fee_gst_mvr: '0.00'
                       occurred_at: '2026-08-15T06:04:22+00:00'
                       received_at: '2026-08-15T06:04:22+00:00'
-                linedCreated:
+                mixedBasket:
                   summary: 'Reply to “Mixed basket” — a rate PER LINE, and an effective rate'
                   description: |
                     The answer to the **Mixed basket with line items**
@@ -519,7 +577,9 @@ paths:
                       backdated: false
                       currency: MVR
                       eligible_laari: 100000
+                      eligible_mvr: '1,000.00'
                       sale_laari: null
+                      sale_mvr: null
                       cashback_rate_percent: '5.00'
                       platform_fee_percent: '1.00'
                       effective_cashback_rate_percent: '2.75'
@@ -529,6 +589,7 @@ paths:
                       fee_laari: 638
                       fee_mvr: '6.38'
                       fee_gst_laari: 0
+                      fee_gst_mvr: '0.00'
                       occurred_at: '2026-08-15T05:30:00+00:00'
                       received_at: '2026-08-15T05:30:01+00:00'
                       lines:
@@ -559,7 +620,7 @@ paths:
                           fee_laari: 450
                           priced_by: standing
                           sort: 2
-                overridden:
+                customRate:
                   summary: 'Reply to “Custom cashback for this sale” — 5.00% frozen on the row'
                   description: |
                     The answer to the **Custom cashback for this sale**
@@ -582,7 +643,9 @@ paths:
                       backdated: false
                       currency: MVR
                       eligible_laari: 118000
+                      eligible_mvr: '1,180.00'
                       sale_laari: null
+                      sale_mvr: null
                       cashback_rate_percent: '5.00'
                       platform_fee_percent: '1.00'
                       effective_cashback_rate_percent: '5.00'
@@ -592,8 +655,87 @@ paths:
                       fee_laari: 1180
                       fee_mvr: '11.80'
                       fee_gst_laari: 0
+                      fee_gst_mvr: '0.00'
                       occurred_at: '2026-08-15T06:04:22+00:00'
                       received_at: '2026-08-15T06:04:23+00:00'
+                saleTotalAndWallClock:
+                  summary: 'Reply to “With sale total and wall-clock time”'
+                  description: |
+                    Worked integers: cashback
+                    ceil(50,033 × 200 ÷ 10,000) = ceil(1,000.66) = 1,001
+                    laari (MVR 10.01); fee ceil(50,033 × 75 ÷ 10,000) =
+                    ceil(375.2475) = 376 laari (MVR 3.76). Both round UP —
+                    §4 rounds in the customer's favour, and the fee follows
+                    the reward.
+
+                    `sale_laari` echoes the reference-only total and touches
+                    nothing. The wall-clock `occurred_at` was read as
+                    Maldives time (UTC+5) and normalised to UTC here, which
+                    is why it comes back five hours earlier.
+                  value:
+                    status: created
+                    reason: null
+                    transaction:
+                      id: 84522
+                      origin: pos
+                      invoice_no: INV-1007
+                      state: awaiting_validation
+                      reason_code: null
+                      backdated: false
+                      currency: MVR
+                      eligible_laari: 50033
+                      eligible_mvr: '500.33'
+                      sale_laari: 62500
+                      sale_mvr: '625.00'
+                      cashback_rate_percent: '2.00'
+                      platform_fee_percent: '0.75'
+                      effective_cashback_rate_percent: '2.00'
+                      effective_platform_fee_percent: '0.75'
+                      cashback_laari: 1001
+                      cashback_mvr: '10.01'
+                      fee_laari: 376
+                      fee_mvr: '3.76'
+                      fee_gst_laari: 0
+                      fee_gst_mvr: '0.00'
+                      occurred_at: '2026-08-15T06:09:00+00:00'
+                      received_at: '2026-08-15T06:09:12+00:00'
+                phoneKeyed:
+                  summary: 'Reply to “Online store — phone-keyed customer”'
+                  description: |
+                    Identical in every respect except `origin`, which is
+                    `api_phone` rather than `pos` because the customer was
+                    identified by phone number instead of the 6-digit code.
+                    Worked integers: cashback
+                    ceil(29,900 × 200 ÷ 10,000) = 598 laari (MVR 5.98); fee
+                    ceil(29,900 × 75 ÷ 10,000) = ceil(224.25) = 225 laari
+                    (MVR 2.25).
+                  value:
+                    status: created
+                    reason: null
+                    transaction:
+                      id: 84523
+                      origin: api_phone
+                      invoice_no: WEB-88410
+                      state: awaiting_validation
+                      reason_code: null
+                      backdated: false
+                      currency: MVR
+                      eligible_laari: 29900
+                      eligible_mvr: '299.00'
+                      sale_laari: null
+                      sale_mvr: null
+                      cashback_rate_percent: '2.00'
+                      platform_fee_percent: '0.75'
+                      effective_cashback_rate_percent: '2.00'
+                      effective_platform_fee_percent: '0.75'
+                      cashback_laari: 598
+                      cashback_mvr: '5.98'
+                      fee_laari: 225
+                      fee_mvr: '2.25'
+                      fee_gst_laari: 0
+                      fee_gst_mvr: '0.00'
+                      occurred_at: '2026-08-15T06:12:41+00:00'
+                      received_at: '2026-08-15T06:12:42+00:00'
                 backdated:
                   summary: 'Reply to a backdated occurred_at — payable at once, irreversible'
                   description: |
@@ -619,7 +761,9 @@ paths:
                       backdated: true
                       currency: MVR
                       eligible_laari: 50000
+                      eligible_mvr: '500.00'
                       sale_laari: null
+                      sale_mvr: null
                       cashback_rate_percent: '2.00'
                       platform_fee_percent: '0.75'
                       effective_cashback_rate_percent: '2.00'
@@ -629,6 +773,7 @@ paths:
                       fee_laari: 375
                       fee_mvr: '3.75'
                       fee_gst_laari: 0
+                      fee_gst_mvr: '0.00'
                       occurred_at: '2026-08-01T10:00:00+00:00'
                       received_at: '2026-08-15T06:04:23+00:00'
         '200':
@@ -679,7 +824,9 @@ paths:
                       backdated: false
                       currency: MVR
                       eligible_laari: 118000
+                      eligible_mvr: '1,180.00'
                       sale_laari: null
+                      sale_mvr: null
                       cashback_rate_percent: '2.00'
                       platform_fee_percent: '0.75'
                       effective_cashback_rate_percent: '2.00'
@@ -689,6 +836,7 @@ paths:
                       fee_laari: 885
                       fee_mvr: '8.85'
                       fee_gst_laari: 0
+                      fee_gst_mvr: '0.00'
                       occurred_at: '2026-08-15T06:04:22+00:00'
                       received_at: '2026-08-15T06:04:22+00:00'
                 recordedIneligibleSuspended:
@@ -726,7 +874,9 @@ paths:
                       backdated: false
                       currency: MVR
                       eligible_laari: 200000
+                      eligible_mvr: '2,000.00'
                       sale_laari: null
+                      sale_mvr: null
                       cashback_rate_percent: '2.00'
                       platform_fee_percent: '0.75'
                       effective_cashback_rate_percent: '0.00'
@@ -736,6 +886,7 @@ paths:
                       fee_laari: 0
                       fee_mvr: '0.00'
                       fee_gst_laari: 0
+                      fee_gst_mvr: '0.00'
                       occurred_at: '2026-08-15T06:10:00+00:00'
                       received_at: '2026-08-15T06:10:01+00:00'
                 belowMinimum:
@@ -763,7 +914,9 @@ paths:
                       backdated: false
                       currency: MVR
                       eligible_laari: 3500
+                      eligible_mvr: '35.00'
                       sale_laari: 3500
+                      sale_mvr: '35.00'
                       cashback_rate_percent: '2.00'
                       platform_fee_percent: '0.75'
                       effective_cashback_rate_percent: '0.00'
@@ -773,6 +926,7 @@ paths:
                       fee_laari: 0
                       fee_mvr: '0.00'
                       fee_gst_laari: 0
+                      fee_gst_mvr: '0.00'
                       occurred_at: '2026-08-15T06:12:00+00:00'
                       received_at: '2026-08-15T06:12:01+00:00'
         '401':
@@ -1007,7 +1161,9 @@ paths:
                       backdated: false
                       currency: MVR
                       eligible_laari: 118000
+                      eligible_mvr: '1,180.00'
                       sale_laari: null
+                      sale_mvr: null
                       cashback_rate_percent: '2.00'
                       platform_fee_percent: '0.75'
                       effective_cashback_rate_percent: '2.00'
@@ -1017,6 +1173,7 @@ paths:
                       fee_laari: 885
                       fee_mvr: '8.85'
                       fee_gst_laari: 0
+                      fee_gst_mvr: '0.00'
                       occurred_at: '2026-08-14T06:04:22+00:00'
                       received_at: '2026-08-14T06:04:23+00:00'
                 lockedInSettlement:
@@ -1041,7 +1198,9 @@ paths:
                       backdated: false
                       currency: MVR
                       eligible_laari: 118000
+                      eligible_mvr: '1,180.00'
                       sale_laari: null
+                      sale_mvr: null
                       cashback_rate_percent: '2.00'
                       platform_fee_percent: '0.75'
                       effective_cashback_rate_percent: '2.00'
@@ -1051,6 +1210,7 @@ paths:
                       fee_laari: 885
                       fee_mvr: '8.85'
                       fee_gst_laari: 0
+                      fee_gst_mvr: '0.00'
                       occurred_at: '2026-08-14T06:04:22+00:00'
                       received_at: '2026-08-14T06:04:23+00:00'
                 alreadyConfirmed:
@@ -1075,7 +1235,9 @@ paths:
                       backdated: false
                       currency: MVR
                       eligible_laari: 100000
+                      eligible_mvr: '1,000.00'
                       sale_laari: null
+                      sale_mvr: null
                       cashback_rate_percent: '2.00'
                       platform_fee_percent: '0.75'
                       effective_cashback_rate_percent: '2.00'
@@ -1085,6 +1247,7 @@ paths:
                       fee_laari: 750
                       fee_mvr: '7.50'
                       fee_gst_laari: 0
+                      fee_gst_mvr: '0.00'
                       occurred_at: '2026-08-10T05:00:00+00:00'
                       received_at: '2026-08-10T05:00:01+00:00'
         '401':
@@ -2158,7 +2321,9 @@ components:
         - backdated
         - currency
         - eligible_laari
+        - eligible_mvr
         - sale_laari
+        - sale_mvr
         - cashback_rate_percent
         - platform_fee_percent
         - effective_cashback_rate_percent
@@ -2168,6 +2333,7 @@ components:
         - fee_laari
         - fee_mvr
         - fee_gst_laari
+        - fee_gst_mvr
         - occurred_at
         - received_at
       properties:
@@ -2204,10 +2370,21 @@ components:
           const: MVR
         eligible_laari:
           $ref: '#/components/schemas/LaariAmount'
+        eligible_mvr:
+          allOf:
+            - $ref: '#/components/schemas/MvrString'
+          description: |
+            `eligible_laari` preformatted for printing — "1,180.00". Every
+            amount in this payload ships as BOTH: the `_laari` integer is
+            the value and the only thing to compute with, the `_mvr` string
+            is what goes on a receipt. Never parse the string back.
         sale_laari:
           type: ['integer', 'null']
           format: int64
           description: The reference-only sale total, if supplied.
+        sale_mvr:
+          type: ['string', 'null']
+          description: '`sale_laari` preformatted, or null when it was not supplied.'
         cashback_rate_percent:
           allOf:
             - $ref: '#/components/schemas/PercentString'
@@ -2244,6 +2421,8 @@ components:
           $ref: '#/components/schemas/MvrString'
         fee_gst_laari:
           $ref: '#/components/schemas/LaariAmount'
+        fee_gst_mvr:
+          $ref: '#/components/schemas/MvrString'
         occurred_at:
           type: string
           format: date-time

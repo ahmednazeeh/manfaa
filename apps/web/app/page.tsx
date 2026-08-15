@@ -19,7 +19,7 @@ import {
 import type { LucideIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { formatDate, formatRate } from '@/lib/format';
-import { useDiscovery, useMe } from '@/lib/queries';
+import { useDiscovery, useMe, useSignedIn } from '@/lib/queries';
 import { SEARCH_MAX_CHARS } from '@/lib/search';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -233,23 +233,34 @@ function Hero({ promoted }: { promoted: DiscoveryEntry | null }) {
   ];
 
   return (
-    <section className="container pt-2 pb-10 lg:pb-14">
+    <section className="container pt-6 pb-10 lg:pt-10 lg:pb-14">
       <div className="grid items-center gap-10 lg:grid-cols-2 lg:gap-12">
         <div className="flex max-w-xl flex-col gap-5">
-          <h1 className="text-3xl font-semibold tracking-tight text-balance text-mono sm:text-4xl lg:text-5xl">
-            {t('landing.heroTitleLead')}{' '}
-            <RotatingWords words={channels} className="text-primary" />
+          {/* Three deliberate lines: the promise, then "when you", then the
+              changing channel on its own. Keeping the rotating phrase on a
+              line of its own is what stops the sentence above it reflowing
+              as the phrase changes length — and it is the shape rakuten.com
+              uses for the same kind of headline. `block` on each part, not
+              <br>, so a narrow screen may still wrap within a part. */}
+          <h1 className="font-display text-4xl leading-[1.05] text-balance text-mono sm:text-5xl lg:text-6xl">
+            <span className="block">{t('landing.heroTitleLead')}</span>
+            <span className="block">{t('landing.heroTitleWhenYou')}</span>
+            <RotatingWords words={channels} className="block text-primary" />
           </h1>
           <p className="text-sm/relaxed text-pretty text-muted-foreground sm:text-base/relaxed">
             {t('landing.heroSubtitle')}
           </p>
-          <HeroSearch />
           <div className="flex flex-wrap items-center gap-3">
             <PrimaryCta />
             <Button size="lg" variant="outline" asChild>
               <a href="#how-it-works">{t('landing.howTitle')}</a>
             </Button>
           </div>
+          {/* The friction-removers, in the one place someone decides whether
+              to sign up. */}
+          <p className="text-xs text-muted-foreground">
+            {t('landing.trustLine')}
+          </p>
         </div>
 
         <CashbackDemo />
@@ -516,38 +527,77 @@ function MarketplaceTeaser() {
   );
 }
 
+/**
+ * The search block that opens the storefront for a SIGNED-OUT visitor,
+ * sitting with the category rail below how-it-works: by then they know what
+ * Manfaa is and the question has changed from "what is this?" to "who takes
+ * it?".
+ */
+function SearchAndCategories({
+  sections,
+  isPending,
+}: {
+  sections: DiscoverySections | undefined;
+  isPending: boolean;
+}) {
+  const { t } = useTranslation();
+
+  return (
+    <section className="border-b border-border bg-background">
+      <div className="container flex flex-col items-center gap-4 pt-8 pb-2">
+        <h2 className="font-display text-2xl text-mono sm:text-3xl">
+          {t('landing.findStoreTitle')}
+        </h2>
+        <HeroSearch />
+      </div>
+      {isPending && <CategoryRailSkeleton />}
+      {sections !== undefined && <CategoryRail sections={sections} />}
+    </section>
+  );
+}
+
 export default function LandingPage() {
   // Coordinate-free on purpose: the landing has no "near you" shelf any
   // more — Nearby is a rail entry point, and geolocation is only ever asked
   // for on /discover, from the button the visitor presses there.
   const { data, isPending } = useDiscovery(null);
+  const signedIn = useSignedIn();
 
   // The single best live promotion becomes the hero's second panel; the
   // boosted shelf below still lists it with everything else that is live.
   const promoted = data?.increased[0] ?? null;
 
+  const storefront =
+    data !== undefined &&
+    (hasListedStores(data) ? (
+      <Shelves sections={data} />
+    ) : (
+      <AllEmptyBlock />
+    ));
+
   return (
     <div className="flex min-h-screen w-full flex-col bg-background">
       <PublicHeader />
       <main className="grow">
-        {/* Nothing renders while loading and nothing renders on error — a
-            public landing page carries itself on the hero and how-it-works
-            instead of showing spinners or API errors. The rail is the one
-            exception: it reserves its height so the hero below it does not
-            jump when the payload lands. */}
-        {isPending && <CategoryRailSkeleton />}
-        {data !== undefined && <CategoryRail sections={data} />}
-
-        <Hero promoted={promoted} />
-
-        <HowItWorks />
-
-        {data !== undefined &&
-          (hasListedStores(data) ? (
-            <Shelves sections={data} />
-          ) : (
-            <AllEmptyBlock />
-          ))}
+        {signedIn ? (
+          /* A customer who already has an account does not need the pitch —
+             they came to shop. Categories on top, then the shelves, which is
+             the storefront /discover shows them. */
+          <>
+            {isPending && <CategoryRailSkeleton />}
+            {data !== undefined && <CategoryRail sections={data} />}
+            {storefront}
+          </>
+        ) : (
+          /* Signed out: say what this is, then how it works, and only then
+             open the directory. */
+          <>
+            <Hero promoted={promoted} />
+            <HowItWorks />
+            <SearchAndCategories sections={data} isPending={isPending} />
+            {storefront}
+          </>
+        )}
 
         <MarketplaceTeaser />
       </main>

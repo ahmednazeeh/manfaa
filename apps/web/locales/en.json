@@ -307,7 +307,7 @@
     "marketplaceCtaHint": "Create a free account and we'll let you know when it opens.",
     "marketplaceSignedInHint": "You're all set — we'll let you know when it opens.",
     "marketplaceFooter": "Marketplace (coming soon)",
-    "heroTitleLead": "Earn cash back in MVR when you",
+    "heroTitleLead": "Earn cash back in MVR",
     "heroChannelInStore": "shop in store.",
     "heroChannelOnline": "shop online.",
     "heroChannelDineIn": "dine in.",
@@ -319,7 +319,12 @@
     "demoEarned": "Earned",
     "demoToastTitle": "Ka-ching!",
     "demoToastBody": "You earned {{amount}} cashback at {{store}}.",
-    "demoAlt": "A demonstration of the app: you show your Manfaa code at the till, {{store}} records a {{sale}} sale, and {{amount}} cashback lands in your balance."
+    "demoAlt": "A demonstration of the app: you show your Manfaa code at the till, {{store}} records a {{sale}} sale, and {{amount}} cashback lands in your balance.",
+    "heroTitleWhenYou": "when you",
+    "trustLine": "Free to join · No card required · Paid straight to your bank",
+    "findStoreTitle": "Find a store",
+    "realMoneyTitle": "Cashback is real money — not points",
+    "realMoneyBody": "You earn Maldivian rufiyaa, not a balance you can only spend with us. It goes to your own bank account every month, and it is yours to spend anywhere."
   },
   "payouts": {
     "title": "Payouts",

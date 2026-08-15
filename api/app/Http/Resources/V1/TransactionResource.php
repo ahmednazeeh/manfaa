@@ -16,6 +16,11 @@ use Illuminate\Http\Resources\Json\JsonResource;
  * laari integers paired with pre-formatted MVR presentation strings, and
  * every timestamp normalised to UTC ISO 8601.
  *
+ * EVERY money field carries both halves — `*_laari` is the value and the
+ * only thing to compute with, `*_mvr` is the string to print. Pairing some
+ * fields and not others is worse than pairing none: it teaches a reader
+ * that a bare `_laari` field is already in rufiyaa.
+ *
  * Rates follow the same idiom (PLAN §1 wire format): 2-decimal percent
  * strings, never basis points, which are the internal representation only.
  *
@@ -58,7 +63,16 @@ class TransactionResource extends JsonResource
             'backdated' => (bool) $this->backdated,
             'currency' => $this->currency,
             'eligible_laari' => $this->eligible_laari,
+            // Every amount ships as BOTH the authoritative laari integer and
+            // a preformatted MVR string. cashback and fee always did;
+            // eligible, sale and GST did not, which left a reader dividing
+            // 118000 by 100 in their head on the very field the request
+            // asked them to send.
+            'eligible_mvr' => Laari::of($this->eligible_laari)->formatMvr(),
             'sale_laari' => $this->sale_laari,
+            'sale_mvr' => $this->sale_laari === null
+                ? null
+                : Laari::of($this->sale_laari)->formatMvr(),
             'cashback_rate_percent' => Percent::format($this->rate_bp),
             'platform_fee_percent' => Percent::format($this->fee_bp),
             // Null only when there is nothing to divide by — a rate on a
@@ -76,6 +90,7 @@ class TransactionResource extends JsonResource
             'fee_laari' => $this->fee_laari,
             'fee_mvr' => Laari::of($this->fee_laari)->formatMvr(),
             'fee_gst_laari' => $this->fee_gst_laari,
+            'fee_gst_mvr' => Laari::of($this->fee_gst_laari)->formatMvr(),
             'occurred_at' => $this->occurred_at->utc()->toIso8601String(),
             'received_at' => $this->received_at->utc()->toIso8601String(),
             // Present only when the caller loaded the pricing split (lined

@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import {
   ApiError,
   bootstrapCsrf,
@@ -119,6 +120,47 @@ export function useMe() {
     retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 4000),
     staleTime: 5 * 60 * 1000,
   });
+}
+
+/**
+ * localStorage key holding whether the LAST settled session probe found a
+ * customer. A hint, never an authority — nothing is ever shown or hidden on
+ * the strength of it that matters, and the probe overrides it within one
+ * request.
+ */
+const SIGNED_IN_HINT_KEY = 'manfaa.signedIn';
+
+/**
+ * Whether to render the app for someone who already has an account.
+ *
+ * The session probe is a network round trip, so for the first moment of a
+ * page load the answer is genuinely unknown. Rendering the signed-OUT page
+ * during that moment means a returning customer watches the "join free"
+ * pitch flash past on every visit, which is precisely the thing that reads
+ * as broken. So the last settled answer is remembered and used while the
+ * probe is in flight.
+ *
+ * This is presentation only. It gates marketing copy against a storefront —
+ * never data, never an action — and both are public. A stale hint costs a
+ * layout that corrects itself a moment later; it cannot expose anything,
+ * because everything it chooses between is visible to anyone.
+ */
+export function useSignedIn(): boolean {
+  const { data: me, isPending } = useMe();
+  const [hint, setHint] = useState(false);
+
+  // Read after mount only: server and first client render must agree, and
+  // localStorage does not exist during SSR.
+  useEffect(() => {
+    setHint(window.localStorage.getItem(SIGNED_IN_HINT_KEY) === '1');
+  }, []);
+
+  useEffect(() => {
+    if (isPending) return;
+    window.localStorage.setItem(SIGNED_IN_HINT_KEY, me ? '1' : '0');
+  }, [isPending, me]);
+
+  return me != null || (isPending && hint);
 }
 
 export function useLogin() {

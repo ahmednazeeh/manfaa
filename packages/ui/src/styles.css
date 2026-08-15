@@ -9,6 +9,50 @@
  */
 
 /*
+ * The DISPLAY face, for the storefront's headline only.
+ *
+ * rakuten.com sets its hero in Stag Light — a slab serif at 46–64px, weight
+ * 300, with line-height barely above the cap height (48px on 46px). Stag is
+ * a licensed commercial face and Rakuten Sans UI is proprietary, so neither
+ * can be shipped here; what carries that look is the TREATMENT — a slab
+ * serif, genuinely light, set large and tight — and Zilla Slab (OFL) has a
+ * real 300 weight to do it with. Self-hosted, ~26 KB per weight.
+ */
+@font-face {
+  font-family: 'Zilla Slab';
+  src: url('../fonts/ZillaSlab-Light.woff2') format('woff2');
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Zilla Slab';
+  src: url('../fonts/ZillaSlab-Medium.woff2') format('woff2');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+/*
+ * Opt-in, never a document default: this face is for the one headline that
+ * has to carry the page, and using it for body copy would undo the reason
+ * it works. Thaana has no slab serif to pair with, so a Dhivehi headline
+ * falls through to the Thaana stack — which the rule below re-asserts.
+ */
+.font-display {
+  font-family: 'Zilla Slab', Georgia, 'Times New Roman', serif;
+  font-weight: 300;
+  letter-spacing: -0.01em;
+}
+
+html[lang='dv'] .font-display {
+  font-family: 'Noto Sans Thaana', 'Faruma', 'DAM Kalhi', system-ui, sans-serif;
+  font-weight: 400;
+  letter-spacing: normal;
+}
+
+/*
  * Noto Sans Thaana is the PRIMARY Thaana face. Faruma is the traditional
  * Maldivian font and stays as a fallback, but its glyphs sit small on the
  * em and its fili (the marks above and below the letters) thin out badly at
