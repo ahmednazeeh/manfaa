@@ -22,6 +22,9 @@ class TransactionResource extends JsonResource
             'invoice_no' => $this->invoice_no,
             'state' => $this->state->value,
             'reason_code' => $this->reason_code,
+            // PLAN §1: credited outside the validation window — payable
+            // immediately, and the merchant can never reverse it.
+            'backdated' => (bool) $this->backdated,
             'currency' => $this->currency,
             'eligible_laari' => $this->eligible_laari,
             'sale_laari' => $this->sale_laari,

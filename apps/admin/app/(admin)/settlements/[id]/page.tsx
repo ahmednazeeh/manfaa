@@ -10,7 +10,7 @@ import {
 } from '@manfaa/api-client';
 import { formatMoney, MoneyText } from '@manfaa/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, CircleCheck, TriangleAlert } from 'lucide-react';
+import { ArrowLeft, CircleCheck, Paperclip, TriangleAlert } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiErrorMessage } from '@/lib/api-error';
 import { formatDateTime } from '@/lib/format';
@@ -49,7 +49,14 @@ import {
   computeMatchOutcome,
   type MatchOutcome,
 } from '@/components/settlements/match-outcome';
+import {
+  pendingPayment,
+  rejection,
+  slipPayment,
+} from '@/components/settlements/receipt';
+import { ReceiptReviewCard } from '@/components/settlements/receipt-review-card';
 import { RecordPaymentDialog } from '@/components/settlements/record-payment-dialog';
+import { RejectionNotice } from '@/components/settlements/rejection-notice';
 
 const PAYABLE_STATES: Settlement['state'][] = [
   'awaiting_payment',
@@ -190,6 +197,20 @@ export default function SettlementDetailPage() {
   const payments = settlement.payments ?? [];
   const allocatedCount = lines.filter((l) => l.allocated_at !== null).length;
 
+  // The receipt this queue exists to review: the claim still awaiting a
+  // decision, or — once decided — whatever slip the batch carries, so the
+  // evidence stays readable after the fact.
+  const receipt = pendingPayment(settlement) ?? slipPayment(settlement);
+  const refusal = rejection(settlement);
+
+  // Mirrors the domain guard: only a payment_review batch that has received
+  // nothing and holds no matched payment can be rejected. Offering the button
+  // anywhere else would just invite a 409.
+  const canReject =
+    settlement.state === 'payment_review' &&
+    settlement.amount_received_laari === 0 &&
+    !payments.some((payment) => payment.state === 'matched');
+
   return (
     <div className="flex flex-col">
       <PageHeader
@@ -231,6 +252,18 @@ export default function SettlementDetailPage() {
         />
       ) : null}
 
+      {refusal ? <RejectionNotice payment={refusal} /> : null}
+
+      {receipt ? (
+        <ReceiptReviewCard
+          settlement={settlement}
+          payment={receipt}
+          onMatch={(paymentId) => match.mutate(paymentId)}
+          matching={match.isPending}
+          canReject={canReject}
+        />
+      ) : null}
+
       <div className="mb-5 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <SummaryStat
           label="Amount due"
@@ -264,6 +297,7 @@ export default function SettlementDetailPage() {
                   <TableHead className="text-end">Amount</TableHead>
                   <TableHead>Method</TableHead>
                   <TableHead>Bank ref</TableHead>
+                  <TableHead>Slip</TableHead>
                   <TableHead>State</TableHead>
                   <TableHead>Recorded</TableHead>
                   <TableHead>Matched</TableHead>
@@ -274,7 +308,7 @@ export default function SettlementDetailPage() {
                 {payments.length === 0 ? (
                   <TableRow>
                     <TableCell
-                      colSpan={7}
+                      colSpan={8}
                       className="py-8 text-center text-muted-foreground"
                     >
                       No payments recorded yet.
@@ -289,9 +323,29 @@ export default function SettlementDetailPage() {
                       <TableCell className="capitalize">
                         {payment.method}
                       </TableCell>
-                      <TableCell>{payment.bank_ref ?? '—'}</TableCell>
+                      <TableCell className="font-mono text-xs">
+                        {payment.bank_ref ?? '—'}
+                      </TableCell>
+                      <TableCell>
+                        {payment.has_slip ? (
+                          <Badge variant="info" appearance="light" size="sm">
+                            <Paperclip className="size-3" />
+                            Attached
+                          </Badge>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
                       <TableCell>
                         <PaymentStateBadge state={payment.state} />
+                        {payment.rejection_reason ? (
+                          <p
+                            className="mt-1 max-w-xs truncate text-xs text-muted-foreground"
+                            title={payment.rejection_reason}
+                          >
+                            {payment.rejection_reason}
+                          </p>
+                        ) : null}
                       </TableCell>
                       <TableCell>
                         {formatDateTime(payment.created_at)}

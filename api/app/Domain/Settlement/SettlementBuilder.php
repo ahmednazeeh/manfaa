@@ -8,15 +8,22 @@ use App\Domain\Cashback\Actor;
 use App\Domain\Cashback\TransactionState;
 use App\Domain\Cashback\TransitionService;
 use App\Domain\Ledger\Postings;
+use App\Domain\Money\Laari;
 use App\Models\Adjustment;
+use App\Models\AdminUser;
 use App\Models\Merchant;
+use App\Models\MerchantUser;
 use App\Models\Settlement;
 use App\Models\SettlementLine;
+use App\Models\SettlementPayment;
 use App\Models\Transaction;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\UniqueConstraintViolationException;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Throwable;
 
 /**
  * Builds settlement batches (§6, §7). A draft is a mutable selection of the
@@ -30,6 +37,13 @@ use Illuminate\Support\Facades\DB;
  * applied with the settlement linkage, and posts the adjustment's credit
  * journal (applyAdjustmentCredit) at that moment — application time, never
  * creation time.
+ *
+ * Receipt-first (PLAN §1 "Settlement flow"): the merchant-driven entry point
+ * is createAndSubmitWithReceipt — build, freeze and evidence in ONE database
+ * transaction, landing directly in payment_review. createDraft/submit stay
+ * public because the composite paths and the documented admin fallback are
+ * built out of them, but no merchant HTTP route reaches them on their own:
+ * a settlement the platform cannot see a receipt for does not get created.
  */
 final class SettlementBuilder
 {
@@ -37,7 +51,225 @@ final class SettlementBuilder
         private readonly Postings $postings,
         private readonly TransitionService $transitions,
         private readonly LineAllocator $allocator,
+        private readonly SettlementAllocator $payments,
+        private readonly WalletFunding $wallet,
+        private readonly SlipStorage $slips,
     ) {}
+
+    /**
+     * Receipt-first submission (PLAN §1). The merchant has already
+     * transferred; this call builds the batch, freezes its lines, stores the
+     * slip on the private disk and records the claimed payment — all inside
+     * ONE database transaction, so there is no instant at which a settlement
+     * exists without its receipt, and nothing survives a failure halfway.
+     *
+     * The batch lands in payment_review: awaiting_payment is never observable
+     * on this path, because the payment is recorded in the same breath as the
+     * batch that owes it. An admin then reviews the slip — Match or Reject.
+     *
+     * The slip is inspected (magic bytes, size) BEFORE the transaction opens:
+     * a forged or oversized upload must never even create a draft. The file
+     * write cannot join the transaction, so a rollback deletes it explicitly.
+     *
+     * @param  list<int>|null  $transactionIds  null settles everything eligible
+     *
+     * @throws InvalidSlipException the upload is not a JPEG/PNG/WebP/PDF, or is too large
+     * @throws NotEligibleForSettlementException nothing to settle, or nothing due
+     * @throws DuplicateBankRefException this merchant already recorded that transfer
+     */
+    public function createAndSubmitWithReceipt(
+        Merchant $merchant,
+        MerchantUser $uploader,
+        ?array $transactionIds,
+        Laari $amount,
+        string $bankRef,
+        UploadedFile $slip,
+    ): Settlement {
+        $inspection = $this->slips->inspect($slip);
+        $storedPath = null;
+
+        try {
+            return DB::transaction(function () use ($merchant, $uploader, $transactionIds, $amount, $bankRef, $slip, $inspection, &$storedPath): Settlement {
+                $settlement = $this->createDraft($merchant, $transactionIds);
+
+                // Fully netted by §7 credits: no transfer is due, so no
+                // receipt can be honest about one. The credit-netted batch
+                // settles through createAndSettleFromWallet, which draws
+                // nothing from the wallet either.
+                if ($settlement->amount_due_laari === 0) {
+                    throw NotEligibleForSettlementException::nothingDue($merchant);
+                }
+
+                $settlement = $this->submit($settlement);
+
+                $storedPath = $this->slips->store($merchant, $settlement, $slip, $inspection);
+
+                $this->payments->recordBankPayment(
+                    $settlement,
+                    $amount,
+                    $bankRef,
+                    ReceiptSlip::uploaded($storedPath, $inspection, $uploader),
+                );
+
+                return $settlement->refresh();
+            });
+        } catch (Throwable $exception) {
+            $this->slips->delete($storedPath);
+
+            throw $exception;
+        }
+    }
+
+    /**
+     * A FURTHER receipt against a batch the merchant already owns — the
+     * second half of §7's partial-payment rule. Oldest-first allocation
+     * leaves the uncovered lines Pending and frozen on the batch, so the
+     * merchant cannot start a new settlement for them; without this they
+     * would be stranded exactly the way the receipt-first decision set out to
+     * prevent. It is also how a merchant pays an admin-built fallback batch
+     * sitting in awaiting_payment.
+     *
+     * Same rules as the first receipt: inspected before anything is written,
+     * stored privately, rolled back whole on failure.
+     */
+    public function addReceipt(
+        Settlement $settlement,
+        MerchantUser $uploader,
+        Laari $amount,
+        string $bankRef,
+        UploadedFile $slip,
+    ): SettlementPayment {
+        $inspection = $this->slips->inspect($slip);
+        $storedPath = null;
+
+        try {
+            return DB::transaction(function () use ($settlement, $uploader, $amount, $bankRef, $slip, $inspection, &$storedPath): SettlementPayment {
+                $storedPath = $this->slips->store($settlement->merchant, $settlement, $slip, $inspection);
+
+                return $this->payments->recordBankPayment(
+                    $settlement,
+                    $amount,
+                    $bankRef,
+                    ReceiptSlip::uploaded($storedPath, $inspection, $uploader),
+                );
+            });
+        } catch (Throwable $exception) {
+            $this->slips->delete($storedPath);
+
+            throw $exception;
+        }
+    }
+
+    /**
+     * The wallet counterpart of the receipt-first path (§7: "wallet
+     * settlement runs the same path — only the funding source differs").
+     * Build, freeze and fund from the balance in one transaction; no receipt
+     * exists because no bank transfer happened — the money was already
+     * evidenced by the top-up that put it in the wallet.
+     *
+     * A batch fully netted to zero by §7 credits settles inside submit()
+     * without touching the wallet at all; that is the only route by which a
+     * merchant settles a zero-due batch, and it draws no balance.
+     *
+     * @param  list<int>|null  $transactionIds  null settles everything eligible
+     */
+    public function createAndSettleFromWallet(Merchant $merchant, MerchantUser $actor, ?array $transactionIds): Settlement
+    {
+        return DB::transaction(function () use ($merchant, $actor, $transactionIds): Settlement {
+            $settlement = $this->submit($this->createDraft($merchant, $transactionIds));
+
+            if ($settlement->state === SettlementState::AwaitingPayment) {
+                $this->wallet->settleFromWallet($settlement, $actor);
+            }
+
+            return $settlement->refresh();
+        });
+    }
+
+    /**
+     * The reject half of the admin receipt review (PLAN §1): the transfer
+     * could not be verified, so the batch cancels, its lines are released —
+     * the transactions return to payable_unfunded and become eligible for a
+     * NEW settlement immediately — and every pending payment on it is marked
+     * rejected with the reason, which the merchant sees on their batch.
+     *
+     * Only a payment_review batch with nothing matched can be rejected: once
+     * a payment is matched, lines are allocated and customers' cashback is
+     * confirmed — §13 says corrections after that are adjustments, never a
+     * release.
+     *
+     * Lock order matches matchPayment (payments, then the settlement) so the
+     * two admin actions serialise on the same rows in the same sequence
+     * instead of deadlocking against each other — but the payment set that
+     * DECIDES is re-read under the settlement lock, because FOR UPDATE locks
+     * the rows it returns and does not block an INSERT.
+     */
+    public function reject(Settlement $settlement, AdminUser $actor, string $reason): Settlement
+    {
+        return DB::transaction(function () use ($settlement, $actor, $reason): Settlement {
+            // Take the payment locks BEFORE the settlement row — matchPayment
+            // locks in that order too, so the two admin actions queue behind
+            // each other instead of deadlocking head-on. The rows themselves
+            // are re-read below; this call is here for the lock order.
+            $this->lockedPayments($settlement);
+
+            $settlement = $this->locked($settlement);
+
+            // Re-read UNDER the settlement lock. A receipt that committed
+            // between the two reads is invisible to the first one, and
+            // rejecting without it would strand a pending payment on a
+            // cancelled batch: matchPayment refuses (cancelled is not
+            // matchable), reject refuses (the batch has left payment_review),
+            // and re-submitting the same transfer is refused as a duplicate
+            // (the partial unique index exempts only rejected rows) — real
+            // money in the platform's account with no in-app path to book it.
+            // From here nothing more can arrive: recordBankPayment takes this
+            // same settlement row lock before inserting, so it waits for this
+            // commit and then finds a cancelled batch.
+            $payments = $this->lockedPayments($settlement);
+
+            if ($settlement->state !== SettlementState::PaymentReview) {
+                throw InvalidSettlementStateException::forAction($settlement, 'rejecting the receipt', 'a batch in payment_review');
+            }
+
+            if ($settlement->amount_received_laari !== 0 || $payments->contains(fn (SettlementPayment $payment): bool => $payment->state === 'matched')) {
+                throw InvalidSettlementStateException::rejectAfterMatching($settlement);
+            }
+
+            $now = CarbonImmutable::now('UTC');
+
+            foreach ($payments as $payment) {
+                if ($payment->state !== 'pending') {
+                    continue;
+                }
+
+                $payment->forceFill([
+                    'state' => 'rejected',
+                    'rejected_by' => $actor->id,
+                    'rejected_at' => $now,
+                    'rejection_reason' => $reason,
+                ])->save();
+            }
+
+            $this->releaseLinesAndCancel($settlement);
+
+            return $settlement;
+        });
+    }
+
+    /**
+     * Every payment row on the batch, locked and in id order.
+     *
+     * @return Collection<int, SettlementPayment>
+     */
+    private function lockedPayments(Settlement $settlement): Collection
+    {
+        return SettlementPayment::query()
+            ->where('settlement_id', $settlement->getKey())
+            ->orderBy('id')
+            ->lockForUpdate()
+            ->get();
+    }
 
     /**
      * Transactions a settlement may pick up: the merchant's payable_unfunded
@@ -203,17 +435,33 @@ final class SettlementBuilder
                 throw InvalidSettlementStateException::cancelWithMoneyReceived($settlement);
             }
 
-            $this->unapplyAdjustments($settlement);
-
-            $reversalMemos = $this->pendingReversalMemos($settlement);
-
-            $settlement->lines()->delete();
-            $settlement->forceFill(['state' => SettlementState::Cancelled])->save();
-
-            $this->reverseReleasedMemoTransactions($reversalMemos);
+            $this->releaseLinesAndCancel($settlement);
 
             return $settlement;
         });
+    }
+
+    /**
+     * The release itself, shared by cancel() and the admin reject(): applied
+     * §7 credits go back to pending, the lines are DELETED — nothing on them
+     * was ever allocated, and settlement_lines.transaction_id is unique
+     * across live batches, so deleting the row IS what returns the
+     * transaction to payable_unfunded eligibility — the batch goes cancelled,
+     * and any reversal memo the freeze was deferring is settled up now that
+     * the freeze is gone.
+     *
+     * Callers own the state guard and the row lock.
+     */
+    private function releaseLinesAndCancel(Settlement $settlement): void
+    {
+        $this->unapplyAdjustments($settlement);
+
+        $reversalMemos = $this->pendingReversalMemos($settlement);
+
+        $settlement->lines()->delete();
+        $settlement->forceFill(['state' => SettlementState::Cancelled])->save();
+
+        $this->reverseReleasedMemoTransactions($reversalMemos);
     }
 
     /**
@@ -401,29 +649,7 @@ final class SettlementBuilder
      */
     private function applyPendingAdjustments(Settlement $settlement): void
     {
-        $pending = Adjustment::query()
-            ->join('transactions', 'transactions.id', '=', 'adjustments.transaction_id')
-            ->where('transactions.merchant_id', $settlement->merchant_id)
-            ->where('adjustments.state', 'pending')
-            ->where(function ($query) {
-                $query
-                    ->whereIn('transactions.state', [TransactionState::Confirmed->value, TransactionState::Paid->value])
-                    ->orWhereExists(function ($sub) {
-                        $sub->select(DB::raw(1))
-                            ->from('settlement_lines')
-                            ->join('settlements', 'settlements.id', '=', 'settlement_lines.settlement_id')
-                            ->whereColumn('settlement_lines.transaction_id', 'transactions.id')
-                            ->whereNotIn('settlements.state', [
-                                SettlementState::Draft->value,
-                                SettlementState::AwaitingPayment->value,
-                                SettlementState::Cancelled->value,
-                            ]);
-                    });
-            })
-            ->orderBy('adjustments.id')
-            ->select('adjustments.*')
-            ->lockForUpdate()
-            ->get();
+        $pending = $this->applicablePendingAdjustments($settlement->merchant_id)->lockForUpdate()->get();
 
         if ($pending->isEmpty()) {
             return;
@@ -456,6 +682,39 @@ final class SettlementBuilder
         }
 
         $settlement->forceFill(['amount_due_laari' => $due])->save();
+    }
+
+    /**
+     * The §7 credit memos a NEW batch for this merchant would net in, in
+     * strict FIFO order — the applicability rule of applyPendingAdjustments
+     * expressed once so the merchant's pre-submit preview and the settlement
+     * it eventually creates can never disagree about what is owed.
+     *
+     * @return Builder<Adjustment>
+     */
+    public function applicablePendingAdjustments(int $merchantId): Builder
+    {
+        return Adjustment::query()
+            ->join('transactions', 'transactions.id', '=', 'adjustments.transaction_id')
+            ->where('transactions.merchant_id', $merchantId)
+            ->where('adjustments.state', 'pending')
+            ->where(function ($query) {
+                $query
+                    ->whereIn('transactions.state', [TransactionState::Confirmed->value, TransactionState::Paid->value])
+                    ->orWhereExists(function ($sub) {
+                        $sub->select(DB::raw(1))
+                            ->from('settlement_lines')
+                            ->join('settlements', 'settlements.id', '=', 'settlement_lines.settlement_id')
+                            ->whereColumn('settlement_lines.transaction_id', 'transactions.id')
+                            ->whereNotIn('settlements.state', [
+                                SettlementState::Draft->value,
+                                SettlementState::AwaitingPayment->value,
+                                SettlementState::Cancelled->value,
+                            ]);
+                    });
+            })
+            ->orderBy('adjustments.id')
+            ->select('adjustments.*');
     }
 
     /**
@@ -497,16 +756,31 @@ final class SettlementBuilder
      */
     private function nextReference(): string
     {
-        $year = CarbonImmutable::now((string) config('app.business_timezone', 'Indian/Maldives'))->year;
+        DB::statement('SELECT pg_advisory_xact_lock(?)', [crc32('settlements-reference-'.$this->referenceYear())]);
 
-        DB::statement('SELECT pg_advisory_xact_lock(?)', [crc32('settlements-reference-'.$year)]);
+        return $this->peekReference();
+    }
 
-        $prefix = sprintf('ST-%d-', $year);
+    /**
+     * The reference the next batch WOULD get, read without the advisory lock
+     * — for the pre-submit preview only. Reservation-free by design: nothing
+     * is claimed, so two merchants previewing at once see the same string and
+     * the loser's batch simply gets the next one. The final reference is
+     * assigned at submit, inside the lock (docs/openapi.yaml says so).
+     */
+    public function peekReference(): string
+    {
+        $prefix = sprintf('ST-%d-', $this->referenceYear());
 
         $latest = Settlement::query()->where('reference', 'like', $prefix.'%')->max('reference');
         $next = $latest === null ? 1 : (int) substr((string) $latest, strlen($prefix)) + 1;
 
         return $prefix.str_pad((string) $next, 5, '0', STR_PAD_LEFT);
+    }
+
+    private function referenceYear(): int
+    {
+        return CarbonImmutable::now((string) config('app.business_timezone', 'Indian/Maldives'))->year;
     }
 
     private function locked(Settlement $settlement): Settlement

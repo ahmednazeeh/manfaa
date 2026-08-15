@@ -112,11 +112,26 @@ it('still records a SUSPENDED merchant sale as ineligible — §7 leniency is fo
         ->assertJsonPath('status', 'recorded_ineligible');
 });
 
-it('gives a pending merchant nothing to settle', function () {
+it('gives a pending merchant no way to create a settlement', function () {
     $owner = pendingMerchantOwner();
     $this->actingAs($owner, 'merchant');
 
-    $this->postJson('/api/merchant/settlements', [])->assertUnprocessable();
+    // Receipt-first settlement mutations sit behind EnsureMerchantApproved:
+    // a store still in review cannot claim a bank transfer against a batch
+    // for trading it has not been approved to do. The refusal is the same
+    // machine-readable conflict the wizard uses, not a validation error.
+    $this->postJson('/api/merchant/settlements', [])
+        ->assertStatus(409)
+        ->assertJsonPath('code', 'store_not_approved');
+
+    $this->postJson('/api/merchant/settlements/wallet', ['settle_all' => true])
+        ->assertStatus(409)
+        ->assertJsonPath('code', 'store_not_approved');
+
+    // Reads stay open — there is simply nothing there.
+    $this->getJson('/api/merchant/settlements')
+        ->assertOk()
+        ->assertJsonCount(0, 'data');
 });
 
 it('enforces the channel enum at the database and drops is_online for good', function () {

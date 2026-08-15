@@ -168,6 +168,14 @@ export const TransactionSchema = z.object({
   cashback_laari: z.number().int(),
   fee_laari: z.number().int(),
   fee_gst_laari: z.number().int(),
+  /**
+   * PLAN §1 "Backdated credits": the sale was credited outside the merchant's
+   * validation window, so it never sat in the refund window — it is payable
+   * immediately AND permanently merchant-irreversible (an admin adjustment is
+   * the only correction). Branch on this flag, never on `reason_code`, which
+   * later transitions rewrite.
+   */
+  backdated: z.boolean(),
   occurred_at: z.string(),
   received_at: z.string(),
   /**
@@ -180,6 +188,65 @@ export const TransactionSchema = z.object({
   lines: z.array(TransactionLineSchema).optional(),
 });
 export type Transaction = z.infer<typeof TransactionSchema>;
+
+// ---------------------------------------------------------------------------
+// Backdated credits (PLAN §1, decision 2026-08-14 late)
+// ---------------------------------------------------------------------------
+
+/**
+ * The state qualifier a backdated credit carries through its (instantaneous)
+ * hop to payable_unfunded. It is an EVENT reason, not a row state: it tells
+ * a history reader why the credit skipped the validation window. No admin
+ * approval is involved — on_hold is now fraud/velocity only.
+ */
+export const BACKDATED_REASON_CODE = 'backdated_final';
+
+/**
+ * The 409 `code` a reversal of a backdated credit answers with — merchant
+ * and vendor alike (POST /v1/transactions/{id}/reverse). Distinct from a
+ * plain failure so a POS can tell the cashier the truth: this one needs an
+ * admin adjustment, retrying will never work.
+ */
+export const BACKDATED_IRREVERSIBLE_CODE = 'backdated_irreversible';
+
+/**
+ * Days past the merchant's validation window before the API treats a credit
+ * as backdated (CreditRecorder::STALE_GRACE_DAYS). Kept in step with the
+ * server so the entry form's warning fires on exactly the sales the server
+ * will make final.
+ */
+export const BACKDATED_STALE_GRACE_DAYS = 3;
+
+/**
+ * Would this sale be credited as BACKDATED — payable immediately and
+ * merchant-irreversible? Mirrors the server rule exactly: occurred_at
+ * strictly before now minus (validation window + grace days). The entry form
+ * warns on true BEFORE submit, because the decision cannot be undone
+ * afterwards.
+ *
+ * @param validationWindowDays the merchant's own preferences value
+ */
+export function isBackdatedOccurrence(
+  occurredAt: string | number | Date,
+  validationWindowDays: number,
+  now: Date = new Date(),
+): boolean {
+  const occurred =
+    occurredAt instanceof Date
+      ? occurredAt.getTime()
+      : typeof occurredAt === 'number'
+        ? occurredAt
+        : Date.parse(occurredAt);
+
+  if (!Number.isFinite(occurred)) {
+    return false;
+  }
+
+  const staleAfterMs =
+    (validationWindowDays + BACKDATED_STALE_GRACE_DAYS) * 24 * 60 * 60 * 1000;
+
+  return now.getTime() - occurred > staleAfterMs;
+}
 
 // ---------------------------------------------------------------------------
 // Promotions (shared by the merchant builder and the admin listing)
@@ -297,13 +364,38 @@ export const SettlementPaymentSchema = z.object({
   currency: z.string(),
   method: z.string(),
   bank_ref: z.string().nullable(),
+  /**
+   * Path on the private `slips` disk. It is NOT fetchable — the disk has no
+   * URL and is not served. Branch on `has_slip`; read the bytes only through
+   * the authenticated admin slip route.
+   */
   slip_path: z.string().nullable(),
+  has_slip: z.boolean(),
+  /** Mime derived from the uploaded BYTES, never the client's Content-Type. */
+  slip_mime: z.string().nullable(),
+  slip_size_bytes: z.number().int().nullable(),
+  uploaded_by: z.number().int().nullable(),
   state: SettlementPaymentStateSchema,
   matched_by: z.number().int().nullable(),
   matched_at: z.string().nullable(),
+  rejected_by: z.number().int().nullable(),
+  rejected_at: z.string().nullable(),
+  /** Why an admin refused the receipt — the merchant reads this verbatim. */
+  rejection_reason: z.string().nullable(),
   created_at: z.string(),
 });
 export type SettlementPayment = z.infer<typeof SettlementPaymentSchema>;
+
+/**
+ * The platform's active primary account, exactly as the merchant must type
+ * it into their bank. Copy buttons quote these three strings verbatim.
+ */
+export const SettlementBankAccountSchema = z.object({
+  bank_name: z.string(),
+  account_no: z.string(),
+  account_name: z.string(),
+});
+export type SettlementBankAccount = z.infer<typeof SettlementBankAccountSchema>;
 
 /**
  * Where to actually send the transfer: the platform's active primary bank
@@ -316,17 +408,55 @@ export const SettlementPaymentInstructionsSchema = z.object({
   reference: z.string(),
   amount_due_laari: z.number().int(),
   amount_due_mvr: z.string(),
-  bank_account: z
-    .object({
-      bank_name: z.string(),
-      account_no: z.string(),
-      account_name: z.string(),
-    })
-    .nullable(),
+  bank_account: SettlementBankAccountSchema.nullable(),
   needs_configuration: z.boolean(),
 });
 export type SettlementPaymentInstructions = z.infer<
   typeof SettlementPaymentInstructionsSchema
+>;
+
+/**
+ * The rejection that cancelled a batch, read off the payment the admin
+ * refused. Present only on a cancelled batch whose payments are loaded — a
+ * plain cancellation (no payment ever recorded) refuses nothing and carries
+ * no rejection.
+ */
+export const SettlementRejectionSchema = z.object({
+  reason: z.string().nullable(),
+  rejected_at: z.string().nullable(),
+  /** The bank reference the merchant quoted on the refused transfer. */
+  bank_ref: z.string().nullable(),
+  payment_id: z.number().int(),
+});
+export type SettlementRejection = z.infer<typeof SettlementRejectionSchema>;
+
+/**
+ * What the MERCHANT is told about their batch (PLAN §1 receipt-first). The
+ * raw §6 `state` stays for machines; this is the human answer to "what is
+ * happening to my transfer" — `verifying` while an admin reviews the slip,
+ * `rejected` (with the reason) when the transfer could not be verified.
+ */
+export const SettlementMerchantStatusCodeSchema = z.enum([
+  'draft',
+  'awaiting_payment',
+  'verifying',
+  'settled',
+  'partially_settled',
+  'rejected',
+  'cancelled',
+]);
+export type SettlementMerchantStatusCode = z.infer<
+  typeof SettlementMerchantStatusCodeSchema
+>;
+
+export const SettlementMerchantStatusSchema = z.object({
+  code: SettlementMerchantStatusCodeSchema,
+  /** English prose from the API; localise off `code`, not off this. */
+  message: z.string(),
+  rejection: SettlementRejectionSchema.nullable(),
+});
+export type SettlementMerchantStatus = z.infer<
+  typeof SettlementMerchantStatusSchema
 >;
 
 export const SettlementSchema = z.object({
@@ -348,6 +478,12 @@ export const SettlementSchema = z.object({
   due_at: z.string().nullable(),
   created_at: z.string(),
   payment_instructions: SettlementPaymentInstructionsSchema,
+  /**
+   * The merchant-facing reading of `state` (PLAN §1). `rejection` is filled
+   * only when the endpoint loads the payments — the merchant list and detail
+   * both do, so a rejected batch always explains itself.
+   */
+  merchant_status: SettlementMerchantStatusSchema,
   // Present only on endpoints that eager-load the relations.
   lines: z.array(SettlementLineSchema).optional(),
   payments: z.array(SettlementPaymentSchema).optional(),

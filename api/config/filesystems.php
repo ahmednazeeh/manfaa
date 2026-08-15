@@ -38,6 +38,19 @@ return [
             'report' => false,
         ],
 
+        // Settlement payment slips (PLAN §1 receipt-first). PRIVATE by
+        // construction: its own root outside storage/app/public, no `url`,
+        // and `serve` off — there is no route, signed or otherwise, that
+        // Laravel will generate for it. Slips reach a human only by streaming
+        // through the admin-authenticated controller.
+        'slips' => [
+            'driver' => 'local',
+            'root' => storage_path('app/slips'),
+            'serve' => false,
+            'throw' => false,
+            'report' => false,
+        ],
+
         'public' => [
             'driver' => 'local',
             'root' => storage_path('app/public'),

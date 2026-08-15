@@ -210,18 +210,32 @@ it('rejects a future-dated occurred_at with 422 and creates nothing', function (
         ->and(DB::table('ledger_journals')->count())->toBe(0);
 });
 
-it('puts a stale occurred_at on hold with reason stale_timestamp', function () {
-    // validation_window_days (3) + 3 grace days = 6; 7 days ago is stale.
+it('makes a backdated occurred_at immediately payable, never on hold', function () {
+    // validation_window_days (3) + 3 grace days = 6; 7 days ago is backdated.
+    // PLAN §1: no admin approval, immediately payable, merchant-irreversible.
     $this->postJson('/api/merchant/credits', manualCreditPayload([
         'occurred_at' => now()->subDays(7)->toIso8601String(),
     ]))
         ->assertCreated()
-        ->assertJsonPath('data.state', 'on_hold')
-        ->assertJsonPath('data.reason_code', 'stale_timestamp')
+        ->assertJsonPath('data.state', 'payable_unfunded')
+        ->assertJsonPath('data.reason_code', 'backdated_final')
+        ->assertJsonPath('data.backdated', true)
         ->assertJsonPath('data.cashback_laari', 2500);
 
-    // The accrual still posts — the hold gates validation, not the ledger.
+    // The clock started NOW, not at the (long past) occurred_at.
+    $transaction = Transaction::query()->sole();
+
+    expect($transaction->clock_start_at)->not->toBeNull()
+        ->and($transaction->due_at->getTimestamp())
+        ->toBe(now()->setTimezone(config('app.business_timezone'))->addDays(15)->setTimezone('UTC')->getTimestamp());
+
+    // The accrual posts exactly as it always did.
     expect(DB::table('ledger_journals')->count())->toBe(1);
+
+    // Never through on_hold: the append-only history shows tracked →
+    // awaiting_validation → payable_unfunded and nothing else.
+    expect($transaction->events()->orderBy('id')->pluck('to_state')->all())
+        ->toBe(['tracked', 'awaiting_validation', 'payable_unfunded']);
 });
 
 it('freezes the rate effective at occurred_at, not the current rate', function () {

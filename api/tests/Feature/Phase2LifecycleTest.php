@@ -25,11 +25,17 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Testing\TestResponse;
+use Tests\Feature\ReceiptSettlement\Slips;
 use Tests\TestCase;
 
 uses(TestCase::class, RefreshDatabase::class);
+
+beforeEach(function () {
+    Storage::fake('slips');
+});
 
 afterEach(function () {
     Carbon::setTestNow();
@@ -104,29 +110,32 @@ function p2Journals(string $referenceType, int $referenceId, string $description
         ->count();
 }
 
-/** Merchant-side settle-all → the created draft (NOT yet submitted). */
-function p2SettleAll(MerchantUser $owner): Settlement
+/**
+ * Merchant-side receipt-first settle-all (PLAN §1): one call builds the
+ * batch, freezes its lines and attaches the transfer's slip — the batch
+ * exists in payment_review or not at all.
+ */
+function p2SettleAll(MerchantUser $owner, int $amountLaari, string $bankRef): Settlement
 {
     $response = p2ActingAs($owner)
-        ->postJson('/api/merchant/settlements', ['settle_all' => true])
-        ->assertCreated();
+        ->post('/api/merchant/settlements', [
+            'settle_all' => '1',
+            'amount' => $amountLaari,
+            'bank_ref' => $bankRef,
+            'slip' => Slips::jpeg(),
+        ])
+        ->assertCreated()
+        ->assertJsonPath('data.state', 'payment_review');
 
     return Settlement::query()->findOrFail($response->json('data.id'));
 }
 
-/** Admin-side: record a claimed bank transfer, then match it. */
-function p2PayAndMatch(AdminUser $admin, Settlement $settlement, int $amountLaari, string $bankRef): Settlement
+/** Admin-side: match the merchant's claimed transfer. */
+function p2PayAndMatch(AdminUser $admin, Settlement $settlement, string $bankRef): Settlement
 {
-    p2ActingAs($admin)
-        ->postJson("/api/admin/settlements/{$settlement->id}/payments", [
-            'amount' => $amountLaari,
-            'bank_ref' => $bankRef,
-        ])
-        ->assertCreated();
-
     $paymentId = $settlement->payments()->where('bank_ref', $bankRef)->sole()->id;
 
-    test()->postJson("/api/admin/payments/{$paymentId}/match")->assertOk();
+    p2ActingAs($admin)->postJson("/api/admin/payments/{$paymentId}/match")->assertOk();
 
     return $settlement->refresh();
 }
@@ -306,17 +315,13 @@ it('runs the full Phase 2 vendor lifecycle: credential → POS ingest → replay
     // (2845 cashback + 1145 fee = 3990 due) and freezes them.
     Carbon::setTestNow(CarbonImmutable::parse('2026-08-05T13:00:00+05:00'));
 
-    $settlement1 = p2SettleAll($owner);
+    $settlement1 = p2SettleAll($owner, 3_990, 'BML-P2-3990');
 
     expect($settlement1->cashback_total_laari)->toBe(2_845)
         ->and($settlement1->fee_total_laari)->toBe(1_145)
         ->and($settlement1->amount_due_laari)->toBe(3_990)
         ->and($settlement1->lines()->count())->toBe(3)
         ->and($settlement1->due_at->equalTo($dueAt))->toBeTrue();
-
-    $this->postJson("/api/merchant/settlements/{$settlement1->id}/submit")
-        ->assertOk()
-        ->assertJsonPath('data.state', 'awaiting_payment');
 
     // ── (i) A refund arrives for INV-2002 while its line is locked in the
     // submitted batch. §7: the transaction cannot reverse; a pending credit
@@ -349,7 +354,7 @@ it('runs the full Phase 2 vendor lifecycle: credential → POS ingest → replay
     // batch, never the locked one. All three lines confirm, oldest-first.
     Carbon::setTestNow(CarbonImmutable::parse('2026-08-06T10:00:00+05:00'));
 
-    $settlement1 = p2PayAndMatch($admin, $settlement1, 3_990, 'BML-P2-3990');
+    $settlement1 = p2PayAndMatch($admin, $settlement1, 'BML-P2-3990');
 
     expect($settlement1->state->value)->toBe('settled')
         ->and($settlement1->amount_received_laari)->toBe(3_990);
@@ -386,7 +391,7 @@ it('runs the full Phase 2 vendor lifecycle: credential → POS ingest → replay
     // credit.
     Carbon::setTestNow(CarbonImmutable::parse('2026-08-10T13:00:00+05:00'));
 
-    $settlement2 = p2SettleAll($owner);
+    $settlement2 = p2SettleAll($owner, 125, 'BML-P2-125');
     $adjustment->refresh();
 
     expect($settlement2->cashback_total_laari)->toBe(1_000)
@@ -419,13 +424,8 @@ it('runs the full Phase 2 vendor lifecycle: credential → POS ingest → replay
     // the applied credit already moved the ledger at application, so cash
     // books only 125, nothing is "forgiven", no wallet row appears, and the
     // receivable returns to zero.
-    p2ActingAs($owner)
-        ->postJson("/api/merchant/settlements/{$settlement2->id}/submit")
-        ->assertOk()
-        ->assertJsonPath('data.state', 'awaiting_payment');
-
     Carbon::setTestNow(CarbonImmutable::parse('2026-08-10T14:00:00+05:00'));
-    $settlement2 = p2PayAndMatch($admin, $settlement2, 125, 'BML-P2-125');
+    $settlement2 = p2PayAndMatch($admin, $settlement2, 'BML-P2-125');
 
     expect($settlement2->state->value)->toBe('settled')
         ->and($settlement2->amount_received_laari)->toBe(125)

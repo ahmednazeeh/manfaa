@@ -5,11 +5,13 @@ declare(strict_types=1);
 namespace App\Domain\Standing;
 
 use App\Domain\Cashback\TransactionState;
+use App\Domain\Settlement\SettlementState;
 use App\Domain\Webhooks\WebhookDispatcher;
 use App\Domain\Webhooks\WebhookEvents;
 use App\Models\Merchant;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -51,7 +53,7 @@ final readonly class SuspensionService
 
         $merchants = Merchant::query()
             ->where('status', 'active')
-            ->whereHas('transactions', fn (Builder $query) => $this->overdue($query, $now))
+            ->whereHas('transactions', fn (Builder $query) => $this->unpaidOverdue($query, $now))
             ->orderBy('id')
             ->get();
 
@@ -159,7 +161,13 @@ final readonly class SuspensionService
         ]);
     }
 
-    private function overdue(Builder $query, CarbonImmutable $now): Builder
+    /**
+     * @template TQuery of Builder|QueryBuilder
+     *
+     * @param  TQuery  $query
+     * @return TQuery
+     */
+    private function overdue(Builder|QueryBuilder $query, CarbonImmutable $now): Builder|QueryBuilder
     {
         return $query
             ->where('state', TransactionState::PayableUnfunded->value)
@@ -167,14 +175,50 @@ final readonly class SuspensionService
     }
 
     /**
+     * What suspension actually acts on: overdue transactions the merchant has
+     * NOT already transferred for. A line frozen on a batch carrying a
+     * PENDING receipt is money the merchant has paid and evidenced; it still
+     * reads payable_unfunded only because nothing leaves that state until an
+     * admin matches the payment (LineAllocator runs at match time). Counting
+     * it would make the platform's own review latency the credit control —
+     * §7's day-16 rule is aimed at a merchant who has not paid.
+     *
+     * The shield lasts exactly as long as the review does, and no longer:
+     * Reject releases the lines with no payment left pending, and Match
+     * leaves any uncovered lines on a partially_settled batch with nothing
+     * pending either — both put the merchant straight back in scope.
+     *
+     * Reinstatement deliberately keeps the WIDER overdue() definition: an
+     * unreviewed slip must never unlock a door the merchant's own lateness
+     * already shut.
+     *
+     * @template TQuery of Builder|QueryBuilder
+     *
+     * @param  TQuery  $query
+     * @return TQuery
+     */
+    private function unpaidOverdue(Builder|QueryBuilder $query, CarbonImmutable $now): Builder|QueryBuilder
+    {
+        return $this->overdue($query, $now)
+            ->whereNotExists(fn ($sub) => $sub
+                ->select(DB::raw(1))
+                ->from('settlement_lines')
+                ->join('settlements', 'settlements.id', '=', 'settlement_lines.settlement_id')
+                ->join('settlement_payments', 'settlement_payments.settlement_id', '=', 'settlements.id')
+                ->whereColumn('settlement_lines.transaction_id', 'transactions.id')
+                ->where('settlements.state', '!=', SettlementState::Cancelled->value)
+                ->where('settlement_payments.state', 'pending'));
+    }
+
+    /**
+     * The notice payload describes what triggered the suspension, so it
+     * counts the same unpaid-overdue set the decision was made on.
+     *
      * @return array<string, mixed>
      */
     private function overdueSummary(int $merchantId, CarbonImmutable $now): array
     {
-        $summary = DB::table('transactions')
-            ->where('merchant_id', $merchantId)
-            ->where('state', TransactionState::PayableUnfunded->value)
-            ->where('due_at', '<', $now)
+        $summary = $this->unpaidOverdue(DB::table('transactions')->where('merchant_id', $merchantId), $now)
             ->selectRaw(<<<'SQL'
                 COUNT(*) AS overdue_count,
                 COALESCE(SUM(cashback_laari + fee_laari + fee_gst_laari), 0) AS overdue_laari,

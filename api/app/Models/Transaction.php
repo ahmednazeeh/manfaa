@@ -34,6 +34,7 @@ class Transaction extends Model
             'fee_laari' => 'integer',
             'fee_gst_laari' => 'integer',
             'state' => TransactionState::class,
+            'backdated' => 'boolean',
             'occurred_at' => 'immutable_datetime',
             'received_at' => 'immutable_datetime',
             'clock_start_at' => 'immutable_datetime',

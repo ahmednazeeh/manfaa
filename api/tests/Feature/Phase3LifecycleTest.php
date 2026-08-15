@@ -25,11 +25,17 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Testing\TestResponse;
+use Tests\Feature\ReceiptSettlement\Slips;
 use Tests\TestCase;
 
 uses(TestCase::class, RefreshDatabase::class);
+
+beforeEach(function () {
+    Storage::fake('slips');
+});
 
 afterEach(function () {
     Carbon::setTestNow();
@@ -283,8 +289,9 @@ it('runs the full Phase 3 customer journey: OTP signup → promo publish → pri
         ->assertJsonPath('data.paid_this_month_laari', 0)
         ->assertJsonPath('data.has_payout_account', false);
 
-    // ── (k) Day 0 of the clock for all four sales, then settle-all → submit
-    // → the merchant pays 40,126 → match: oldest-first allocation confirms
+    // ── (k) Day 0 of the clock for all four sales, then the receipt-first
+    // settle-all (PLAN §1) — the merchant transfers 40,126 and submits the
+    // slip in one call → admin matches: oldest-first allocation confirms
     // every line in full.
     Carbon::setTestNow(CarbonImmutable::parse('2026-08-16T12:00:00+05:00'));
     $this->artisan('manfaa:sweep-validation')->assertExitCode(0);
@@ -293,25 +300,22 @@ it('runs the full Phase 3 customer journey: OTP signup → promo publish → pri
 
     Carbon::setTestNow(CarbonImmutable::parse('2026-08-16T13:00:00+05:00'));
 
-    $settlementId = p3ActingAs($owner)
-        ->postJson('/api/merchant/settlements', ['settle_all' => true])
+    p3ActingAs($owner)
+        ->post('/api/merchant/settlements', [
+            'settle_all' => '1',
+            'amount' => 40_126,
+            'bank_ref' => 'BML-P3-40126',
+            'slip' => Slips::webp(),
+        ])
         ->assertCreated()
+        ->assertJsonPath('data.state', 'payment_review')
         ->assertJsonPath('data.cashback_total_laari', 33_000)
         ->assertJsonPath('data.fee_total_laari', 7_126)
-        ->assertJsonPath('data.amount_due_laari', 40_126)
-        ->json('data.id');
-
-    $this->postJson("/api/merchant/settlements/{$settlementId}/submit")
-        ->assertOk()
-        ->assertJsonPath('data.state', 'awaiting_payment');
+        ->assertJsonPath('data.amount_due_laari', 40_126);
 
     Carbon::setTestNow(CarbonImmutable::parse('2026-08-17T10:00:00+05:00'));
 
-    p3ActingAs($admin)
-        ->postJson("/api/admin/settlements/{$settlementId}/payments", [
-            'amount' => 40_126,
-            'bank_ref' => 'BML-P3-40126',
-        ])->assertCreated();
+    p3ActingAs($admin);
 
     $paymentId = (int) DB::table('settlement_payments')->where('bank_ref', 'BML-P3-40126')->value('id');
     $this->postJson("/api/admin/payments/{$paymentId}/match")->assertOk();

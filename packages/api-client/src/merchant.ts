@@ -9,6 +9,7 @@ import {
   PromotionSchema,
   PromotionStatusSchema,
   RateDescriptionSchema,
+  SettlementBankAccountSchema,
   SettlementFundingMethodSchema,
   SettlementSchema,
   TransactionSchema,
@@ -33,6 +34,13 @@ import {
  * `needs_configuration: true` when the platform has not configured one),
  * plus the exact amount and reference to quote on the transfer. See
  * SettlementPaymentInstructionsSchema in resources.ts.
+ *
+ * Settlements are RECEIPT-FIRST (PLAN §1): preview → transfer at the bank →
+ * submit the slip and bank reference, which is the single act that creates
+ * the batch, landing it in `payment_review`. There is no draft-then-submit
+ * pair and no merchant route to `awaiting_payment` — a settlement without a
+ * receipt cannot be created. Settlement MUTATIONS need manager or above plus
+ * an approved store; the preview and the reads stay staff-accessible.
  */
 
 interface RequestOptions {
@@ -59,6 +67,19 @@ export const OutstandingTotalSchema = OutstandingBucketSchema.extend({
 });
 export type OutstandingTotal = z.infer<typeof OutstandingTotalSchema>;
 
+/**
+ * §7 reversal credits not yet netted into a batch. `credit_laari` is the
+ * stored (NEGATIVE) sum of the pending adjustments — the amount that will
+ * come OFF the next settlement, which is why the dashboard's outstanding
+ * total and the next batch's amount due differ.
+ */
+export const PendingAdjustmentsSchema = z.object({
+  count: z.number().int(),
+  credit_laari: z.number().int(),
+  credit_mvr: z.string(),
+});
+export type PendingAdjustments = z.infer<typeof PendingAdjustmentsSchema>;
+
 export const OutstandingSummarySchema = z.object({
   as_of: z.string(),
   total: OutstandingTotalSchema,
@@ -68,6 +89,7 @@ export const OutstandingSummarySchema = z.object({
     '11_15': OutstandingBucketSchema,
     overdue: OutstandingBucketSchema,
   }),
+  pending_adjustments: PendingAdjustmentsSchema,
 });
 export type OutstandingSummary = z.infer<typeof OutstandingSummarySchema>;
 
@@ -122,47 +144,231 @@ export function getMerchantSettlement(
   );
 }
 
-export const CreateSettlementRequestSchema = z.union([
-  z.object({ settle_all: z.literal(true) }),
-  z.object({ ids: z.array(z.number().int()).min(1) }),
-]);
-export type CreateSettlementRequest = z.infer<
-  typeof CreateSettlementRequestSchema
->;
+/**
+ * Which payable transactions a settlement covers: everything eligible, or an
+ * explicit list. An explicit list is claimed exactly — naming a transaction
+ * that is not payable (already on a batch, not yet payable, reversed) is a
+ * 422, never a silent drop.
+ */
+export type SettlementSelection =
+  { settle_all: true } | { transaction_ids: number[] };
 
-/** POST /api/merchant/settlements — creates a draft (201) with lines loaded. */
-export function createMerchantSettlement(
-  body: CreateSettlementRequest,
-  options: RequestOptions = {},
-): Promise<MerchantSettlementResponse> {
-  return apiFetch('/api/merchant/settlements', MerchantSettlementResponseSchema, {
-    method: 'POST',
-    body,
-    signal: options.signal,
-  });
+export const SettlementSelectionSchema = z.union([
+  z.object({ settle_all: z.literal(true) }),
+  z.object({ transaction_ids: z.array(z.number().int()).min(1) }),
+]);
+
+/** `?settle_all=1` or repeated `?transaction_ids[]=` — Laravel array syntax. */
+function selectionQuery(selection: SettlementSelection): string {
+  const search = new URLSearchParams();
+  if ('settle_all' in selection) {
+    search.set('settle_all', '1');
+  } else {
+    for (const id of selection.transaction_ids) {
+      search.append('transaction_ids[]', String(id));
+    }
+  }
+  return `?${search.toString()}`;
 }
 
-/** POST /api/merchant/settlements/{id}/submit — draft -> awaiting_payment. */
-export function submitMerchantSettlement(
-  id: number,
+/** The same selection, as multipart fields on a receipt submission. */
+function appendSelection(form: FormData, selection: SettlementSelection): void {
+  if ('settle_all' in selection) {
+    form.append('settle_all', '1');
+  } else {
+    for (const id of selection.transaction_ids) {
+      form.append('transaction_ids[]', String(id));
+    }
+  }
+}
+
+/**
+ * What a selection would cost and where to send it — the preview's own
+ * payment instructions. The reference is a PREVIEW (`reference_is_final`
+ * false): nothing is reserved, and the batch's real reference is assigned at
+ * submit. If the two ever differ, the one on the created settlement is the
+ * one the merchant must quote.
+ */
+export const SettlementPreviewInstructionsSchema = z.object({
+  reference_preview: z.string(),
+  reference_is_final: z.boolean(),
+  amount_due_laari: z.number().int(),
+  amount_due_mvr: z.string(),
+  bank_account: SettlementBankAccountSchema.nullable(),
+  needs_configuration: z.boolean(),
+});
+export type SettlementPreviewInstructions = z.infer<
+  typeof SettlementPreviewInstructionsSchema
+>;
+
+/**
+ * The receipt-first preview (PLAN §1): exactly what this selection will owe,
+ * where to transfer it, and what to quote — before anything is claimed. No
+ * draft is created and no reference is burnt, so previewing twice changes
+ * nothing and the transactions stay eligible.
+ *
+ * `line_total_laari` is the batch before §7 credits; `credit_applied_laari`
+ * is what pending reversal memos net off it (strict FIFO, stopping at the
+ * first memo larger than what remains); `amount_due_laari` is the transfer.
+ */
+export const SettlementPreviewSchema = z.object({
+  /** Exactly the transactions the batch would freeze, oldest due first. */
+  transaction_ids: z.array(z.number().int()),
+  transaction_count: z.number().int(),
+  sale_total_laari: z.number().int(),
+  cashback_total_laari: z.number().int(),
+  fee_total_laari: z.number().int(),
+  fee_gst_total_laari: z.number().int(),
+  line_total_laari: z.number().int(),
+  credit_applied_laari: z.number().int(),
+  credit_applied_mvr: z.string(),
+  amount_due_laari: z.number().int(),
+  amount_due_mvr: z.string(),
+  /** The EARLIEST line's due date (§7), not a batch creation date. */
+  due_at: z.string().nullable(),
+  payment_instructions: SettlementPreviewInstructionsSchema,
+});
+export type SettlementPreview = z.infer<typeof SettlementPreviewSchema>;
+
+export const SettlementPreviewResponseSchema = dataWrapped(
+  SettlementPreviewSchema,
+);
+export type SettlementPreviewResponse = z.infer<
+  typeof SettlementPreviewResponseSchema
+>;
+
+/**
+ * GET /api/merchant/settlements/preview — staff-readable (it claims
+ * nothing). 422 when the selection names a transaction that is not eligible,
+ * or when there is nothing to settle at all.
+ */
+export function previewMerchantSettlement(
+  selection: SettlementSelection,
   options: RequestOptions = {},
-): Promise<MerchantSettlementResponse> {
+): Promise<SettlementPreviewResponse> {
   return apiFetch(
-    `/api/merchant/settlements/${id}/submit`,
-    MerchantSettlementResponseSchema,
-    { method: 'POST', signal: options.signal },
+    `/api/merchant/settlements/preview${selectionQuery(selection)}`,
+    SettlementPreviewResponseSchema,
+    { signal: options.signal },
   );
 }
 
-/** POST /api/merchant/settlements/{id}/wallet-settle — settle entirely from the wallet. */
-export function walletSettleMerchantSettlement(
+/**
+ * The receipt half of a submission: what was actually transferred, the bank's
+ * own reference for it, and the slip.
+ *
+ * `slip` is validated by its BYTES server-side — JPEG, PNG, WebP or PDF, max
+ * 5 MB. A renamed SVG or an HTML page called .pdf is refused (422
+ * `slip_unsupported_type`), whatever the filename or the browser's declared
+ * type says.
+ */
+export interface SettlementReceiptInput {
+  /** Integer laari actually transferred, >= 1 — not necessarily the amount due. */
+  amount: number;
+  /** The bank's reference for the transfer; unique per settlement. */
+  bank_ref: string;
+  slip: File | Blob;
+}
+
+/** 5 MB — the server's own slip ceiling, so the panel can refuse first. */
+export const SETTLEMENT_SLIP_MAX_BYTES = 5 * 1024 * 1024;
+
+/** What the server accepts as a slip, by content — SVG is deliberately absent. */
+export const SETTLEMENT_SLIP_ACCEPT =
+  'image/jpeg,image/png,image/webp,application/pdf';
+
+/**
+ * Refusal codes carried on ApiError bodies as `code` for the receipt-first
+ * routes (read them with `apiErrorCode`):
+ *  - `slip_too_large` (422) — over 5 MB;
+ *  - `slip_unsupported_type` (422) — the BYTES are not JPEG/PNG/WebP/PDF;
+ *  - `duplicate_bank_ref` (409) — that reference is already recorded on this
+ *    batch; the transfer is in the system and re-recording it would book the
+ *    same cash twice;
+ *  - `manager_required` (403) — submitting is a manager's job (staff read);
+ *  - `store_not_approved` (403) — the store has not passed review.
+ *
+ * A 422 with no `code` is ordinary validation (an ineligible transaction in
+ * the selection, nothing to settle); a 409 with no `code` is a state
+ * conflict — the batch moved on, so reload it.
+ */
+export const SettlementErrorCodeSchema = z.enum([
+  'slip_too_large',
+  'slip_unsupported_type',
+  'duplicate_bank_ref',
+  'manager_required',
+  'store_not_approved',
+]);
+export type SettlementErrorCode = z.infer<typeof SettlementErrorCodeSchema>;
+
+function receiptForm(receipt: SettlementReceiptInput): FormData {
+  const form = new FormData();
+  form.append('amount', String(receipt.amount));
+  form.append('bank_ref', receipt.bank_ref);
+  form.append('slip', receipt.slip);
+  return form;
+}
+
+/**
+ * POST /api/merchant/settlements — multipart. THE receipt-first submission
+ * (PLAN §1): selection + amount transferred + bank reference + slip, in one
+ * multipart request that creates the settlement directly in
+ * `payment_review`. There is no draft and no awaiting_payment on this path —
+ * a settlement without a receipt cannot be created at all — and the lines
+ * freeze on creation, so a rejected batch (not a re-edit) is how a mistake
+ * is undone. Manager or above, approved store only. 201 with lines and
+ * payments loaded.
+ */
+export function createMerchantSettlement(
+  selection: SettlementSelection,
+  receipt: SettlementReceiptInput,
+  options: RequestOptions = {},
+): Promise<MerchantSettlementResponse> {
+  const form = receiptForm(receipt);
+  appendSelection(form, selection);
+
+  return apiFetch(
+    '/api/merchant/settlements',
+    MerchantSettlementResponseSchema,
+    { method: 'POST', body: form, signal: options.signal },
+  );
+}
+
+/**
+ * POST /api/merchant/settlements/{id}/receipts — multipart. A FURTHER
+ * transfer against a batch that is still owed money: the remainder after a
+ * partial payment (§7 leaves the uncovered lines frozen on this batch, so no
+ * new settlement can pick them up), or the transfer for a batch an admin
+ * built as the fallback. 201 with the reloaded settlement.
+ */
+export function addMerchantSettlementReceipt(
   id: number,
+  receipt: SettlementReceiptInput,
   options: RequestOptions = {},
 ): Promise<MerchantSettlementResponse> {
   return apiFetch(
-    `/api/merchant/settlements/${id}/wallet-settle`,
+    `/api/merchant/settlements/${id}/receipts`,
     MerchantSettlementResponseSchema,
-    { method: 'POST', signal: options.signal },
+    { method: 'POST', body: receiptForm(receipt), signal: options.signal },
+  );
+}
+
+/**
+ * POST /api/merchant/settlements/wallet — build and settle from the wallet
+ * balance in one call (§7: same path, same states, same ledger entries; only
+ * the funding source differs). No receipt exists because no bank transfer
+ * happened — the top-up that funded the wallet is the evidence. A batch fully
+ * netted to zero by §7 credits also settles here, drawing nothing. 422 when
+ * the balance cannot cover the batch.
+ */
+export function createMerchantWalletSettlement(
+  selection: SettlementSelection,
+  options: RequestOptions = {},
+): Promise<MerchantSettlementResponse> {
+  return apiFetch(
+    '/api/merchant/settlements/wallet',
+    MerchantSettlementResponseSchema,
+    { method: 'POST', body: selection, signal: options.signal },
   );
 }
 
@@ -227,7 +433,16 @@ export type CreateCreditRequest = z.infer<typeof CreateCreditRequestSchema>;
 export const CreateCreditResponseSchema = dataWrapped(TransactionSchema);
 export type CreateCreditResponse = z.infer<typeof CreateCreditResponseSchema>;
 
-/** POST /api/merchant/credits — records a manual credit (201). */
+/**
+ * POST /api/merchant/credits — records a manual credit (201).
+ *
+ * BACKDATED (PLAN §1): when `occurred_at` is older than the merchant's
+ * validation window plus the grace days, the credit skips on_hold entirely —
+ * it is payable immediately and the merchant can NEVER reverse it (admin
+ * adjustment only). The response carries `backdated: true`. Warn before
+ * submit with `isBackdatedOccurrence(occurred_at, validation_window_days)`,
+ * which mirrors the server rule; afterwards there is nothing to undo.
+ */
 export function createMerchantCredit(
   body: CreateCreditRequest,
   options: RequestOptions = {},

@@ -1,11 +1,14 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { MoneyText } from '@manfaa/ui';
+import { format } from 'date-fns';
 import { Plus } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
+import type { MerchantSettlement } from '@/lib/api';
 import { useSettlements } from '@/lib/queries';
 import { hasRoleAtLeast } from '@/lib/roles';
-import { useLayout } from '@/components/app-layout/context';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -22,8 +25,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { format } from 'date-fns';
-import Link from 'next/link';
+import { useLayout } from '@/components/app-layout/context';
 import {
   Toolbar,
   ToolbarActions,
@@ -39,7 +41,42 @@ import {
 import { ListPagination } from '@/components/app/list-pagination';
 import { SettlementStateBadge } from '@/components/app/state-badge';
 
+/**
+ * Settlement history. Under the receipt-first flow (PLAN §1) the state chip
+ * alone does not answer the merchant's question, so each row also carries
+ * the human status: "Manfaa is verifying your transfer" while a slip is in
+ * review, and the admin's REASON on a rejected one — with a route to a fresh
+ * settlement, which is the whole remedy.
+ */
+
+function StatusCell({ settlement }: { settlement: MerchantSettlement }) {
+  const { t } = useTranslation();
+  const status = settlement.merchant_status;
+
+  return (
+    <div className="flex flex-col gap-1">
+      <SettlementStateBadge state={settlement.state} />
+      {status.code === 'verifying' && (
+        <span className="text-xs text-muted-foreground">
+          {t('settlement.statusVerifying')}
+        </span>
+      )}
+      {status.code === 'rejected' && (
+        <span className="flex flex-col gap-0.5">
+          <span className="text-xs font-medium text-destructive">
+            {t('settlement.statusRejected')}
+          </span>
+          <span className="text-xs text-muted-foreground">
+            {status.rejection?.reason ?? t('settlement.statusRejectedNoReason')}
+          </span>
+        </span>
+      )}
+    </div>
+  );
+}
+
 export default function SettlementsPage() {
+  const { t } = useTranslation();
   const { me } = useLayout();
   const canManage = hasRoleAtLeast(me.role, 'manager');
   const [page, setPage] = useState(1);
@@ -49,10 +86,9 @@ export default function SettlementsPage() {
     <div className="container">
       <Toolbar>
         <ToolbarHeading>
-          <ToolbarPageTitle>Settlements</ToolbarPageTitle>
+          <ToolbarPageTitle>{t('settlement.listTitle')}</ToolbarPageTitle>
           <ToolbarDescription>
-            Batches of outstanding cashback and fees you have settled or are
-            settling
+            {t('settlement.listSubtitle')}
           </ToolbarDescription>
         </ToolbarHeading>
         {/* Building a batch is manager work (PLAN §1); staff read the
@@ -62,7 +98,7 @@ export default function SettlementsPage() {
             <Button asChild>
               <Link href="/settlements/new">
                 <Plus />
-                New settlement
+                {t('settlement.title')}
               </Link>
             </Button>
           </ToolbarActions>
@@ -73,8 +109,10 @@ export default function SettlementsPage() {
         <CardHeader>
           <CardTitle>
             {settlements.data
-              ? `${settlements.data.meta.total} settlements`
-              : 'Settlements'}
+              ? t('settlement.listCount', {
+                  count: settlements.data.meta.total,
+                })
+              : t('settlement.listTitle')}
           </CardTitle>
         </CardHeader>
 
@@ -83,9 +121,7 @@ export default function SettlementsPage() {
         ) : !settlements.data ? (
           <LoadingBlock lines={5} />
         ) : settlements.data.data.length === 0 ? (
-          <EmptyBlock>
-            No settlements yet — build one from your outstanding transactions.
-          </EmptyBlock>
+          <EmptyBlock>{t('settlement.emptyList')}</EmptyBlock>
         ) : (
           <>
             <CardTable>
@@ -93,13 +129,21 @@ export default function SettlementsPage() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Reference</TableHead>
-                      <TableHead>Created</TableHead>
-                      <TableHead>State</TableHead>
-                      <TableHead className="text-end">Cashback</TableHead>
-                      <TableHead className="text-end">Fees</TableHead>
-                      <TableHead className="text-end">Amount due</TableHead>
-                      <TableHead className="text-end">Received</TableHead>
+                      <TableHead>{t('settlement.colReference')}</TableHead>
+                      <TableHead>{t('settlement.colCreated')}</TableHead>
+                      <TableHead>{t('settlement.colStatus')}</TableHead>
+                      <TableHead className="text-end">
+                        {t('settlement.colCashback')}
+                      </TableHead>
+                      <TableHead className="text-end">
+                        {t('settlement.colFees')}
+                      </TableHead>
+                      <TableHead className="text-end">
+                        {t('settlement.colAmountDue')}
+                      </TableHead>
+                      <TableHead className="text-end">
+                        {t('settlement.colReceived')}
+                      </TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -109,18 +153,19 @@ export default function SettlementsPage() {
                           <Link
                             href={`/settlements/${settlement.id}`}
                             className="font-medium text-mono hover:text-primary"
+                            dir="ltr"
                           >
                             {settlement.reference}
                           </Link>
                         </TableCell>
-                        <TableCell className="text-secondary-foreground whitespace-nowrap">
+                        <TableCell className="whitespace-nowrap text-secondary-foreground">
                           {format(
                             new Date(settlement.created_at),
                             'dd MMM yyyy',
                           )}
                         </TableCell>
                         <TableCell>
-                          <SettlementStateBadge state={settlement.state} />
+                          <StatusCell settlement={settlement} />
                         </TableCell>
                         <TableCell className="text-end">
                           <MoneyText laari={settlement.cashback_total_laari} />

@@ -252,10 +252,19 @@ Keep POSTing while suspended — sales are still recorded — but stop
 advertising cashback until the `merchant.reinstated` webhook. Accrual resumes
 automatically; already-recorded ineligible sales are **not** retro-credited.
 
-**`201` with `reason: "stale_timestamp"`** — a sale older than the merchant's
-validation window + 3 days is accepted but arrives in `state: "on_hold"`,
-routed to manual review instead of a live settlement batch. Flush your
-offline queue promptly.
+**`201` with `reason: "backdated_final"`** — a sale older than the merchant's
+validation window + 3 days is **backdated**. It is accepted, but it skips the
+refund window entirely: it arrives in `state: "payable_unfunded"` with
+`"backdated": true`, the merchant's 15-day settlement clock starts at the
+moment you POST it (not at `occurred_at`), and **it can never be reversed
+through this API** — `POST /v1/transactions/{id}/reverse` answers
+`409 backdated_irreversible` in every state, and no credit adjustment is
+created either. Corrections are admin adjustments, arranged with Manfaa.
+
+Flush your offline queue promptly: a queue that drains a week late turns
+ordinary sales into irreversible ones. Branch on the `backdated` boolean, not
+on `reason_code` — later transitions rewrite `reason_code`, but `backdated`
+is permanent.
 
 A closed (not merely suspended) merchant account answers
 `403 forbidden_ability` in the error envelope — stop sending and contact us.
@@ -445,6 +454,26 @@ retry with the *same* `Idempotency-Key` replays the original `200` instead —
 `invalid_state` only fires on a new key); an unknown or cross-merchant id
 answers `404 transaction_not_found`.
 
+**Backdated sales cannot be reversed at all.** A transaction created outside
+the merchant's validation window (`"backdated": true`, `reason_code:
+"backdated_final"` — see §4.1) answers:
+
+```json
+{
+  "error": {
+    "code": "backdated_irreversible",
+    "message": "Transaction 84522 was credited as a backdated sale and cannot be reversed by the merchant — an admin adjustment is required.",
+    "meta": { "state": "payable_unfunded" }
+  }
+}
+```
+
+This fires in **every** state — pending, confirmed or paid — and creates no
+credit adjustment. It is deliberately a different code from `invalid_state`:
+`invalid_state` describes where the transaction is right now, while
+`backdated_irreversible` will never succeed on any retry with any key. Do not
+queue it; surface it to a human, who arranges an adjustment with Manfaa.
+
 ### 4.3 Rate for the till display — `GET /v1/merchants/me/rate`
 
 Ability: `rates:read`.
@@ -561,10 +590,11 @@ The complete code registry (also in `openapi.yaml` → `MachineCode`):
 | `lines_sum_mismatch` | error envelope — line amounts ≠ `eligible_amount` | 422 | Fix the split; fresh key |
 | `duplicate_invoice` | error envelope; existing id in `meta.transaction_id` | 409 | Never — sale already recorded |
 | `invalid_state` | error envelope; current state in `meta.state` | 409 | Never — terminal state |
+| `backdated_irreversible` | error envelope; current state in `meta.state` | 409 | Never — admin adjustment only |
 | `transaction_not_found` | error envelope | 404 | Never |
 | `merchant_suspended` | `reason` in a `200 recorded_ineligible` body | — | n/a — recorded, no cashback |
 | `below_minimum` | `reason` in a `200 below_minimum` body | — | n/a — recorded, zero cashback |
-| `stale_timestamp` | `reason` in a `201` body, `state: on_hold` | — | n/a — accepted, routed to review |
+| `backdated_final` | `reason` in a `201` body, `state: payable_unfunded` | — | n/a — accepted, payable now, irreversible |
 | `locked_in_settlement` | `cause` in a `200 adjustment_created` body | — | n/a — adjustment created |
 | `already_confirmed` | `cause` in a `200 adjustment_created` body | — | n/a — adjustment created |
 

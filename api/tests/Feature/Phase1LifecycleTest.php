@@ -22,9 +22,15 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
+use Tests\Feature\ReceiptSettlement\Slips;
 use Tests\TestCase;
 
 uses(TestCase::class, RefreshDatabase::class);
+
+beforeEach(function () {
+    Storage::fake('slips');
+});
 
 afterEach(function () {
     Carbon::setTestNow();
@@ -74,39 +80,50 @@ function lifecycleCredit(MerchantUser $user, Customer $customer, string $invoice
 }
 
 /**
- * Merchant-side settle-all → submit, returning the awaiting_payment batch.
+ * Merchant-side receipt-first settle-all (PLAN §1): select everything
+ * eligible, state the transfer, attach the slip — one call, landing the
+ * batch in payment_review with its receipt already attached.
  */
-function lifecycleSettleAll(MerchantUser $user): Settlement
+function lifecycleSettleAll(MerchantUser $user, int $amountLaari, string $bankRef): Settlement
 {
     $response = test()->actingAs($user, 'merchant')
-        ->postJson('/api/merchant/settlements', ['settle_all' => true])
-        ->assertCreated();
+        ->post('/api/merchant/settlements', [
+            'settle_all' => '1',
+            'amount' => $amountLaari,
+            'bank_ref' => $bankRef,
+            'slip' => Slips::jpeg(),
+        ])
+        ->assertCreated()
+        ->assertJsonPath('data.state', 'payment_review');
 
-    $settlement = Settlement::query()->findOrFail($response->json('data.id'));
-
-    test()->postJson("/api/merchant/settlements/{$settlement->id}/submit")
-        ->assertOk()
-        ->assertJsonPath('data.state', 'awaiting_payment');
-
-    return $settlement->refresh();
+    return Settlement::query()->findOrFail($response->json('data.id'));
 }
 
 /**
- * Admin-side: record a claimed bank transfer against the batch, then match
- * it through the queue — allocation, confirmation and postings all fire here.
+ * A further transfer against a batch still owed money — §7's partial
+ * remainder, submitted with its own receipt.
  */
-function lifecyclePayAndMatch(AdminUser $admin, Settlement $settlement, int $amountLaari, string $bankRef): Settlement
+function lifecycleTopUp(MerchantUser $user, Settlement $settlement, int $amountLaari, string $bankRef): void
 {
-    test()->actingAs($admin, 'admin')
-        ->postJson("/api/admin/settlements/{$settlement->id}/payments", [
+    test()->actingAs($user, 'merchant')
+        ->post("/api/merchant/settlements/{$settlement->id}/receipts", [
             'amount' => $amountLaari,
             'bank_ref' => $bankRef,
+            'slip' => Slips::pdf(),
         ])
         ->assertCreated();
+}
 
+/**
+ * Admin-side: match the merchant's claimed transfer through the queue —
+ * allocation, confirmation and postings all fire here.
+ */
+function lifecycleMatch(AdminUser $admin, Settlement $settlement, string $bankRef): Settlement
+{
     $paymentId = $settlement->payments()->where('bank_ref', $bankRef)->sole()->id;
 
-    test()->postJson("/api/admin/payments/{$paymentId}/match")->assertOk();
+    test()->actingAs($admin, 'admin')
+        ->postJson("/api/admin/payments/{$paymentId}/match")->assertOk();
 
     return $settlement->refresh();
 }
@@ -223,7 +240,7 @@ it('runs the full Phase 1 lifecycle: credit → sweep → settle → forgive →
     // batch, the admin records the EXACT 11,825 total, and matching confirms
     // all four lines.
     Carbon::setTestNow($august->addDays(6)->setTime(11, 0)); // Aug 7
-    $settlementA = lifecycleSettleAll($userA);
+    $settlementA = lifecycleSettleAll($userA, 11_825, 'BML-A-11825');
 
     expect($settlementA->cashback_total_laari)->toBe(8_600)
         ->and($settlementA->fee_total_laari)->toBe(3_225)
@@ -232,7 +249,7 @@ it('runs the full Phase 1 lifecycle: credit → sweep → settle → forgive →
         ->and($settlementA->due_at->equalTo($expectedDueAt))->toBeTrue()
         ->and($settlementA->lines()->count())->toBe(4);
 
-    $settlementA = lifecyclePayAndMatch($admin1, $settlementA, 11_825, 'BML-A-11825');
+    $settlementA = lifecycleMatch($admin1, $settlementA, 'BML-A-11825');
 
     expect($settlementA->state->value)->toBe('settled')
         ->and($settlementA->amount_received_laari)->toBe(11_825);
@@ -254,11 +271,11 @@ it('runs the full Phase 1 lifecycle: credit → sweep → settle → forgive →
     // and B2 in whole (18,185), B3 is unaffordable, and the 815 remainder is
     // parked in the wallet — partially_settled.
     Carbon::setTestNow($august->addDays(7)->setTime(11, 0)); // Aug 8
-    $settlementB = lifecycleSettleAll($userB);
+    $settlementB = lifecycleSettleAll($userB, 19_000, 'BML-B-19000');
 
     expect($settlementB->amount_due_laari)->toBe(23_960)->and($settlementB->lines()->count())->toBe(5);
 
-    $settlementB = lifecyclePayAndMatch($admin1, $settlementB, 19_000, 'BML-B-19000');
+    $settlementB = lifecycleMatch($admin1, $settlementB, 'BML-B-19000');
 
     expect($settlementB->state->value)->toBe('partially_settled')
         ->and($settlementB->lines()->whereNotNull('allocated_at')->count())->toBe(2)
@@ -277,11 +294,11 @@ it('runs the full Phase 1 lifecycle: credit → sweep → settle → forgive →
     // short, under MVR 1 — so the whole batch settles, the platform books the
     // 45 as expense, and bad debt stays untouched at zero.
     Carbon::setTestNow($august->addDays(8)->setTime(11, 0)); // Aug 9
-    $settlementC = lifecycleSettleAll($userC);
+    $settlementC = lifecycleSettleAll($userC, 1_330, 'BML-C-1330');
 
     expect($settlementC->amount_due_laari)->toBe(1_375);
 
-    $settlementC = lifecyclePayAndMatch($admin1, $settlementC, 1_330, 'BML-C-1330');
+    $settlementC = lifecycleMatch($admin1, $settlementC, 'BML-C-1330');
 
     expect($settlementC->state->value)->toBe('settled')
         ->and($settlementC->lines()->whereNull('allocated_at')->count())->toBe(0)
@@ -321,7 +338,8 @@ it('runs the full Phase 1 lifecycle: credit → sweep → settle → forgive →
     // 5,775 with 4,960 cash plus the 815 wallet credit, settles in full, and
     // the next reinstatement run flips it back to active. D stays suspended.
     Carbon::setTestNow(CarbonImmutable::parse('2026-08-25T10:00:00+05:00'));
-    $settlementB = lifecyclePayAndMatch($admin1, $settlementB, 4_960, 'BML-B-4960');
+    lifecycleTopUp($userB, $settlementB, 4_960, 'BML-B-4960');
+    $settlementB = lifecycleMatch($admin1, $settlementB, 'BML-B-4960');
 
     expect($settlementB->state->value)->toBe('settled')
         ->and($settlementB->amount_received_laari)->toBe(23_960)

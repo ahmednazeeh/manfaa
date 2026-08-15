@@ -8,24 +8,20 @@ import {
   createMerchantCredit,
   createMerchantProductCategory,
   createMerchantPromotion,
-  createMerchantSettlement,
   createMerchantStaff,
   deleteMerchantBranch,
   getMerchantOutstanding,
   getMerchantProfile,
-  getMerchantSettlement,
   getMerchantSetup,
   getMerchantWallet,
   listMerchantBranches,
   listMerchantProductCategories,
   listMerchantPromotions,
-  listMerchantSettlements,
   listMerchantStaff,
   lookupMerchantCustomer,
   publishMerchantPromotion,
   registerMerchantSignup,
   requestMerchantSignupOtp,
-  submitMerchantSettlement,
   submitMerchantSetup,
   updateMerchantBankAccount,
   updateMerchantBranch,
@@ -38,13 +34,11 @@ import {
   uploadMerchantSettingsLogo,
   uploadMerchantSetupLogo,
   verifyMerchantSignupOtp,
-  walletSettleMerchantSettlement,
   type CreateCreditRequest,
   type CreateMerchantBranchRequest,
   type CreateMerchantStaffRequest,
   type CreateProductCategoryRequest,
   type CreatePromotionRequest,
-  type CreateSettlementRequest,
   type MerchantSetupStateResponse,
   type MerchantSignupRegisterRequest,
   type MerchantSignupVerifyOtpRequest,
@@ -59,12 +53,20 @@ import {
 } from '@manfaa/api-client';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
+  addSettlementReceipt,
   changeRate,
   fetchMe,
   fetchRate,
+  getSettlement,
+  listSettlements,
   listTransactions,
   login,
   logout,
+  previewSettlement,
+  submitSettlementWithReceipt,
+  walletSettleSelection,
+  type ReceiptSubmission,
+  type SettlementSelection,
 } from '@/lib/api';
 
 /**
@@ -81,6 +83,21 @@ export const queryKeys = {
     ['merchant', 'customer-lookup', code] as const,
   settlements: (page: number) => ['merchant', 'settlements', page] as const,
   settlement: (id: number) => ['merchant', 'settlement', id] as const,
+  /**
+   * Keyed by the SELECTION, so switching between "settle all" and a picked
+   * set re-previews instead of showing the previous batch's amount.
+   */
+  settlementPreview: (selection: SettlementSelection) =>
+    [
+      'merchant',
+      'settlement-preview',
+      'settleAll' in selection
+        ? 'all'
+        : selection.transactionIds
+            .slice()
+            .sort((a, b) => a - b)
+            .join(','),
+    ] as const,
   transactions: (state: TransactionState | 'all', page: number) =>
     ['merchant', 'transactions', state, page] as const,
   profile: ['merchant', 'profile'] as const,
@@ -149,15 +166,14 @@ export function useWallet() {
 export function useSettlements(page: number) {
   return useQuery({
     queryKey: queryKeys.settlements(page),
-    queryFn: ({ signal }) => listMerchantSettlements({ page }, { signal }),
+    queryFn: ({ signal }) => listSettlements(page, signal),
   });
 }
 
 export function useSettlement(id: number) {
   return useQuery({
     queryKey: queryKeys.settlement(id),
-    queryFn: ({ signal }) => getMerchantSettlement(id, { signal }),
-    select: (response) => response.data,
+    queryFn: ({ signal }) => getSettlement(id, signal),
   });
 }
 
@@ -189,29 +205,93 @@ function useInvalidateSettlementData() {
   };
 }
 
-export function useCreateSettlement() {
+/**
+ * The receipt-first wizard's step 2 (PLAN §1): what the selection costs and
+ * where to send it. Reservation-free — nothing is claimed by asking, so it
+ * refetches freely; `enabled` keeps it off until a selection exists.
+ *
+ * Never retried: the two failure modes are 422s (a transaction stopped being
+ * eligible, or there is nothing to settle), and retrying re-renders the same
+ * refusal while the merchant waits.
+ */
+export function useSettlementPreview(
+  selection: SettlementSelection | null,
+  enabled = true,
+) {
+  // Never null inside the query function: the empty stand-in only exists so
+  // the key is stable while the query is disabled.
+  const active: SettlementSelection = selection ?? { transactionIds: [] };
+  return useQuery({
+    queryKey: queryKeys.settlementPreview(active),
+    queryFn: ({ signal }) => previewSettlement(active, signal),
+    enabled: enabled && selection !== null,
+    retry: false,
+    // A preview is a quote on live rows: never serve a stale one.
+    staleTime: 0,
+    gcTime: 0,
+  });
+}
+
+/**
+ * The single act that creates a settlement (PLAN §1): selection + amount +
+ * bank reference + slip, multipart, landing directly in payment_review.
+ */
+export function useSubmitSettlementReceipt() {
   const invalidate = useInvalidateSettlementData();
   return useMutation({
-    mutationFn: (body: CreateSettlementRequest) =>
-      createMerchantSettlement(body),
+    mutationFn: ({
+      selection,
+      receipt,
+    }: {
+      selection: SettlementSelection;
+      receipt: ReceiptSubmission;
+    }) => submitSettlementWithReceipt(selection, receipt),
     onSuccess: invalidate,
   });
 }
 
-export function useSubmitSettlement(id: number) {
+/** A further transfer against a batch that is still owed money (§7). */
+export function useAddSettlementReceipt(id: number) {
   const invalidate = useInvalidateSettlementData();
   return useMutation({
-    mutationFn: () => submitMerchantSettlement(id),
+    mutationFn: (receipt: ReceiptSubmission) =>
+      addSettlementReceipt(id, receipt),
     onSuccess: invalidate,
   });
 }
 
-export function useWalletSettle(id: number) {
+/**
+ * §7's wallet funding: build and settle from the balance in one call. Also
+ * the route for a batch fully netted by credit adjustments — it settles
+ * without drawing any balance at all.
+ */
+export function useWalletSettleSelection() {
   const invalidate = useInvalidateSettlementData();
   return useMutation({
-    mutationFn: () => walletSettleMerchantSettlement(id),
+    mutationFn: (selection: SettlementSelection) =>
+      walletSettleSelection(selection),
     onSuccess: invalidate,
   });
+}
+
+/**
+ * A settlement 422 that carries neither a machine code nor field errors:
+ * the domain's "these transactions are not eligible" / "nothing is due"
+ * refusals, whose server prose names internal states (payable_unfunded,
+ * non-cancelled settlement). The panel answers in the merchant's own terms
+ * instead of forwarding that sentence.
+ */
+export function isSelectionRefusal(error: unknown): boolean {
+  if (!(error instanceof ApiError) || error.status !== 422) return false;
+  const body = error.body as { code?: unknown; errors?: unknown } | undefined;
+  return body?.code === undefined && body?.errors === undefined;
+}
+
+/** The `code` on an ApiError body, if any (slip_too_large, …). */
+export function apiErrorCode(error: unknown): string | null {
+  if (!(error instanceof ApiError)) return null;
+  const body = error.body as { code?: unknown } | undefined;
+  return typeof body?.code === 'string' ? body.code : null;
 }
 
 // ---------------------------------------------------------------------------

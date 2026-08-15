@@ -6,6 +6,8 @@ import {
   MerchantStatusSchema,
   paginated,
   RateDescriptionSchema,
+  SettlementPaymentSchema,
+  SettlementSchema,
   TransactionSchema,
   type MerchantStatus,
   type TransactionState,
@@ -197,4 +199,293 @@ export function listTransactions(
     TransactionListResponseSchema,
     { signal },
   );
+}
+
+// ---------------------------------------------------------------------------
+// Receipt-first settlements (PLAN §1 "Settlement flow")
+// ---------------------------------------------------------------------------
+
+/**
+ * The merchant settlement surface is receipt-first: preview a selection,
+ * transfer at the bank, then SUBMIT the slip — the single act that creates a
+ * settlement at all, landing it in payment_review. There is no draft to
+ * submit and no merchant route to awaiting_payment, so no path in this panel
+ * can reach a settlement without a receipt.
+ *
+ * It lives here rather than in @manfaa/api-client because these responses
+ * carry merchant-only fields the shared Settlement schema does not model
+ * (`merchant_status` and the receipt columns on a payment); a zod object
+ * strips what it does not declare, so the panel declares them itself.
+ */
+
+/** What to settle: everything eligible, or exactly these transactions. */
+export type SettlementSelection =
+  { settleAll: true } | { transactionIds: number[] };
+
+function appendSelection(
+  append: (key: string, value: string) => void,
+  selection: SettlementSelection,
+): void {
+  if ('settleAll' in selection) {
+    append('settle_all', '1');
+    return;
+  }
+  for (const id of selection.transactionIds) {
+    append('transaction_ids[]', String(id));
+  }
+}
+
+export const PlatformBankAccountSchema = z.object({
+  bank_name: z.string(),
+  account_no: z.string(),
+  account_name: z.string(),
+});
+export type PlatformBankAccount = z.infer<typeof PlatformBankAccountSchema>;
+
+/**
+ * GET /api/merchant/settlements/preview — what this selection costs and
+ * where to send it, BEFORE any commitment. Reservation-free: no batch, no
+ * lines frozen, and the reference is explicitly a preview
+ * (`reference_is_final: false`) — the real one is assigned at submit and is
+ * the one the merchant should quote if they ever differ.
+ */
+export const SettlementPreviewSchema = z.object({
+  transaction_ids: z.array(z.number().int()),
+  transaction_count: z.number().int(),
+  sale_total_laari: z.number().int(),
+  cashback_total_laari: z.number().int(),
+  fee_total_laari: z.number().int(),
+  fee_gst_total_laari: z.number().int(),
+  line_total_laari: z.number().int(),
+  /** §7 credit memos netted into this batch (0 when there are none). */
+  credit_applied_laari: z.number().int(),
+  credit_applied_mvr: z.string(),
+  amount_due_laari: z.number().int(),
+  amount_due_mvr: z.string(),
+  due_at: z.string().nullable(),
+  payment_instructions: z.object({
+    reference_preview: z.string(),
+    reference_is_final: z.boolean(),
+    amount_due_laari: z.number().int(),
+    amount_due_mvr: z.string(),
+    bank_account: PlatformBankAccountSchema.nullable(),
+    needs_configuration: z.boolean(),
+  }),
+});
+export type SettlementPreview = z.infer<typeof SettlementPreviewSchema>;
+
+const SettlementPreviewResponseSchema = dataWrapped(SettlementPreviewSchema);
+
+export function previewSettlement(
+  selection: SettlementSelection,
+  signal?: AbortSignal,
+): Promise<SettlementPreview> {
+  const query = new URLSearchParams();
+  appendSelection((key, value) => query.append(key, value), selection);
+  return apiFetch(
+    `/api/merchant/settlements/preview?${query.toString()}`,
+    SettlementPreviewResponseSchema,
+    { signal },
+  ).then((response) => response.data);
+}
+
+/**
+ * The human answer to "what is happening to my transfer" (the raw §6 state
+ * stays in `state` for machines) — including, when an admin refused the
+ * receipt, WHY, so the merchant can fix it and submit a new settlement.
+ */
+export const SettlementMerchantStatusSchema = z.object({
+  code: z.enum([
+    'draft',
+    'awaiting_payment',
+    'verifying',
+    'settled',
+    'partially_settled',
+    'rejected',
+    'cancelled',
+  ]),
+  message: z.string(),
+  rejection: z
+    .object({
+      reason: z.string().nullable(),
+      rejected_at: z.string().nullable(),
+      bank_ref: z.string().nullable(),
+      payment_id: z.number().int(),
+    })
+    .nullable(),
+});
+export type SettlementMerchantStatus = z.infer<
+  typeof SettlementMerchantStatusSchema
+>;
+
+/**
+ * A payment with its receipt columns. `has_slip` is what the UI branches on
+ * — `slip_path` is a private-disk path (storage/app/slips), never fetchable;
+ * only an admin streams a slip, through their own authenticated route.
+ */
+export const ReceiptPaymentSchema = SettlementPaymentSchema.extend({
+  has_slip: z.boolean(),
+  slip_mime: z.string().nullable(),
+  slip_size_bytes: z.number().int().nullable(),
+  uploaded_by: z.number().int().nullable(),
+  rejected_by: z.number().int().nullable(),
+  rejected_at: z.string().nullable(),
+  rejection_reason: z.string().nullable(),
+});
+export type ReceiptPayment = z.infer<typeof ReceiptPaymentSchema>;
+
+export const MerchantSettlementSchema = SettlementSchema.extend({
+  merchant_status: SettlementMerchantStatusSchema,
+  payments: z.array(ReceiptPaymentSchema).optional(),
+});
+export type MerchantSettlement = z.infer<typeof MerchantSettlementSchema>;
+
+const MerchantSettlementListSchema = paginated(MerchantSettlementSchema);
+export type MerchantSettlementList = z.infer<
+  typeof MerchantSettlementListSchema
+>;
+const MerchantSettlementResponseSchema = dataWrapped(MerchantSettlementSchema);
+
+/** GET /api/merchant/settlements — newest first, 25 per page. */
+export function listSettlements(
+  page: number,
+  signal?: AbortSignal,
+): Promise<MerchantSettlementList> {
+  return apiFetch(
+    `/api/merchant/settlements?page=${page}`,
+    MerchantSettlementListSchema,
+    { signal },
+  );
+}
+
+/** GET /api/merchant/settlements/{id} — lines (with transaction) + payments. */
+export function getSettlement(
+  id: number,
+  signal?: AbortSignal,
+): Promise<MerchantSettlement> {
+  return apiFetch(
+    `/api/merchant/settlements/${id}`,
+    MerchantSettlementResponseSchema,
+    { signal },
+  ).then((response) => response.data);
+}
+
+export interface ReceiptSubmission {
+  /** Laari actually transferred — normally the previewed amount due. */
+  amountLaari: number;
+  bankRef: string;
+  slip: File;
+}
+
+/**
+ * POST /api/merchant/settlements (multipart) — builds the batch, freezes its
+ * lines, stores the slip privately and records the claimed payment in one
+ * server-side transaction. 201 with the settlement in payment_review.
+ */
+export function submitSettlementWithReceipt(
+  selection: SettlementSelection,
+  receipt: ReceiptSubmission,
+): Promise<MerchantSettlement> {
+  const form = new FormData();
+  appendSelection((key, value) => form.append(key, value), selection);
+  form.append('amount', String(receipt.amountLaari));
+  form.append('bank_ref', receipt.bankRef);
+  form.append('slip', receipt.slip);
+  return apiFetch(
+    '/api/merchant/settlements',
+    MerchantSettlementResponseSchema,
+    {
+      method: 'POST',
+      body: form,
+    },
+  ).then((response) => response.data);
+}
+
+/**
+ * POST /api/merchant/settlements/{id}/receipts (multipart) — a FURTHER
+ * transfer against a batch still owed money: the remainder after a §7
+ * partial payment (whose uncovered lines stay frozen on this batch), or the
+ * transfer for a batch an admin built as the fallback.
+ */
+export function addSettlementReceipt(
+  id: number,
+  receipt: ReceiptSubmission,
+): Promise<MerchantSettlement> {
+  const form = new FormData();
+  form.append('amount', String(receipt.amountLaari));
+  form.append('bank_ref', receipt.bankRef);
+  form.append('slip', receipt.slip);
+  return apiFetch(
+    `/api/merchant/settlements/${id}/receipts`,
+    MerchantSettlementResponseSchema,
+    { method: 'POST', body: form },
+  ).then((response) => response.data);
+}
+
+/**
+ * POST /api/merchant/settlements/wallet — §7's "same path, different funding
+ * source": build and settle from the wallet balance in one call. No receipt,
+ * because no bank transfer happened — the top-up that funded the wallet is
+ * the evidence.
+ */
+export function walletSettleSelection(
+  selection: SettlementSelection,
+): Promise<MerchantSettlement> {
+  const body: Record<string, unknown> =
+    'settleAll' in selection
+      ? { settle_all: true }
+      : { transaction_ids: selection.transactionIds };
+  return apiFetch(
+    '/api/merchant/settlements/wallet',
+    MerchantSettlementResponseSchema,
+    { method: 'POST', body },
+  ).then((response) => response.data);
+}
+
+// ---------------------------------------------------------------------------
+// Slip pre-flight (mirrors the server's SlipStorage rules)
+// ---------------------------------------------------------------------------
+
+/** 5 MB — SlipStorage::MAX_BYTES. The server refuses anything larger. */
+export const MAX_SLIP_BYTES = 5 * 1024 * 1024;
+
+/**
+ * What the SERVER accepts, decided there by magic bytes. This list is the
+ * courtesy check that saves a 5 MB round trip; it is never the authority —
+ * a renamed .svg passes here and is still refused by the API.
+ */
+export const ACCEPTED_SLIP_TYPES = [
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'application/pdf',
+] as const;
+
+/** The `accept` attribute for the file picker, matching the above. */
+export const SLIP_ACCEPT_ATTRIBUTE =
+  '.jpg,.jpeg,.png,.webp,.pdf,image/jpeg,image/png,image/webp,application/pdf';
+
+const SLIP_EXTENSIONS = ['jpg', 'jpeg', 'png', 'webp', 'pdf'];
+
+export type SlipRejection = 'too_large' | 'unsupported_type';
+
+/**
+ * Client-side pre-flight on a chosen slip: size first (a 40 MB photo is
+ * refused before it is read), then the type — by MIME when the browser
+ * supplies one, otherwise by extension. Returns null when the file looks
+ * acceptable.
+ */
+export function checkSlipFile(file: File): SlipRejection | null {
+  if (file.size > MAX_SLIP_BYTES) return 'too_large';
+  if (file.size <= 0) return 'unsupported_type';
+
+  const mime = file.type.toLowerCase();
+  if (mime !== '') {
+    return (ACCEPTED_SLIP_TYPES as readonly string[]).includes(mime)
+      ? null
+      : 'unsupported_type';
+  }
+
+  const extension = file.name.split('.').pop()?.toLowerCase() ?? '';
+  return SLIP_EXTENSIONS.includes(extension) ? null : 'unsupported_type';
 }

@@ -29,6 +29,14 @@ use Illuminate\Support\Facades\DB;
  * fee, no journal, and an immediate terminal reversal — the exact
  * below-minimum mechanics with a different reason code.
  *
+ * Backdated credits (PLAN §1, decision 2026-08-14 late): a sale older than
+ * the merchant's validation window + 3 days skips on_hold entirely. It goes
+ * straight to payable_unfunded with the 15-day clock starting NOW, carries
+ * reason_code `backdated_final` and the permanent `backdated` flag, and can
+ * never be reversed by the merchant or their vendor (ReversalService answers
+ * 409 backdated_irreversible — admin adjustment only). One rule here covers
+ * the manual panel path AND /v1. on_hold is now fraud/velocity review only.
+ *
  * Promotions (PLAN §12 Phase 3): TermsResolver walks the live PUBLISHED
  * candidates covering occurred_at, the sale's branch and its minimum
  * purchase — promo rate pricing the row, fee following the promo rate's §4
@@ -53,8 +61,18 @@ final readonly class CreditRecorder
     /** Clock-skew allowance before an occurred_at counts as future-dated. */
     private const int FUTURE_SKEW_MINUTES = 5;
 
-    /** Days past the merchant's validation window before a credit is stale. */
+    /**
+     * Days past the merchant's validation window before a credit counts as
+     * BACKDATED (PLAN §1 "Backdated credits").
+     */
     private const int STALE_GRACE_DAYS = 3;
+
+    /**
+     * The state qualifier a backdated credit carries: it never sat in the
+     * refund window, so it was never provisional — it is final the moment it
+     * is recorded, payable now, and merchant-irreversible.
+     */
+    public const string BACKDATED_REASON = 'backdated_final';
 
     public function __construct(
         private TransitionService $transitions,
@@ -97,7 +115,12 @@ final readonly class CreditRecorder
 
         $ineligible = $ineligibleReason !== null;
         $belowMinimum = $eligible->value() < $merchant->min_eligible_laari;
-        $stale = $occurredAt->isBefore($now->subDays($merchant->validation_window_days + self::STALE_GRACE_DAYS));
+
+        // PLAN §1 "Backdated credits": a sale older than the merchant's
+        // validation window (plus the grace days) has already outlived the
+        // refund window it would have waited in. It therefore skips
+        // awaiting_validation AND on_hold entirely — see the routing below.
+        $backdated = $occurredAt->isBefore($now->subDays($merchant->validation_window_days + self::STALE_GRACE_DAYS));
 
         // Nothing ever accrues on an ineligible or below-minimum sale, and
         // the row goes terminal immediately. Suspension outranks the minimum:
@@ -107,7 +130,7 @@ final readonly class CreditRecorder
         $reason = $ineligible ? $ineligibleReason : ($belowMinimum ? 'below_minimum' : null);
 
         try {
-            return DB::transaction(function () use ($merchant, $actor, $origin, $customer, $invoiceNo, $eligible, $saleAmount, $occurredAt, $now, $branchId, $idempotencyKey, $standingBp, $zeroed, $reason, $stale, $lines): Transaction {
+            return DB::transaction(function () use ($merchant, $actor, $origin, $customer, $invoiceNo, $eligible, $saleAmount, $occurredAt, $now, $branchId, $idempotencyKey, $standingBp, $zeroed, $reason, $backdated, $lines): Transaction {
                 $priced = null;
 
                 if ($lines === null) {
@@ -165,6 +188,12 @@ final readonly class CreditRecorder
                     'fee_gst_laari' => 0,
                     'state' => TransactionState::Tracked,
                     'reason_code' => $reason,
+                    // Permanent property of the row, not a transient
+                    // qualifier: a backdated credit can never be reversed by
+                    // the merchant or their vendor, and later transitions
+                    // must not be able to erase that by rewriting
+                    // reason_code (PLAN §1).
+                    'backdated' => $backdated && ! $zeroed,
                     'occurred_at' => $occurredAt,
                     'received_at' => $now,
                 ]);
@@ -209,8 +238,34 @@ final readonly class CreditRecorder
                     // show the customer a Pending that can never confirm. No
                     // ledger reversal: the accrual never posted.
                     $this->transitions->reverse($transaction, Actor::system(), $reason);
-                } elseif ($stale) {
-                    $this->transitions->hold($transaction, Actor::system(), 'stale_timestamp');
+                } elseif ($backdated) {
+                    // PLAN §1 "Backdated credits" — no admin approval,
+                    // immediately payable, merchant-irreversible. The old
+                    // behaviour parked these on_hold, where they waited for a
+                    // human who had nothing to decide: the sale's refund
+                    // window closed long ago, so there is nothing left to
+                    // validate. It goes straight to payable_unfunded with the
+                    // 15-day clock starting NOW (makePayable stamps
+                    // clock_start_at and due_at in the business timezone) and
+                    // the row qualified `backdated_final`.
+                    //
+                    // The hop through awaiting_validation is the §6 state
+                    // machine's only route from tracked to payable, and it is
+                    // instantaneous — both events land in the same
+                    // transaction, so the append-only history shows exactly
+                    // what happened and why, without inventing a shortcut
+                    // edge that only this path would ever use.
+                    //
+                    // on_hold now means fraud or dispute review, and nothing
+                    // else.
+                    $this->transitions->transition(
+                        $transaction,
+                        TransactionState::AwaitingValidation,
+                        Actor::system(),
+                        self::BACKDATED_REASON,
+                        stampReasonOnRow: false,
+                    );
+                    $this->transitions->makePayable($transaction, Actor::system(), self::BACKDATED_REASON);
                 } else {
                     // The event records WHY the hop happened; the row's
                     // reason_code stays null — a clean pending sale has no

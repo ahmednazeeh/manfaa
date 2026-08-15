@@ -101,12 +101,13 @@ function merchantRoleMatrix(): array
         'promotion create' => ['method' => 'POST', 'uri' => '/api/merchant/promotions', 'payload' => [], 'owner' => 422, 'manager' => 422, 'staff' => 403],
         'promotion publish' => ['method' => 'POST', 'uri' => '/api/merchant/promotions/999999/publish', 'payload' => [], 'owner' => 404, 'manager' => 404, 'staff' => 403],
         'promotion cancel' => ['method' => 'POST', 'uri' => '/api/merchant/promotions/999999/cancel', 'payload' => [], 'owner' => 404, 'manager' => 404, 'staff' => 403],
+        // Receipt-first (PLAN §1): creating a settlement IS submitting one —
+        // it freezes the lines and claims a real bank transfer, so it is
+        // manager work. The preview claims nothing and stays open to staff.
+        'settlement preview' => ['method' => 'GET', 'uri' => '/api/merchant/settlements/preview?settle_all=1', 'payload' => [], 'owner' => 422, 'manager' => 422, 'staff' => 422],
         'settlement create' => ['method' => 'POST', 'uri' => '/api/merchant/settlements', 'payload' => [], 'owner' => 422, 'manager' => 422, 'staff' => 403],
-        // Submit freezes lines and — on a fully credit-netted draft —
-        // allocates and settles the whole batch: a settlement mutation like
-        // the other two, so manager-gated like the other two.
-        'settlement submit' => ['method' => 'POST', 'uri' => '/api/merchant/settlements/999999/submit', 'payload' => [], 'owner' => 404, 'manager' => 404, 'staff' => 403],
-        'wallet settle' => ['method' => 'POST', 'uri' => '/api/merchant/settlements/999999/wallet-settle', 'payload' => [], 'owner' => 404, 'manager' => 404, 'staff' => 403],
+        'settlement receipt' => ['method' => 'POST', 'uri' => '/api/merchant/settlements/999999/receipts', 'payload' => [], 'owner' => 422, 'manager' => 422, 'staff' => 403],
+        'wallet settle' => ['method' => 'POST', 'uri' => '/api/merchant/settlements/wallet', 'payload' => [], 'owner' => 422, 'manager' => 422, 'staff' => 403],
         'branches read' => ['method' => 'GET', 'uri' => '/api/merchant/branches', 'payload' => [], 'owner' => 200, 'manager' => 200, 'staff' => 403],
         'branch create' => ['method' => 'POST', 'uri' => '/api/merchant/branches', 'payload' => [], 'owner' => 422, 'manager' => 422, 'staff' => 403],
         'branch update' => ['method' => 'PATCH', 'uri' => '/api/merchant/branches/999999', 'payload' => [], 'owner' => 404, 'manager' => 404, 'staff' => 403],

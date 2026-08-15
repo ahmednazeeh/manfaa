@@ -90,9 +90,14 @@ info:
     (`2026-08-14T11:04:22+05:00`; `Z` is an offset). Offsetless local times
     are rejected `validation_failed`. Future-dated sales (beyond a 5-minute
     clock-skew allowance) are rejected `future_dated`. Sales older than the
-    merchant's validation window plus 3 days are **accepted** but routed to
-    review (`state: on_hold`, `reason_code: stale_timestamp`) rather than
-    into a live settlement batch. All response timestamps are ISO 8601 UTC.
+    merchant's validation window plus 3 days are **backdated**: accepted,
+    but they skip the refund window entirely and become payable
+    IMMEDIATELY — `state: payable_unfunded`, `reason_code: backdated_final`,
+    `backdated: true`, with the 15-day settlement clock starting at the
+    moment of the POST, not at `occurred_at`. A backdated sale can **never
+    be reversed through this API** (`409 backdated_irreversible`); a
+    correction is an admin adjustment. Send today's sales today.
+    All response timestamps are ISO 8601 UTC.
 
     ## Errors
 
@@ -222,8 +227,10 @@ paths:
             Sale recorded and cashback accrued. `state` is normally
             `awaiting_validation` (the refund window). A sale older than the
             merchant's validation window + 3 days is still `201` but arrives
-            in `state: on_hold` with `reason_code: stale_timestamp` — it is
-            routed to review, not into a live batch.
+            in `state: payable_unfunded` with `reason_code: backdated_final`
+            and `backdated: true` — it skipped the refund window, its 15-day
+            settlement clock started now, and it is **irreversible** through
+            this API.
           content:
             application/json:
               schema:
@@ -315,17 +322,18 @@ paths:
                           fee_laari: 450
                           priced_by: standing
                           sort: 2
-                staleHeld:
-                  summary: Stale sale accepted but held for review
+                backdated:
+                  summary: Backdated sale — payable immediately, irreversible
                   value:
                     status: created
-                    reason: stale_timestamp
+                    reason: backdated_final
                     transaction:
                       id: 84522
                       origin: pos
                       invoice_no: INV-0844
-                      state: on_hold
-                      reason_code: stale_timestamp
+                      state: payable_unfunded
+                      reason_code: backdated_final
+                      backdated: true
                       currency: MVR
                       eligible_laari: 50000
                       sale_laari: null
@@ -565,6 +573,17 @@ paths:
         `Idempotency-Key` replays the original `200`; `invalid_state` only
         fires on a *new* key against an already-terminal transaction.
 
+        **Backdated sales cannot be reversed here at all.** A transaction
+        created outside the merchant's validation window (`backdated: true`,
+        `reason_code: backdated_final`) answers `409
+        backdated_irreversible` in **every** state — pending, confirmed or
+        paid — and no credit adjustment is created either. It was recorded
+        as final and became payable immediately; only an admin adjustment
+        can correct it. This code is deliberately distinct from
+        `invalid_state`: `invalid_state` describes the transaction's current
+        position, while `backdated_irreversible` will never succeed on any
+        retry, so route it to a human rather than a queue.
+
         Cross-merchant ids return `404 transaction_not_found` —
         indistinguishable from a nonexistent id, deliberately.
       parameters:
@@ -705,10 +724,18 @@ paths:
                       message: No transaction with id 99999.
         '409':
           description: |
-            `invalid_state` — the transaction is in a terminal state
-            (`reversed`, `written_off`) and cannot be reversed again.
-            Terminal; do not retry. The current state is in
-            `error.meta.state`.
+            Two distinct codes, both terminal — do not retry either:
+
+            - `invalid_state` — the transaction is in a terminal state
+              (`reversed`, `written_off`) and cannot be reversed again.
+            - `backdated_irreversible` — the sale was recorded outside the
+              merchant's validation window (`backdated: true`). It became
+              payable the moment it was recorded and can never be reversed
+              by the merchant or their vendor, in any state, and no credit
+              adjustment is created. Corrections are admin adjustments —
+              contact the platform.
+
+            The current state is in `error.meta.state` for both.
           content:
             application/json:
               schema:
@@ -721,6 +748,15 @@ paths:
                       message: Transaction 84521 is already reversed.
                       meta:
                         state: reversed
+                backdatedIrreversible:
+                  value:
+                    error:
+                      code: backdated_irreversible
+                      message: >-
+                        Transaction 84522 was credited as a backdated sale and cannot be
+                        reversed by the merchant — an admin adjustment is required.
+                      meta:
+                        state: payable_unfunded
         '422':
           description: '`validation_failed` — missing `reason`, or offsetless / future-dated `occurred_at`.'
           content:
@@ -1301,10 +1337,11 @@ components:
         | `lines_sum_mismatch` | error | 422 | Make line amounts sum to `eligible_amount`; fresh key |
         | `duplicate_invoice` | error | 409 | Never — sale already recorded |
         | `invalid_state` | error | 409 | Never — terminal state |
+        | `backdated_irreversible` | error | 409 | Never — admin adjustment only |
         | `transaction_not_found` | error | 404 | Never |
         | `merchant_suspended` | reason (`200 recorded_ineligible`) | — | n/a — recorded, no cashback |
         | `below_minimum` | reason (`200 below_minimum`) | — | n/a — recorded, zero cashback |
-        | `stale_timestamp` | reason (`201`, `state: on_hold`) | — | n/a — accepted, routed to review |
+        | `backdated_final` | reason (`201`, `state: payable_unfunded`) | — | n/a — accepted, payable now, irreversible |
         | `locked_in_settlement` | cause (`200 adjustment_created`) | — | n/a — adjustment created |
         | `already_confirmed` | cause (`200 adjustment_created`) | — | n/a — adjustment created |
 
@@ -1327,10 +1364,11 @@ components:
         - lines_sum_mismatch
         - duplicate_invoice
         - invalid_state
+        - backdated_irreversible
         - transaction_not_found
         - merchant_suspended
         - below_minimum
-        - stale_timestamp
+        - backdated_final
         - locked_in_settlement
         - already_confirmed
 
@@ -1343,7 +1381,8 @@ components:
         `code`, never on `message`. `errors` (per-field messages) is
         present only with `validation_failed`; `meta` carries optional
         machine-readable context (e.g. the existing `transaction_id` on
-        `duplicate_invoice`, the current `state` on `invalid_state`).
+        `duplicate_invoice`, the current `state` on `invalid_state` and
+        `backdated_irreversible`).
       required: [error]
       properties:
         error:
@@ -1623,7 +1662,17 @@ components:
           $ref: '#/components/schemas/TransactionState'
         reason_code:
           type: ['string', 'null']
-          description: Machine code qualifying the current state (see `MachineCode`), e.g. `below_minimum`, `merchant_suspended`, `stale_timestamp`, or the reversal reason.
+          description: Machine code qualifying the current state (see `MachineCode`), e.g. `below_minimum`, `merchant_suspended`, `backdated_final`, or the reversal reason. Rewritten by later transitions — for the permanent irreversibility fact, read `backdated`.
+        backdated:
+          type: boolean
+          description: |
+            `true` when the sale was recorded outside the merchant's
+            validation window (+3 days grace). Such a transaction skipped
+            the refund window, is payable immediately, and can **never** be
+            reversed through this API — `POST /v1/transactions/{id}/reverse`
+            answers `409 backdated_irreversible` regardless of state. A
+            permanent property of the row: unlike `reason_code`, nothing
+            later clears it.
         currency:
           type: string
           const: MVR
@@ -1693,7 +1742,7 @@ components:
           oneOf:
             - $ref: '#/components/schemas/MachineCode'
             - type: 'null'
-          description: '`merchant_suspended`, `below_minimum`, `stale_timestamp`, or `null` for a clean creation.'
+          description: '`merchant_suspended`, `below_minimum`, `backdated_final`, or `null` for a clean creation.'
         transaction:
           $ref: '#/components/schemas/Transaction'
 

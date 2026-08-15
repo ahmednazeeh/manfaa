@@ -19,6 +19,7 @@ import {
   TriangleAlert,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { toast } from 'sonner';
 import { estimateLaariAtBp, formatBp } from '@/lib/estimate';
 import {
   apiErrorMessage,
@@ -37,6 +38,7 @@ import {
 } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Input, InputAddon, InputGroup } from '@/components/ui/input';
 import {
   InputOTP,
@@ -59,6 +61,7 @@ import {
   SplitEditor,
   type SplitRow,
 } from '@/components/app/credit-split';
+import { QrScanButton } from '@/components/app/qr-scanner';
 import { TransactionStateBadge } from '@/components/app/state-badge';
 
 /**
@@ -75,11 +78,31 @@ const BUSINESS_UTC_OFFSET = '+05:00';
 const BUSINESS_OFFSET_MS = 5 * 60 * 60 * 1000;
 
 /**
- * §1 default refund/validation window. The merchant's own window may differ
- * (server-side setting); the note this drives is a heads-up, and the server
- * decides authoritatively what lands on_hold (window + 3 grace days).
+ * §1 default refund/validation window, which is ALSO the ceiling a
+ * merchant's own window is validated against (PreferencesController caps it
+ * at the platform default) — so a store's window is somewhere in 0…this.
+ *
+ * The panel cannot read the actual number: GET-ing it means the owner-only
+ * preferences route, and this screen is staff work. Hence the two-band
+ * warning below, derived from the BOUNDS. If an admin ever raises the
+ * platform default above 3, the upper band starts firing a few days early
+ * — the warning is then over-cautious rather than absent, and the real fix
+ * is to expose validation_window_days on a staff-readable endpoint.
  */
 const DEFAULT_VALIDATION_WINDOW_DAYS = 3;
+
+/**
+ * Grace days the server adds to the window before a credit counts as
+ * BACKDATED (CreditRecorder::STALE_GRACE_DAYS). A backdated credit skips
+ * on_hold entirely: payable immediately, and merchant-irreversible for good
+ * (PLAN §1 "Backdated credits").
+ */
+const BACKDATED_GRACE_DAYS = 3;
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** The server's reason code on a backdated, irreversible credit. */
+const BACKDATED_REASON = 'backdated_final';
 
 /** Now as a datetime-local string ("YYYY-MM-DDTHH:mm") in UTC+5 wall time. */
 function nowLocalValue(): string {
@@ -191,6 +214,12 @@ function ResultCard({
     transaction.state === 'reversed' &&
     transaction.reason_code === 'below_minimum';
   const underReview = transaction.state === 'on_hold';
+  /**
+   * PLAN §1: the sale was outside the validation window, so it never sat in
+   * one — it is payable now and can no longer be reversed from this panel or
+   * the merchant's POS.
+   */
+  const backdatedFinal = transaction.reason_code === BACKDATED_REASON;
 
   return (
     <Card className="mb-5">
@@ -205,6 +234,11 @@ function ResultCard({
             <>
               <Clock4 className="size-4.5 text-violet-500" />
               Recorded — under review
+            </>
+          ) : backdatedFinal ? (
+            <>
+              <TriangleAlert className="size-4.5 text-yellow-500" />
+              {t('credit.backdatedResultTitle')}
             </>
           ) : (
             <>
@@ -240,12 +274,24 @@ function ResultCard({
               <Clock4 />
             </AlertIcon>
             <AlertContent>
-              <AlertTitle>
-                Backdated entry — Manfaa reviews it first.
-              </AlertTitle>
+              <AlertTitle>On hold — Manfaa is checking it.</AlertTitle>
               <AlertDescription>
-                The sale is recorded and on hold. It counts for the customer
-                once the review approves it; nothing else is needed from you.
+                The sale is recorded and on hold for a review. It counts for the
+                customer once the review clears it; nothing else is needed from
+                you.
+              </AlertDescription>
+            </AlertContent>
+          </Alert>
+        )}
+        {backdatedFinal && (
+          <Alert variant="warning" appearance="light">
+            <AlertIcon>
+              <TriangleAlert />
+            </AlertIcon>
+            <AlertContent>
+              <AlertTitle>{t('credit.backdatedResultTitle')}</AlertTitle>
+              <AlertDescription>
+                {t('credit.backdatedResultBody')}
               </AlertDescription>
             </AlertContent>
           </Alert>
@@ -328,6 +374,7 @@ export default function CreditPage() {
   const [result, setResult] = useState<CreditResult | null>(null);
   const [splitEnabled, setSplitEnabled] = useState(false);
   const [splitRows, setSplitRows] = useState<SplitRow[]>(initialSplitRows);
+  const [backdatedConfirmed, setBackdatedConfirmed] = useState(false);
 
   const rate = useRate();
   const lookup = useCustomerLookup(code);
@@ -385,10 +432,30 @@ export default function CreditPage() {
   const futureDated =
     Number.isFinite(occurredEpoch) &&
     occurredEpoch > Date.now() + 5 * 60 * 1000;
-  const backdated =
+
+  /**
+   * PLAN §1 "Backdated credits". The server's threshold is the merchant's
+   * validation window + 3 grace days; the panel knows only the bounds of
+   * that window (0 … the platform default), so it warns across the whole
+   * band it could fall in:
+   *
+   *  - older than default + grace  → certainly backdated;
+   *  - older than grace alone      → backdated IF this store shortened its
+   *                                  window, which the panel cannot read.
+   *
+   * Both require the confirmation, because both can produce a credit that
+   * can never be reversed; only the wording differs, and it never claims
+   * certainty it does not have.
+   */
+  const ageMs = Number.isFinite(occurredEpoch) ? Date.now() - occurredEpoch : 0;
+  const certainlyBackdated =
     Number.isFinite(occurredEpoch) &&
-    Date.now() - occurredEpoch >
-      DEFAULT_VALIDATION_WINDOW_DAYS * 24 * 60 * 60 * 1000;
+    ageMs > (DEFAULT_VALIDATION_WINDOW_DAYS + BACKDATED_GRACE_DAYS) * DAY_MS;
+  const possiblyBackdated =
+    !certainlyBackdated &&
+    Number.isFinite(occurredEpoch) &&
+    ageMs > BACKDATED_GRACE_DAYS * DAY_MS;
+  const backdatedWarning = certainlyBackdated || possiblyBackdated;
 
   const currentRate = rate.data?.current ?? null;
 
@@ -450,6 +517,8 @@ export default function CreditPage() {
     occurredAt !== '' &&
     Number.isFinite(occurredEpoch) &&
     !futureDated &&
+    // An irreversible, immediately-payable credit is never one click away.
+    (!backdatedWarning || backdatedConfirmed) &&
     (!splitActive || splitAnalysis.submittable) &&
     !createCredit.isPending;
 
@@ -461,6 +530,13 @@ export default function CreditPage() {
     setSaleInput('');
     setOccurredAt(nowLocalValue());
     setSplitRows(initialSplitRows());
+    setBackdatedConfirmed(false);
+  };
+
+  /** Changing the sale time re-opens the question, so the tick resets. */
+  const changeOccurredAt = (value: string) => {
+    setOccurredAt(value);
+    setBackdatedConfirmed(false);
   };
 
   const submit = () => {
@@ -529,7 +605,17 @@ export default function CreditPage() {
           </CardHeader>
           <CardContent className="flex flex-col gap-5">
             <div className="flex flex-col gap-2.5">
-              <Label htmlFor="customer-code">Customer code</Label>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <Label htmlFor="customer-code">Customer code</Label>
+                {/* Renders only where BarcodeDetector + a camera exist;
+                    typing the code stays the universal path. */}
+                <QrScanButton
+                  onCode={(scanned) => {
+                    setCode(scanned);
+                    toast.success(t('credit.scanned', { code: scanned }));
+                  }}
+                />
+              </div>
               <InputOTP
                 id="customer-code"
                 maxLength={6}
@@ -570,7 +656,7 @@ export default function CreditPage() {
                   type="datetime-local"
                   value={occurredAt}
                   max={nowLocalValue()}
-                  onChange={(event) => setOccurredAt(event.target.value)}
+                  onChange={(event) => changeOccurredAt(event.target.value)}
                 />
                 {futureDated && (
                   <p className="text-xs text-destructive">
@@ -673,17 +759,49 @@ export default function CreditPage() {
               </div>
             )}
 
-            {backdated && (
-              <Alert variant="warning" appearance="light">
+            {/* PLAN §1 "Backdated credits": no admin approval, payable
+                immediately, merchant-irreversible. The warning replaces the
+                old "Manfaa reviews it first" copy, which is no longer true,
+                and the tick is required before the credit can be recorded. */}
+            {backdatedWarning && (
+              <Alert
+                variant={certainlyBackdated ? 'destructive' : 'warning'}
+                appearance="light"
+              >
                 <AlertIcon>
-                  <Clock4 />
+                  <TriangleAlert />
                 </AlertIcon>
                 <AlertContent>
-                  <AlertTitle>Backdated entry</AlertTitle>
+                  <AlertTitle>
+                    {t(
+                      certainlyBackdated
+                        ? 'credit.backdatedTitle'
+                        : 'credit.backdatedMaybeTitle',
+                    )}
+                  </AlertTitle>
                   <AlertDescription>
-                    This sale is older than the validation window — entries this
-                    old are reviewed by Manfaa before they count.
+                    {t(
+                      certainlyBackdated
+                        ? 'credit.backdatedBody'
+                        : 'credit.backdatedMaybeBody',
+                    )}
                   </AlertDescription>
+                  <div className="mt-3 flex items-start gap-2.5">
+                    <Checkbox
+                      id="backdated-confirm"
+                      checked={backdatedConfirmed}
+                      onCheckedChange={(checked) =>
+                        setBackdatedConfirmed(checked === true)
+                      }
+                      className="mt-0.5"
+                    />
+                    <Label
+                      htmlFor="backdated-confirm"
+                      className="text-sm font-normal"
+                    >
+                      {t('credit.backdatedConfirm')}
+                    </Label>
+                  </div>
                 </AlertContent>
               </Alert>
             )}
@@ -720,7 +838,12 @@ export default function CreditPage() {
               </Alert>
             )}
 
-            <div className="flex justify-end">
+            <div className="flex flex-wrap items-center justify-end gap-3">
+              {backdatedWarning && !backdatedConfirmed && (
+                <span className="text-xs text-muted-foreground">
+                  {t('credit.backdatedConfirmRequired')}
+                </span>
+              )}
               <Button disabled={!canSubmit} onClick={submit}>
                 {createCredit.isPending ? (
                   <LoaderCircle className="animate-spin" />

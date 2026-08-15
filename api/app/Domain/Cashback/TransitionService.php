@@ -117,8 +117,14 @@ final class TransitionService
      * settlement_due_days setting says otherwise): due_at is evaluated in
      * the business timezone, stored UTC, and echoed into the event meta as
      * evidence.
+     *
+     * $reasonCode qualifies the resulting payable state and is stamped on the
+     * row — used by the backdated-credit path (PLAN §1), where a sale older
+     * than the validation window becomes payable IMMEDIATELY and the row must
+     * say so (`backdated_final`). The ordinary window-close path passes null:
+     * a clean payable sale has no state qualifier.
      */
-    public function makePayable(Transaction $transaction, Actor $actor): TransactionEvent
+    public function makePayable(Transaction $transaction, Actor $actor, ?string $reasonCode = null): TransactionEvent
     {
         $clockStart = CarbonImmutable::now('UTC');
         $dueAt = $clockStart
@@ -130,6 +136,7 @@ final class TransitionService
             $transaction,
             TransactionState::PayableUnfunded,
             $actor,
+            $reasonCode,
             meta: ['clock_start_at' => $clockStart->toIso8601String(), 'due_at' => $dueAt->toIso8601String()],
             attributes: ['clock_start_at' => $clockStart, 'due_at' => $dueAt],
         );

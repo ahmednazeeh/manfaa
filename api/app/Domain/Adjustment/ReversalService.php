@@ -35,6 +35,22 @@ use Illuminate\Support\Facades\DB;
  *    double-count.
  *  - reversed / written_off (the terminal states) →
  *    InvalidReversalStateException (409 invalid_state).
+ *  - a BACKDATED credit (PLAN §1), in any state →
+ *    BackdatedIrreversibleException (409 backdated_irreversible). This
+ *    outranks every branch above: the merchant chose to credit a sale whose
+ *    refund window had already closed, was warned it becomes final, and
+ *    cannot take it back — by reversal or by credit memo. Admin adjustment
+ *    only.
+ *
+ * "Admin adjustment only" is the other half of that decision, not a promise
+ * made elsewhere: an ADMIN actor runs the ordinary tree above on a backdated
+ * row — in-place reversal before confirmation, credit memo after it. Without
+ * it the platform's documented correction (docs/openapi.yaml: "Corrections
+ * are admin adjustments") would exist only on paper, and a mis-keyed backfill
+ * would be fixable by nothing but hand-written SQL, which no ledger invariant
+ * survives. Nothing a merchant, a vendor token or a scheduled job can reach
+ * passes that gate — Actor::admin is minted only from an authenticated
+ * admin-guard request.
  *
  * A transaction sitting in a DRAFT settlement is still reversible (§7 locks
  * only non-draft batches); its line is removed from the draft first so the
@@ -62,11 +78,16 @@ final readonly class ReversalService
         private SettlementBuilder $builder,
     ) {}
 
+    /**
+     * @param  string|null  $note  a free-text reason kept on the event and any memo;
+     *                             the admin correction path requires one
+     */
     public function reverse(
         Transaction $transaction,
         Actor $actor,
         string $reason,
         CarbonImmutable $occurredAt,
+        ?string $note = null,
     ): ReversalOutcome {
         $occurredAt = $occurredAt->utc();
 
@@ -74,9 +95,21 @@ final readonly class ReversalService
             throw FutureDatedTransactionException::at($occurredAt);
         }
 
-        return DB::transaction(function () use ($transaction, $actor, $reason, $occurredAt): ReversalOutcome {
+        return DB::transaction(function () use ($transaction, $actor, $reason, $occurredAt, $note): ReversalOutcome {
             /** @var Transaction $transaction */
             $transaction = Transaction::query()->whereKey($transaction->getKey())->lockForUpdate()->firstOrFail();
+
+            // PLAN §1 "Backdated credits": merchant-irreversible, full stop —
+            // checked FIRST so the answer never depends on where the row
+            // happens to sit in the §6 machine. Not an adjustment memo
+            // either: a memo is a credit the merchant collects on the next
+            // batch, which is exactly the outcome this rule refuses. Only an
+            // admin adjustment can correct one — and an admin acting through
+            // the admin guard IS that adjustment, so they fall through to the
+            // ordinary tree below instead of into this 409.
+            if ($transaction->backdated && $actor->actorType !== 'admin') {
+                throw BackdatedIrreversibleException::for($transaction);
+            }
 
             if (in_array($transaction->state, [TransactionState::Reversed, TransactionState::WrittenOff], true)) {
                 throw InvalidReversalStateException::for($transaction);
@@ -87,7 +120,7 @@ final readonly class ReversalService
             // refund offsets the customer's future earnings, §11; the
             // merchant's credit must not vanish into a 409).
             if (in_array($transaction->state, [TransactionState::Confirmed, TransactionState::Paid], true)) {
-                return $this->createAdjustment($transaction, $reason, ReversalOutcome::CAUSE_ALREADY_CONFIRMED, $occurredAt);
+                return $this->createAdjustment($transaction, $actor, $reason, ReversalOutcome::CAUSE_ALREADY_CONFIRMED, $occurredAt, $note);
             }
 
             // Lock the row of any live settlement holding this line, so a
@@ -102,7 +135,7 @@ final readonly class ReversalService
 
             // §7 locked batches: left draft → the distinct adjustment outcome.
             if ($settlement !== null && $settlement->state !== SettlementState::Draft) {
-                return $this->createAdjustment($transaction, $reason, ReversalOutcome::CAUSE_LOCKED_IN_SETTLEMENT, $occurredAt);
+                return $this->createAdjustment($transaction, $actor, $reason, ReversalOutcome::CAUSE_LOCKED_IN_SETTLEMENT, $occurredAt, $note);
             }
 
             // §7 locks only non-draft settlements: a draft still holding this
@@ -132,7 +165,10 @@ final readonly class ReversalService
                 $transaction,
                 $actor,
                 $reason,
-                ['reversal_occurred_at' => $occurredAt->toIso8601String()],
+                array_filter([
+                    'reversal_occurred_at' => $occurredAt->toIso8601String(),
+                    'note' => $note,
+                ], fn (?string $value): bool => $value !== null),
             );
 
             // Mirror the accrual with the STORED integers — never recompute
@@ -166,9 +202,11 @@ final readonly class ReversalService
      */
     private function createAdjustment(
         Transaction $transaction,
+        Actor $actor,
         string $reason,
         string $cause,
         CarbonImmutable $occurredAt,
+        ?string $note,
     ): ReversalOutcome {
         $existing = Adjustment::query()
             ->where('transaction_id', $transaction->id)
@@ -187,7 +225,13 @@ final readonly class ReversalService
             'fee_gst_laari' => -$transaction->fee_gst_laari,
             'currency' => $transaction->currency,
             'reason_code' => $reason,
-            'note' => sprintf('Vendor reversal (%s); reversal occurred_at %s', $cause, $occurredAt->toIso8601String()),
+            'note' => sprintf(
+                '%s (%s); reversal occurred_at %s%s',
+                $actor->actorType === 'admin' ? 'Admin adjustment' : 'Vendor reversal',
+                $cause,
+                $occurredAt->toIso8601String(),
+                $note !== null ? '; '.$note : '',
+            ),
             'state' => 'pending',
         ]);
 

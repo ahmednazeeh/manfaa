@@ -16,6 +16,22 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * The machine-readable `code` an API refusal carries on its body — e.g.
+ * `duplicate_bank_ref` (409), `slip_unsupported_type` (422),
+ * `backdated_irreversible` (409), `manager_required` (403). Returns null for
+ * anything else (a plain validation error, a network failure, a non-ApiError
+ * throw), so a caller can branch on the code it knows and fall back to the
+ * status otherwise.
+ */
+export function apiErrorCode(error: unknown): string | null {
+  if (!(error instanceof ApiError) || typeof error.body !== 'object') {
+    return null;
+  }
+  const code = (error.body as { code?: unknown } | null)?.code;
+  return typeof code === 'string' ? code : null;
+}
+
 function readCookie(name: string): string | null {
   if (typeof document === 'undefined') {
     return null;
@@ -84,6 +100,42 @@ export async function apiFetch<Schema extends z.ZodType>(
     throw new ApiError(response.status, payload);
   }
   return schema.parse(payload);
+}
+
+/**
+ * Like apiFetch but for endpoints that stream BINARY (e.g. the admin
+ * settlement-slip route, whose file lives on a private disk with no URL):
+ * performs the credentialed GET and returns the bytes as a Blob, which the
+ * caller turns into an object URL for an <img>/<iframe> and revokes when the
+ * preview closes. Errors still arrive as JSON and are thrown as ApiError, so
+ * "no slip on this batch" (404) is a catchable refusal rather than a broken
+ * image.
+ */
+export async function apiFetchBlob(
+  path: string,
+  options: Omit<ApiFetchOptions, 'body'> = {},
+): Promise<Blob> {
+  const { method = 'GET', headers = {}, signal } = options;
+  const xsrfToken = readCookie('XSRF-TOKEN');
+
+  const response = await fetch(`${apiBaseUrl()}${path}`, {
+    method,
+    credentials: 'include',
+    signal,
+    headers: {
+      // JSON first so a refusal comes back as JSON rather than an HTML error
+      // page; the stream itself ignores content negotiation.
+      Accept: 'application/json, */*',
+      ...(xsrfToken !== null ? { 'X-XSRF-TOKEN': xsrfToken } : {}),
+      ...headers,
+    },
+  });
+
+  if (!response.ok) {
+    const payload = await response.json().catch(() => undefined);
+    throw new ApiError(response.status, payload);
+  }
+  return response.blob();
 }
 
 /**

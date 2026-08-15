@@ -17,6 +17,8 @@ use Database\Seeders\LedgerAccountSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
+use Tests\Feature\ReceiptSettlement\Slips;
 use Tests\TestCase;
 
 uses(TestCase::class, RefreshDatabase::class);
@@ -40,6 +42,7 @@ uses(TestCase::class, RefreshDatabase::class);
  */
 beforeEach(function () {
     $this->seed(LedgerAccountSeeder::class);
+    Storage::fake('slips');
 
     $this->base = CarbonImmutable::parse('2026-08-01T10:00:00+00:00');
     Carbon::setTestNow($this->base);
@@ -246,25 +249,23 @@ it('walks the full lined-credit lifecycle over HTTP: categories → credits → 
     // Dues from the STORED integers: (2,750+638) + (4,500+750) = 8,638.
     $this->actingAs($this->owner, 'merchant');
 
-    $settlementId = $this->postJson('/api/merchant/settlements', ['settle_all' => true])
+    $settlementId = $this->post('/api/merchant/settlements', [
+        'settle_all' => '1',
+        'amount' => 8638,
+        'bank_ref' => 'BML-LC-88421',
+        'slip' => Slips::png(),
+    ])
         ->assertCreated()
-        ->assertJsonPath('data.state', 'draft')
+        ->assertJsonPath('data.state', 'payment_review')
         ->assertJsonPath('data.amount_due_laari', 8638)
         ->assertJsonCount(2, 'data.lines')
         ->json('data.id');
 
-    $this->postJson("/api/merchant/settlements/{$settlementId}/submit")
-        ->assertOk()
-        ->assertJsonPath('data.state', 'awaiting_payment');
-
     $this->actingAs($this->admin, 'admin');
 
-    $paymentId = $this->postJson("/api/admin/settlements/{$settlementId}/payments", [
-        'amount' => 8638,
-        'bank_ref' => 'BML-LC-88421',
-    ])
-        ->assertCreated()
-        ->json('data.id');
+    $paymentId = $this->getJson("/api/admin/settlements/{$settlementId}")
+        ->assertOk()
+        ->json('data.payments.0.id');
 
     $this->postJson("/api/admin/payments/{$paymentId}/match")
         ->assertOk()

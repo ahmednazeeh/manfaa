@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { apiFetch, apiFetchText } from './client';
+import { apiBaseUrl, apiFetch, apiFetchBlob, apiFetchText } from './client';
 import {
   ClaimStateSchema,
   dataWrapped,
@@ -121,6 +121,81 @@ export function matchAdminSettlementPayment(
     AdminSettlementResponseSchema,
     { method: 'POST', signal: options.signal },
   );
+}
+
+export const RejectSettlementRequestSchema = z.object({
+  /** Recorded on the refused payment; the merchant reads it verbatim. */
+  reason: z.string().min(3).max(1000),
+});
+export type RejectSettlementRequest = z.infer<
+  typeof RejectSettlementRequestSchema
+>;
+
+/**
+ * POST /api/admin/settlements/{id}/reject — the second review outcome
+ * (PLAN §1 receipt-first): the transfer could not be verified, so the batch
+ * cancels and its lines release, leaving the transactions payable again for a
+ * fresh merchant-submitted settlement. Only a batch in `payment_review` with
+ * nothing received can be rejected; anything else answers 409.
+ */
+export function rejectAdminSettlement(
+  settlementId: number,
+  body: RejectSettlementRequest,
+  options: RequestOptions = {},
+): Promise<AdminSettlementResponse> {
+  return apiFetch(
+    `/api/admin/settlements/${settlementId}/reject`,
+    AdminSettlementResponseSchema,
+    { method: 'POST', body, signal: options.signal },
+  );
+}
+
+/**
+ * Path of the authenticated slip stream — the ONLY way a merchant's uploaded
+ * receipt is ever read, since the `slips` disk is private and unserved. Fetch
+ * it credentialed (it is not a public URL); `payment_id` names an earlier slip
+ * when a batch carries several.
+ */
+export function adminSettlementSlipPath(
+  settlementId: number,
+  paymentId?: number,
+): string {
+  return `/api/admin/settlements/${settlementId}/slip${queryString({
+    payment_id: paymentId,
+  })}`;
+}
+
+/**
+ * Absolute URL of the same stream, for an <img>/<iframe> src. The request
+ * carries the admin session cookie (SESSION_DOMAIN spans the panel and the
+ * API), and the response is served inline with the mime the uploaded BYTES
+ * declared plus `nosniff` — so a PDF renders as a PDF and nothing renders as
+ * script. It is NOT a shareable link: without the admin session it is a 401,
+ * which in an <img> shows only as a broken image. Prefer
+ * `fetchAdminSettlementSlip` when the screen must tell a missing slip (404)
+ * apart from an expired session.
+ */
+export function adminSettlementSlipUrl(
+  settlementId: number,
+  paymentId?: number,
+): string {
+  return `${apiBaseUrl()}${adminSettlementSlipPath(settlementId, paymentId)}`;
+}
+
+/**
+ * GET /api/admin/settlements/{id}/slip as a Blob — the reviewable receipt,
+ * with real error handling: 404 when the batch carries no slip (or the stored
+ * file is gone). Wrap it in `URL.createObjectURL` for the preview and revoke
+ * the object URL when it closes.
+ */
+export function fetchAdminSettlementSlip(
+  settlementId: number,
+  paymentId?: number,
+  options: RequestOptions = {},
+): Promise<Blob> {
+  return apiFetchBlob(adminSettlementSlipPath(settlementId, paymentId), {
+    signal: options.signal,
+  });
 }
 
 // ---------------------------------------------------------------------------

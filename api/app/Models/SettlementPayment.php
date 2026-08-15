@@ -16,9 +16,14 @@ class SettlementPayment extends Model
     {
         return [
             'settlement_id' => 'integer',
+            'merchant_id' => 'integer',
             'amount_laari' => 'integer',
+            'slip_size_bytes' => 'integer',
+            'uploaded_by' => 'integer',
             'matched_by' => 'integer',
             'matched_at' => 'immutable_datetime',
+            'rejected_by' => 'integer',
+            'rejected_at' => 'immutable_datetime',
         ];
     }
 

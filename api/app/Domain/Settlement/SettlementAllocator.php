@@ -64,27 +64,29 @@ final class SettlementAllocator
      * pending until an admin matches it; the settlement moves to
      * payment_review so the matching queue picks it up.
      *
-     * Idempotent per transfer: the unique (settlement_id, bank_ref) index is
-     * the authority on duplicates — recording the same reference twice rolls
-     * the whole attempt back and surfaces as DuplicateBankRefException, so
-     * one real transfer can never book cash twice.
+     * Idempotent per transfer: the unique (settlement_id, bank_ref) index and
+     * the partial unique (merchant_id, bank_ref) index (non-rejected rows)
+     * are together the authority on duplicates — recording the same reference
+     * twice, on this batch or on a second batch the merchant just created,
+     * rolls the whole attempt back and surfaces as DuplicateBankRefException,
+     * so one real transfer can never book cash twice.
      */
-    public function recordBankPayment(Settlement $settlement, Laari $amount, string $bankRef, ?string $slipPath = null): SettlementPayment
+    public function recordBankPayment(Settlement $settlement, Laari $amount, string $bankRef, ?ReceiptSlip $slip = null): SettlementPayment
     {
         if ($amount->value() <= 0) {
             throw new InvalidArgumentException('A settlement payment must be a positive amount.');
         }
 
         try {
-            return $this->storeBankPayment($settlement, $amount, $bankRef, $slipPath);
+            return $this->storeBankPayment($settlement, $amount, $bankRef, $slip);
         } catch (UniqueConstraintViolationException) {
             throw DuplicateBankRefException::forSettlement($settlement, $bankRef);
         }
     }
 
-    private function storeBankPayment(Settlement $settlement, Laari $amount, string $bankRef, ?string $slipPath): SettlementPayment
+    private function storeBankPayment(Settlement $settlement, Laari $amount, string $bankRef, ?ReceiptSlip $slip): SettlementPayment
     {
-        return DB::transaction(function () use ($settlement, $amount, $bankRef, $slipPath): SettlementPayment {
+        return DB::transaction(function () use ($settlement, $amount, $bankRef, $slip): SettlementPayment {
             $settlement = $this->locked($settlement);
 
             $payable = [SettlementState::AwaitingPayment, SettlementState::PaymentReview, SettlementState::PartiallySettled];
@@ -94,11 +96,15 @@ final class SettlementAllocator
             }
 
             $payment = $settlement->payments()->create([
+                'merchant_id' => $settlement->merchant_id,
                 'amount_laari' => $amount->value(),
                 'currency' => 'MVR',
                 'method' => 'bank',
                 'bank_ref' => $bankRef,
-                'slip_path' => $slipPath,
+                'slip_path' => $slip?->path,
+                'slip_mime' => $slip?->mime,
+                'slip_size_bytes' => $slip?->sizeBytes,
+                'uploaded_by' => $slip?->uploadedBy,
                 'state' => 'pending',
             ]);
 

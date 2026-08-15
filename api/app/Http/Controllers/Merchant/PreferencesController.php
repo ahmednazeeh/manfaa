@@ -16,11 +16,11 @@ use Illuminate\Validation\Rule;
  * min_eligible_laari 0–100000 (MVR 0–1,000); validation_window_days is
  * capped at the ADMIN-governed platform window (PlatformConfig
  * default_validation_window_days, default 3) — never a merchant-picked 30.
- * The window feeds the §11 stale-review control (CreditRecorder holds any
- * manual credit backdated past window + 3 days as stale_timestamp for
- * admin review, the premise of the merchant-mediated claims decision) and
- * it defers the merchant's own settlement clock start — a knob the window
- * polices must not be raisable by the party it polices. Merchants may
+ * The window defines what counts as BACKDATED (PLAN §1: CreditRecorder
+ * routes any credit older than window + 3 days straight to payable_unfunded,
+ * final and merchant-irreversible, instead of into review) and it defers the
+ * merchant's own settlement clock start — a knob with those two effects must
+ * not be raisable by the party it polices. Merchants may
  * tighten it freely; raising the ceiling is the admin's platform-settings
  * call. Both knobs apply to FUTURE credits only — rate/terms freeze onto
  * each transaction at occurred_at (§4), so history never moves.

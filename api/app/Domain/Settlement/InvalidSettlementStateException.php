@@ -29,6 +29,20 @@ final class InvalidSettlementStateException extends DomainException
         ));
     }
 
+    /**
+     * Receipt-first reject (§1): a batch whose payment was already matched
+     * has confirmed customers' cashback through the state machine. Rejecting
+     * it would have to un-confirm them — corrections after confirmation are
+     * adjustments (§13), never a release.
+     */
+    public static function rejectAfterMatching(Settlement $settlement): self
+    {
+        return new self(sprintf(
+            'Settlement %s has already had a payment matched — rejecting the receipt is no longer possible; correct it with an adjustment.',
+            $settlement->reference,
+        ));
+    }
+
     public static function paymentNotPending(SettlementPayment $payment): self
     {
         return new self(sprintf(

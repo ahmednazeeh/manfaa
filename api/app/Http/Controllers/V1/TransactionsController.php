@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\V1;
 
+use App\Domain\Adjustment\BackdatedIrreversibleException;
 use App\Domain\Adjustment\InvalidReversalStateException;
 use App\Domain\Adjustment\ReversalOutcome;
 use App\Domain\Adjustment\ReversalService;
@@ -174,6 +175,16 @@ class TransactionsController extends V1Controller
             );
         } catch (FutureDatedTransactionException) {
             return $this->error(422, 'future_dated', 'occurred_at is in the future beyond the permitted clock-skew allowance.');
+        } catch (BackdatedIrreversibleException $exception) {
+            // PLAN §1: distinct from invalid_state on purpose — this one will
+            // never succeed on a retry, in any state, so a vendor must route
+            // it to a human rather than queue it.
+            return $this->error(
+                409,
+                BackdatedIrreversibleException::ERROR_CODE,
+                $exception->getMessage(),
+                meta: ['state' => $exception->transaction->state->value],
+            );
         } catch (InvalidReversalStateException $exception) {
             return $this->error(
                 409,

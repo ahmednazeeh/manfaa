@@ -1,7 +1,9 @@
 export {
   ApiError,
   apiBaseUrl,
+  apiErrorCode,
   apiFetch,
+  apiFetchBlob,
   apiFetchText,
   bootstrapCsrf,
   type ApiFetchOptions,

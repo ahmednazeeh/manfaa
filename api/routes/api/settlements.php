@@ -4,32 +4,52 @@ use App\Http\Controllers\Admin\SettlementController as AdminSettlementController
 use App\Http\Controllers\Admin\SettlementPaymentController;
 use App\Http\Controllers\Admin\WalletController;
 use App\Http\Controllers\Merchant\SettlementController as MerchantSettlementController;
+use App\Http\Middleware\EnsureMerchantApproved;
 use Illuminate\Support\Facades\Route;
 
-// Settlement domain (§6, §7, §12 Phase 1): outstanding ageing, the batch
-// builder, wallet settlement, and the admin matching queue. Every merchant
-// {id} route resolves through the authenticated merchant's own relations —
-// another merchant's settlement is indistinguishable from a missing one.
-// Every settlement MUTATION (create, submit, wallet-settle) needs MANAGER
-// or above (merchant.role:manager): submit freezes the lines irreversibly,
-// and on a fully credit-netted draft it allocates every line and settles
-// the batch on the spot — not staff work, but squarely a manager's job
-// (PLAN §1). Reads stay staff-accessible.
+// Settlement domain (§6, §7, §12 Phase 1), receipt-first (PLAN §1): the
+// merchant previews what a selection costs, transfers at their bank, then
+// SUBMITS the slip + bank reference — the single act that creates a
+// settlement, landing it directly in payment_review. There is no
+// draft-then-submit pair and no merchant route that reaches
+// awaiting_payment: a settlement without a receipt cannot be created through
+// this API at all.
+//
+// Every merchant {id} route resolves through the authenticated merchant's
+// own relations — another merchant's settlement is indistinguishable from a
+// missing one. Every settlement MUTATION needs MANAGER or above
+// (merchant.role:manager) plus an APPROVED store (EnsureMerchantApproved):
+// submitting freezes lines irreversibly and claims a real bank transfer, so
+// it is a manager's job in a store that has actually passed review. Reads
+// and the preview stay staff-accessible — the preview claims nothing.
 Route::prefix('merchant')->middleware('auth:merchant')->group(function () {
     Route::get('outstanding', [MerchantSettlementController::class, 'outstanding']);
     Route::get('wallet', [MerchantSettlementController::class, 'wallet']);
 
     Route::get('settlements', [MerchantSettlementController::class, 'index']);
-    Route::post('settlements', [MerchantSettlementController::class, 'store'])->middleware('merchant.role:manager');
+    Route::get('settlements/preview', [MerchantSettlementController::class, 'preview']);
     Route::get('settlements/{id}', [MerchantSettlementController::class, 'show'])->whereNumber('id');
-    Route::post('settlements/{id}/submit', [MerchantSettlementController::class, 'submit'])->whereNumber('id')->middleware('merchant.role:manager');
-    Route::post('settlements/{id}/wallet-settle', [MerchantSettlementController::class, 'walletSettle'])->whereNumber('id')->middleware('merchant.role:manager');
+
+    Route::middleware(['merchant.role:manager', EnsureMerchantApproved::class])->group(function () {
+        Route::post('settlements', [MerchantSettlementController::class, 'store']);
+        Route::post('settlements/wallet', [MerchantSettlementController::class, 'walletSettle']);
+        // A further transfer against a batch still owed money (§7 partial
+        // payments, or an admin-built fallback batch) — also receipt-bearing.
+        Route::post('settlements/{id}/receipts', [MerchantSettlementController::class, 'storeReceipt'])->whereNumber('id');
+    });
 });
 
 Route::prefix('admin')->middleware('auth:admin')->group(function () {
     Route::get('settlements', [AdminSettlementController::class, 'index']);
     Route::get('settlements/{id}', [AdminSettlementController::class, 'show'])->whereNumber('id');
+    // Slips are private (storage/app/slips — no disk URL, not served): this
+    // authenticated stream is the only way one is ever read.
+    Route::get('settlements/{id}/slip', [AdminSettlementController::class, 'slip'])->whereNumber('id');
     Route::post('settlements/{id}/payments', [AdminSettlementController::class, 'storePayment'])->whereNumber('id');
+    Route::post('settlements/{id}/reject', [AdminSettlementController::class, 'reject'])->whereNumber('id');
     Route::post('payments/{id}/match', [SettlementPaymentController::class, 'match'])->whereNumber('id');
+    // The documented fallback (PLAN §1): admin-built batch for a merchant who
+    // cannot submit through the panel, landing in awaiting_payment.
+    Route::post('merchants/{merchant}/settlements', [AdminSettlementController::class, 'storeForMerchant'])->whereNumber('merchant');
     Route::post('merchants/{merchant}/wallet/top-ups', [WalletController::class, 'storeTopUp'])->whereNumber('merchant');
 });

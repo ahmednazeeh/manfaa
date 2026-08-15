@@ -11,8 +11,9 @@ use Carbon\CarbonImmutable;
 
 /**
  * The §9.2 API ingestion path: same rate-at-occurred_at resolution, ceiling
- * money, below-minimum and stale routing as the manual path — all shared
- * through CreditRecorder.
+ * money, below-minimum handling and backdated routing (PLAN §1) as the
+ * manual path — all shared through CreditRecorder, which is deliberately the
+ * ONE place those rules live.
  *
  * customer_ref resolution is dual (original-spec online model 3): a 6-digit
  * customer code, or a Maldivian mobile normalised to +960 E.164
