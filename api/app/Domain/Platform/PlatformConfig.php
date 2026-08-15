@@ -31,7 +31,16 @@ final class PlatformConfig
         'min_payout_laari' => ['default' => 10000, 'min' => 0, 'max' => 1000000],
         'settlement_due_days' => ['default' => 15, 'min' => 1, 'max' => 60],
         'write_off_days' => ['default' => 90, 'min' => 30, 'max' => 365],
+        // The MAXIMUM window a merchant may choose for themselves
+        // (PreferencesController validates against it). Distinct from the
+        // one below: a store may be given a shorter window than the
+        // ceiling it is allowed to raise itself to.
         'default_validation_window_days' => ['default' => 3, 'min' => 0, 'max' => 30],
+        // What a NEW store starts on. Two days covers same-day and
+        // next-day returns while getting the customer paid sooner; a store
+        // that wants longer can raise it up to the ceiling above.
+        // Changing this never touches a store that already exists.
+        'new_merchant_validation_window_days' => ['default' => 2, 'min' => 0, 'max' => 30],
         'default_min_eligible_laari' => ['default' => 5000, 'min' => 0, 'max' => 1000000],
         // Prompt-payment discount (PLAN §1). 0 turns the incentive OFF
         // entirely — every batch then prices exactly as it did before the
@@ -81,9 +90,24 @@ final class PlatformConfig
         return $this->get('write_off_days');
     }
 
+    /** The ceiling a merchant may raise their own window to. */
     public function defaultValidationWindowDays(): int
     {
         return $this->get('default_validation_window_days');
+    }
+
+    /**
+     * The window a store is created with. Clamped to the ceiling so the two
+     * settings can never disagree — an admin who sets a new-store window
+     * above the maximum a merchant may choose would otherwise create stores
+     * that fail their own preferences validation on first save.
+     */
+    public function newMerchantValidationWindowDays(): int
+    {
+        return min(
+            $this->get('new_merchant_validation_window_days'),
+            $this->defaultValidationWindowDays(),
+        );
     }
 
     public function defaultMinEligibleLaari(): int

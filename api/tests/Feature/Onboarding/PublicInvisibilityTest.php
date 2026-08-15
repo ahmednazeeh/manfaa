@@ -60,6 +60,7 @@ it('hides every non-active status from every public surface', function (string $
         'in_store' => [],
         'online' => [],
         'recently_added' => [],
+        'top_cashback' => [],
         'categories' => [],
     ]);
 

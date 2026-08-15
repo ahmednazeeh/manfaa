@@ -120,7 +120,7 @@ export function PublicHeader() {
           <ThemeToggle />
           {me ? (
             <Button asChild>
-              <Link href="/dashboard">{t('nav.myCashback')}</Link>
+              <Link href="/dashboard">{t('landing.dashboard')}</Link>
             </Button>
           ) : (
             <>

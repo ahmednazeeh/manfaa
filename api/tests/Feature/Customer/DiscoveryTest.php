@@ -502,3 +502,17 @@ it('does not list a promo at or below the standing rate as increased', function 
 
     expect($data['increased'])->toBe([]);
 });
+
+it('shelves the highest rates first, comparing basis points not text', function () {
+    // "9.50" sorts after "10.00" as TEXT — the shelf must not put the worse
+    // rate on top of a list whose entire purpose is the best one.
+    discoveryMerchant(['name' => 'Alpha Nine', 'slug' => 'alpha-nine'], 950);
+    discoveryMerchant(['name' => 'Beta Ten', 'slug' => 'beta-ten'], 1000);
+    discoveryMerchant(['name' => 'Gamma Two', 'slug' => 'gamma-two'], 200);
+
+    $shelf = $this->getJson('/api/discover')->assertOk()->json('data.top_cashback');
+
+    expect(collect($shelf)->pluck('slug')->all())
+        ->toBe(['beta-ten', 'alpha-nine', 'gamma-two'])
+        ->and($shelf[0]['cashback_rate_percent'])->toBe('10.00');
+});

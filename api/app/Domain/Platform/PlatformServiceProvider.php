@@ -31,7 +31,7 @@ final class PlatformServiceProvider extends ServiceProvider
             $attributes = $merchant->getAttributes();
 
             if (! array_key_exists('validation_window_days', $attributes)) {
-                $merchant->validation_window_days = $config->defaultValidationWindowDays();
+                $merchant->validation_window_days = $config->newMerchantValidationWindowDays();
             }
 
             if (! array_key_exists('min_eligible_laari', $attributes)) {

@@ -6,6 +6,7 @@ import {
   Banknote,
   Clock,
   Globe,
+  Percent,
   QrCode,
   ShoppingBag,
   Sparkles,
@@ -22,6 +23,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { CashbackDemo } from '@/components/app/cashback-demo';
+import { CustomerBanner } from '@/components/app/customer-banner';
 import {
   CategoryRail,
   CategoryRailSkeleton,
@@ -307,9 +309,16 @@ function Shelves({ sections }: { sections: DiscoverySections }) {
       viewAllHref: '/discover?view=featured',
     },
     {
+      key: 'top-cashback',
+      icon: Percent,
+      title: t('discover.topCashback'),
+      entries: sections.top_cashback,
+      viewAllHref: '/discover?view=top-cashback',
+    },
+    {
       key: 'recent',
       icon: Clock,
-      title: t('discover.recentlyAdded'),
+      title: t('discover.newStores'),
       entries: sections.recently_added,
       viewAllHref: '/discover?view=recent',
     },
@@ -569,6 +578,7 @@ export default function LandingPage() {
              they came to shop. Categories on top, then the shelves, which is
              the storefront /discover shows them. */
           <>
+            <CustomerBanner />
             {isPending && <CategoryRailSkeleton />}
             {data !== undefined && <CategoryRail sections={data} />}
             {storefront}

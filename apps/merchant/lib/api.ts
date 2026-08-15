@@ -210,6 +210,46 @@ export function listTransactions(
   );
 }
 
+/**
+ * The two corrections a merchant may make to their own sale, while their
+ * validation window is still open (the API refuses both afterwards, and
+ * always on a backdated credit).
+ */
+export interface AmendTransactionBody {
+  eligible_amount: number;
+  sale_amount?: number | null;
+  /** Replaces the split wholesale; omit to leave a single-rate sale alone. */
+  lines?: Array<{ category: string | null; amount_laari: number }>;
+}
+
+const TransactionResponseSchema = dataWrapped(TransactionSchema);
+
+/** PATCH /api/merchant/transactions/{id} — correct the amounts. */
+export function amendTransaction(
+  id: number,
+  body: AmendTransactionBody,
+): Promise<z.infer<typeof TransactionResponseSchema>> {
+  return apiFetch(
+    `/api/merchant/transactions/${id}`,
+    TransactionResponseSchema,
+    { method: 'PATCH', body },
+  );
+}
+
+export type CancelReason = 'refund' | 'void' | 'duplicate' | 'error';
+
+/** POST /api/merchant/transactions/{id}/cancel — take the sale back off. */
+export function cancelTransaction(
+  id: number,
+  body: { reason: CancelReason; note?: string | null },
+): Promise<z.infer<typeof TransactionResponseSchema>> {
+  return apiFetch(
+    `/api/merchant/transactions/${id}/cancel`,
+    TransactionResponseSchema,
+    { method: 'POST', body },
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Receipt-first settlements (PLAN §1 "Settlement flow")
 // ---------------------------------------------------------------------------

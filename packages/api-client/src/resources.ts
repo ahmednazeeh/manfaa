@@ -325,6 +325,14 @@ export const TransactionSchema = z.object({
    */
   cashback_rate_percent: PercentSchema,
   platform_fee_percent: PercentSchema,
+  /**
+   * What the sale ACTUALLY returned — cashback_laari / eligible_laari — as
+   * opposed to the base rate above, which it was priced AGAINST. Equal on a
+   * single-rate sale; different on a lined one, where it is the only honest
+   * single figure. Null only when there is nothing to divide by.
+   */
+  effective_cashback_rate_percent: z.string().nullable().catch(null),
+  effective_platform_fee_percent: z.string().nullable().catch(null),
   cashback_laari: z.number().int(),
   fee_laari: z.number().int(),
   fee_gst_laari: z.number().int(),

@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   ApiError,
   bpToPercentString,
@@ -410,12 +410,6 @@ export default function CreditPage() {
   const [code, setCode] = useState('');
   const [invoiceNo, setInvoiceNo] = useState('');
   const [eligibleInput, setEligibleInput] = useState('');
-  /**
-   * True once the cashier types in the total themselves. From then on their
-   * figure wins and the split stops writing into the field — clearing it
-   * hands control back.
-   */
-  const [eligibleTouched, setEligibleTouched] = useState(false);
   const [saleInput, setSaleInput] = useState('');
   const [occurredAt, setOccurredAt] = useState(nowLocalValue);
   const [result, setResult] = useState<CreditResult | null>(null);
@@ -488,33 +482,16 @@ export default function CreditPage() {
     return amounts.reduce<number>((sum, amount) => sum + (amount as number), 0);
   }, [splitEnabled, splitRows]);
 
-  const eligibleIsDerived = !eligibleTouched && derivedFromSplitLaari !== null;
-  const eligibleLaari = eligibleTouched
-    ? typedEligibleLaari
-    : (derivedFromSplitLaari ?? typedEligibleLaari);
-
   /**
-   * Keep the total field showing the split's sum so the cashier sees the
-   * figure being submitted in the box itself, not only in a hint. Plain
-   * digits, no separators, so re-parsing it is lossless.
+   * Under a split the eligible amount is not a field at all — it IS the sum
+   * of the lines, computed here and sent as such. There is nowhere for a
+   * cashier to type a second, disagreeing figure, so the mismatch that
+   * used to be possible cannot arise.
    */
-  useEffect(() => {
-    if (eligibleTouched) return;
-    const next =
-      derivedFromSplitLaari === null
-        ? ''
-        : (derivedFromSplitLaari / 100).toFixed(2);
-    setEligibleInput((current) => (current === next ? current : next));
-  }, [derivedFromSplitLaari, eligibleTouched]);
+  const eligibleLaari = splitEnabled
+    ? derivedFromSplitLaari
+    : typedEligibleLaari;
 
-  /**
-   * Resolve a mismatch the other way round: hand the field back to the split
-   * instead of retyping the total. Releasing `touched` is enough — the effect
-   * above writes the sum in and keeps it there as the lines change. The
-   * mismatch alert only shows when every row parses, so the sum it offers and
-   * the sum written here are the same number.
-   */
-  const handleUseLinesTotal = useCallback(() => setEligibleTouched(false), []);
   const saleLaari = useMemo(
     () => (saleInput.trim() === '' ? null : safeParseMvr(saleInput)),
     [saleInput],
@@ -892,57 +869,38 @@ export default function CreditPage() {
                 )}
               </div>
 
-              <div className="flex flex-col gap-2.5">
-                <Label htmlFor="eligible-amount">Eligible amount</Label>
-                <InputGroup>
-                  <InputAddon>MVR</InputAddon>
-                  <Input
-                    id="eligible-amount"
-                    inputMode="decimal"
-                    value={eligibleInput}
-                    onChange={(event) => {
-                      setEligibleInput(event.target.value);
-                      setEligibleTouched(event.target.value.trim() !== '');
-                    }}
-                    placeholder="0.00"
-                    aria-invalid={eligibleInvalid}
-                  />
-                </InputGroup>
-                {eligibleInvalid ? (
-                  <p className="text-xs text-destructive">
-                    Enter a valid amount, e.g. 1,250.00.
-                  </p>
-                ) : eligibleIsDerived ? (
-                  /* Itemised sale, total left blank: say out loud what is
-                     being sent rather than submitting a figure the cashier
-                     never saw. */
-                  <p className="text-xs text-muted-foreground">
-                    Adding up to{' '}
-                    <MoneyText
-                      laari={eligibleLaari as number}
-                      className="font-medium text-mono"
-                    />{' '}
-                    from the categories below.
-                  </p>
-                ) : splitEnabled ? (
-                  /* Split mode changes what this figure means, and saying
-                     "the part cashback is computed on" here is what sends a
-                     cashier to type the earning part and then fail the sum:
-                     an excluded category is not eligible for cashback, yet it
-                     belongs in this total. */
-                  <p className="text-xs text-muted-foreground">
-                    Every part of the bill you are splitting below, including
-                    categories that earn nothing. Leave it blank and the lines
-                    add up for you.
-                  </p>
-                ) : (
-                  <p className="text-xs text-muted-foreground">
-                    The part of the bill cashback is computed on, per your
-                    agreement. Leave blank when splitting by category and it
-                    adds up for you.
-                  </p>
-                )}
-              </div>
+              {/* Hidden entirely under a split: the eligible amount IS the
+                  sum of the lines, and offering a second place to type it
+                  only creates a figure that can disagree with them. It is
+                  still SENT — derived below — so the API contract is
+                  unchanged. */}
+              {!splitEnabled && (
+                <div className="flex flex-col gap-2.5">
+                  <Label htmlFor="eligible-amount">Eligible amount</Label>
+                  <InputGroup>
+                    <InputAddon>MVR</InputAddon>
+                    <Input
+                      id="eligible-amount"
+                      inputMode="decimal"
+                      value={eligibleInput}
+                      onChange={(event) => setEligibleInput(event.target.value)}
+                      placeholder="0.00"
+                      aria-invalid={eligibleInvalid}
+                    />
+                  </InputGroup>
+                  {eligibleInvalid ? (
+                    <p className="text-xs text-destructive">
+                      Enter a valid amount, e.g. 1,250.00.
+                    </p>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      The part of the bill cashback is computed on, per your
+                      agreement. Split by category below and this adds itself
+                      up from the lines.
+                    </p>
+                  )}
+                </div>
+              )}
 
               <div className="flex flex-col gap-2.5">
                 <Label htmlFor="sale-amount">
@@ -1066,12 +1024,6 @@ export default function CreditPage() {
                       onRowsChange={setSplitRows}
                       categories={activeCategories}
                       analysis={splitAnalysis}
-                      eligibleLaari={
-                        eligibleLaari !== null && !eligibleInvalid
-                          ? eligibleLaari
-                          : null
-                      }
-                      onUseLinesTotal={handleUseLinesTotal}
                     />
                   </>
                 ) : (

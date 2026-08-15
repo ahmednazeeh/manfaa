@@ -51,21 +51,43 @@ export interface AppMenuSection {
  * Cosmetic only — the API enforces the same split server-side (403
  * `owner_required` / `manager_required`) on every route.
  */
+/**
+ * Grouped by WHEN a merchant uses each screen, not by what the API happens
+ * to call it. The old menu was one undifferentiated run of six followed by
+ * eight settings, which made the till's daily screen sit at the same weight
+ * as the once-a-quarter ones.
+ *
+ *  - Till        what a cashier touches during a shift
+ *  - Money       what the owner reconciles: what is owed, and getting paid
+ *  - Marketing   what brings customers in
+ *  - Store       the shop's own setup — how it prices and where it trades
+ *  - Account     the things you set once: who may sign in, where money
+ *                lands, how the tills authenticate
+ */
 export const APP_MENU: AppMenuSection[] = [
   {
+    label: 'Till',
     items: [
       { title: 'Credit customer', path: '/credit', icon: HandCoins },
-      { title: 'Dashboard', path: '/dashboard', icon: LayoutGrid },
       { title: 'Transactions', path: '/transactions', icon: ReceiptText },
-      { title: 'Settlements', path: '/settlements', icon: Landmark },
-      { title: 'Wallet', path: '/wallet', icon: Wallet },
-      { title: 'Promotions', path: '/promotions', icon: Megaphone },
     ],
   },
   {
-    label: 'Settings',
-    // The whole section is hidden from staff; managers see the three
-    // operating screens, owners see all eight.
+    label: 'Money',
+    items: [
+      { title: 'Dashboard', path: '/dashboard', icon: LayoutGrid },
+      { title: 'Settlements', path: '/settlements', icon: Landmark },
+      { title: 'Wallet', path: '/wallet', icon: Wallet },
+    ],
+  },
+  {
+    label: 'Marketing',
+    items: [{ title: 'Promotions', path: '/promotions', icon: Megaphone }],
+  },
+  {
+    label: 'Store',
+    // Hidden from staff: how the shop prices and where it trades is a
+    // manager decision, not a counter one.
     minRole: 'manager',
     items: [
       { title: 'Cashback rate', path: '/settings/rate', icon: Percent },
@@ -75,25 +97,20 @@ export const APP_MENU: AppMenuSection[] = [
         icon: Tags,
       },
       { title: 'Branches', path: '/settings/branches', icon: MapPin },
-      { title: 'Profile', path: '/settings/profile', icon: Store, minRole: 'owner' },
-      {
-        title: 'Bank account',
-        path: '/settings/bank-account',
-        icon: Banknote,
-        minRole: 'owner',
-      },
-      { title: 'Staff', path: '/settings/staff', icon: Users, minRole: 'owner' },
-      {
-        title: 'API access',
-        path: '/settings/api-access',
-        icon: Plug,
-        minRole: 'owner',
-      },
+      { title: 'Store profile', path: '/settings/profile', icon: Store, minRole: 'owner' },
+    ],
+  },
+  {
+    label: 'Account',
+    minRole: 'owner',
+    items: [
+      { title: 'Bank account', path: '/settings/bank-account', icon: Banknote },
+      { title: 'Staff', path: '/settings/staff', icon: Users },
+      { title: 'API access', path: '/settings/api-access', icon: Plug },
       {
         title: 'Preferences',
         path: '/settings/preferences',
         icon: SlidersHorizontal,
-        minRole: 'owner',
       },
     ],
   },

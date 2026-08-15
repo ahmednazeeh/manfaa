@@ -56,6 +56,8 @@ final class DiscoveryService
     // rebuild. Bump the moment an entry gains, loses or renames a key.
     //
     // v5: the cached rail rows gained `icon` (admin-chosen lucide name).
+    // (The top-cashback shelf needed no bump: it is a re-sort of entries
+    // that already carry rate_bp, done at the presentation boundary.)
     public const string CACHE_KEY = 'discovery:entries:v5';
 
     // v4: store detail gained category_rates (Task #25).
@@ -109,7 +111,7 @@ final class DiscoveryService
     }
 
     /**
-     * @return array{featured: list<array<string, mixed>>, increased: list<array<string, mixed>>, nearby: list<array<string, mixed>>, in_store: list<array<string, mixed>>, online: list<array<string, mixed>>, recently_added: list<array<string, mixed>>, categories: list<array{slug: string, name_en: string, name_dv: string|null, icon: string|null, icon_url: string|null, merchant_count: int}>}
+     * @return array{featured: list<array<string, mixed>>, increased: list<array<string, mixed>>, nearby: list<array<string, mixed>>, in_store: list<array<string, mixed>>, online: list<array<string, mixed>>, recently_added: list<array<string, mixed>>, top_cashback: list<array<string, mixed>>, categories: list<array{slug: string, name_en: string, name_dv: string|null, icon: string|null, icon_url: string|null, merchant_count: int}>}
      */
     public function sections(?float $lat, ?float $lng): array
     {
@@ -168,6 +170,12 @@ final class DiscoveryService
         $recentlyAdded = $entries;
         usort($recentlyAdded, fn (array $a, array $b): int => $b['listed_at'] <=> $a['listed_at']);
 
+        // Highest effective rate first. Compared in integer basis points —
+        // "9.50" sorts after "10.00" as text, which would put the WORSE
+        // rate at the top of a shelf whose whole purpose is the best one.
+        $topCashback = $entries;
+        usort($topCashback, fn (array $a, array $b): int => $b['rate_bp'] <=> $a['rate_bp']);
+
         $present = fn (array $list): array => array_values(array_map(
             $this->presentEntry(...),
             array_slice($list, 0, self::SECTION_LIMIT),
@@ -189,6 +197,12 @@ final class DiscoveryService
             // Same entry shape and the same SECTION_LIMIT cap as the shelves
             // above; only the ordering differs.
             'recently_added' => $present($recentlyAdded),
+            // The best rates on the platform right now, whatever the
+            // reason — a standing rate or a live promotion, since the
+            // shopper only cares what they get today. Ties break
+            // alphabetically because usort is stable and the dataset is
+            // already in name order.
+            'top_cashback' => $present($topCashback),
             // NOT a shelf — the category rail that sits above them. See
             // buildCuratedCategories() for how it differs from the
             // directory's flat meta.categories.

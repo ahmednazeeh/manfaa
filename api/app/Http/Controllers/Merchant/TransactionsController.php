@@ -29,6 +29,11 @@ class TransactionsController extends Controller
         $user = $request->user('merchant');
 
         $query = $user->merchant->transactions()
+            // The panel offers a correction on every row still inside its
+            // window, and correcting a LINED sale means editing its lines —
+            // so the split travels with the list rather than needing a
+            // second request per row the moment someone opens the dialog.
+            ->with(['lines' => fn ($lines) => $lines->orderBy('sort')])
             ->orderByDesc('occurred_at')
             ->orderByDesc('id');
 

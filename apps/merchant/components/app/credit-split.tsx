@@ -7,8 +7,8 @@ import {
   type ProductCategory,
   type TransactionLine,
 } from '@manfaa/api-client';
-import { MoneyText, useFormatMoney } from '@manfaa/ui';
-import { Plus, Trash2, TriangleAlert } from 'lucide-react';
+import { MoneyText } from '@manfaa/ui';
+import { Plus, Trash2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import {
   estimateFeeBpFor,
@@ -16,13 +16,6 @@ import {
   formatBp,
   formatRate,
 } from '@/lib/estimate';
-import {
-  Alert,
-  AlertContent,
-  AlertDescription,
-  AlertIcon,
-  AlertTitle,
-} from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input, InputAddon, InputGroup } from '@/components/ui/input';
@@ -360,20 +353,14 @@ export function SplitEditor({
   onRowsChange,
   categories,
   analysis,
-  eligibleLaari,
-  onUseLinesTotal,
 }: {
   rows: SplitRow[];
   onRowsChange: (rows: SplitRow[]) => void;
   /** ACTIVE categories only. */
   categories: ProductCategory[];
   analysis: SplitAnalysis;
-  eligibleLaari: number | null;
-  /** Adopts the lines' own sum as the eligible amount, clearing a mismatch. */
-  onUseLinesTotal: () => void;
 }) {
   const { t, i18n } = useTranslation();
-  const formatMoney = useFormatMoney();
 
   const usedKeys = useMemo(
     () => new Set(rows.map((row) => row.category)),
@@ -505,63 +492,16 @@ export function SplitEditor({
         </Button>
         <span className="text-sm">
           <span className="text-muted-foreground">
-            {t('creditSplit.linesTotal')}
+            {t('creditSplit.eligibleTotal')}
           </span>{' '}
           {analysis.sumLaari !== null ? (
-            <MoneyText
-              laari={analysis.sumLaari}
-              className={
-                analysis.mismatch ? 'text-destructive font-medium' : ''
-              }
-            />
+            <MoneyText laari={analysis.sumLaari} className="font-semibold text-mono" />
           ) : (
             <span className="text-muted-foreground">—</span>
-          )}
-          {eligibleLaari !== null && (
-            <>
-              {' '}
-              <span className="text-muted-foreground">
-                {t('creditSplit.ofEligible')}
-              </span>{' '}
-              <MoneyText laari={eligibleLaari} />
-            </>
           )}
         </span>
       </div>
 
-      {analysis.mismatch &&
-        analysis.sumLaari !== null &&
-        eligibleLaari !== null && (
-          <Alert variant="warning" appearance="light">
-            <AlertIcon>
-              <TriangleAlert />
-            </AlertIcon>
-            <AlertContent>
-              <AlertTitle>{t('creditSplit.mismatchTitle')}</AlertTitle>
-              <AlertDescription>
-                {t('creditSplit.mismatchBody', {
-                  // Integer-only money formatting (no float division).
-                  difference: `${analysis.sumLaari > eligibleLaari ? '+' : '-'}${formatMoney(
-                    Math.abs(analysis.sumLaari - eligibleLaari),
-                  )}`,
-                })}
-              </AlertDescription>
-              {/* The overwhelmingly common cause is a total typed before the
-                  split was itemised — usually the earning part only, with an
-                  excluded category left out. One click adopts the lines. */}
-              <Button
-                variant="outline"
-                size="sm"
-                className="mt-2 self-start"
-                onClick={onUseLinesTotal}
-              >
-                {t('creditSplit.useLinesTotal', {
-                  amount: formatMoney(analysis.sumLaari),
-                })}
-              </Button>
-            </AlertContent>
-          </Alert>
-        )}
     </div>
   );
 }

@@ -1,5 +1,6 @@
 'use client';
 
+import type { AmendTransactionBody, CancelReason } from '@/lib/api';
 import {
   ApiError,
   bootstrapCsrf,
@@ -64,6 +65,8 @@ import {
   fetchRate,
   getSettlement,
   listSettlements,
+  amendTransaction,
+  cancelTransaction,
   listTransactions,
   login,
   logout,
@@ -196,6 +199,38 @@ export function useTransactions(state: TransactionState | 'all', page: number) {
         { state: state === 'all' ? undefined : state, page },
         signal,
       ),
+  });
+}
+
+/**
+ * Correcting a sale changes what is owed, what a settlement would cover and
+ * the dashboard's totals, so every one of those reads is dropped rather
+ * than only the list the row came from.
+ */
+function useInvalidateAfterCorrection() {
+  const queryClient = useQueryClient();
+  return () => {
+    void queryClient.invalidateQueries({ queryKey: ['merchant', 'transactions'] });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.outstanding });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.wallet });
+  };
+}
+
+export function useAmendTransaction() {
+  const invalidate = useInvalidateAfterCorrection();
+  return useMutation({
+    mutationFn: ({ id, ...body }: { id: number } & AmendTransactionBody) =>
+      amendTransaction(id, body),
+    onSuccess: invalidate,
+  });
+}
+
+export function useCancelTransaction() {
+  const invalidate = useInvalidateAfterCorrection();
+  return useMutation({
+    mutationFn: ({ id, ...body }: { id: number; reason: CancelReason; note?: string | null }) =>
+      cancelTransaction(id, body),
+    onSuccess: invalidate,
   });
 }
 

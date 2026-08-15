@@ -47,6 +47,7 @@ import {
   LoadingBlock,
 } from '@/components/app/async-states';
 import { ListPagination } from '@/components/app/list-pagination';
+import { TransactionActions } from '@/components/app/transaction-actions';
 import {
   TransactionReasonLine,
   TransactionStateBadge,
@@ -113,6 +114,7 @@ export default function TransactionsPage() {
                       <TableHead className="text-end">Eligible</TableHead>
                       <TableHead className="text-end">Cashback</TableHead>
                       <TableHead className="text-end">Fee + GST</TableHead>
+                      <TableHead className="w-10" />
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -149,6 +151,9 @@ export default function TransactionsPage() {
                               transaction.fee_laari + transaction.fee_gst_laari
                             }
                           />
+                        </TableCell>
+                        <TableCell className="text-end">
+                          <TransactionActions transaction={transaction} />
                         </TableCell>
                       </TableRow>
                     ))}

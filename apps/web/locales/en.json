@@ -39,7 +39,6 @@
     "payoutAccount": "Payout account",
     "publicNav": "Main menu",
     "payouts": "Payouts",
-    "myCashback": "My cashback",
     "forMerchants": "For merchants",
     "becomeMerchant": "Become a merchant"
   },
@@ -224,7 +223,9 @@
     "noSuggestions": "No matches — press Enter to search everything.",
     "searchAllFor": "Search all stores for “{{query}}”",
     "categoryLabel": "Categories",
-    "storesLabel": "Stores"
+    "storesLabel": "Stores",
+    "topCashback": "Highest cashback",
+    "newStores": "New stores"
   },
   "categories": {
     "grocery": "Grocery",
@@ -331,7 +332,14 @@
     "findStoreTitle": "Find a store",
     "realMoneyTitle": "Cashback is real money — not points",
     "realMoneyBody": "You earn Maldivian rufiyaa, not a balance you can only spend with us. It goes to your own bank account every month, and it is yours to spend anywhere.",
-    "searchPlaceholder": "Search stores, restaurants or products…"
+    "searchPlaceholder": "Search stores, restaurants or products…",
+    "bannerConfirmed": "Your cashback",
+    "bannerPending": "Still pending",
+    "bannerPendingNote": "Confirmed by the store first",
+    "bannerAddAccount": "Add your bank account",
+    "bannerShowCode": "Show my code",
+    "bannerActivity": "Activity",
+    "bannerPayouts": "Payouts"
   },
   "payouts": {
     "title": "Payouts",

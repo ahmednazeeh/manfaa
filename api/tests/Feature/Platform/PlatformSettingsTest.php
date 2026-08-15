@@ -159,15 +159,32 @@ it('writes off at the configured write_off_days horizon instead of 90', function
 });
 
 it('fills merchant defaults from platform settings only when the caller did not set them', function () {
-    // Unset: the hardcoded defaults, identical to the old column defaults.
+    // Unset: the hardcoded defaults. The window a NEW store starts on is
+    // its own setting (2 days), separate from the ceiling a merchant may
+    // raise themselves to — one is what they get, the other is how far
+    // they may go.
     $vanilla = Merchant::query()->create(['name' => 'Default Corner', 'slug' => 'default-corner', 'status' => 'active']);
-    expect($vanilla->validation_window_days)->toBe(3)->and($vanilla->min_eligible_laari)->toBe(5000);
+    expect($vanilla->validation_window_days)->toBe(2)->and($vanilla->min_eligible_laari)->toBe(5000);
 
+    // Raising the ceiling alone does NOT move what a new store starts on.
     app(PlatformConfig::class)->set('default_validation_window_days', 7);
     app(PlatformConfig::class)->set('default_min_eligible_laari', 10000);
 
+    $ceilingOnly = Merchant::query()->create(['name' => 'Ceiling Corner', 'slug' => 'ceiling-corner', 'status' => 'active']);
+    expect($ceilingOnly->validation_window_days)->toBe(2)->and($ceilingOnly->min_eligible_laari)->toBe(10000);
+
+    app(PlatformConfig::class)->set('new_merchant_validation_window_days', 5);
+
     $configured = Merchant::query()->create(['name' => 'Config Corner', 'slug' => 'config-corner', 'status' => 'active']);
-    expect($configured->validation_window_days)->toBe(7)->and($configured->min_eligible_laari)->toBe(10000);
+    expect($configured->validation_window_days)->toBe(5)->and($configured->min_eligible_laari)->toBe(10000);
+
+    // A new-store window above the ceiling is clamped to it, so a store is
+    // never created outside the range its own preferences screen allows.
+    app(PlatformConfig::class)->set('default_validation_window_days', 3);
+    app(PlatformConfig::class)->set('new_merchant_validation_window_days', 9);
+
+    $clamped = Merchant::query()->create(['name' => 'Clamped Corner', 'slug' => 'clamped-corner', 'status' => 'active']);
+    expect($clamped->validation_window_days)->toBe(3);
 
     // An explicit value always beats the platform default.
     $explicit = Merchant::query()->create([

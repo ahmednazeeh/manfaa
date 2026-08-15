@@ -363,7 +363,8 @@
     "previewFee": "Platform fee (per line)",
     "previewYouPay": "You pay",
     "previewNote": "Estimate — each line is priced separately on the server at the sale time; a promotion's per-customer cap may reduce promo-priced lines.",
-    "overrideRate": "{{rate}} — your custom rate for this sale."
+    "overrideRate": "{{rate}} — your custom rate for this sale.",
+    "eligibleTotal": "Eligible amount"
   },
   "settlement": {
     "title": "New settlement",
@@ -630,5 +631,35 @@
       "settlement_credit": "Credit from a settlement",
       "unknown": "Adjustment"
     }
+  },
+  "transactions": {
+    "actionsLabel": "Actions",
+    "amendAction": "Correct amount",
+    "cancelAction": "Cancel sale",
+    "amendTitle": "Correct the amount",
+    "amendBody": "Fix what was rung up on {{invoiceNo}}. The cashback is recalculated at the same rate the sale was recorded under.",
+    "amendEligibleLabel": "Eligible amount",
+    "amendHint": "The part of the bill cashback is computed on, as it should have been.",
+    "amendCurrent": "Currently",
+    "amendCurrentCashback": "cashback",
+    "amendSubmit": "Save correction",
+    "amendDone": "Amount corrected.",
+    "cancelTitle": "Cancel this sale",
+    "cancelBody": "{{invoiceNo}} comes off entirely and the cashback is taken back.",
+    "cancelReasonLabel": "Reason",
+    "cancelNoteLabel": "Note (optional)",
+    "cancelWarning": "The customer has already been told they earned this. Cancelling removes it from their balance.",
+    "cancelSubmit": "Cancel sale",
+    "cancelDone": "Sale cancelled.",
+    "cancelReason": {
+      "refund": "Refunded",
+      "void": "Voided at the till",
+      "duplicate": "Duplicate entry",
+      "error": "Keyed in error"
+    },
+    "amendFailed": "Could not correct the amount.",
+    "cancelFailed": "Could not cancel the sale.",
+    "amendLinesLabel": "Category amounts",
+    "amendLinesHint": "The eligible amount adds up from these lines:"
   }
 }

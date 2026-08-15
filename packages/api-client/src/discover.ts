@@ -103,6 +103,12 @@ export const DiscoverySectionsSchema = z.object({
    */
   recently_added: z.array(DiscoveryEntrySchema).catch([]),
   /**
+   * The best rates on the platform right now — standing or promotional,
+   * since a shopper only cares what they get today. Already sorted by the
+   * API in integer basis points; never re-sort it on the percent STRING.
+   */
+  top_cashback: z.array(DiscoveryEntrySchema).catch([]),
+  /**
    * The curated category rail. Not a shelf: navigation chips above them.
    * Distinct from the directory's `meta.categories`, which is the flat slug
    * list the filter accepts — same categories, less to say. Same
