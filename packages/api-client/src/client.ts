@@ -19,10 +19,15 @@ export class ApiError extends Error {
 /**
  * The machine-readable `code` an API refusal carries on its body — e.g.
  * `duplicate_bank_ref` (409), `slip_unsupported_type` (422),
- * `backdated_irreversible` (409), `manager_required` (403). Returns null for
- * anything else (a plain validation error, a network failure, a non-ApiError
- * throw), so a caller can branch on the code it knows and fall back to the
- * status otherwise.
+ * `backdated_irreversible` (409), `permission_required` (403). Returns null
+ * for anything else (a plain validation error, a network failure, a
+ * non-ApiError throw), so a caller can branch on the code it knows and fall
+ * back to the status otherwise.
+ *
+ * A `permission_required` body also carries `permission` — the one slug the
+ * account is missing — so a refusal can name what it would take rather than
+ * just saying forbidden. Read it off `error.body`; this helper returns the
+ * code alone.
  */
 export function apiErrorCode(error: unknown): string | null {
   if (!(error instanceof ApiError) || typeof error.body !== 'object') {

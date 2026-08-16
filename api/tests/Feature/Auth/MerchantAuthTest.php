@@ -31,7 +31,7 @@ it('logs in a merchant user with email and password and me returns identity', fu
     $this->getJson('/api/merchant/auth/me')
         ->assertOk()
         ->assertJsonPath('data.id', $user->id)
-        ->assertJsonPath('data.role', 'owner')
+        ->assertJsonPath('data.role.is_owner', true)
         ->assertJsonPath('data.merchant.id', $merchant->id)
         ->assertJsonPath('data.merchant.name', 'Demo Store');
 });

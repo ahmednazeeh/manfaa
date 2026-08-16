@@ -3,7 +3,8 @@ import {
   isVendorAbility,
   isWalletMovementType,
   type MerchantChannel,
-  type MerchantStaffRole,
+  type MerchantRoleErrorCode,
+  type MerchantRoleSummary,
   type MerchantStatus,
   type PromotionStatus,
   type PromptDiscountReason,
@@ -148,16 +149,20 @@ const MERCHANT_CHANNEL_HINT_KEYS: Record<MerchantChannel, string> = {
   both: 'channelHint.both',
 };
 
-const MERCHANT_ROLE_KEYS: Record<MerchantStaffRole, string> = {
-  owner: 'roles.owner',
-  manager: 'roles.manager',
-  staff: 'roles.staff',
-};
-
-const MERCHANT_ROLE_HINT_KEYS: Record<MerchantStaffRole, string> = {
-  owner: 'roles.ownerHint',
-  manager: 'roles.managerHint',
-  staff: 'roles.staffHint',
+/**
+ * Why a change to the store's roles was refused. The server's own prose is
+ * English-only and names the rule in general terms; these are the same
+ * refusals in the reader's language, and each one has a different repair
+ * behind it — which is the whole reason the API carries a code at all.
+ */
+const MERCHANT_ROLE_ERROR_KEYS: Record<MerchantRoleErrorCode, string> = {
+  permission_not_held: 'roles.errors.permission_not_held',
+  owner_role_not_delegable: 'roles.errors.owner_role_not_delegable',
+  cannot_edit_own_role: 'roles.errors.cannot_edit_own_role',
+  owner_role_frozen: 'roles.errors.owner_role_frozen',
+  owner_role_undeletable: 'roles.errors.owner_role_undeletable',
+  role_in_use: 'roles.errors.role_in_use',
+  role_cap_reached: 'roles.errors.role_cap_reached',
 };
 
 /**
@@ -321,18 +326,39 @@ export function merchantChannelHint(
   return t(MERCHANT_CHANNEL_HINT_KEYS[channel]);
 }
 
-export function merchantRoleLabel(
+/**
+ * A refused role change in words. `role_cap_reached` is the only one whose
+ * sentence needs a value, and it comes from the panel's own mirror of the
+ * server constant rather than from the refusal.
+ *
+ * Unlike the maps above, these codes are a CLOSED api-client enum on the
+ * wire as well, so an unrecognised one is a contract break rather than an
+ * old row — callers keep the server's own message for that case.
+ */
+export function merchantRoleErrorLabel(
   t: TFunction,
-  role: MerchantStaffRole,
+  code: MerchantRoleErrorCode,
+  values: { cap?: number } = {},
 ): string {
-  return t(MERCHANT_ROLE_KEYS[role]);
+  return t(MERCHANT_ROLE_ERROR_KEYS[code], values);
 }
 
-export function merchantRoleHint(
-  t: TFunction,
-  role: MerchantStaffRole,
+/**
+ * A role's name as this reader should see it. Role names are the STORE'S
+ * OWN words — "Shift lead", "Accounts" — so they are user data and never
+ * translated; `name_dv` is the shop's own Thaana spelling of the same job,
+ * shown when the panel is in Dhivehi and the shop bothered to type one.
+ *
+ * Not an i18n key anywhere: comparing a role by name is exactly the mistake
+ * this round removed, so nothing here returns anything a gate could use.
+ */
+export function roleDisplayName(
+  role: Pick<MerchantRoleSummary, 'name' | 'name_dv'>,
+  language: string,
 ): string {
-  return t(MERCHANT_ROLE_HINT_KEYS[role]);
+  return language === 'dv' && role.name_dv !== null && role.name_dv !== ''
+    ? role.name_dv
+    : role.name;
 }
 
 /**
@@ -346,7 +372,10 @@ export function vendorAbilityLabel(t: TFunction, ability: string): string {
     : t('apiAccess.abilities.unknown');
 }
 
-export function vendorAbilityHint(t: TFunction, ability: VendorAbility): string {
+export function vendorAbilityHint(
+  t: TFunction,
+  ability: VendorAbility,
+): string {
   return t(VENDOR_ABILITY_HINT_KEYS[ability]);
 }
 

@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\EnsureMerchantPermission;
 use App\Http\Middleware\EnsureMerchantRole;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -18,10 +19,16 @@ return Application::configure(basePath: dirname(__DIR__))
         // app authenticate over session cookies against the api routes.
         $middleware->statefulApi();
 
-        // The merchant panel's three-tier role gate, parameterised by the
-        // MINIMUM tier a route needs: merchant.role:owner /
-        // merchant.role:manager (PLAN §1 staff roles).
+        // The merchant panel's permission gate, parameterised by the one
+        // permission a route needs: merchant.can:settlements.create (PLAN
+        // §13b staff permissions).
+        //
+        // `merchant.role` stays registered on purpose. It is retired, and
+        // EnsureMerchantRole now throws — but an alias Laravel cannot
+        // resolve is a worse failure than one that refuses loudly, and a
+        // route file the refactor missed must never end up ungated.
         $middleware->alias([
+            'merchant.can' => EnsureMerchantPermission::class,
             'merchant.role' => EnsureMerchantRole::class,
         ]);
 

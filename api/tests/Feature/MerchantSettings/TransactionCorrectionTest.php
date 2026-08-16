@@ -208,7 +208,7 @@ it('refuses both corrections on a backdated credit', function () {
 
 it('is manager work, not staff work', function () {
     $id = credit();
-    $staff = MerchantUser::factory()->for($this->merchant)->create(['role' => 'staff']);
+    $staff = MerchantUser::factory()->for($this->merchant)->staff()->create();
 
     $this->actingAs($staff, 'merchant')
         ->patchJson("/api/merchant/transactions/{$id}", ['eligible_amount' => 11800])

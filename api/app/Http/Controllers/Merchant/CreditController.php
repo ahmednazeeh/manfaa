@@ -11,10 +11,12 @@ use App\Domain\Cashback\ManualCreditService;
 use App\Domain\Cashback\MerchantNotActiveException;
 use App\Domain\Cashback\NoEffectiveRateException;
 use App\Domain\Cashback\RateBelowAdvertisedException;
+use App\Domain\MerchantAccess\Permission;
 use App\Domain\Money\Laari;
 use App\Domain\Money\Percent;
 use App\Domain\Platform\RateNotPricedException;
 use App\Http\Controllers\Controller;
+use App\Http\Middleware\EnsureMerchantPermission;
 use App\Http\Resources\TransactionResource;
 use App\Http\Support\OccurredAt;
 use App\Models\MerchantUser;
@@ -58,19 +60,16 @@ class CreditController extends Controller
 
         $eligible = Laari::of((int) $validated['eligible_amount']);
 
-        // PLAN §1 staff roles: rate authority is MANAGER and above. Keying
-        // a sale in is staff work, so this route carries no role gate — but
-        // a per-sale override is a pricing decision, the same authority the
-        // rate screen needs (403 `manager_required` there). Without this
-        // check a staff account would be a bigger per-sale spending lever
+        // The ONLY gate on the override. The route needs `credits.create`,
+        // which every till holds; a per-sale rate is a pricing decision on
+        // top of it, so it gets its own permission and is checked here
+        // because it gates a FIELD, not the endpoint. Without it an account
+        // trusted to key sales in would be a bigger per-sale spending lever
         // than the standing rate it is deliberately denied: one sale at the
         // schedule ceiling costs the merchant several times the standing
         // terms, and nothing else bounds it.
-        if (isset($validated['cashback_rate_percent']) && ! $user->hasRoleAtLeast('manager')) {
-            return new JsonResponse([
-                'message' => 'Only a merchant owner or manager can set a custom cashback rate for a sale.',
-                'code' => 'manager_required',
-            ], 403);
+        if (isset($validated['cashback_rate_percent']) && ! $user->can(Permission::CreditsCustomRate)) {
+            return EnsureMerchantPermission::deny(Permission::CreditsCustomRate);
         }
 
         $overrideRateBp = isset($validated['cashback_rate_percent'])

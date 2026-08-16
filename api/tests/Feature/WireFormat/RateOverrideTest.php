@@ -302,8 +302,8 @@ it('ignores an unusable override on a below-minimum sale and still returns 200 (
     expect(Transaction::query()->sole()->reason_code)->toBe('below_minimum');
 });
 
-it('reserves the per-sale override for managers and above on the manual credit', function () {
-    $staff = MerchantUser::factory()->for($this->merchant)->create(['role' => 'staff']);
+it('reserves the per-sale override for credits.custom_rate on the manual credit', function () {
+    $staff = MerchantUser::factory()->for($this->merchant)->staff()->create();
 
     $payload = [
         'customer_code' => '482917',
@@ -316,7 +316,8 @@ it('reserves the per-sale override for managers and above on the manual credit',
     $this->actingAs($staff, 'merchant')
         ->postJson('/api/merchant/credits', [...$payload, 'cashback_rate_percent' => '10.00'])
         ->assertForbidden()
-        ->assertJsonPath('code', 'manager_required');
+        ->assertJsonPath('code', 'permission_required')
+        ->assertJsonPath('permission', 'credits.custom_rate');
 
     expect(Transaction::query()->count())->toBe(0);
 
@@ -327,7 +328,7 @@ it('reserves the per-sale override for managers and above on the manual credit',
         ->assertJsonPath('data.cashback_rate_percent', '2.00');
 
     // A manager may boost it.
-    $manager = MerchantUser::factory()->for($this->merchant)->create(['role' => 'manager']);
+    $manager = MerchantUser::factory()->for($this->merchant)->manager()->create();
 
     $this->actingAs($manager, 'merchant')
         ->postJson('/api/merchant/credits', [...$payload, 'invoice_no' => 'INV-7102', 'cashback_rate_percent' => '5.00'])

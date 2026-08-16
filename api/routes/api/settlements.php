@@ -17,26 +17,44 @@ use Illuminate\Support\Facades\Route;
 //
 // Every merchant {id} route resolves through the authenticated merchant's
 // own relations — another merchant's settlement is indistinguishable from a
-// missing one. Every settlement MUTATION needs MANAGER or above
-// (merchant.role:manager) plus an APPROVED store (EnsureMerchantApproved):
-// submitting freezes lines irreversibly and claims a real bank transfer, so
-// it is a manager's job in a store that has actually passed review. Reads
-// and the preview stay staff-accessible — the preview claims nothing.
+// missing one. Every settlement MUTATION additionally needs an APPROVED
+// store (EnsureMerchantApproved): submitting freezes lines irreversibly and
+// claims a real bank transfer, so it belongs to a store that has actually
+// passed review. Reads and the preview seed to every role — the preview
+// claims nothing, and the till screen shows what is owed.
+//
+// `outstanding` answers to settlements.view: it is the unsettled-lines read
+// model the settlement builder is assembled from, not a separate surface.
+// The wallet is its own pair, because spending a wallet balance settles
+// real money without a bank transfer ever being made.
 Route::prefix('merchant')->middleware('auth:merchant')->group(function () {
-    Route::get('outstanding', [MerchantSettlementController::class, 'outstanding']);
-    Route::get('wallet', [MerchantSettlementController::class, 'wallet']);
+    Route::get('outstanding', [MerchantSettlementController::class, 'outstanding'])
+        ->middleware('merchant.can:settlements.view');
 
-    Route::get('settlements', [MerchantSettlementController::class, 'index']);
-    Route::get('settlements/preview', [MerchantSettlementController::class, 'preview']);
-    Route::get('settlements/{id}', [MerchantSettlementController::class, 'show'])->whereNumber('id');
+    Route::get('wallet', [MerchantSettlementController::class, 'wallet'])
+        ->middleware('merchant.can:wallet.view');
 
-    Route::middleware(['merchant.role:manager', EnsureMerchantApproved::class])->group(function () {
-        Route::post('settlements', [MerchantSettlementController::class, 'store']);
-        Route::post('settlements/wallet', [MerchantSettlementController::class, 'walletSettle']);
-        // A further transfer against a batch still owed money (§7 partial
-        // payments, or an admin-built fallback batch) — also receipt-bearing.
-        Route::post('settlements/{id}/receipts', [MerchantSettlementController::class, 'storeReceipt'])->whereNumber('id');
-    });
+    Route::get('settlements', [MerchantSettlementController::class, 'index'])
+        ->middleware('merchant.can:settlements.view');
+
+    Route::get('settlements/preview', [MerchantSettlementController::class, 'preview'])
+        ->middleware('merchant.can:settlements.preview');
+
+    Route::get('settlements/{id}', [MerchantSettlementController::class, 'show'])
+        ->whereNumber('id')
+        ->middleware('merchant.can:settlements.view');
+
+    Route::post('settlements', [MerchantSettlementController::class, 'store'])
+        ->middleware(['merchant.can:settlements.create', EnsureMerchantApproved::class]);
+
+    Route::post('settlements/wallet', [MerchantSettlementController::class, 'walletSettle'])
+        ->middleware(['merchant.can:wallet.settle', EnsureMerchantApproved::class]);
+
+    // A further transfer against a batch still owed money (§7 partial
+    // payments, or an admin-built fallback batch) — also receipt-bearing.
+    Route::post('settlements/{id}/receipts', [MerchantSettlementController::class, 'storeReceipt'])
+        ->whereNumber('id')
+        ->middleware(['merchant.can:settlements.receipt_add', EnsureMerchantApproved::class]);
 });
 
 Route::prefix('admin')->middleware('auth:admin')->group(function () {

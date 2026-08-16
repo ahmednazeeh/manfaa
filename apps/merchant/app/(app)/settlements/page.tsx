@@ -8,7 +8,7 @@ import { Plus } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { MerchantSettlement } from '@/lib/api';
 import { useSettlements } from '@/lib/queries';
-import { hasRoleAtLeast } from '@/lib/roles';
+import { can } from '@/lib/roles';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -78,7 +78,7 @@ function StatusCell({ settlement }: { settlement: MerchantSettlement }) {
 export default function SettlementsPage() {
   const { t } = useTranslation();
   const { me } = useLayout();
-  const canManage = hasRoleAtLeast(me.role, 'manager');
+  const canSettle = can(me, 'settlements.create');
   const [page, setPage] = useState(1);
   const settlements = useSettlements(page);
 
@@ -91,9 +91,10 @@ export default function SettlementsPage() {
             {t('settlement.listSubtitle')}
           </ToolbarDescription>
         </ToolbarHeading>
-        {/* Building a batch is manager work (PLAN §1); staff read the
-            list. The API gates the POST identically. */}
-        {canManage && (
+        {/* Reading the list and building a batch are separate grants: this
+            button leads to the wizard whose last step is the POST, so it
+            stands on that POST's permission. The API gates it identically. */}
+        {canSettle && (
           <ToolbarActions>
             <Button asChild>
               <Link href="/settlements/new">

@@ -1,11 +1,11 @@
 'use client';
 
 import { ReactNode } from 'react';
-import type { MerchantStaffRole } from '@manfaa/api-client';
+import type { MerchantPermission } from '@manfaa/api-client';
 import { ShieldAlert } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useLayout } from '@/components/app-layout/context';
-import { hasRoleAtLeast } from '@/lib/roles';
+import { can, permissionLabel } from '@/lib/roles';
 import {
   Alert,
   AlertContent,
@@ -15,34 +15,46 @@ import {
 } from '@/components/ui/alert';
 
 /**
- * The panel-side half of the three-tier split (PLAN §1): renders `children`
- * only for accounts at or above `min`, and otherwise explains which tier
- * the screen belongs to.
+ * Renders `children` only for an account holding `permission`, and
+ * otherwise says which one is missing (PLAN §13b).
  *
  * A courtesy for anyone who deep-links past a hidden nav entry — the API
- * refuses the same requests server-side with 403 `owner_required` /
- * `manager_required`, so nothing here is a security boundary.
+ * refuses the same request server-side with 403 `permission_required`, so
+ * nothing here is a security boundary.
  */
 export function RoleGate({
-  min,
+  permission,
   children,
 }: {
-  min: MerchantStaffRole;
+  permission: MerchantPermission;
   children: ReactNode;
 }) {
   const { me } = useLayout();
 
-  if (hasRoleAtLeast(me.role, min)) {
+  if (can(me, permission)) {
     return <>{children}</>;
   }
 
-  return <RoleGateNotice required={min} />;
+  return <RoleGateNotice permission={permission} />;
 }
 
-export function RoleGateNotice({ required }: { required: MerchantStaffRole }) {
+/**
+ * The refusal, naming the ACT the reader is missing rather than a rank.
+ * There are no ranks left to name: a store writes its own roles, so "ask a
+ * manager" may be advice about a job nobody at that shop holds, while "you
+ * need permission to view settlements" is both true and actionable — the
+ * words match the checkbox on the roles screen an owner would go and tick.
+ *
+ * `permission` is null only for a screen that is a doorway to several
+ * others (/settings), where no single permission is the missing one.
+ */
+export function RoleGateNotice({
+  permission,
+}: {
+  permission?: MerchantPermission | null;
+}) {
   const { me } = useLayout();
   const { t } = useTranslation();
-  const owner = required === 'owner';
 
   return (
     <div className="container">
@@ -52,13 +64,14 @@ export function RoleGateNotice({ required }: { required: MerchantStaffRole }) {
             <ShieldAlert />
           </AlertIcon>
           <AlertContent>
-            <AlertTitle>
-              {t(owner ? 'roles.gate.ownerTitle' : 'roles.gate.managerTitle')}
-            </AlertTitle>
+            <AlertTitle>{t('roles.gate.title')}</AlertTitle>
             <AlertDescription>
-              {t(owner ? 'roles.gate.ownerBody' : 'roles.gate.managerBody', {
-                store: me.merchant.name,
-              })}
+              {permission
+                ? t('roles.gate.body', {
+                    permission: permissionLabel(t, permission),
+                    store: me.merchant.name,
+                  })
+                : t('roles.gate.bodyNone', { store: me.merchant.name })}
             </AlertDescription>
           </AlertContent>
         </Alert>

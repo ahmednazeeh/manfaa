@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Merchant;
 
 use App\Domain\Discovery\DiscoveryService;
+use App\Domain\MerchantAccess\Permission;
 use App\Domain\Money\Percent;
 use App\Domain\Platform\FeeTierScheduleResolver;
 use App\Domain\Platform\RateNotPricedException;
@@ -12,6 +13,7 @@ use App\Domain\Platform\TierScheduleService;
 use App\Domain\Webhooks\WebhookDispatcher;
 use App\Domain\Webhooks\WebhookEvents;
 use App\Http\Controllers\Controller;
+use App\Http\Middleware\EnsureMerchantPermission;
 use App\Http\Resources\RateResource;
 use App\Models\Merchant;
 use App\Models\MerchantRate;
@@ -66,10 +68,13 @@ class RateController extends Controller
         $merchant = $this->merchant($request);
         $user = $request->user();
 
-        // Manager or owner (PLAN §1): staff can read the rate, never
-        // reprice the shop. Belt-and-braces behind merchant.role:manager.
-        if (! $user instanceof MerchantUser || ! $user->hasRoleAtLeast('manager')) {
-            abort(403, 'Only a merchant owner or manager can change the cashback rate.');
+        // Belt-and-braces behind the merchant.can:rate.update route gate,
+        // answering with the same body so the panel has one refusal to
+        // handle: reading the rate and repricing the shop are different
+        // permissions, and this is the one endpoint where getting that
+        // wrong moves what every till advertises.
+        if (! $user instanceof MerchantUser || ! $user->can(Permission::RateUpdate)) {
+            abort(EnsureMerchantPermission::deny(Permission::RateUpdate));
         }
 
         // PLAN §1 wire format: the rate arrives as a 2-decimal percent —

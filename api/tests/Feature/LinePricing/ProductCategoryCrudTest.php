@@ -57,12 +57,14 @@ it('lets the owner create excluded and rate categories with generated slugs', fu
         ->assertJsonPath('data.1.slug', 'veggies');
 });
 
-it('refuses category writes from staff with manager_required', function () {
+it('refuses category writes from staff, naming the permission they lack', function () {
     $this->actingAs($this->staff, 'merchant');
 
     $this->postJson('/api/merchant/product-categories', [
         'name_en' => 'Veggies', 'name_dv' => 'ދިވެހި', 'mode' => 'rate', 'cashback_rate_percent' => '2.00',
-    ])->assertForbidden()->assertJsonPath('code', 'manager_required');
+    ])->assertForbidden()
+        ->assertJsonPath('code', 'permission_required')
+        ->assertJsonPath('permission', 'product_categories.create');
 
     expect(MerchantProductCategory::query()->count())->toBe(0);
 });

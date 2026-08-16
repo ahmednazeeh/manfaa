@@ -133,8 +133,8 @@ it('refuses issuance and revocation to managers and staff', function () {
     $issued = app(CredentialService::class)
         ->issueForMerchantUser($this->merchant, 'TillPoint POS', ['rates:read'], $this->owner);
 
-    foreach (['manager', 'staff'] as $role) {
-        $user = MerchantUser::factory()->for($this->merchant)->create(['role' => $role]);
+    foreach (['manager', 'staff'] as $preset) {
+        $user = MerchantUser::factory()->for($this->merchant)->{$preset}()->create();
 
         app('auth')->forgetGuards();
         $this->actingAs($user, 'merchant')
@@ -143,13 +143,15 @@ it('refuses issuance and revocation to managers and staff', function () {
                 'abilities' => ['transactions:write'],
             ])
             ->assertForbidden()
-            ->assertJsonPath('code', 'owner_required');
+            ->assertJsonPath('code', 'permission_required')
+            ->assertJsonPath('permission', 'api_credentials.create');
 
         app('auth')->forgetGuards();
         $this->actingAs($user, 'merchant')
             ->deleteJson("/api/merchant/credentials/{$issued->credential->id}")
             ->assertForbidden()
-            ->assertJsonPath('code', 'owner_required');
+            ->assertJsonPath('code', 'permission_required')
+            ->assertJsonPath('permission', 'api_credentials.revoke');
     }
 
     // Nothing was minted and nothing was killed.

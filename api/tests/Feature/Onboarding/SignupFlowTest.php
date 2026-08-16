@@ -60,7 +60,7 @@ it('signs a store up end to end: draft merchant, owner account, logged-in sessio
         'password' => 'a-strong-password',
     ])->assertCreated();
 
-    $response->assertJsonPath('data.role', 'owner')
+    $response->assertJsonPath('data.role.is_owner', true)
         ->assertJsonPath('data.merchant.name', 'Fresh Mart')
         ->assertJsonPath('data.merchant.status', 'draft');
 
@@ -72,7 +72,7 @@ it('signs a store up end to end: draft merchant, owner account, logged-in sessio
         ->and($merchant->contact_email)->toBe('owner@freshmart.mv');
 
     $owner = MerchantUser::query()->where('email', 'owner@freshmart.mv')->firstOrFail();
-    expect($owner->role)->toBe('owner')
+    expect($owner->isOwner())->toBeTrue()
         ->and($owner->is_active)->toBeTrue()
         ->and($owner->merchant_id)->toBe($merchant->id);
 

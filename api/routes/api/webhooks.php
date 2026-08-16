@@ -15,9 +15,10 @@ Route::prefix('admin')->middleware('auth:admin')->group(function () {
     Route::delete('pos-vendors/{vendor}/webhook-endpoints/{endpoint}', [WebhookEndpointController::class, 'destroy']);
 });
 
-// Merchant panel: read the standing rate (any merchant user) and change it
-// (MANAGER or above — PLAN §1 puts rates in the manager tier; also enforced
-// in the controller, §7 increase/decrease semantics; TRADING stores only —
+// Merchant panel: read the standing rate (rate.view, seeded to every role —
+// the till quotes it) and change it (rate.update, seeded to Manager and
+// above; also enforced in the controller, §7 increase/decrease semantics;
+// TRADING stores only —
 // pre-approval the wizard's rate step is the sole write path, with
 // replace-the-initial-row semantics this endpoint lacks, a pending_review
 // store must not reprice what the queue reviewed, and a SUSPENDED store
@@ -25,6 +26,9 @@ Route::prefix('admin')->middleware('auth:admin')->group(function () {
 // merchant.rate_changed and move the till's quoted rate to a number that
 // accrues nothing).
 Route::prefix('merchant')->middleware('auth:merchant')->group(function () {
-    Route::get('rate', [RateController::class, 'show']);
-    Route::post('rate', [RateController::class, 'store'])->middleware(['merchant.role:manager', EnsureMerchantApproved::class.':trading']);
+    Route::get('rate', [RateController::class, 'show'])
+        ->middleware('merchant.can:rate.view');
+
+    Route::post('rate', [RateController::class, 'store'])
+        ->middleware(['merchant.can:rate.update', EnsureMerchantApproved::class.':trading']);
 });

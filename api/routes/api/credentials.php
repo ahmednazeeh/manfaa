@@ -17,10 +17,13 @@ Route::prefix('admin')->middleware('auth:admin')->group(function () {
     Route::delete('credentials/{credential}', [CredentialController::class, 'destroy']);
 });
 
-// The merchant's own credentials are OWNER-only throughout (PLAN §1: API
-// credentials are explicitly outside the manager tier) — they name the POS
-// vendors holding write tokens against the store, which is integration
-// governance, not shop-floor work.
+// The merchant's own credentials sit in the `api_credentials.*` group —
+// seeded to the OWNER preset alone (PLAN §1: API credentials were
+// explicitly outside the manager tier) — because they name the POS vendors
+// holding write tokens against the store, which is integration governance,
+// not shop-floor work. Reading the list, minting a token and killing one
+// are three separate permissions: handing an integrator the list is not the
+// same act as handing them the ability to issue.
 //
 // Self-serve issuance (§13b task #21) additionally needs an APPROVED store
 // (EnsureMerchantApproved, 409 store_not_approved): a token minted before
@@ -33,12 +36,14 @@ Route::prefix('admin')->middleware('auth:admin')->group(function () {
 // REVOCATION carries no approval gate on purpose: killing a leaked token is
 // a security action, and it must never be blocked by the store's commercial
 // standing.
-Route::prefix('merchant')->middleware(['auth:merchant', 'merchant.role:owner'])->group(function () {
-    Route::get('credentials', [MerchantCredentialController::class, 'index']);
+Route::prefix('merchant')->middleware('auth:merchant')->group(function () {
+    Route::get('credentials', [MerchantCredentialController::class, 'index'])
+        ->middleware('merchant.can:api_credentials.view');
 
     Route::post('credentials', [MerchantCredentialController::class, 'store'])
-        ->middleware(EnsureMerchantApproved::class);
+        ->middleware(['merchant.can:api_credentials.create', EnsureMerchantApproved::class]);
 
     Route::delete('credentials/{id}', [MerchantCredentialController::class, 'destroy'])
-        ->whereNumber('id');
+        ->whereNumber('id')
+        ->middleware('merchant.can:api_credentials.revoke');
 });

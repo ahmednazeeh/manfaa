@@ -14,7 +14,7 @@ import { MoneyText } from '@manfaa/ui';
 import { format } from 'date-fns';
 import { LoaderCircle, Plus, TriangleAlert, X } from 'lucide-react';
 import { formatBp, formatRate, formatRateOrDash } from '@/lib/estimate';
-import { hasRoleAtLeast } from '@/lib/roles';
+import { can } from '@/lib/roles';
 import {
   apiErrorMessage,
   isRateNotPriced,
@@ -88,11 +88,11 @@ import { PromotionStatusBadge } from '@/components/app/state-badge';
 
 /**
  * The promotion builder (§10): a time-boxed cashback BOOST above the
- * standing rate. Staff may read the list; only the owner builds, publishes
- * or cancels (the API answers 403 otherwise, this page just hides the
- * tools). All rates are entered and shown as PERCENT — converted to integer
- * basis points with the shared exact-2dp string parser, never a float — and
- * the min-purchase / per-customer-cap amounts stay MVR.
+ * standing rate. Reading the list, drafting, publishing and cancelling are
+ * four separate permissions (the API answers 403 otherwise; this page just
+ * hides the tools). All rates are entered and shown as PERCENT — converted
+ * to integer basis points with the shared exact-2dp string parser, never a
+ * float — and the min-purchase / per-customer-cap amounts stay MVR.
  *
  * Once published a promotion is immutable for its stated duration: no edit,
  * no early end. The publish confirm says so in plain words.
@@ -448,9 +448,13 @@ function PromotionBuilder({
 function DraftActions({
   promotion,
   onPreview,
+  canPublish,
+  canCancel,
 }: {
   promotion: Promotion;
   onPreview: (preview: PromotionCostPreview) => void;
+  canPublish: boolean;
+  canCancel: boolean;
 }) {
   const publish = usePublishPromotion();
   const cancel = useCancelPromotion();
@@ -481,54 +485,72 @@ function DraftActions({
 
   return (
     <div className="flex justify-end gap-2">
-      <Button
-        size="sm"
-        variant="outline"
-        disabled={cancel.isPending || publish.isPending}
-        onClick={doCancel}
-      >
-        {cancel.isPending && <LoaderCircle className="animate-spin" />}
-        Cancel
-      </Button>
-      <AlertDialog>
-        <AlertDialogTrigger asChild>
-          <Button size="sm" disabled={publish.isPending || cancel.isPending}>
-            {publish.isPending && <LoaderCircle className="animate-spin" />}
-            Publish
-          </Button>
-        </AlertDialogTrigger>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>
-              Publish the {formatRate(promotion.cashback_rate_percent)}{' '}
-              promotion?
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              It runs {format(new Date(promotion.starts_at), 'dd MMM, HH:mm')}{' '}
-              to {format(new Date(promotion.ends_at), 'dd MMM, HH:mm')}. Once
-              published it cannot be changed or ended early — customers can
-              rely on the advertised boost for the whole window.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Keep as draft</AlertDialogCancel>
-            <AlertDialogAction onClick={doPublish}>Publish</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {canCancel && (
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={cancel.isPending || publish.isPending}
+          onClick={doCancel}
+        >
+          {cancel.isPending && <LoaderCircle className="animate-spin" />}
+          Cancel
+        </Button>
+      )}
+      {canPublish && (
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <Button size="sm" disabled={publish.isPending || cancel.isPending}>
+              {publish.isPending && <LoaderCircle className="animate-spin" />}
+              Publish
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>
+                Publish the {formatRate(promotion.cashback_rate_percent)}{' '}
+                promotion?
+              </AlertDialogTitle>
+              <AlertDialogDescription>
+                It runs {format(new Date(promotion.starts_at), 'dd MMM, HH:mm')}{' '}
+                to {format(new Date(promotion.ends_at), 'dd MMM, HH:mm')}. Once
+                published it cannot be changed or ended early — customers can
+                rely on the advertised boost for the whole window.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Keep as draft</AlertDialogCancel>
+              <AlertDialogAction onClick={doPublish}>Publish</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
     </div>
   );
 }
 
 export default function PromotionsPage() {
   const { me } = useLayout();
-  // Promotions are manager work (PLAN §1) — staff read the list, managers
-  // and owners build them.
-  const canManage = hasRoleAtLeast(me.role, 'manager');
+  // Three separate acts behind what used to be one flag. Publishing is the
+  // irreversible one (PLAN §2.1) and is deliberately grantable without the
+  // other two: a shift lead may be trusted to put a drafted boost live and
+  // not to invent one.
+  //
+  // `canDraft` rather than canCreate: the builder has its own canCreate,
+  // meaning "this form is submittable", and the two must not be read as the
+  // same question.
+  const canDraft = can(me, 'promotions.create');
+  const canPublish = can(me, 'promotions.publish');
+  const canCancel = can(me, 'promotions.cancel');
+  const canActOnDraft = canPublish || canCancel;
 
   const promotions = usePromotions();
   const rate = useRate();
-  const branches = useBranches(canManage);
+  // Branches are read for their NAMES — the list's branch column, which
+  // every reader of this screen sees — so the estate stands on its own
+  // permission and not on any of the three above. Without it the column
+  // falls back to "Branch #3", which is what it already does for a branch
+  // that has since been deleted.
+  const branches = useBranches(can(me, 'branches.view'));
 
   const [builderOpen, setBuilderOpen] = useState(false);
   const [preview, setPreview] = useState<PromotionCostPreview | null>(null);
@@ -552,7 +574,7 @@ export default function PromotionsPage() {
             Time-boxed cashback boosts above your standing rate
           </ToolbarDescription>
         </ToolbarHeading>
-        {canManage && (
+        {canDraft && (
           <ToolbarActions>
             <Button
               onClick={() => setBuilderOpen(true)}
@@ -566,7 +588,7 @@ export default function PromotionsPage() {
       </Toolbar>
 
       <div className="flex flex-col gap-5 pb-7.5">
-        {canManage && builderOpen && (
+        {canDraft && builderOpen && (
           <PromotionBuilder
             standingRate={standingRate}
             onCreated={setPreview}
@@ -584,7 +606,7 @@ export default function PromotionsPage() {
           <Card>
             <EmptyBlock>
               No promotions yet.
-              {canManage && ' Create one to boost your cashback for a while.'}
+              {canDraft && ' Create one to boost your cashback for a while.'}
             </EmptyBlock>
           </Card>
         ) : (
@@ -603,7 +625,7 @@ export default function PromotionsPage() {
                     <TableHead>Per-customer cap</TableHead>
                     <TableHead>Branch</TableHead>
                     <TableHead>Status</TableHead>
-                    {canManage && <TableHead className="text-end" />}
+                    {canActOnDraft && <TableHead className="text-end" />}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -658,12 +680,14 @@ export default function PromotionsPage() {
                           live={promotion.is_live}
                         />
                       </TableCell>
-                      {canManage && (
+                      {canActOnDraft && (
                         <TableCell>
                           {promotion.status === 'draft' && (
                             <DraftActions
                               promotion={promotion}
                               onPreview={setPreview}
+                              canPublish={canPublish}
+                              canCancel={canCancel}
                             />
                           )}
                         </TableCell>

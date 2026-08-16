@@ -148,7 +148,7 @@ it('refuses logo changes while the store is pending review', function () {
 
 it('keeps the logo endpoints owner-only', function () {
     $owner = logoOwner();
-    $staff = MerchantUser::factory()->for($owner->merchant)->create(['role' => 'staff']);
+    $staff = MerchantUser::factory()->for($owner->merchant)->staff()->create();
     $this->actingAs($staff, 'merchant');
 
     $this->post('/api/merchant/setup/logo', [

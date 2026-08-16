@@ -1,5 +1,5 @@
-import type { MerchantStaffRole } from '@manfaa/api-client';
-import { hasRoleAtLeast } from '@/lib/roles';
+import type { MerchantPermission } from '@manfaa/api-client';
+import { can, type PermissionHolder } from '@/lib/roles';
 import {
   Banknote,
   HandCoins,
@@ -11,6 +11,7 @@ import {
   Percent,
   Plug,
   ReceiptText,
+  ShieldCheck,
   SlidersHorizontal,
   Store,
   Tags,
@@ -23,35 +24,29 @@ export interface AppMenuItem {
   path: string;
   icon: LucideIcon;
   /**
-   * Lowest tier this screen is shown to. Defaults to the section's
-   * `minRole`, which itself defaults to `staff` (everyone).
+   * The permission that opens this screen — the one its READ route is gated
+   * with server-side, so an entry is shown exactly when the screen it leads
+   * to will render rather than 403. Required on every entry: there is no
+   * section-wide floor to inherit any more, because a set has no floor, and
+   * a screen nobody deliberately granted is a screen that silently opened.
    */
-  minRole?: MerchantStaffRole;
+  permission: MerchantPermission;
 }
 
 export interface AppMenuSection {
   /** Rendered as a group label when set. */
   label?: string;
-  /** Section-wide floor; individual items may raise it, never lower it. */
-  minRole?: MerchantStaffRole;
   items: AppMenuItem[];
 }
 
 /**
  * The merchant panel's whole navigation (§10 apps/merchant) and — via
- * minRoleForPath — the single source of truth for which tier each screen
- * belongs to (PLAN §1):
+ * permissionForPath — the single source of truth for which permission each
+ * screen belongs to, so the sidebar and the settings gate can never
+ * disagree. Cosmetic only: the API gates the same routes with
+ * `merchant.can:…` and answers 403 `permission_required` regardless of what
+ * the panel chooses to render.
  *
- *  - staff    the counter: credit entry, plus every read screen;
- *  - manager  + cashback rate, product categories, promotions writes,
- *             settlement builder, branches;
- *  - owner    + store profile, bank account, staff accounts, API access,
- *             preferences.
- *
- * Cosmetic only — the API enforces the same split server-side (403
- * `owner_required` / `manager_required`) on every route.
- */
-/**
  * Grouped by WHEN a merchant uses each screen, not by what the API happens
  * to call it. The old menu was one undifferentiated run of six followed by
  * eight settings, which made the till's daily screen sit at the same weight
@@ -68,85 +63,158 @@ export const APP_MENU: AppMenuSection[] = [
   {
     label: 'Till',
     items: [
-      { title: 'Credit customer', path: '/credit', icon: HandCoins },
-      { title: 'Transactions', path: '/transactions', icon: ReceiptText },
+      {
+        title: 'Credit customer',
+        path: '/credit',
+        icon: HandCoins,
+        permission: 'credits.create',
+      },
+      {
+        title: 'Transactions',
+        path: '/transactions',
+        icon: ReceiptText,
+        permission: 'transactions.view',
+      },
     ],
   },
   {
     label: 'Money',
     items: [
-      { title: 'Dashboard', path: '/dashboard', icon: LayoutGrid },
-      { title: 'Settlements', path: '/settlements', icon: Landmark },
-      { title: 'Wallet', path: '/wallet', icon: Wallet },
+      // The dashboard IS the outstanding read model — the ageing buckets,
+      // the total payable — which is why it stands on the same permission
+      // as the settlements list rather than one of its own.
+      {
+        title: 'Dashboard',
+        path: '/dashboard',
+        icon: LayoutGrid,
+        permission: 'settlements.view',
+      },
+      {
+        title: 'Settlements',
+        path: '/settlements',
+        icon: Landmark,
+        permission: 'settlements.view',
+      },
+      {
+        title: 'Wallet',
+        path: '/wallet',
+        icon: Wallet,
+        permission: 'wallet.view',
+      },
     ],
   },
   {
     label: 'Marketing',
-    items: [{ title: 'Promotions', path: '/promotions', icon: Megaphone }],
+    items: [
+      {
+        title: 'Promotions',
+        path: '/promotions',
+        icon: Megaphone,
+        permission: 'promotions.view',
+      },
+    ],
   },
   {
     label: 'Store',
-    // Hidden from staff: how the shop prices and where it trades is a
-    // manager decision, not a counter one.
-    minRole: 'manager',
     items: [
-      { title: 'Cashback rate', path: '/settings/rate', icon: Percent },
+      {
+        title: 'Cashback rate',
+        path: '/settings/rate',
+        icon: Percent,
+        permission: 'rate.view',
+      },
       {
         title: 'Product categories',
         path: '/settings/product-categories',
         icon: Tags,
+        permission: 'product_categories.view',
       },
-      { title: 'Branches', path: '/settings/branches', icon: MapPin },
-      { title: 'Store profile', path: '/settings/profile', icon: Store, minRole: 'owner' },
+      {
+        title: 'Branches',
+        path: '/settings/branches',
+        icon: MapPin,
+        permission: 'branches.view',
+      },
+      {
+        title: 'Store profile',
+        path: '/settings/profile',
+        icon: Store,
+        permission: 'profile.view',
+      },
     ],
   },
   {
     label: 'Account',
-    minRole: 'owner',
     items: [
-      { title: 'Bank account', path: '/settings/bank-account', icon: Banknote },
-      { title: 'Staff', path: '/settings/staff', icon: Users },
-      { title: 'API access', path: '/settings/api-access', icon: Plug },
+      {
+        title: 'Bank account',
+        path: '/settings/bank-account',
+        icon: Banknote,
+        permission: 'bank_account.view',
+      },
+      {
+        title: 'Staff',
+        path: '/settings/staff',
+        icon: Users,
+        permission: 'staff.view',
+      },
+      {
+        title: 'Roles',
+        path: '/settings/roles',
+        icon: ShieldCheck,
+        permission: 'roles.view',
+      },
+      {
+        title: 'API access',
+        path: '/settings/api-access',
+        icon: Plug,
+        permission: 'api_credentials.view',
+      },
+      // Preferences has no read permission because it has no read route:
+      // the screen loads its current values with an empty PATCH, so seeing
+      // the screen at all is `preferences.update`.
       {
         title: 'Preferences',
         path: '/settings/preferences',
         icon: SlidersHorizontal,
+        permission: 'preferences.update',
       },
     ],
   },
 ];
 
-/** The tier an individual menu entry needs, resolving section defaults. */
-export function itemMinRole(
-  section: AppMenuSection,
-  item: AppMenuItem,
-): MerchantStaffRole {
-  return item.minRole ?? section.minRole ?? 'staff';
+const SETTINGS_PREFIX = '/settings/';
+
+/**
+ * The first Settings screen this account may open — /settings itself has no
+ * content, so it forwards here. Null when they may open none of them, which
+ * the caller renders as the notice.
+ *
+ * Matched by PATH rather than by section: the settings screens are split
+ * across Store and Account, grouped by when a shopkeeper reaches for them,
+ * and no section owns all of them.
+ */
+export function firstSettingsPathFor(me: PermissionHolder): string | null {
+  for (const section of APP_MENU) {
+    for (const item of section.items) {
+      if (item.path.startsWith(SETTINGS_PREFIX) && can(me, item.permission)) {
+        return item.path;
+      }
+    }
+  }
+
+  return null;
 }
 
 /**
- * The first Settings screen `role` may open — /settings itself has no
- * content, so it forwards here. Null when the tier owns none of them
- * (staff), which the caller renders as the manager notice.
+ * The permission a pathname needs, matched against the menu (longest path
+ * wins, so /settings/product-categories beats a hypothetical /settings).
+ * Null for a path the menu does not know — screens outside the menu carry
+ * their own gates, and inventing a requirement for them would lock out a
+ * screen nobody meant to gate.
  */
-export function firstSettingsPathFor(role: MerchantStaffRole): string | null {
-  const settings = APP_MENU.find((section) => section.label === 'Settings');
-  if (!settings) return null;
-
-  const item = settings.items.find((candidate) =>
-    hasRoleAtLeast(role, itemMinRole(settings, candidate)),
-  );
-
-  return item?.path ?? null;
-}
-
-/**
- * The tier a pathname needs, matched against the menu (longest path wins,
- * so /settings/product-categories beats a hypothetical /settings). Unknown
- * paths are open — screens outside the menu carry their own gates.
- */
-export function minRoleForPath(pathname: string): MerchantStaffRole {
-  let match: { path: string; role: MerchantStaffRole } | null = null;
+export function permissionForPath(pathname: string): MerchantPermission | null {
+  let match: { path: string; permission: MerchantPermission } | null = null;
 
   for (const section of APP_MENU) {
     for (const item of section.items) {
@@ -154,10 +222,10 @@ export function minRoleForPath(pathname: string): MerchantStaffRole {
         continue;
       }
       if (match === null || item.path.length > match.path.length) {
-        match = { path: item.path, role: itemMinRole(section, item) };
+        match = { path: item.path, permission: item.permission };
       }
     }
   }
 
-  return match?.role ?? 'staff';
+  return match?.permission ?? null;
 }

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Merchant;
 
 use App\Domain\Discovery\DiscoveryService;
+use App\Domain\MerchantAccess\Permission;
 use App\Domain\Money\Percent;
 use App\Domain\Platform\FeeTierScheduleResolver;
 use App\Domain\Platform\RateNotPricedException;
@@ -15,6 +16,7 @@ use App\Domain\Promotions\PromotionNotDraftException;
 use App\Domain\Promotions\PromotionRateNotBoostException;
 use App\Domain\Promotions\PromotionService;
 use App\Http\Controllers\Controller;
+use App\Http\Middleware\EnsureMerchantPermission;
 use App\Http\Resources\PromotionResource;
 use App\Http\Resources\RateResource;
 use App\Models\Merchant;
@@ -26,10 +28,10 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 /**
- * Merchant promotion builder (§10). Mutations need MANAGER or above — a
- * promotion reprices future sales and moves the platform fee tier, exactly
- * like a rate change, and both sit in the manager tier (PLAN §1). Staff may
- * read the list.
+ * Merchant promotion builder (§10). Each lifecycle step carries its own
+ * permission — a promotion reprices future sales and moves the platform fee
+ * tier, exactly like a rate change — while `promotions.view` seeds to every
+ * role so the till can see what is running.
  *
  * The lifecycle endpoints only expose what the domain offers: create draft,
  * publish, cancel DRAFT. There is deliberately no update and no early-end
@@ -60,7 +62,7 @@ class PromotionController extends Controller
     public function store(Request $request): JsonResponse
     {
         $merchant = $this->merchant($request);
-        $user = $this->managerOrAbove($request);
+        $user = $this->authorise($request, Permission::PromotionsCreate);
 
         // PLAN §1 wire format: the promo rate is a 2-decimal percent
         // ("5", "5.5", 5.5), converted to integer basis points here. §4
@@ -103,7 +105,7 @@ class PromotionController extends Controller
 
     public function publish(Request $request, int $id): JsonResponse
     {
-        $this->managerOrAbove($request);
+        $this->authorise($request, Permission::PromotionsPublish);
         $promotion = $this->find($request, $id);
 
         try {
@@ -131,7 +133,7 @@ class PromotionController extends Controller
 
     public function cancel(Request $request, int $id): JsonResponse
     {
-        $this->managerOrAbove($request);
+        $this->authorise($request, Permission::PromotionsCancel);
         $promotion = $this->find($request, $id);
 
         try {
@@ -207,16 +209,19 @@ class PromotionController extends Controller
     }
 
     /**
-     * Manager or owner (PLAN §1) — mirrors the standing rate change: staff
-     * can read promotions, never reprice the shop. Belt-and-braces behind
-     * the merchant.role:manager route gate.
+     * Belt-and-braces behind each route's own merchant.can gate, answering
+     * with the same body so the panel has one refusal to handle. Each
+     * lifecycle step names ITS permission rather than a blanket
+     * "may manage promotions": publishing is the irreversible one, and a
+     * shared check here would have quietly re-merged what the catalogue
+     * separates.
      */
-    private function managerOrAbove(Request $request): MerchantUser
+    private function authorise(Request $request, Permission $permission): MerchantUser
     {
         $user = $request->user();
 
-        if (! $user instanceof MerchantUser || ! $user->hasRoleAtLeast('manager')) {
-            abort(403, 'Only a merchant owner or manager can manage promotions.');
+        if (! $user instanceof MerchantUser || ! $user->can($permission)) {
+            abort(EnsureMerchantPermission::deny($permission));
         }
 
         return $user;

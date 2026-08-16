@@ -17,18 +17,40 @@ Route::prefix('merchant/signup')->group(function () {
     Route::post('register', [SignupController::class, 'register'])->middleware('throttle:10,1');
 });
 
-// The wizard is OWNER-only behind the merchant guard. Draft, rejected AND
-// pending/active merchants may READ the setup state (the panel renders the
-// waiting screen from it); writes are gated in the domain layer to draft or
-// rejected stores — except the logo, which stays open to ACTIVE merchants
-// for post-approval changes and is also exposed under /merchant/settings.
-Route::prefix('merchant')->middleware(['auth:merchant', 'merchant.role:owner'])->group(function () {
-    Route::get('setup', [SetupController::class, 'show']);
-    Route::patch('setup/profile', [SetupController::class, 'updateProfile']);
-    Route::patch('setup/location', [SetupController::class, 'updateLocation']);
-    Route::post('setup/logo', [SetupController::class, 'storeLogo'])->middleware('throttle:20,1');
-    Route::patch('setup/rate', [SetupController::class, 'updateRate']);
-    Route::post('setup/submit', [SetupController::class, 'submit'])->middleware('throttle:20,1');
+// The wizard sits in the `setup.*` permissions, seeded to the Owner alone —
+// it is the store's application for approval, and the only screen a
+// pre-approval account ever sees. Reading it is separate from filling it in
+// and separate again from SUBMITTING: submit is the irreversible act that
+// puts the store in front of the review queue.
+//
+// Draft, rejected AND pending/active merchants may READ the setup state
+// (the panel renders the waiting screen from it); writes are gated in the
+// domain layer to draft or rejected stores — except the logo, which stays
+// open to ACTIVE merchants for post-approval changes and is also exposed
+// under /merchant/settings.
+//
+// Both logo routes answer to `branding.update` rather than `setup.edit`:
+// they are one handler changing one thing, and which URL the panel reached
+// it through is not an authority question.
+Route::prefix('merchant')->middleware('auth:merchant')->group(function () {
+    Route::get('setup', [SetupController::class, 'show'])
+        ->middleware('merchant.can:setup.view');
 
-    Route::post('settings/logo', [SetupController::class, 'storeLogo'])->middleware('throttle:20,1');
+    Route::patch('setup/profile', [SetupController::class, 'updateProfile'])
+        ->middleware('merchant.can:setup.edit');
+
+    Route::patch('setup/location', [SetupController::class, 'updateLocation'])
+        ->middleware('merchant.can:setup.edit');
+
+    Route::post('setup/logo', [SetupController::class, 'storeLogo'])
+        ->middleware(['merchant.can:branding.update', 'throttle:20,1']);
+
+    Route::patch('setup/rate', [SetupController::class, 'updateRate'])
+        ->middleware('merchant.can:setup.edit');
+
+    Route::post('setup/submit', [SetupController::class, 'submit'])
+        ->middleware(['merchant.can:setup.submit', 'throttle:20,1']);
+
+    Route::post('settings/logo', [SetupController::class, 'storeLogo'])
+        ->middleware(['merchant.can:branding.update', 'throttle:20,1']);
 });

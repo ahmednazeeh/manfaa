@@ -10,13 +10,26 @@ use App\Models\MerchantUser;
 use Illuminate\Http\Request;
 
 /**
- * PATCH /merchant/bank-account (owner only). The bank identity is one
- * atomic triple — a half-updated identity mismatches every payment — so
- * all three fields are required together. See MerchantBankAccountResource
- * for what this identity is used for (and what it is not).
+ * The merchant's own bank identity: read on `bank_account.view`, written on
+ * `bank_account.update`. The two are separate permissions because seeing
+ * which account the store is matched against is bookkeeping, while
+ * repointing it is the single most consequential change in the panel.
+ *
+ * The identity is one atomic triple — a half-updated identity mismatches
+ * every payment — so all three fields are required together on the write.
+ * See MerchantBankAccountResource for what this identity is used for (and
+ * what it is not).
  */
 class BankAccountController extends Controller
 {
+    public function show(Request $request): MerchantBankAccountResource
+    {
+        /** @var MerchantUser $user */
+        $user = $request->user('merchant');
+
+        return new MerchantBankAccountResource($user->merchant);
+    }
+
     public function update(Request $request): MerchantBankAccountResource
     {
         $validated = $request->validate([

@@ -56,7 +56,7 @@ it('runs signup → resume → submit → reject → resubmit → approve → pu
         'email' => 'owner@reefcorner.mv',
         'password' => 'reef-corner-secret-1',
     ])->assertCreated()
-        ->assertJsonPath('data.role', 'owner')
+        ->assertJsonPath('data.role.is_owner', true)
         ->assertJsonPath('data.merchant.status', 'draft');
 
     // --- Mid-wizard: only the profile step, then quit ---------------------

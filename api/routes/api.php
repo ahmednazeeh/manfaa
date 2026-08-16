@@ -34,8 +34,13 @@ Route::prefix('customer/auth')->group(function () {
 });
 
 Route::prefix('merchant')->middleware('auth:merchant')->group(function () {
-    // Manual credits are the exposed fraud surface (§11) — throttled per merchant user.
-    Route::post('credits', [CreditController::class, 'store'])->middleware('throttle:30,1');
+    // Manual credits are the exposed fraud surface (§11) — throttled per
+    // merchant user. `credits.create` is the till's whole reason to be
+    // logged in, so every seeded role holds it; the finer authority — a
+    // per-sale rate override — is `credits.custom_rate`, checked inside the
+    // controller because it gates a FIELD, not the route.
+    Route::post('credits', [CreditController::class, 'store'])
+        ->middleware(['merchant.can:credits.create', 'throttle:30,1']);
 });
 
 // Per-domain route files — each domain owns exactly one file in routes/api/.

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { apiFetch } from './client';
-import { MerchantBranchSchema, MerchantStaffRoleSchema } from './merchant';
+import { MerchantBranchSchema, MerchantRoleSummarySchema } from './merchant';
 import {
   CashbackPercentInputSchema,
   dataWrapped,
@@ -15,7 +15,8 @@ import {
  *  - the PUBLIC signup flow — phone OTP → short-lived signup token →
  *    register creates a DRAFT merchant plus its owner and logs the owner in
  *    (Sanctum session; call bootstrapCsrf() before the first POST);
- *  - the OWNER-only resumable setup wizard — profile (curated category,
+ *  - the resumable setup wizard, gated on `setup.view` / `.edit` /
+ *    `.submit` and seeded to the Owner role alone — profile (curated category,
  *    channel, terms, contact), the primary branch's map pin, optional logo
  *    (FormData), initial cashback rate, then submit → pending_review;
  *  - the ADMIN approval queue (approve → active / reject with a reason) and
@@ -125,15 +126,39 @@ export type MerchantSignupRegisterRequest = z.infer<
 
 /**
  * The merchant panel account as /api/merchant/auth login/me and signup
- * register return it. `merchant.status` is the onboarding lifecycle — the
- * panel routes draft/rejected owners into the setup wizard and
- * pending_review ones onto the waiting screen.
+ * register return it — THE one schema for that body. `merchant.status` is
+ * the onboarding lifecycle: the panel routes draft/rejected owners into the
+ * setup wizard and pending_review ones onto the waiting screen.
+ *
+ * A second copy of this shape is how the permission set goes missing. Zod
+ * strips unknown keys, so a panel-local /me schema that omits `permissions`
+ * hands every gate `undefined` with no type error and no failed parse, and
+ * every gate then denies. There is one copy, and it lives here.
  */
 export const MerchantAuthUserSchema = z.object({
   id: z.number().int(),
   name: z.string(),
   email: z.email(),
-  role: MerchantStaffRoleSchema,
+  /**
+   * The RESOLVED flat permission set, owner wildcard already expanded
+   * against the catalogue server-side (D3). This is what the panel gates on
+   * and the only thing it gates on: a set has no order, so there is no tier
+   * left to compare, and shipping the owner's wildcard as a sentinel instead
+   * would make `permissions.includes('bank_account.update')` false for the
+   * one account the wildcard exists to protect.
+   *
+   * Plain strings, not the MerchantPermission enum: a server ahead of this
+   * build sends slugs it does not know, and `includes` must keep working
+   * rather than throw the whole session away at parse time.
+   */
+  permissions: z.array(z.string()),
+  /**
+   * Carried to be PRINTED — "signed in as Shift lead" — and so the roles
+   * screen can tell which row is the reader's own. Never gate on it: custom
+   * role names are the store's own words. Null when the account somehow
+   * stands on no role, which grants nothing.
+   */
+  role: MerchantRoleSummarySchema.nullable(),
   merchant: z.object({
     id: z.number().int(),
     name: z.string(),
@@ -167,7 +192,7 @@ export function registerMerchantSignup(
 }
 
 // ---------------------------------------------------------------------------
-// Setup wizard (owner only, resumable)
+// Setup wizard (`setup.view` / `.edit` / `.submit`, resumable)
 // ---------------------------------------------------------------------------
 
 /**
@@ -261,7 +286,7 @@ export const OnboardingErrorCodeSchema = z.enum([
 export type OnboardingErrorCode = z.infer<typeof OnboardingErrorCodeSchema>;
 
 /**
- * GET /api/merchant/setup — owner only. Readable in EVERY lifecycle state
+ * GET /api/merchant/setup — `setup.view`. Readable in EVERY lifecycle state
  * (the panel renders the pending_review waiting screen and the rejection
  * banner from it); only the writes are gated to draft/rejected.
  */

@@ -5,24 +5,32 @@ declare(strict_types=1);
 namespace App\Domain\MerchantSettings;
 
 use App\Models\Merchant;
+use App\Models\MerchantRole;
 use App\Models\MerchantUser;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 /**
- * Owner management of merchant panel accounts, mirroring the admin-side
+ * Management of merchant panel accounts, mirroring the admin-side
  * AdminAccountService. There is no DELETE — deactivation is the only
  * removal, so audit trails (created_by on rates, transaction event actors)
  * always keep resolving. Guards: nobody demotes or deactivates themselves,
  * and the merchant's last active OWNER can be neither deactivated nor
  * demoted.
  *
- * Three tiers since 2026-08-15 (PLAN §1): owner, manager, staff. An owner
- * assigns any of them — at invite or later. A MANAGER never reaches this
- * service: the staff routes are merchant.role:owner. Managers deliberately
- * do NOT count towards the last-owner guard — a store whose only owner
- * stepped down to manager could no longer touch its bank account or mint
- * accounts, which is precisely the lockout the guard exists to prevent.
+ * An account points at one of its merchant's ROLES (PLAN §13b staff
+ * permissions), and who may reach this service is now a matter of the
+ * `staff.view` / `staff.invite` / `staff.edit` permissions rather than a
+ * tier. Which role may be handed out is RoleService's question — assigning
+ * someone a role is as much a grant as writing the permissions into it.
+ *
+ * The last-owner guard keys on the role's immutable `is_owner` FLAG, not on
+ * any permission (D4): a store whose only owner stepped down could no
+ * longer touch its bank account or mint accounts, and keying the guard on
+ * `staff.edit` would let it happen the moment a custom role held that
+ * permission. Roles that merely carry wide permissions deliberately do NOT
+ * count towards it, exactly as managers did not.
  */
 final class StaffService
 {
@@ -33,17 +41,22 @@ final class StaffService
      */
     public const int OWNER_GUARD_LOCK_CLASS = 0x4D4F57; // 'MOW'
 
+    public function __construct(private readonly RoleService $roles) {}
+
     /**
      * Creates a panel account with a generated temporary password, returned
      * exactly once alongside the model — it is never retrievable again.
      *
-     * The tier defaults to `staff` (the back-compatible invite); an owner
-     * may invite a manager, or a second owner, straight away.
+     * The role is explicit: with a per-store role table there is no tier to
+     * fall back to, and an invite that quietly picked one would be handing
+     * out authority nobody asked for.
      *
      * @return array{0: MerchantUser, 1: string}
      */
-    public function create(Merchant $merchant, string $name, string $email, string $role = 'staff'): array
+    public function create(Merchant $merchant, MerchantUser $actor, string $name, string $email, MerchantRole $role): array
     {
+        $this->roles->assertMayAssign($actor, $role);
+
         $tempPassword = Str::password(20);
 
         $user = MerchantUser::query()->create([
@@ -51,33 +64,38 @@ final class StaffService
             'name' => $name,
             'email' => $email,
             'password' => $tempPassword,
-            'role' => $role,
+            'merchant_role_id' => $role->getKey(),
             'is_active' => true,
         ]);
 
         return [$user, $tempPassword];
     }
 
-    public function update(MerchantUser $target, MerchantUser $actor, ?string $role = null, ?bool $isActive = null): MerchantUser
+    public function update(MerchantUser $target, MerchantUser $actor, ?MerchantRole $role = null, ?bool $isActive = null): MerchantUser
     {
+        if ($role !== null) {
+            $this->roles->assertMayAssign($actor, $role);
+        }
+
         return DB::transaction(function () use ($target, $actor, $role, $isActive): MerchantUser {
             MerchantUser::query()->whereKey($target->getKey())->lockForUpdate()->first();
             $target->refresh();
 
-            // Any move OFF owner is a demotion — to manager just as much as
-            // to staff: both drop the bank account, staff management and
-            // credential surfaces, and both can strand the merchant if this
-            // was the last owner.
-            $demoting = $role !== null && $role !== 'owner' && $target->role === 'owner';
+            // Any move OFF the owner role is a demotion, however wide the
+            // new role is: only the flag carries the standing the guard
+            // protects, and a role that merely holds `staff.edit` today
+            // can be edited to hold nothing tomorrow.
+            $wasOwner = $target->isOwner();
+            $demoting = $role !== null && ! $role->is_owner && $wasOwner;
             $deactivating = $isActive === false && $target->is_active;
 
             // The last-owner guard runs first: losing every active owner
             // locks the merchant's whole settings surface permanently.
-            if (($demoting || $deactivating) && $target->role === 'owner' && $target->is_active) {
+            if (($demoting || $deactivating) && $wasOwner && $target->is_active) {
                 // Serialise concurrent guard evaluations per merchant. Two
                 // simultaneous demotes/deactivations of DIFFERENT owners
                 // lock different target rows, and each plain READ COMMITTED
-                // exists() would still see the other's uncommitted 'owner'
+                // exists() would still see the other's uncommitted owner
                 // row — both would pass and zero active owners could
                 // remain. The merchant-keyed transaction-scoped advisory
                 // lock makes the second evaluation wait for the first
@@ -101,7 +119,7 @@ final class StaffService
             }
 
             if ($role !== null) {
-                $target->role = $role;
+                $target->merchant_role_id = $role->getKey();
             }
 
             if ($isActive !== null) {
@@ -119,8 +137,15 @@ final class StaffService
         return MerchantUser::query()
             ->whereKeyNot($target->getKey())
             ->where('merchant_id', $target->merchant_id)
-            ->where('role', 'owner')
             ->where('is_active', true)
+            ->whereHas('role', function (Builder $query) {
+                // Correlated back to the user's own merchant for the same
+                // reason MerchantUser::can() is: role ids are shared
+                // sequential integers, and another store's owner role must
+                // never read as this store's last owner.
+                $query->where('is_owner', true)
+                    ->whereColumn('merchant_roles.merchant_id', 'merchant_users.merchant_id');
+            })
             ->exists();
     }
 }

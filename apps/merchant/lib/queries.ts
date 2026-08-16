@@ -1,6 +1,5 @@
 'use client';
 
-import type { AmendTransactionBody, CancelReason } from '@/lib/api';
 import {
   ApiError,
   bootstrapCsrf,
@@ -11,16 +10,20 @@ import {
   createMerchantCredit,
   createMerchantProductCategory,
   createMerchantPromotion,
+  createMerchantRole,
   createMerchantStaff,
   deleteMerchantBranch,
+  deleteMerchantRole,
   getMerchantOutstanding,
   getMerchantProfile,
   getMerchantSetup,
   getMerchantWallet,
   listMerchantBranches,
   listMerchantCredentials,
+  listMerchantPermissions,
   listMerchantProductCategories,
   listMerchantPromotions,
+  listMerchantRoles,
   listMerchantStaff,
   lookupMerchantCustomer,
   publishMerchantPromotion,
@@ -33,6 +36,7 @@ import {
   updateMerchantPreferences,
   updateMerchantProductCategory,
   updateMerchantProfile,
+  updateMerchantRole,
   updateMerchantSetupLocation,
   updateMerchantSetupProfile,
   updateMerchantSetupRate,
@@ -43,6 +47,7 @@ import {
   type CreateCreditRequest,
   type CreateMerchantBranchRequest,
   type CreateMerchantCredentialRequest,
+  type CreateMerchantRoleRequest,
   type CreateMerchantStaffRequest,
   type CreateProductCategoryRequest,
   type CreatePromotionRequest,
@@ -54,21 +59,23 @@ import {
   type UpdateMerchantBranchRequest,
   type UpdateMerchantPreferencesRequest,
   type UpdateMerchantProfileRequest,
+  type UpdateMerchantRoleRequest,
   type UpdateMerchantSetupLocationRequest,
   type UpdateMerchantSetupProfileRequest,
   type UpdateMerchantStaffRequest,
   type UpdateProductCategoryRequest,
 } from '@manfaa/api-client';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import type { AmendTransactionBody, CancelReason } from '@/lib/api';
 import {
   addSettlementReceipt,
+  amendTransaction,
+  cancelTransaction,
   changeRate,
   fetchMe,
   fetchRate,
   getSettlement,
   listSettlements,
-  amendTransaction,
-  cancelTransaction,
   listTransactions,
   login,
   logout,
@@ -113,6 +120,8 @@ export const queryKeys = {
   profile: ['merchant', 'profile'] as const,
   branches: ['merchant', 'branches'] as const,
   staff: ['merchant', 'staff'] as const,
+  roles: ['merchant', 'roles'] as const,
+  permissionCatalogue: ['merchant', 'permissions'] as const,
   credentials: ['merchant', 'credentials'] as const,
   preferences: ['merchant', 'preferences'] as const,
   promotions: ['merchant', 'promotions'] as const,
@@ -122,11 +131,6 @@ export const queryKeys = {
 
 export function isUnauthorized(error: unknown): boolean {
   return error instanceof ApiError && error.status === 401;
-}
-
-/** 403 from an owner-gated settings route (code `owner_required`). */
-export function isOwnerRequired(error: unknown): boolean {
-  return error instanceof ApiError && error.status === 403;
 }
 
 export function useMe() {
@@ -212,7 +216,9 @@ export function useTransactions(state: TransactionState | 'all', page: number) {
 function useInvalidateAfterCorrection() {
   const queryClient = useQueryClient();
   return () => {
-    void queryClient.invalidateQueries({ queryKey: ['merchant', 'transactions'] });
+    void queryClient.invalidateQueries({
+      queryKey: ['merchant', 'transactions'],
+    });
     void queryClient.invalidateQueries({ queryKey: queryKeys.outstanding });
     void queryClient.invalidateQueries({ queryKey: queryKeys.wallet });
   };
@@ -230,8 +236,14 @@ export function useAmendTransaction() {
 export function useCancelTransaction() {
   const invalidate = useInvalidateAfterCorrection();
   return useMutation({
-    mutationFn: ({ id, ...body }: { id: number; reason: CancelReason; note?: string | null }) =>
-      cancelTransaction(id, body),
+    mutationFn: ({
+      id,
+      ...body
+    }: {
+      id: number;
+      reason: CancelReason;
+      note?: string | null;
+    }) => cancelTransaction(id, body),
     onSuccess: invalidate,
   });
 }
@@ -340,6 +352,29 @@ export function apiErrorCode(error: unknown): string | null {
   if (!(error instanceof ApiError)) return null;
   const body = error.body as { code?: unknown } | undefined;
   return typeof body?.code === 'string' ? body.code : null;
+}
+
+/**
+ * The slugs a `permission_not_held` refusal names (D5). Plain strings on
+ * purpose: the checkbox they belong to came from the SERVED catalogue, so a
+ * server ahead of this build can legitimately name one it has never heard
+ * of, and the screen still has to point somewhere.
+ */
+export function roleErrorPermissions(error: unknown): string[] {
+  if (!(error instanceof ApiError)) return [];
+  const body = error.body as { permissions?: unknown } | undefined;
+  return Array.isArray(body?.permissions)
+    ? body.permissions.filter(
+        (slug): slug is string => typeof slug === 'string',
+      )
+    : [];
+}
+
+/** How many accounts stand on a role a `role_in_use` refusal protected. */
+export function roleErrorStaffCount(error: unknown): number | null {
+  if (!(error instanceof ApiError)) return null;
+  const body = error.body as { staff_count?: unknown } | undefined;
+  return typeof body?.staff_count === 'number' ? body.staff_count : null;
 }
 
 // ---------------------------------------------------------------------------
@@ -540,8 +575,7 @@ export function isRateBelowAdvertised(error: unknown): boolean {
 export function advertisedRatePercent(error: unknown): string | null {
   if (!(error instanceof ApiError)) return null;
   const body = error.body as
-    | { advertised_cashback_rate_percent?: unknown }
-    | undefined;
+    { advertised_cashback_rate_percent?: unknown } | undefined;
   const advertised = body?.advertised_cashback_rate_percent;
   return typeof advertised === 'string' ? advertised : null;
 }
@@ -639,18 +673,29 @@ export function useStaff() {
   });
 }
 
-export function useCreateStaff() {
+/**
+ * Inviting or reassigning an account moves a role's `staff_count` as well as
+ * the staff list, and that count is what the roles screen refuses a delete
+ * on — so the roles list goes stale with it.
+ */
+function useInvalidateAfterStaffChange() {
   const queryClient = useQueryClient();
+  return () => {
+    void queryClient.invalidateQueries({ queryKey: queryKeys.staff });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.roles });
+  };
+}
+
+export function useCreateStaff() {
+  const invalidate = useInvalidateAfterStaffChange();
   return useMutation({
     mutationFn: (body: CreateMerchantStaffRequest) => createMerchantStaff(body),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.staff });
-    },
+    onSuccess: invalidate,
   });
 }
 
 export function useUpdateStaff() {
-  const queryClient = useQueryClient();
+  const invalidate = useInvalidateAfterStaffChange();
   return useMutation({
     mutationFn: ({
       id,
@@ -659,9 +704,89 @@ export function useUpdateStaff() {
       id: number;
       body: UpdateMerchantStaffRequest;
     }) => updateMerchantStaff(id, body),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.staff });
-    },
+    onSuccess: invalidate,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Settings — roles (`roles.view` reads, `roles.manage` writes)
+// ---------------------------------------------------------------------------
+
+/**
+ * The permission catalogue behind the roles screen's checkboxes (D8). It is
+ * DEPLOY-scoped data — the catalogue is a PHP enum, so it changes only when
+ * the API ships — which is why it is cached for the hour rather than
+ * refetched every time a dialog opens.
+ */
+export function usePermissionCatalogue(enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.permissionCatalogue,
+    queryFn: ({ signal }) => listMerchantPermissions({ signal }),
+    select: (response) => response.data.groups,
+    retry: false,
+    staleTime: 60 * 60 * 1000,
+    enabled,
+  });
+}
+
+export function useRoles(enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.roles,
+    queryFn: ({ signal }) => listMerchantRoles({ signal }),
+    select: (response) => response.data,
+    retry: false,
+    enabled,
+  });
+}
+
+/**
+ * A role write moves three cached things at once. The roles list and the
+ * staff rows are the obvious two — staff rows print the role's name, so a
+ * rename leaves them stale.
+ *
+ * The third is the one that is easy to miss: `me` carries the signed-in
+ * account's RESOLVED permission set (D3), and editing a role the reader
+ * stands under changes it. The server resolves permissions per request and
+ * is authoritative from the next call regardless — what the panel would
+ * otherwise keep is a cached copy still hiding a control the reader has
+ * just been given, or still offering one they have just lost.
+ */
+function useInvalidateAfterRoleChange() {
+  const queryClient = useQueryClient();
+  return () => {
+    void queryClient.invalidateQueries({ queryKey: queryKeys.roles });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.staff });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.me });
+  };
+}
+
+export function useCreateRole() {
+  const invalidate = useInvalidateAfterRoleChange();
+  return useMutation({
+    mutationFn: (body: CreateMerchantRoleRequest) => createMerchantRole(body),
+    onSuccess: invalidate,
+  });
+}
+
+export function useUpdateRole() {
+  const invalidate = useInvalidateAfterRoleChange();
+  return useMutation({
+    mutationFn: ({
+      id,
+      body,
+    }: {
+      id: number;
+      body: UpdateMerchantRoleRequest;
+    }) => updateMerchantRole(id, body),
+    onSuccess: invalidate,
+  });
+}
+
+export function useDeleteRole() {
+  const invalidate = useInvalidateAfterRoleChange();
+  return useMutation({
+    mutationFn: (id: number) => deleteMerchantRole(id),
+    onSuccess: invalidate,
   });
 }
 

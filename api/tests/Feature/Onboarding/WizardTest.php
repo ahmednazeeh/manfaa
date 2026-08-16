@@ -226,13 +226,15 @@ it('locks every wizard write while the store is pending review', function () {
         ->assertJsonPath('data.status', 'pending_review');
 });
 
-it('keeps the wizard owner-only', function () {
+it('keeps the wizard behind the setup permissions', function () {
     $owner = wizardOwner();
-    $staff = MerchantUser::factory()->for($owner->merchant)->create(['role' => 'staff']);
+    $staff = MerchantUser::factory()->for($owner->merchant)->staff()->create();
 
     $this->actingAs($staff, 'merchant');
 
-    $this->getJson('/api/merchant/setup')->assertForbidden()->assertJsonPath('code', 'owner_required');
+    $this->getJson('/api/merchant/setup')->assertForbidden()
+        ->assertJsonPath('code', 'permission_required')
+        ->assertJsonPath('permission', 'setup.view');
     $this->patchJson('/api/merchant/setup/profile', ['category' => 'grocery'])->assertForbidden();
 });
 

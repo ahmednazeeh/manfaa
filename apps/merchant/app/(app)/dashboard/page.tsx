@@ -5,7 +5,7 @@ import { MoneyText } from '@manfaa/ui';
 import { HandCoins } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useOutstanding, useSettlementPreview, useWallet } from '@/lib/queries';
-import { hasRoleAtLeast } from '@/lib/roles';
+import { can } from '@/lib/roles';
 import { useLayout } from '@/components/app-layout/context';
 import { Button } from '@/components/ui/button';
 import {
@@ -72,9 +72,12 @@ function BucketCard({
 
 export default function DashboardPage() {
   const { me } = useLayout();
-  // Staff read the ageing but never open the settlement builder — creating
-  // a batch is manager work (PLAN §1), and the API refuses the POST anyway.
-  const canManage = hasRoleAtLeast(me.role, 'manager');
+  // Three separate things behind one screen: reading the ageing is
+  // `settlements.view` (which is what put this entry in the menu at all),
+  // building a batch is `settlements.create`, and the wallet balance is its
+  // own permission again. A reader may hold any one without the others.
+  const canSettle = can(me, 'settlements.create');
+  const canSeeWallet = can(me, 'wallet.view');
   const outstanding = useOutstanding();
   const wallet = useWallet();
   // The settlement preview, purely to say when the PLAN §1 prompt-payment
@@ -84,7 +87,8 @@ export default function DashboardPage() {
   // clear board is not owed a countdown.
   const settleAllPreview = useSettlementPreview(
     { settleAll: true },
-    (outstanding.data?.total.count ?? 0) > 0,
+    can(me, 'settlements.preview') &&
+      (outstanding.data?.total.count ?? 0) > 0,
   );
 
   return (
@@ -96,7 +100,7 @@ export default function DashboardPage() {
             Outstanding cashback and fees by age — settle within 15 days
           </ToolbarDescription>
         </ToolbarHeading>
-        {canManage && (
+        {canSettle && (
           <ToolbarActions>
             <Button asChild disabled={outstanding.data?.total.count === 0}>
               <Link href="/settlements/new">
@@ -190,34 +194,39 @@ export default function DashboardPage() {
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader>
-                <CardTitle>Wallet</CardTitle>
-                <Button asChild variant="outline" size="sm">
-                  <Link href="/wallet">View movements</Link>
-                </Button>
-              </CardHeader>
-              <CardContent className="flex flex-col gap-2">
-                {wallet.error ? (
-                  <span className="text-sm text-muted-foreground">
-                    Wallet unavailable right now.
-                  </span>
-                ) : wallet.data ? (
-                  <>
-                    <MoneyText
-                      laari={wallet.data.balance_laari}
-                      className="text-2xl font-semibold text-mono"
-                    />
+            {/* Hidden rather than left to fail: the card's error branch says
+                the wallet is unavailable, which reads as an outage when the
+                truth is that this account was never given the wallet. */}
+            {canSeeWallet && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Wallet</CardTitle>
+                  <Button asChild variant="outline" size="sm">
+                    <Link href="/wallet">View movements</Link>
+                  </Button>
+                </CardHeader>
+                <CardContent className="flex flex-col gap-2">
+                  {wallet.error ? (
                     <span className="text-sm text-muted-foreground">
-                      Available to fund settlements instead of a bank
-                      transfer.
+                      Wallet unavailable right now.
                     </span>
-                  </>
-                ) : (
-                  <Skeleton className="h-16 rounded-md" />
-                )}
-              </CardContent>
-            </Card>
+                  ) : wallet.data ? (
+                    <>
+                      <MoneyText
+                        laari={wallet.data.balance_laari}
+                        className="text-2xl font-semibold text-mono"
+                      />
+                      <span className="text-sm text-muted-foreground">
+                        Available to fund settlements instead of a bank
+                        transfer.
+                      </span>
+                    </>
+                  ) : (
+                    <Skeleton className="h-16 rounded-md" />
+                  )}
+                </CardContent>
+              </Card>
+            )}
           </div>
         </div>
       )}

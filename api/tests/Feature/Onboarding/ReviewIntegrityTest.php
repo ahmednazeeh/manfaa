@@ -2,10 +2,12 @@
 
 declare(strict_types=1);
 
+use App\Domain\MerchantAccess\RolePresetService;
 use App\Models\AdminUser;
 use App\Models\Merchant;
 use App\Models\MerchantBranch;
 use App\Models\MerchantRate;
+use App\Models\MerchantRole;
 use App\Models\MerchantUser;
 use App\Models\StoreCategory;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -148,11 +150,11 @@ it('refuses to mint a panel account the store cannot let anyone use yet', functi
     // owner-only wizard, so an invited manager or staff account would land
     // on a permissions wall with nothing but logout. Refuse the invite
     // instead of creating the dead end.
-    foreach (['staff', 'manager', 'owner'] as $role) {
+    foreach (MerchantRole::query()->where('merchant_id', $owner->merchant_id)->get() as $role) {
         $this->postJson('/api/merchant/staff', [
             'name' => 'Too Early',
-            'email' => "too.early.{$role}@example.com",
-            'role' => $role,
+            'email' => "too.early.{$role->slug}@example.com",
+            'merchant_role_id' => $role->id,
         ])->assertStatus(409)->assertJsonPath('code', 'store_not_approved');
     }
 
@@ -177,7 +179,8 @@ it('opens branch writes and staff invites the moment the store is approved', fun
     $this->postJson('/api/merchant/staff', [
         'name' => 'Now Allowed',
         'email' => 'now.allowed@example.com',
-        'role' => 'manager',
+        'merchant_role_id' => app(RolePresetService::class)
+            ->ensure($merchant, RolePresetService::MANAGER)->id,
     ])->assertCreated();
 });
 

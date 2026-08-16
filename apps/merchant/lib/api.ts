@@ -3,8 +3,8 @@ import {
   bootstrapCsrf,
   bpToPercentString,
   dataWrapped,
-  MerchantStaffRoleSchema,
-  MerchantStatusSchema,
+  MerchantAuthUserResponseSchema,
+  MerchantAuthUserSchema,
   paginated,
   PercentSchema,
   RateDescriptionSchema,
@@ -12,6 +12,7 @@ import {
   SettlementPreviewSchema,
   SettlementSchema,
   TransactionSchema,
+  type MerchantAuthUser,
   type MerchantStatus,
   type SettlementBankAccount,
   type SettlementPreview,
@@ -25,24 +26,14 @@ import { z } from 'zod';
  * amounts are integer laari; *_mvr strings are display-only.
  */
 
-export const MerchantMeSchema = z.object({
-  id: z.number().int(),
-  name: z.string(),
-  email: z.email(),
-  /** owner | manager | staff — the panel gates its nav and screens on it. */
-  role: MerchantStaffRoleSchema,
-  merchant: z.object({
-    id: z.number().int(),
-    name: z.string(),
-    /**
-     * The onboarding lifecycle — the panel routes draft/rejected/
-     * pending_review users onto /setup and keeps the rest of the panel
-     * inaccessible until the store is approved.
-     */
-    status: MerchantStatusSchema,
-  }),
-});
-export type MerchantMe = z.infer<typeof MerchantMeSchema>;
+/**
+ * The signed-in account, passed through from the shared client rather than
+ * described a second time here. A local copy is how the permission set goes
+ * missing: zod strips what a schema does not declare, so a panel-side /me
+ * schema that forgets `permissions` hands every gate `undefined` with
+ * neither a parse error nor a type error, and every gate then denies.
+ */
+export { MerchantAuthUserSchema, type MerchantAuthUser };
 
 /**
  * Statuses that belong on /setup (the wizard or its waiting/rejection
@@ -55,17 +46,15 @@ export function isOnboardingStatus(status: MerchantStatus): boolean {
   );
 }
 
-const MeResponseSchema = dataWrapped(MerchantMeSchema);
-
 /** POST /api/merchant/auth/login — bootstraps the Sanctum CSRF cookie first. */
 export async function login(body: {
   email: string;
   password: string;
-}): Promise<MerchantMe> {
+}): Promise<MerchantAuthUser> {
   await bootstrapCsrf();
   const response = await apiFetch(
     '/api/merchant/auth/login',
-    MeResponseSchema,
+    MerchantAuthUserResponseSchema,
     {
       method: 'POST',
       body,
@@ -80,10 +69,12 @@ export async function logout(): Promise<void> {
 }
 
 /** GET /api/merchant/auth/me — 401 when the session is gone. */
-export async function fetchMe(signal?: AbortSignal): Promise<MerchantMe> {
-  const response = await apiFetch('/api/merchant/auth/me', MeResponseSchema, {
-    signal,
-  });
+export async function fetchMe(signal?: AbortSignal): Promise<MerchantAuthUser> {
+  const response = await apiFetch(
+    '/api/merchant/auth/me',
+    MerchantAuthUserResponseSchema,
+    { signal },
+  );
   return response.data;
 }
 

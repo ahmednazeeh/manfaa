@@ -33,7 +33,7 @@ it('lets a staff user run lookup, credit, and duplicate 409 as the UI does', fun
         'effective_from' => now()->subYear(),
         'effective_to' => null,
     ]);
-    $staff = MerchantUser::factory()->for($merchant)->create(['role' => 'staff']);
+    $staff = MerchantUser::factory()->for($merchant)->staff()->create();
     Customer::factory()->create([
         'customer_code' => '482917',
         'name' => 'Aisha Mohamed',

@@ -1,10 +1,10 @@
 'use client';
 
-import { MerchantMe } from '@/lib/api';
+import type { MerchantAuthUser } from '@/lib/api';
 import { createContext, ReactNode, useContext, useState } from 'react';
 
 interface LayoutState {
-  me: MerchantMe;
+  me: MerchantAuthUser;
   sidebarCollapse: boolean;
   setSidebarCollapse: (open: boolean) => void;
 }
@@ -15,7 +15,7 @@ export function LayoutProvider({
   me,
   children,
 }: {
-  me: MerchantMe;
+  me: MerchantAuthUser;
   children: ReactNode;
 }) {
   const [sidebarCollapse, setSidebarCollapse] = useState(false);

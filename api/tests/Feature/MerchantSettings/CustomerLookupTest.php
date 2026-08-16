@@ -12,7 +12,7 @@ uses(TestCase::class, RefreshDatabase::class);
 
 beforeEach(function () {
     $this->merchant = Merchant::factory()->create();
-    $this->staff = MerchantUser::factory()->for($this->merchant)->create(['role' => 'staff']);
+    $this->staff = MerchantUser::factory()->for($this->merchant)->staff()->create();
 
     $this->actingAs($this->staff, 'merchant');
 });
@@ -67,7 +67,7 @@ it('throttles the lookup at 30 per minute per user', function () {
         ->assertStatus(429);
 
     // Keyed per USER, not globally: a colleague is unaffected.
-    $colleague = MerchantUser::factory()->for($this->merchant)->create(['role' => 'staff']);
+    $colleague = MerchantUser::factory()->for($this->merchant)->staff()->create();
 
     $this->actingAs($colleague, 'merchant')
         ->getJson('/api/merchant/customers/lookup?code=482917')
@@ -85,7 +85,7 @@ it('caps non-creditable lookups per MERCHANT per day — staff accounts share on
             ->assertExactJson(['valid' => false]);
     }
 
-    $colleague = MerchantUser::factory()->for($this->merchant)->create(['role' => 'staff']);
+    $colleague = MerchantUser::factory()->for($this->merchant)->staff()->create();
     $this->actingAs($colleague, 'merchant');
 
     foreach (range(1, 30) as $i) {
@@ -97,14 +97,14 @@ it('caps non-creditable lookups per MERCHANT per day — staff accounts share on
     // A third account gains nothing: the cap is keyed per merchant, so
     // spinning up staff accounts cannot extend the enumeration budget —
     // once tripped, even a VALID code answers 429 until the day rolls.
-    $third = MerchantUser::factory()->for($this->merchant)->create(['role' => 'staff']);
+    $third = MerchantUser::factory()->for($this->merchant)->staff()->create();
 
     $this->actingAs($third, 'merchant')
         ->getJson('/api/merchant/customers/lookup?code=482917')
         ->assertStatus(429);
 
     // Another merchant's till is unaffected — its own budget is untouched.
-    $otherMerchantStaff = MerchantUser::factory()->create(['role' => 'staff']);
+    $otherMerchantStaff = MerchantUser::factory()->staff()->create();
 
     $this->actingAs($otherMerchantStaff, 'merchant')
         ->getJson('/api/merchant/customers/lookup?code=482917')

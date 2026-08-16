@@ -9,13 +9,15 @@ import { SettlementWizard } from '@/components/settlement/settlement-wizard';
  * at your bank → upload the slip and submit. Submitting is what creates the
  * settlement, so nothing here can produce one without a receipt.
  *
- * Manager-or-owner work (PLAN §1) — submitting freezes lines and claims a
- * real transfer. The API gates the same POST with merchant.role:manager, so
- * this gate is courtesy, not security.
+ * Gated on the act the last step performs — submitting freezes lines and
+ * claims a real transfer — rather than on the preview the earlier steps
+ * read: a reader who could only preview would reach the final button and be
+ * refused there. The API gates the same POST with
+ * `merchant.can:settlements.create`, so this is courtesy, not security.
  */
 export default function NewSettlementPage() {
   return (
-    <RoleGate min="manager">
+    <RoleGate permission="settlements.create">
       <SettlementWizard />
     </RoleGate>
   );

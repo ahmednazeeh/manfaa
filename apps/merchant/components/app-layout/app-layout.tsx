@@ -1,7 +1,7 @@
 'use client';
 
 import { ReactNode, useEffect } from 'react';
-import { MerchantMe } from '@/lib/api';
+import type { MerchantAuthUser } from '@/lib/api';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { LayoutProvider, useLayout } from './context';
 import { Footer } from './footer';
@@ -69,7 +69,7 @@ export function AppLayout({
   me,
   children,
 }: {
-  me: MerchantMe;
+  me: MerchantAuthUser;
   children: ReactNode;
 }) {
   return (

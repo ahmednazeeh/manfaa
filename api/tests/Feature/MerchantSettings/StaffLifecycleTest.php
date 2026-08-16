@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Domain\MerchantAccess\RolePresetService;
 use App\Models\Merchant;
 use App\Models\MerchantUser;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -13,6 +14,7 @@ uses(TestCase::class, RefreshDatabase::class);
 beforeEach(function () {
     $this->merchant = Merchant::factory()->create();
     $this->owner = MerchantUser::factory()->for($this->merchant)->owner()->create();
+    $this->roles = app(RolePresetService::class)->provision($this->merchant);
 });
 
 it('creates a staff account returning the temporary password exactly once', function () {
@@ -21,9 +23,11 @@ it('creates a staff account returning the temporary password exactly once', func
     $response = $this->postJson('/api/merchant/staff', [
         'name' => 'New Staff',
         'email' => 'new.staff@example.com',
+        'merchant_role_id' => $this->roles[RolePresetService::STAFF]->id,
     ])->assertCreated()
         ->assertJsonPath('data.name', 'New Staff')
-        ->assertJsonPath('data.role', 'staff')
+        ->assertJsonPath('data.role.name', 'Staff')
+        ->assertJsonPath('data.role.is_owner', false)
         ->assertJsonPath('data.is_active', true);
 
     $tempPassword = $response->json('temp_password');
@@ -32,7 +36,7 @@ it('creates a staff account returning the temporary password exactly once', func
     expect($tempPassword)->toBeString()->not->toBeEmpty()
         ->and(Hash::check($tempPassword, $created->password))->toBeTrue()
         ->and($created->merchant_id)->toBe($this->merchant->id)
-        ->and($created->role)->toBe('staff');
+        ->and($created->merchant_role_id)->toBe($this->roles[RolePresetService::STAFF]->id);
 
     // Never surfaced again: the listing carries no password material.
     $listing = $this->getJson('/api/merchant/staff')->assertOk()->assertJsonCount(2, 'data');
@@ -45,6 +49,7 @@ it('rejects a duplicate staff email', function () {
     $this->postJson('/api/merchant/staff', [
         'name' => 'Dup',
         'email' => $this->owner->email,
+        'merchant_role_id' => $this->roles[RolePresetService::STAFF]->id,
     ])->assertUnprocessable();
 });
 
@@ -110,13 +115,17 @@ it('promotes staff to owner and demotes them back', function () {
 
     $this->actingAs($this->owner, 'merchant');
 
-    $this->patchJson("/api/merchant/staff/{$staff->id}", ['role' => 'owner'])
+    $this->patchJson("/api/merchant/staff/{$staff->id}", [
+        'merchant_role_id' => $this->roles[RolePresetService::OWNER]->id,
+    ])
         ->assertOk()
-        ->assertJsonPath('data.role', 'owner');
+        ->assertJsonPath('data.role.is_owner', true);
 
-    $this->patchJson("/api/merchant/staff/{$staff->id}", ['role' => 'staff'])
+    $this->patchJson("/api/merchant/staff/{$staff->id}", [
+        'merchant_role_id' => $this->roles[RolePresetService::STAFF]->id,
+    ])
         ->assertOk()
-        ->assertJsonPath('data.role', 'staff');
+        ->assertJsonPath('data.role.is_owner', false);
 });
 
 it('refuses self-deactivation and self-demotion', function () {
@@ -128,10 +137,11 @@ it('refuses self-deactivation and self-demotion', function () {
 
     $this->patchJson("/api/merchant/staff/{$this->owner->id}", ['is_active' => false])
         ->assertUnprocessable();
-    $this->patchJson("/api/merchant/staff/{$this->owner->id}", ['role' => 'staff'])
-        ->assertUnprocessable();
+    $this->patchJson("/api/merchant/staff/{$this->owner->id}", [
+        'merchant_role_id' => $this->roles[RolePresetService::STAFF]->id,
+    ])->assertUnprocessable();
 
-    expect($this->owner->refresh()->role)->toBe('owner')
+    expect($this->owner->refresh()->isOwner())->toBeTrue()
         ->and($this->owner->is_active)->toBeTrue();
 });
 
@@ -143,10 +153,11 @@ it('never removes the last active owner', function () {
 
     $this->patchJson("/api/merchant/staff/{$this->owner->id}", ['is_active' => false])
         ->assertUnprocessable();
-    $this->patchJson("/api/merchant/staff/{$this->owner->id}", ['role' => 'staff'])
-        ->assertUnprocessable();
+    $this->patchJson("/api/merchant/staff/{$this->owner->id}", [
+        'merchant_role_id' => $this->roles[RolePresetService::STAFF]->id,
+    ])->assertUnprocessable();
 
-    expect($this->owner->refresh()->role)->toBe('owner')
+    expect($this->owner->refresh()->isOwner())->toBeTrue()
         ->and($this->owner->is_active)->toBeTrue();
 });
 

@@ -222,7 +222,8 @@ it('walks the receipt-first settlement lifecycle over HTTP: credits → preview 
             'slip' => Slips::jpeg(),
         ])
         ->assertForbidden()
-        ->assertJsonPath('code', 'manager_required');
+        ->assertJsonPath('code', 'permission_required')
+        ->assertJsonPath('permission', 'settlements.create');
 
     expect(Settlement::query()->count())->toBe(0);
 

@@ -67,12 +67,13 @@ it('requires a merchant session', function () {
 it('hides the credential listing from managers and staff', function () {
     $merchant = Merchant::factory()->create();
 
-    foreach (['manager', 'staff'] as $role) {
-        $user = MerchantUser::factory()->for($merchant)->create(['role' => $role]);
+    foreach (['manager', 'staff'] as $preset) {
+        $user = MerchantUser::factory()->for($merchant)->{$preset}()->create();
 
         $this->actingAs($user, 'merchant')
             ->getJson('/api/merchant/credentials')
             ->assertForbidden()
-            ->assertJsonPath('code', 'owner_required');
+            ->assertJsonPath('code', 'permission_required')
+            ->assertJsonPath('permission', 'api_credentials.view');
     }
 });

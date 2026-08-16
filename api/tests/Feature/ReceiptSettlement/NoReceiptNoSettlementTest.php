@@ -107,8 +107,8 @@ it('never lets a merchant reach awaiting_payment', function () {
         ->assertJsonPath('data.0.merchant_status.message', 'Manfaa is verifying your transfer.');
 });
 
-it('gates the receipt-first endpoint on manager role and an approved store', function () {
-    $staff = MerchantUser::factory()->for($this->fixture->merchant)->create(['role' => 'staff']);
+it('gates the receipt-first endpoint on settlements.create and an approved store', function () {
+    $staff = MerchantUser::factory()->for($this->fixture->merchant)->staff()->create();
 
     $this->actingAs($staff, 'merchant')
         ->post('/api/merchant/settlements', [
@@ -118,7 +118,8 @@ it('gates the receipt-first endpoint on manager role and an approved store', fun
             'slip' => Slips::jpeg(),
         ])
         ->assertForbidden()
-        ->assertJsonPath('code', 'manager_required');
+        ->assertJsonPath('code', 'permission_required')
+        ->assertJsonPath('permission', 'settlements.create');
 
     $this->fixture->merchant->update(['status' => 'pending_review']);
 

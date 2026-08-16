@@ -42,7 +42,7 @@ import {
   usePromotions,
   useRate,
 } from '@/lib/queries';
-import { hasRoleAtLeast } from '@/lib/roles';
+import { can } from '@/lib/roles';
 import {
   Alert,
   AlertContent,
@@ -118,12 +118,14 @@ const MAX_RATE_BP = 2000;
  * merchant's own window is validated against (PreferencesController caps it
  * at the platform default) — so a store's window is somewhere in 0…this.
  *
- * The panel cannot read the actual number: GET-ing it means the owner-only
- * preferences route, and this screen is staff work. Hence the two-band
- * warning below, derived from the BOUNDS. If an admin ever raises the
- * platform default above 3, the upper band starts firing a few days early
- * — the warning is then over-cautious rather than absent, and the real fix
- * is to expose validation_window_days on a staff-readable endpoint.
+ * The panel cannot read the actual number: GET-ing it means the preferences
+ * route, which stands on `preferences.update`, and nobody would grant a
+ * cashier the right to change the store's settings so that the till screen
+ * could render a warning. Hence the two-band warning below, derived from
+ * the BOUNDS. If an admin ever raises the platform default above 3, the
+ * upper band starts firing a few days early — the warning is then
+ * over-cautious rather than absent, and the real fix is to expose
+ * validation_window_days on an endpoint the till may read.
  */
 const DEFAULT_VALIDATION_WINDOW_DAYS = 3;
 
@@ -402,11 +404,12 @@ function initialSplitRows(): SplitRow[] {
 export default function CreditPage() {
   const { t } = useTranslation();
   const { me } = useLayout();
-  // PLAN §1 staff roles: rate authority is manager and above. Keying a sale
-  // in is staff work, but choosing what it pays is not — the API answers
-  // 403 `manager_required` to a staff account that sends
-  // `cashback_rate_percent`, so the control is not rendered for one.
-  const canSetCustomRate = hasRoleAtLeast(me.role, 'manager');
+  // Keying a sale in is one grant, choosing what it pays is another: the
+  // override is the owner's "custom cashback for sales", and the API checks
+  // it inside the controller because it gates a FIELD, not the route — a
+  // sale sent with `cashback_rate_percent` by an account without it is
+  // refused 403 `permission_required`, so the control is not rendered.
+  const canSetCustomRate = can(me, 'credits.custom_rate');
   const [code, setCode] = useState('');
   const [invoiceNo, setInvoiceNo] = useState('');
   const [eligibleInput, setEligibleInput] = useState('');

@@ -101,7 +101,7 @@ it('collects the Dhivehi name at signup without letting it reach the slug', func
 
 it('lets the owner set the Dhivehi name later and drops the storefront cache', function () {
     $merchant = listedMerchant(['name' => 'Kaanu Mart', 'name_dv' => null]);
-    $owner = MerchantUser::factory()->create(['merchant_id' => $merchant->id, 'role' => 'owner']);
+    $owner = MerchantUser::factory()->owner()->create(['merchant_id' => $merchant->id]);
 
     // Warm the read model holding the OLD (absent) name.
     $this->getJson('/api/discover')->assertOk()->assertJsonPath('data.featured.0.name_dv', null);
@@ -119,7 +119,7 @@ it('lets the owner set the Dhivehi name later and drops the storefront cache', f
 
 it('never lets the profile rename the store itself', function () {
     $merchant = listedMerchant(['name' => 'Kaanu Mart']);
-    $owner = MerchantUser::factory()->create(['merchant_id' => $merchant->id, 'role' => 'owner']);
+    $owner = MerchantUser::factory()->owner()->create(['merchant_id' => $merchant->id]);
 
     $this->actingAs($owner, 'merchant')
         ->patchJson('/api/merchant/profile', ['name' => 'Something Else', 'name_dv' => 'ކާނު'])

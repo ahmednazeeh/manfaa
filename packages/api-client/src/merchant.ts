@@ -29,9 +29,13 @@ import {
  * account, branches, staff, preferences, customer lookup). All amounts sent
  * and received are integer laari.
  *
- * Settings routes are OWNER-only (403 code `owner_required` for staff) —
- * except the customer lookup, which stays staff-accessible because posting
- * credits is staff work.
+ * Authority is a PERMISSION, never a tier (PLAN §13b): every merchant route
+ * names exactly one slug from MERCHANT_PERMISSIONS and refuses with 403
+ * `permission_required`, carrying the missing slug in `permission` so the
+ * panel can say what the account would need. Each fetcher below records the
+ * slug its route requires. Gate the UI on the resolved permission array
+ * `/me` returns (MerchantAuthUserSchema) and never on the role — role names
+ * are the store's own words now, and a set has no order to compare.
  *
  * Every settlement now carries `payment_instructions` — the platform's
  * active primary bank account embedded as `bank_account` (or null with
@@ -43,8 +47,9 @@ import {
  * submit the slip and bank reference, which is the single act that creates
  * the batch, landing it in `payment_review`. There is no draft-then-submit
  * pair and no merchant route to `awaiting_payment` — a settlement without a
- * receipt cannot be created. Settlement MUTATIONS need manager or above plus
- * an approved store; the preview and the reads stay staff-accessible.
+ * receipt cannot be created. Settlement MUTATIONS need `settlements.create`
+ * plus an approved store; the preview and the reads carry their own narrower
+ * permissions (`settlements.preview`, `settlements.view`).
  */
 
 interface RequestOptions {
@@ -393,7 +398,10 @@ export const SETTLEMENT_SLIP_ACCEPT =
  *  - `duplicate_bank_ref` (409) — that reference is already recorded on this
  *    batch; the transfer is in the system and re-recording it would book the
  *    same cash twice;
- *  - `manager_required` (403) — submitting is a manager's job (staff read);
+ *  - `permission_required` (403) — the account may read settlements but not
+ *    submit them. The body's `permission` names the slug that is missing
+ *    (`settlements.create`, `settlements.receipt_add`), which is the whole
+ *    reason the code is no longer a tier: there is no tier to name;
  *  - `store_not_approved` (403) — the store has not passed review.
  *
  * A 422 with no `code` is ordinary validation (an ineligible transaction in
@@ -404,7 +412,7 @@ export const SettlementErrorCodeSchema = z.enum([
   'slip_too_large',
   'slip_unsupported_type',
   'duplicate_bank_ref',
-  'manager_required',
+  'permission_required',
   'store_not_approved',
 ]);
 export type SettlementErrorCode = z.infer<typeof SettlementErrorCodeSchema>;
@@ -424,7 +432,7 @@ function receiptForm(receipt: SettlementReceiptInput): FormData {
  * `payment_review`. There is no draft and no awaiting_payment on this path —
  * a settlement without a receipt cannot be created at all — and the lines
  * freeze on creation, so a rejected batch (not a re-edit) is how a mistake
- * is undone. Manager or above, approved store only. 201 with lines and
+ * is undone. `settlements.create`, approved store only. 201 with lines and
  * payments loaded.
  */
 export function createMerchantSettlement(
@@ -731,7 +739,10 @@ export function listMerchantProductCategories(
   );
 }
 
-/** POST /api/merchant/product-categories — owner only, approved stores only (201). */
+/**
+ * POST /api/merchant/product-categories — `product_categories.create`,
+ * trading stores only (201).
+ */
 export function createMerchantProductCategory(
   body: CreateProductCategoryRequest,
   options: RequestOptions = {},
@@ -744,8 +755,8 @@ export function createMerchantProductCategory(
 }
 
 /**
- * PATCH /api/merchant/product-categories/{id} — owner only. There is
- * deliberately no DELETE: deactivation (`active: false`) is the only
+ * PATCH /api/merchant/product-categories/{id} — `product_categories.edit`.
+ * There is deliberately no DELETE: deactivation (`active: false`) is the only
  * removal, because historical transaction lines reference the category.
  */
 export function updateMerchantProductCategory(
@@ -803,7 +814,7 @@ export type MerchantPromotionWithPreviewResponse = z.infer<
   typeof MerchantPromotionWithPreviewResponseSchema
 >;
 
-/** GET /api/merchant/promotions — newest first; staff may read, owner mutates. */
+/** GET /api/merchant/promotions — newest first; `promotions.view`. */
 export function listMerchantPromotions(
   params: { status?: PromotionStatus } = {},
   options: RequestOptions = {},
@@ -846,7 +857,7 @@ export type CreatePromotionRequest = z.infer<
   typeof CreatePromotionRequestSchema
 >;
 
-/** POST /api/merchant/promotions — creates a draft (201). Owner only (403). */
+/** POST /api/merchant/promotions — creates a draft (201). `promotions.create`. */
 export function createMerchantPromotion(
   body: CreatePromotionRequest,
   options: RequestOptions = {},
@@ -859,8 +870,12 @@ export function createMerchantPromotion(
 }
 
 /**
- * POST /api/merchant/promotions/{id}/publish — draft → published. Owner
- * only. Once published the promotion is IMMUTABLE for its stated duration —
+ * POST /api/merchant/promotions/{id}/publish — draft → published.
+ * `promotions.publish`, held separately from `promotions.create` because
+ * this is the irreversible half: drafting a promotion costs nothing and
+ * publishing one binds the store to it in public.
+ *
+ * Once published the promotion is IMMUTABLE for its stated duration —
  * there is deliberately no update and no early-end endpoint; a non-draft
  * answers 409.
  */
@@ -876,9 +891,9 @@ export function publishMerchantPromotion(
 }
 
 /**
- * POST /api/merchant/promotions/{id}/cancel — withdraws a DRAFT. Owner only.
- * A published promotion can never be cancelled (409) — that would be the
- * forbidden early end.
+ * POST /api/merchant/promotions/{id}/cancel — withdraws a DRAFT.
+ * `promotions.cancel`. A published promotion can never be cancelled (409) —
+ * that would be the forbidden early end.
  */
 export function cancelMerchantPromotion(
   id: number,
@@ -892,11 +907,11 @@ export function cancelMerchantPromotion(
 }
 
 // ---------------------------------------------------------------------------
-// Settings — profile (owner only)
+// Settings — profile (`profile.view` / `profile.edit`)
 // ---------------------------------------------------------------------------
 
 /**
- * The owner-editable merchant profile. `name`, `slug` and `status` are
+ * The merchant profile. `name`, `slug` and `status` are
  * read-only display — renaming the business is an identity change and stays
  * admin-only (a PATCHed `name` is dropped server-side). `eligibility_basis`
  * is the §11 free-text mirror of the agreement, displayed to customers,
@@ -953,7 +968,7 @@ export type MerchantProfileResponse = z.infer<
 
 export const UpdateMerchantProfileRequestSchema = z.object({
   /**
-   * The Thaana name. Editable by the owner even though `name` is not: this
+   * The Thaana name. Editable even though `name` is not: this
    * is a translation of the display name rather than the store's identity,
    * and nothing (the slug included) is derived from it.
    */
@@ -974,7 +989,7 @@ export type UpdateMerchantProfileRequest = z.infer<
   typeof UpdateMerchantProfileRequestSchema
 >;
 
-/** GET /api/merchant/profile — owner only. */
+/** GET /api/merchant/profile — `profile.view`. */
 export function getMerchantProfile(
   options: RequestOptions = {},
 ): Promise<MerchantProfileResponse> {
@@ -983,7 +998,10 @@ export function getMerchantProfile(
   });
 }
 
-/** PATCH /api/merchant/profile — partial update; omitted keys are untouched. */
+/**
+ * PATCH /api/merchant/profile — partial update; omitted keys are untouched.
+ * `profile.edit` plus an approved store.
+ */
 export function updateMerchantProfile(
   body: UpdateMerchantProfileRequest,
   options: RequestOptions = {},
@@ -996,18 +1014,22 @@ export function updateMerchantProfile(
 }
 
 // ---------------------------------------------------------------------------
-// Settings — bank account (owner only)
+// Settings — bank account (`bank_account.view` / `bank_account.update`)
 // ---------------------------------------------------------------------------
 
 /**
  * The merchant's own bank identity, used for matching INBOUND settlement
  * payments (and future wallet withdrawals) — never a payout destination:
  * money flows merchant → platform.
+ *
+ * All three are nullable because the READ is reachable before the identity
+ * has ever been supplied — a store that has not filled it in reads back
+ * three nulls rather than 404. The WRITE still demands all three together.
  */
 export const MerchantBankAccountSchema = z.object({
-  bank_name: z.string(),
-  bank_account: z.string(),
-  bank_account_name: z.string(),
+  bank_name: z.string().nullable(),
+  bank_account: z.string().nullable(),
+  bank_account_name: z.string().nullable(),
 });
 export type MerchantBankAccount = z.infer<typeof MerchantBankAccountSchema>;
 
@@ -1031,7 +1053,26 @@ export type UpdateMerchantBankAccountRequest = z.infer<
   typeof UpdateMerchantBankAccountRequestSchema
 >;
 
-/** PATCH /api/merchant/bank-account — owner only; all three fields together. */
+/**
+ * GET /api/merchant/bank-account — `bank_account.view` (D6). Seeing which
+ * account the store is matched against is bookkeeping; repointing it is the
+ * most consequential change in the panel, so the read is its own permission
+ * and a role can hold it without holding `bank_account.update`.
+ */
+export function getMerchantBankAccount(
+  options: RequestOptions = {},
+): Promise<MerchantBankAccountResponse> {
+  return apiFetch(
+    '/api/merchant/bank-account',
+    MerchantBankAccountResponseSchema,
+    { signal: options.signal },
+  );
+}
+
+/**
+ * PATCH /api/merchant/bank-account — `bank_account.update`; all three fields
+ * together.
+ */
 export function updateMerchantBankAccount(
   body: UpdateMerchantBankAccountRequest,
   options: RequestOptions = {},
@@ -1044,7 +1085,7 @@ export function updateMerchantBankAccount(
 }
 
 // ---------------------------------------------------------------------------
-// Settings — branches (owner only)
+// Settings — branches (`branches.view` / `.create` / `.edit` / `.delete`)
 // ---------------------------------------------------------------------------
 
 /** Coordinates are floats deliberately — geography, not money. */
@@ -1141,32 +1182,325 @@ export async function deleteMerchantBranch(
 }
 
 // ---------------------------------------------------------------------------
-// Settings — staff (owner only)
+// Settings — permissions catalogue (`roles.view`)
 // ---------------------------------------------------------------------------
 
 /**
- * The three merchant panel tiers (PLAN §1, decision 2026-08-15), listed
- * DESCENDING in authority:
+ * The closed set of things a merchant panel account can be allowed to do
+ * (PLAN §13b). Mirrors App\Domain\MerchantAccess\Permission in catalogue
+ * order — the order the roles screen renders within each group.
  *
- *  - `owner`   everything, including the bank account, staff management,
- *              preferences, the store profile, the logo and the API
- *              credential listing;
- *  - `manager` the operating surface — cashback rate, promotions,
- *              settlements, branches and product categories — and nothing
- *              that moves money out or mints accounts;
- *  - `staff`   credit entry, the customer lookup and the read screens.
- *
- * Mirrors the merchant_users_role_check constraint; the API answers 403
- * `owner_required` / `manager_required` naming the tier a route needs.
+ * Slugs are `group.action` with a DOT. Vendor token abilities
+ * (VENDOR_ABILITIES below) keep `group:action` with a COLON, and the
+ * separation is load-bearing rather than cosmetic: they are different axes —
+ * a session-authenticated merchant user carries a Sanctum TransientToken
+ * whose ability check answers true for everything — so a slug that reads
+ * wrong at a glance is the cheapest way to catch one being passed to the
+ * other.
  */
-export const MerchantStaffRoleSchema = z.enum(['owner', 'manager', 'staff']);
-export type MerchantStaffRole = z.infer<typeof MerchantStaffRoleSchema>;
+export const MERCHANT_PERMISSIONS = [
+  'credits.create',
+  'credits.custom_rate',
+  'customers.lookup',
+  'transactions.view',
+  'transactions.amend',
+  'transactions.cancel',
+  'rate.view',
+  'rate.update',
+  'promotions.view',
+  'promotions.create',
+  'promotions.publish',
+  'promotions.cancel',
+  'product_categories.view',
+  'product_categories.create',
+  'product_categories.edit',
+  'settlements.view',
+  'settlements.preview',
+  'settlements.create',
+  'settlements.receipt_add',
+  'wallet.view',
+  'wallet.settle',
+  'profile.view',
+  'profile.edit',
+  'branding.update',
+  'branches.view',
+  'branches.create',
+  'branches.edit',
+  'branches.delete',
+  'bank_account.view',
+  'bank_account.update',
+  'preferences.update',
+  'staff.view',
+  'staff.invite',
+  'staff.edit',
+  'roles.view',
+  'roles.manage',
+  'api_credentials.view',
+  'api_credentials.create',
+  'api_credentials.revoke',
+  'setup.view',
+  'setup.edit',
+  'setup.submit',
+] as const;
+export const MerchantPermissionSchema = z.enum(MERCHANT_PERMISSIONS);
+export type MerchantPermission = (typeof MERCHANT_PERMISSIONS)[number];
 
+/**
+ * Narrows a permission slug off the wire. Every permission ARRAY in this
+ * file is `string[]` rather than this enum, deliberately: the catalogue is
+ * SERVED (see listMerchantPermissions), so a role can legitimately hold — and
+ * the roles screen can legitimately render and send back — a slug this build
+ * predates. Type the panel's own gate calls as MerchantPermission for the
+ * compile-time check, and test wire values with this before labelling them.
+ */
+export function isMerchantPermission(
+  value: string,
+): value is MerchantPermission {
+  return (MERCHANT_PERMISSIONS as readonly string[]).includes(value);
+}
+
+/** One permission as the catalogue endpoint describes it. */
+export const MerchantPermissionEntrySchema = z.object({
+  slug: z.string(),
+  /** The ACT, in prose, worded by the server: "Cancel a transaction". */
+  label: z.string(),
+  /** The owning group's slug — the same value as its group's `slug`. */
+  group: z.string(),
+});
+export type MerchantPermissionEntry = z.infer<
+  typeof MerchantPermissionEntrySchema
+>;
+
+/** One heading on the roles screen, with the permissions that sit under it. */
+export const MerchantPermissionGroupSchema = z.object({
+  slug: z.string(),
+  label: z.string(),
+  permissions: z.array(MerchantPermissionEntrySchema),
+});
+export type MerchantPermissionGroup = z.infer<
+  typeof MerchantPermissionGroupSchema
+>;
+
+export const MerchantPermissionCatalogueResponseSchema = z.object({
+  data: z.object({ groups: z.array(MerchantPermissionGroupSchema) }),
+});
+export type MerchantPermissionCatalogueResponse = z.infer<
+  typeof MerchantPermissionCatalogueResponseSchema
+>;
+
+/**
+ * GET /api/merchant/permissions — `roles.view`. The catalogue with its
+ * groups and its wording, published rather than hardcoded here (D8) so a
+ * permission added by a later deploy renders under the right heading in a
+ * panel build that predates it. Render the checkboxes from THIS, not from
+ * MERCHANT_PERMISSIONS — that const exists for compile-time safety on the
+ * panel's own gate calls, and a screen driven by it would silently omit the
+ * checkbox for a permission the server is already enforcing.
+ */
+export function listMerchantPermissions(
+  options: RequestOptions = {},
+): Promise<MerchantPermissionCatalogueResponse> {
+  return apiFetch(
+    '/api/merchant/permissions',
+    MerchantPermissionCatalogueResponseSchema,
+    { signal: options.signal },
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Settings — roles (`roles.view` / `roles.manage`)
+// ---------------------------------------------------------------------------
+
+/**
+ * One of the merchant's own roles. Roles are per-store, so `name` is the
+ * shop's own word for the job — "Shift lead", "Accounts" — and `name_dv` is
+ * that word in Thaana; neither is an i18n key and neither is safe to compare
+ * against. `slug` is what identifies the three seeded presets and survives a
+ * rename.
+ *
+ * `permissions` is the RESOLVED set, with the owner's wildcard already
+ * expanded against the catalogue (D3): the owner role stores an empty list
+ * because its authority is the FLAG, so a screen rendering the stored column
+ * would draw the most powerful role in the store with every box unticked.
+ *
+ * `is_owner` is frozen apart from its name (D9) and `is_system` marks the
+ * three presets, so the panel can grey out what it must not offer.
+ */
+export const MerchantRoleSchema = z.object({
+  id: z.number().int(),
+  name: z.string(),
+  name_dv: z.string().nullable(),
+  slug: z.string(),
+  permissions: z.array(z.string()),
+  is_owner: z.boolean(),
+  is_system: z.boolean(),
+  /**
+   * How many accounts stand on this role — the reason a delete is refused.
+   * Every role response counts it; a body without it is a server regression
+   * worth failing on rather than rendering a blank column.
+   */
+  staff_count: z.number().int(),
+});
+export type MerchantRole = z.infer<typeof MerchantRoleSchema>;
+
+/**
+ * The role as it appears NEXT TO a person — on the staff list and on the
+ * signed-in account. Just enough to PRINT it and to know it is the frozen
+ * one; the permission set belongs to the roles screen, and repeating the
+ * whole catalogue against every cashier row would be the wrong wire.
+ *
+ * Nullable because nothing has authority without a role: the panel renders
+ * the gap rather than inventing a name. Never gate on it — gate on the
+ * resolved permission array from `/me`.
+ */
+export const MerchantRoleSummarySchema = z.object({
+  id: z.number().int(),
+  name: z.string(),
+  name_dv: z.string().nullable(),
+  is_owner: z.boolean(),
+});
+export type MerchantRoleSummary = z.infer<typeof MerchantRoleSummarySchema>;
+
+export const MerchantRoleListResponseSchema = z.object({
+  data: z.array(MerchantRoleSchema),
+});
+export type MerchantRoleListResponse = z.infer<
+  typeof MerchantRoleListResponseSchema
+>;
+
+export const MerchantRoleResponseSchema = dataWrapped(MerchantRoleSchema);
+export type MerchantRoleResponse = z.infer<typeof MerchantRoleResponseSchema>;
+
+/**
+ * Refusals the roles screen must tell apart, carried as `code` (read them
+ * with `apiErrorCode`). They need different repairs, which is the whole
+ * reason they are distinct — a screen that can only print prose can offer
+ * none of them:
+ *
+ *  - `permission_not_held` (403) — you cannot give a role a permission you
+ *    do not hold yourself (D5). The body's `permissions` array names the
+ *    offending slugs, so the screen can point at the checkboxes;
+ *  - `owner_role_not_delegable` (403) — only an owner hands out the owner
+ *    role;
+ *  - `cannot_edit_own_role` (403) — otherwise `roles.manage` silently equals
+ *    owner;
+ *  - `owner_role_frozen` (409) — the owner role always holds everything, so
+ *    its permissions cannot be edited. It can still be renamed;
+ *  - `owner_role_undeletable` (409) — every store keeps one;
+ *  - `role_in_use` (409) — staff still stand on it; the body's `staff_count`
+ *    says how many. Move them first;
+ *  - `role_cap_reached` (422) — 20 roles per store.
+ */
+export const MERCHANT_ROLE_ERROR_CODES = [
+  'permission_not_held',
+  'owner_role_not_delegable',
+  'cannot_edit_own_role',
+  'owner_role_frozen',
+  'owner_role_undeletable',
+  'role_in_use',
+  'role_cap_reached',
+] as const;
+export const MerchantRoleErrorCodeSchema = z.enum(MERCHANT_ROLE_ERROR_CODES);
+export type MerchantRoleErrorCode = (typeof MERCHANT_ROLE_ERROR_CODES)[number];
+
+export const CreateMerchantRoleRequestSchema = z.object({
+  name: z.string().min(2).max(80),
+  /** The Thaana label. Optional — a store that leaves it blank shows `name`. */
+  name_dv: z.string().max(80).nullable().optional(),
+  /**
+   * Required but allowed to be EMPTY: a role holding nothing yet is a
+   * legitimate starting point on a screen built out of checkboxes.
+   *
+   * Typed as strings rather than the enum because the checkboxes come from
+   * the served catalogue, which may name a permission this build predates.
+   * The server refuses anything outside its own catalogue (422) and anything
+   * the caller does not hold themselves (403 `permission_not_held`).
+   */
+  permissions: z.array(z.string()),
+});
+export type CreateMerchantRoleRequest = z.infer<
+  typeof CreateMerchantRoleRequestSchema
+>;
+
+/**
+ * Every key optional and only the ones SENT are applied — `name_dv` is
+ * nullable, so "clear it" and "leave it alone" are different requests that
+ * would otherwise both arrive as null. Sending `permissions` REPLACES the
+ * set; there is no add/remove.
+ */
+export const UpdateMerchantRoleRequestSchema = z.object({
+  name: z.string().min(2).max(80).optional(),
+  name_dv: z.string().max(80).nullable().optional(),
+  permissions: z.array(z.string()).optional(),
+});
+export type UpdateMerchantRoleRequest = z.infer<
+  typeof UpdateMerchantRoleRequestSchema
+>;
+
+/** GET /api/merchant/roles — the store's roles in id order, each counted. */
+export function listMerchantRoles(
+  options: RequestOptions = {},
+): Promise<MerchantRoleListResponse> {
+  return apiFetch('/api/merchant/roles', MerchantRoleListResponseSchema, {
+    signal: options.signal,
+  });
+}
+
+/** POST /api/merchant/roles — `roles.manage` (201). */
+export function createMerchantRole(
+  body: CreateMerchantRoleRequest,
+  options: RequestOptions = {},
+): Promise<MerchantRoleResponse> {
+  return apiFetch('/api/merchant/roles', MerchantRoleResponseSchema, {
+    method: 'POST',
+    body,
+    signal: options.signal,
+  });
+}
+
+/** PATCH /api/merchant/roles/{id} — partial; omitted keys are untouched. */
+export function updateMerchantRole(
+  id: number,
+  body: UpdateMerchantRoleRequest,
+  options: RequestOptions = {},
+): Promise<MerchantRoleResponse> {
+  return apiFetch(`/api/merchant/roles/${id}`, MerchantRoleResponseSchema, {
+    method: 'PATCH',
+    body,
+    signal: options.signal,
+  });
+}
+
+/**
+ * DELETE /api/merchant/roles/{id} — 204 on success. A role with staff on it
+ * answers 409 `role_in_use` and the owner role answers 409
+ * `owner_role_undeletable`; both arrive here as ApiError.
+ */
+export async function deleteMerchantRole(
+  id: number,
+  options: RequestOptions = {},
+): Promise<void> {
+  await apiFetch(`/api/merchant/roles/${id}`, z.undefined(), {
+    method: 'DELETE',
+    signal: options.signal,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Settings — staff (`staff.view` / `staff.invite` / `staff.edit`)
+// ---------------------------------------------------------------------------
+
+/**
+ * A merchant panel account. The role is an OBJECT, not a name: names are the
+ * store's own words now, so a string would be neither stable enough to
+ * compare nor complete enough to print, and the id is what the edit form
+ * patches back.
+ */
 export const MerchantStaffSchema = z.object({
   id: z.number().int(),
   name: z.string(),
   email: z.string(),
-  role: MerchantStaffRoleSchema,
+  role: MerchantRoleSummarySchema.nullable(),
   is_active: z.boolean(),
   created_at: z.string().nullable(),
 });
@@ -1187,11 +1521,12 @@ export const CreateMerchantStaffRequestSchema = z.object({
   /** Must be unique across all merchant panel accounts (422 otherwise). */
   email: z.email().max(255),
   /**
-   * The tier the invite lands in. Omitted means `staff` — the invite is
-   * back-compatible with the two-tier API. Only an owner may send this
-   * (the whole staff surface is owner-gated).
+   * One of the STORE'S OWN roles (a foreign id is refused exactly as a
+   * missing one). Required: with a per-store role table there is no tier
+   * left to default to, and an invite that quietly picked a role would be
+   * granting authority nobody chose.
    */
-  role: MerchantStaffRoleSchema.optional(),
+  merchant_role_id: z.number().int(),
 });
 export type CreateMerchantStaffRequest = z.infer<
   typeof CreateMerchantStaffRequestSchema
@@ -1211,7 +1546,7 @@ export type CreateMerchantStaffResponse = z.infer<
 >;
 
 export const UpdateMerchantStaffRequestSchema = z.object({
-  role: MerchantStaffRoleSchema.optional(),
+  merchant_role_id: z.number().int().optional(),
   is_active: z.boolean().optional(),
 });
 export type UpdateMerchantStaffRequest = z.infer<
@@ -1227,7 +1562,12 @@ export function listMerchantStaff(
   });
 }
 
-/** POST /api/merchant/staff — creates a staff account (201) + one-time temp password. */
+/**
+ * POST /api/merchant/staff — creates a staff account (201) + one-time temp
+ * password. `staff.invite` plus an approved store. Handing out a role the
+ * caller could not hand out is refused with a MerchantRoleErrorCode
+ * (`permission_not_held`, `owner_role_not_delegable`).
+ */
 export function createMerchantStaff(
   body: CreateMerchantStaffRequest,
   options: RequestOptions = {},
@@ -1241,8 +1581,11 @@ export function createMerchantStaff(
 
 /**
  * PATCH /api/merchant/staff/{id} — role and/or activation. There is
- * deliberately no DELETE: deactivation is the only removal. Demoting or
- * deactivating the last active owner answers 422.
+ * deliberately no DELETE: deactivation is the only removal. Moving off — or
+ * deactivating — the merchant's last active OWNER-flagged account answers
+ * 422, and the guard keys on that flag rather than on any permission (D4):
+ * a custom role holding `staff.manage` must not become a way to leave the
+ * store with nobody who can reach its bank account.
  */
 export function updateMerchantStaff(
   id: number,
@@ -1257,7 +1600,7 @@ export function updateMerchantStaff(
 }
 
 // ---------------------------------------------------------------------------
-// Settings — preferences (owner only)
+// Settings — preferences (`preferences.update`)
 // ---------------------------------------------------------------------------
 
 /**
@@ -1301,7 +1644,7 @@ export type UpdateMerchantPreferencesRequest = z.infer<
   typeof UpdateMerchantPreferencesRequestSchema
 >;
 
-/** PATCH /api/merchant/preferences — partial update; owner only. */
+/** PATCH /api/merchant/preferences — partial update; `preferences.update`. */
 export function updateMerchantPreferences(
   body: UpdateMerchantPreferencesRequest,
   options: RequestOptions = {},
@@ -1314,7 +1657,7 @@ export function updateMerchantPreferences(
 }
 
 // ---------------------------------------------------------------------------
-// GET /api/merchant/customers/lookup — staff-accessible
+// GET /api/merchant/customers/lookup — `customers.lookup`
 // ---------------------------------------------------------------------------
 
 /**
@@ -1348,7 +1691,7 @@ export function lookupMerchantCustomer(
 }
 
 // ---------------------------------------------------------------------------
-// Settings — API access (owner only)
+// Settings — API access (`api_credentials.view` / `.create` / `.revoke`)
 // ---------------------------------------------------------------------------
 
 /**
@@ -1459,7 +1802,8 @@ export function listMerchantCredentials(
 
 /**
  * POST /api/merchant/credentials — mints a vendor token (201) plus the
- * one-time plaintext. Owner only. Refusals worth handling by code:
+ * one-time plaintext. `api_credentials.create`. Refusals worth handling by
+ * code:
  *
  *  - `store_not_approved` (409) — the store has not passed review yet;
  *  - `store_not_trading` (409) — suspended or closed; revocation still works;

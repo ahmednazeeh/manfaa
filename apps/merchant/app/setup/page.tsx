@@ -7,6 +7,7 @@ import { useTheme } from 'next-themes';
 import { useTranslation } from 'react-i18next';
 import { isOnboardingStatus } from '@/lib/api';
 import { toAbsoluteUrl } from '@/lib/helpers';
+import { can } from '@/lib/roles';
 import { isUnauthorized, useLogout, useMe, useSetupState } from '@/lib/queries';
 import {
   Alert,
@@ -32,7 +33,8 @@ import { SetupStatusScreen } from '@/components/setup/status-screen';
  *  - rejected             → the same screen with the admin's reason and an
  *                           "Edit and resubmit" path back into the wizard.
  *
- * The wizard is owner-only (the API enforces it; staff see a notice). The
+ * The wizard stands on `setup.view` / `setup.edit`, which only the seeded
+ * Owner role holds (the API enforces it; anyone else sees a notice). The
  * only actions besides the wizard itself are language/theme and logout.
  */
 export default function SetupPage() {
@@ -45,7 +47,11 @@ export default function SetupPage() {
   // switches into the wizard until the next submit.
   const [editingAfterRejection, setEditingAfterRejection] = useState(false);
 
-  const isOwner = me !== undefined && me.role === 'owner';
+  // Reading the wizard's state and FILLING it are separate grants (the API
+  // gates them as setup.view / setup.edit): an account that may only look
+  // gets the status screen, never a form whose every save would be refused.
+  const canOpenSetup = me !== undefined && can(me, 'setup.view');
+  const canEditSetup = me !== undefined && can(me, 'setup.edit');
   const belongsHere =
     me !== undefined && isOnboardingStatus(me.merchant.status);
 
@@ -57,8 +63,8 @@ export default function SetupPage() {
     }
   }, [error, me, belongsHere, router]);
 
-  // The setup state is owner-only server-side; skip the query otherwise.
-  const setupEnabled = isOwner && belongsHere;
+  // The setup state needs setup.view server-side; skip the query otherwise.
+  const setupEnabled = canOpenSetup && belongsHere;
   const setup = useSetupState(setupEnabled);
 
   const handleLogout = () => {
@@ -89,6 +95,7 @@ export default function SetupPage() {
 
   const state = setupEnabled ? setup.data : undefined;
   const showWizard =
+    canEditSetup &&
     state !== undefined &&
     (state.status === 'draft' ||
       (state.status === 'rejected' && editingAfterRejection));
@@ -122,7 +129,7 @@ export default function SetupPage() {
 
       <main className="grow flex justify-center px-5 pb-10 pt-4">
         <div className="w-full max-w-3xl">
-          {!isOwner ? (
+          {!canOpenSetup ? (
             <Alert variant="warning" appearance="light">
               <AlertIcon>
                 <ShieldAlert />

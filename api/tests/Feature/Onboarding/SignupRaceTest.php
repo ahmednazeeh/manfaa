@@ -62,6 +62,9 @@ function signupRaceCleanup(PDO $pdo, bool $releaseTestLocks = false): void
         }
 
         $pdo->exec("DELETE FROM merchant_users WHERE email LIKE '%@racemart.mv'");
+        // Roles sit between the users that stand on them and the store that
+        // owns them, so they go in the middle.
+        $pdo->exec("DELETE FROM merchant_roles WHERE merchant_id IN (SELECT id FROM merchants WHERE slug LIKE 'race-mart%' OR contact_phone LIKE '+96079900%')");
         $pdo->exec("DELETE FROM merchants WHERE slug LIKE 'race-mart%' OR contact_phone LIKE '+96079900%'");
         $pdo->exec("DELETE FROM merchant_otp_codes WHERE phone LIKE '+96079900%'");
     } catch (PDOException) {
@@ -303,8 +306,15 @@ it('answers the clean email-taken 422 when a rival account wins the insert', fun
         $merchantId = (int) $pdo->query("INSERT INTO merchants (name, slug, status, channel, created_at, updated_at)
             VALUES ('Rival Mart', 'race-mart-rival', 'draft', 'in_store', now(), now()) RETURNING id")->fetchColumn();
 
-        $pdo->exec("INSERT INTO merchant_users (merchant_id, name, email, password, role, is_active, created_at, updated_at)
-            VALUES ({$merchantId}, 'Rival', 'owner@racemart.mv', 'x', 'owner', true, now(), now())");
+        // Committed on this second connection exactly as a real signup
+        // writes it — store, its owner role, then the account standing on
+        // that role — so the row the unique index collides with is a
+        // plausible one and not a half-built user with no authority.
+        $roleId = (int) $pdo->query("INSERT INTO merchant_roles (merchant_id, name, slug, permissions, is_owner, is_system, created_at, updated_at)
+            VALUES ({$merchantId}, 'Owner', 'owner', '[]'::jsonb, true, true, now(), now()) RETURNING id")->fetchColumn();
+
+        $pdo->exec("INSERT INTO merchant_users (merchant_id, name, email, password, merchant_role_id, is_active, created_at, updated_at)
+            VALUES ({$merchantId}, 'Rival', 'owner@racemart.mv', 'x', {$roleId}, true, now(), now())");
     });
 
     try {

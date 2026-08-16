@@ -113,7 +113,7 @@ it('rejects a branch that belongs to another merchant', function () {
 });
 
 it('forbids staff from creating promotions — owner only, like a rate change', function () {
-    $staff = MerchantUser::factory()->for($this->merchant)->create(['role' => 'staff']);
+    $staff = MerchantUser::factory()->for($this->merchant)->staff()->create();
 
     $this->actingAs($staff, 'merchant')
         ->postJson('/api/merchant/promotions', promotionPayload())

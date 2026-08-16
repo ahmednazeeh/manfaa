@@ -8,6 +8,7 @@ use App\Domain\Customers\InvalidOtpException;
 use App\Domain\Customers\InvalidSignupTokenException;
 use App\Domain\Customers\SmsSender;
 use App\Domain\Customers\TooManyOtpAttemptsException;
+use App\Domain\MerchantAccess\RolePresetService;
 use App\Models\Merchant;
 use App\Models\MerchantOtpCode;
 use App\Models\MerchantUser;
@@ -47,7 +48,7 @@ final readonly class MerchantOtpService
 
     private const string OUTCOME_EXHAUSTED = 'exhausted';
 
-    public function __construct(private SmsSender $sms) {}
+    public function __construct(private SmsSender $sms, private RolePresetService $roles) {}
 
     /**
      * Issues a fresh code for the phone, superseding any live one. Behaves
@@ -184,13 +185,20 @@ final readonly class MerchantOtpService
 
             $merchant = $this->createMerchant($businessName, $email, (string) $otp->phone, $businessNameDv);
 
+            // The store's Owner / Manager / Staff roles, inside the SAME
+            // transaction as the store and its first account: a signup that
+            // half-failed would otherwise leave an owner pointing at no
+            // role, and a null role is refused by every gate — the account
+            // would exist and be able to do nothing at all.
+            $roles = $this->roles->provision($merchant);
+
             try {
                 $owner = MerchantUser::query()->create([
                     'merchant_id' => $merchant->id,
                     'name' => $businessName,
                     'email' => $email,
                     'password' => $password,
-                    'role' => 'owner',
+                    'merchant_role_id' => $roles[RolePresetService::OWNER]->id,
                     'is_active' => true,
                 ]);
             } catch (UniqueConstraintViolationException $e) {

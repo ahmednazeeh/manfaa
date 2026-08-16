@@ -23,7 +23,7 @@ import {
 import { toast } from 'sonner';
 import type { MerchantSettlement, ReceiptPayment } from '@/lib/api';
 import { useAddSettlementReceipt, useSettlement } from '@/lib/queries';
-import { hasRoleAtLeast } from '@/lib/roles';
+import { can } from '@/lib/roles';
 import {
   Alert,
   AlertContent,
@@ -235,9 +235,11 @@ export default function SettlementDetailPage({
   const id = Number(idParam);
   const { t } = useTranslation();
   const { me } = useLayout();
-  // Paying a batch is a settlement MUTATION — manager or owner (PLAN §1).
-  // Staff keep the read-only view; the API refuses the POST either way.
-  const canManage = hasRoleAtLeast(me.role, 'manager');
+  // Two different acts on this screen, and the API prices them apart:
+  // adding a receipt to THIS batch is `settlements.receipt_add`, while the
+  // "start a new one" path a rejection offers is a fresh submission.
+  const canAddReceipt = can(me, 'settlements.receipt_add');
+  const canSettle = can(me, 'settlements.create');
   const settlementQuery = useSettlement(id);
   const addReceipt = useAddSettlementReceipt(id);
   const [receiptOpen, setReceiptOpen] = useState(false);
@@ -268,7 +270,7 @@ export default function SettlementDetailPage({
   // (awaiting_payment or partially_settled). While one is already under
   // review, the honest answer is "we are checking it", not "pay again".
   const canPay =
-    canManage &&
+    canAddReceipt &&
     owes > 0 &&
     (settlement.state === 'awaiting_payment' ||
       settlement.state === 'partially_settled');
@@ -290,7 +292,7 @@ export default function SettlementDetailPage({
             </span>
           </ToolbarDescription>
         </ToolbarHeading>
-        {status.code === 'rejected' && canManage && (
+        {status.code === 'rejected' && canSettle && (
           <ToolbarActions>
             <Button asChild>
               <Link href="/settlements/new">

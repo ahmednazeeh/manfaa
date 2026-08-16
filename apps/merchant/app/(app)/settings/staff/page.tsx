@@ -3,20 +3,22 @@
 import { useState } from 'react';
 import {
   type CreateMerchantStaffResponse,
+  type MerchantRole,
   type MerchantStaff,
-  type MerchantStaffRole,
 } from '@manfaa/api-client';
 import { Copy, KeyRound, LoaderCircle, Plus, UserRound } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
-import { merchantRoleHint, merchantRoleLabel } from '@/lib/labels';
+import { toast } from 'sonner';
+import { roleDisplayName } from '@/lib/labels';
 import {
   apiErrorMessage,
   useCreateStaff,
+  useRoles,
   useStaff,
   useUpdateStaff,
 } from '@/lib/queries';
-import { useLayout } from '@/components/app-layout/context';
+import { can } from '@/lib/roles';
+import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
 import {
   Alert,
   AlertContent,
@@ -25,12 +27,7 @@ import {
 } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import {
-  Card,
-  CardHeader,
-  CardTable,
-  CardTitle,
-} from '@/components/ui/card';
+import { Card, CardHeader, CardTable, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
   Dialog,
@@ -58,7 +55,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { toast } from 'sonner';
+import { useLayout } from '@/components/app-layout/context';
 import {
   Toolbar,
   ToolbarActions,
@@ -71,30 +68,50 @@ import {
   ErrorBlock,
   LoadingBlock,
 } from '@/components/app/async-states';
+import { mayAssign, type RoleActor } from '../roles/delegation';
 
 /**
  * Staff management. There is deliberately no delete — deactivation is the
- * only removal, so the audit trail keeps its actors. The API refuses to
- * demote or deactivate the last active owner (422); the same guards appear
- * here as disabled controls so the dead end is visible before the request.
+ * only removal, so the audit trail keeps its actors.
+ *
+ * A role is one of the STORE'S OWN roles now (PLAN §13b), which changes
+ * three things on this screen:
+ *
+ *  1. The picker is the merchant's own list, and a role is editable long
+ *     after the invite — the shop that promotes a cashier on a Tuesday
+ *     should not have to delete and re-invite the account.
+ *  2. Handing someone a role is a grant, so the same D5 rule the roles
+ *     screen obeys applies here: a role holding a permission the reader
+ *     lacks is offered disabled, never as an option that 403s.
+ *  3. The last-owner guard keys on the role's `is_owner` FLAG (D4), not on
+ *     any permission — so a custom role holding `staff.edit` is not a way
+ *     to leave the store with nobody who can reach its bank account.
+ *
+ * Every guard here is a courtesy: the API refuses each one independently
+ * (422 for the last owner and for self-targeting, a coded 403 for
+ * delegation). What the screen adds is the SENTENCE — a disabled control
+ * with no explanation is the thing a shopkeeper mails support about.
  */
 
-/**
- * The three tiers, highest first. The picker lists the names only — the
- * selected tier's one-line description is rendered under the control, the
- * pattern the rest of the panel uses (profile channel, setup wizard), and
- * the one that keeps the closed trigger to a single word.
- */
-const ROLE_OPTIONS: MerchantStaffRole[] = ['owner', 'manager', 'staff'];
-
-function RoleOptions() {
-  const { t } = useTranslation();
+/** The picker's rows, with the delegation rule applied to each. */
+function RoleOptions({
+  roles,
+  actor,
+}: {
+  roles: MerchantRole[];
+  actor: RoleActor;
+}) {
+  const { i18n } = useTranslation();
 
   return (
     <>
-      {ROLE_OPTIONS.map((role) => (
-        <SelectItem key={role} value={role}>
-          {merchantRoleLabel(t, role)}
+      {roles.map((role) => (
+        <SelectItem
+          key={role.id}
+          value={String(role.id)}
+          disabled={!mayAssign(actor, role)}
+        >
+          {roleDisplayName(role, i18n.language)}
         </SelectItem>
       ))}
     </>
@@ -103,10 +120,14 @@ function RoleOptions() {
 
 function CreateStaffDialog({
   open,
+  roles,
+  actor,
   onOpenChange,
   onCreated,
 }: {
   open: boolean;
+  roles: MerchantRole[];
+  actor: RoleActor;
   onOpenChange: (open: boolean) => void;
   onCreated: (response: CreateMerchantStaffResponse) => void;
 }) {
@@ -114,22 +135,27 @@ function CreateStaffDialog({
   const createStaff = useCreateStaff();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
-  const [role, setRole] = useState<MerchantStaffRole>('staff');
+  // No default: with per-store roles there is no tier left to fall back to,
+  // and a preselected role is authority nobody chose.
+  const [roleId, setRoleId] = useState<number | null>(null);
 
+  const anyLocked = roles.some((role) => !mayAssign(actor, role));
   const canSubmit =
-    name.trim() !== '' && email.trim() !== '' && !createStaff.isPending;
+    name.trim() !== '' &&
+    email.trim() !== '' &&
+    roleId !== null &&
+    !createStaff.isPending;
 
   const submit = () => {
+    if (roleId === null) return;
     createStaff.mutate(
-      { name: name.trim(), email: email.trim(), role },
+      { name: name.trim(), email: email.trim(), merchant_role_id: roleId },
       {
         onSuccess: (response) => {
           onCreated(response);
         },
         onError: (error) =>
-          toast.error(
-            apiErrorMessage(error, 'Could not create the account.'),
-          ),
+          toast.error(apiErrorMessage(error, t('staff.createFailed'))),
       },
     );
   };
@@ -138,11 +164,11 @@ function CreateStaffDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>New account</DialogTitle>
+          <DialogTitle>{t('staff.newTitle')}</DialogTitle>
         </DialogHeader>
         <DialogBody className="flex flex-col gap-5">
           <div className="flex flex-col gap-2.5">
-            <Label htmlFor="staff-name">Name</Label>
+            <Label htmlFor="staff-name">{t('staff.nameLabel')}</Label>
             <Input
               id="staff-name"
               value={name}
@@ -151,39 +177,41 @@ function CreateStaffDialog({
             />
           </div>
           <div className="flex flex-col gap-2.5">
-            <Label htmlFor="staff-email">Email</Label>
+            <Label htmlFor="staff-email">{t('staff.emailLabel')}</Label>
             <Input
               id="staff-email"
               type="email"
+              dir="ltr"
               value={email}
               maxLength={255}
               onChange={(event) => setEmail(event.target.value)}
             />
             <p className="text-xs text-muted-foreground">
-              They log in with this email.
+              {t('staff.emailHint')}
             </p>
           </div>
           <div className="flex flex-col gap-2.5">
             <Label htmlFor="staff-role">{t('roles.pickerLabel')}</Label>
             <Select
-              value={role}
-              onValueChange={(value) => setRole(value as MerchantStaffRole)}
+              value={roleId === null ? undefined : String(roleId)}
+              onValueChange={(value) => setRoleId(Number(value))}
             >
               <SelectTrigger id="staff-role">
-                <SelectValue />
+                <SelectValue placeholder={t('staff.rolePlaceholder')} />
               </SelectTrigger>
               <SelectContent>
-                <RoleOptions />
+                <RoleOptions roles={roles} actor={actor} />
               </SelectContent>
             </Select>
             <p className="text-xs text-muted-foreground">
-              {merchantRoleHint(t, role)} {t('roles.inviteHint')}
+              {t('roles.inviteHint')}
+              {anyLocked && ` ${t('staff.notAssignableHint')}`}
             </p>
           </div>
         </DialogBody>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
+            {t('common.cancel')}
           </Button>
           <Button disabled={!canSubmit} onClick={submit}>
             {createStaff.isPending ? (
@@ -191,7 +219,7 @@ function CreateStaffDialog({
             ) : (
               <UserRound />
             )}
-            Create account
+            {t('staff.create')}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -211,6 +239,7 @@ function TempPasswordDialog({
   created: CreateMerchantStaffResponse;
   onDone: () => void;
 }) {
+  const { t } = useTranslation();
   const [acknowledged, setAcknowledged] = useState(false);
   const { copyToClipboard } = useCopyToClipboard();
 
@@ -226,24 +255,26 @@ function TempPasswordDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <KeyRound className="size-4.5" />
-            One-time password for {created.data.name}
+            {t('staff.tempTitle', { name: created.data.name })}
           </DialogTitle>
         </DialogHeader>
         <DialogBody className="flex flex-col gap-4">
           <Alert variant="warning" appearance="light">
             <AlertContent>
-              <AlertTitle>Shown exactly once.</AlertTitle>
+              <AlertTitle>{t('staff.tempOnceTitle')}</AlertTitle>
               <AlertDescription>
-                We only keep a scrambled copy, so this password cannot be
-                shown again. Pass it to {created.data.name} now; they should
-                change it after their first login.
+                {t('staff.tempOnceBody', { name: created.data.name })}
               </AlertDescription>
             </AlertContent>
           </Alert>
 
           <div className="flex flex-col gap-1.5 text-sm">
-            <span className="text-muted-foreground">Login email</span>
-            <span className="text-mono">{created.data.email}</span>
+            <span className="text-muted-foreground">
+              {t('staff.loginEmail')}
+            </span>
+            <span dir="ltr" className="text-mono">
+              {created.data.email}
+            </span>
           </div>
 
           <div className="flex items-center gap-2">
@@ -256,10 +287,10 @@ function TempPasswordDialog({
             <Button
               variant="outline"
               mode="icon"
-              aria-label="Copy password"
+              aria-label={t('staff.copyPassword')}
               onClick={() => {
                 copyToClipboard(created.temp_password);
-                toast.success('Password copied');
+                toast.success(t('staff.passwordCopied'));
               }}
             >
               <Copy />
@@ -272,15 +303,12 @@ function TempPasswordDialog({
               onCheckedChange={(checked) => setAcknowledged(checked === true)}
               className="mt-0.5"
             />
-            <span>
-              I have securely shared this password and understand it will not
-              be shown again.
-            </span>
+            <span>{t('staff.tempAcknowledge')}</span>
           </label>
         </DialogBody>
         <DialogFooter>
           <Button disabled={!acknowledged} onClick={onDone}>
-            Done
+            {t('staff.done')}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -289,22 +317,44 @@ function TempPasswordDialog({
 }
 
 export default function StaffSettingsPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { me } = useLayout();
   const staff = useStaff();
   const updateStaff = useUpdateStaff();
+
+  const actor: RoleActor = { permissions: me.permissions, role: me.role };
+  const canInvite = can(actor, 'staff.invite');
+  const canEdit = can(actor, 'staff.edit');
+  /**
+   * The role picker needs the store's roles, and reading them is its own
+   * permission. A custom role holding `staff.edit` but not `roles.view`
+   * therefore has nothing to choose from — the screen says so rather than
+   * showing an empty picker.
+   */
+  const canSeeRoles = can(actor, 'roles.view');
+  const roles = useRoles(canSeeRoles);
 
   const [creating, setCreating] = useState(false);
   const [created, setCreated] = useState<CreateMerchantStaffResponse | null>(
     null,
   );
 
+  const roleRows = roles.data ?? [];
+  const pickerReady = canSeeRoles && roleRows.length > 0;
+  /**
+   * The last-owner guard's own arithmetic (D4): accounts standing on an
+   * OWNER-FLAGGED role, active. A role that merely holds wide permissions
+   * deliberately does not count — only the flag carries the standing the
+   * guard protects.
+   */
   const activeOwners =
-    staff.data?.filter((user) => user.role === 'owner' && user.is_active) ?? [];
+    staff.data?.filter(
+      (user) => user.role?.is_owner === true && user.is_active,
+    ) ?? [];
 
   const mutate = (
     user: MerchantStaff,
-    body: { role?: MerchantStaffRole; is_active?: boolean },
+    body: { merchant_role_id?: number; is_active?: boolean },
     success: string,
   ) => {
     updateStaff.mutate(
@@ -312,9 +362,7 @@ export default function StaffSettingsPage() {
       {
         onSuccess: () => toast.success(success),
         onError: (error) =>
-          toast.error(
-            apiErrorMessage(error, 'Could not update the account.'),
-          ),
+          toast.error(apiErrorMessage(error, t('staff.updateFailed'))),
       },
     );
   };
@@ -323,55 +371,102 @@ export default function StaffSettingsPage() {
     <div className="container">
       <Toolbar>
         <ToolbarHeading>
-          <ToolbarPageTitle>Staff</ToolbarPageTitle>
-          <ToolbarDescription>
-            Panel accounts for your store — owners change everything,
-            managers run the shop, staff credit customers
-          </ToolbarDescription>
+          <ToolbarPageTitle>{t('staff.title')}</ToolbarPageTitle>
+          <ToolbarDescription>{t('staff.subtitle')}</ToolbarDescription>
         </ToolbarHeading>
-        <ToolbarActions>
-          <Button onClick={() => setCreating(true)}>
-            <Plus />
-            Add account
-          </Button>
-        </ToolbarActions>
+        {canInvite && (
+          <ToolbarActions>
+            <Button disabled={!pickerReady} onClick={() => setCreating(true)}>
+              <Plus />
+              {t('staff.add')}
+            </Button>
+          </ToolbarActions>
+        )}
       </Toolbar>
+
+      {!canSeeRoles && (canInvite || canEdit) && (
+        <Alert variant="warning" appearance="light" className="mb-5">
+          <AlertContent>
+            <AlertDescription>{t('staff.needsRolesView')}</AlertDescription>
+          </AlertContent>
+        </Alert>
+      )}
+
+      {canSeeRoles && roles.error !== null && (
+        <Alert variant="warning" appearance="light" className="mb-5">
+          <AlertContent>
+            <AlertDescription>{t('staff.rolesLoadFailed')}</AlertDescription>
+          </AlertContent>
+        </Alert>
+      )}
 
       <Card className="mb-7.5">
         <CardHeader>
           <CardTitle>
-            {staff.data ? `${staff.data.length} accounts` : 'Accounts'}
+            {staff.data
+              ? t('staff.count', { count: staff.data.length })
+              : t('staff.title')}
           </CardTitle>
         </CardHeader>
 
         {staff.error ? (
-          <ErrorBlock error={staff.error} />
+          <ErrorBlock error={staff.error} fallback={t('staff.loadFailed')} />
         ) : !staff.data ? (
           <LoadingBlock lines={4} />
         ) : staff.data.length === 0 ? (
-          <EmptyBlock>No accounts yet.</EmptyBlock>
+          <EmptyBlock>{t('staff.empty')}</EmptyBlock>
         ) : (
           <CardTable>
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Role</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="w-56">Manage</TableHead>
+                    <TableHead>{t('staff.columnName')}</TableHead>
+                    <TableHead className="w-72">
+                      {t('staff.columnRole')}
+                    </TableHead>
+                    <TableHead className="w-56">
+                      {t('staff.columnStatus')}
+                    </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {staff.data.map((user) => {
                     const isSelf = user.id === me.id;
+                    const isOwnerAccount = user.role?.is_owner === true;
                     const isLastActiveOwner =
-                      user.role === 'owner' &&
+                      isOwnerAccount &&
                       user.is_active &&
                       activeOwners.length === 1;
-                    // Self and last-owner guards surface as disabled
-                    // controls — the API enforces both anyway.
-                    const locked = isSelf || isLastActiveOwner;
+
+                    /**
+                     * Moving off an owner-flagged role is a demotion however
+                     * wide the new role is, so an owner cannot do it to
+                     * themselves; everyone else may be reassigned. The two
+                     * reasons are ordered by which one the server would
+                     * answer with first.
+                     */
+                    const roleLockedReason = !canEdit
+                      ? t('staff.needsStaffEdit')
+                      : !pickerReady
+                        ? null
+                        : isLastActiveOwner
+                          ? t('staff.lastOwnerLocked')
+                          : isSelf && isOwnerAccount
+                            ? t('staff.selfDemoteLocked')
+                            : null;
+                    const activeLockedReason = !canEdit
+                      ? t('staff.needsStaffEdit')
+                      : isLastActiveOwner
+                        ? t('staff.lastOwnerLocked')
+                        : isSelf
+                          ? t('staff.selfActiveLocked')
+                          : null;
+
+                    const roleDisabled =
+                      !canEdit ||
+                      roleLockedReason !== null ||
+                      updateStaff.isPending;
 
                     return (
                       <TableRow key={user.id}>
@@ -380,100 +475,138 @@ export default function StaffSettingsPage() {
                             {user.name}
                             {isSelf && (
                               <span className="ms-1.5 text-xs font-normal text-muted-foreground">
-                                (you)
+                                {t('staff.you')}
                               </span>
                             )}
                           </div>
-                          <div className="text-xs text-muted-foreground">
+                          <div
+                            dir="ltr"
+                            className="text-xs text-muted-foreground text-start"
+                          >
                             {user.email}
                           </div>
                         </TableCell>
                         <TableCell>
-                          <Badge
-                            variant={
-                              user.role === 'owner'
-                                ? 'primary'
-                                : user.role === 'manager'
-                                  ? 'info'
-                                  : 'secondary'
-                            }
-                            appearance="light"
-                            size="sm"
-                          >
-                            {merchantRoleLabel(t, user.role)}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <Badge
-                            variant={user.is_active ? 'success' : 'secondary'}
-                            appearance="light"
-                            size="sm"
-                          >
-                            {user.is_active ? 'Active' : 'Inactive'}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-4">
-                            <Select
-                              value={user.role}
-                              disabled={locked || updateStaff.isPending}
-                              onValueChange={(value) =>
-                                mutate(
-                                  user,
-                                  { role: value as MerchantStaffRole },
-                                  t('roles.changed', {
-                                    name: user.name,
-                                    role: merchantRoleLabel(
-                                      t,
-                                      value as MerchantStaffRole,
-                                    ),
-                                  }),
-                                )
-                              }
-                            >
-                              <SelectTrigger
-                                className="w-32"
-                                size="sm"
-                                aria-label={`Role of ${user.name}`}
+                          <div className="flex flex-col items-start gap-1.5">
+                            {/* The picker is the store's own roles, and it
+                                stays live after the invite — reassigning is
+                                the whole point. Without the list there is
+                                nothing to pick FROM, so the role is printed
+                                rather than drawn as an empty control. */}
+                            {pickerReady ? (
+                              <Select
+                                value={
+                                  user.role === null
+                                    ? undefined
+                                    : String(user.role.id)
+                                }
+                                disabled={roleDisabled}
+                                onValueChange={(value) => {
+                                  const role = roleRows.find(
+                                    (candidate) =>
+                                      candidate.id === Number(value),
+                                  );
+                                  if (role === undefined) return;
+                                  mutate(
+                                    user,
+                                    { merchant_role_id: role.id },
+                                    t('roles.changed', {
+                                      name: user.name,
+                                      role: roleDisplayName(
+                                        role,
+                                        i18n.language,
+                                      ),
+                                    }),
+                                  );
+                                }}
                               >
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <RoleOptions />
-                              </SelectContent>
-                            </Select>
-                            <div className="flex items-center gap-2">
+                                <SelectTrigger
+                                  className="w-56"
+                                  size="sm"
+                                  aria-label={t('staff.roleAria', {
+                                    name: user.name,
+                                  })}
+                                >
+                                  <SelectValue
+                                    placeholder={t('staff.noRole')}
+                                  />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <RoleOptions roles={roleRows} actor={actor} />
+                                </SelectContent>
+                              </Select>
+                            ) : (
+                              <span className="text-sm">
+                                {user.role === null
+                                  ? t('staff.noRole')
+                                  : roleDisplayName(user.role, i18n.language)}
+                              </span>
+                            )}
+                            {isOwnerAccount && (
+                              <Badge
+                                variant="primary"
+                                appearance="light"
+                                size="sm"
+                              >
+                                {t('roles.ownerBadge')}
+                              </Badge>
+                            )}
+                            {roleLockedReason !== null && (
+                              <span className="text-xs text-muted-foreground">
+                                {roleLockedReason}
+                              </span>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex flex-col items-start gap-1.5">
+                            <div className="flex items-center gap-2.5">
                               <Switch
                                 size="sm"
                                 checked={user.is_active}
-                                disabled={locked || updateStaff.isPending}
-                                aria-label={
-                                  user.is_active
-                                    ? `Deactivate ${user.name}`
-                                    : `Activate ${user.name}`
+                                disabled={
+                                  activeLockedReason !== null ||
+                                  updateStaff.isPending
                                 }
+                                aria-label={t(
+                                  user.is_active
+                                    ? 'staff.deactivateAria'
+                                    : 'staff.activateAria',
+                                  { name: user.name },
+                                )}
                                 onCheckedChange={(checked) =>
                                   mutate(
                                     user,
                                     { is_active: checked },
-                                    checked
-                                      ? `${user.name} activated`
-                                      : `${user.name} deactivated`,
+                                    t(
+                                      checked
+                                        ? 'staff.activated'
+                                        : 'staff.deactivated',
+                                      { name: user.name },
+                                    ),
                                   )
                                 }
                               />
+                              <Badge
+                                variant={
+                                  user.is_active ? 'success' : 'secondary'
+                                }
+                                appearance="light"
+                                size="sm"
+                              >
+                                {t(
+                                  user.is_active
+                                    ? 'staff.active'
+                                    : 'staff.inactive',
+                                )}
+                              </Badge>
                             </div>
+                            {activeLockedReason !== null && (
+                              <span className="text-xs text-muted-foreground">
+                                {activeLockedReason}
+                              </span>
+                            )}
                           </div>
-                          <div className="text-xs text-muted-foreground mt-1">
-                            {merchantRoleHint(t, user.role)}
-                          </div>
-                          {locked && (
-                            <div className="text-xs text-muted-foreground mt-1">
-                              {isSelf
-                                ? 'You cannot change your own account.'
-                                : 'The last active owner cannot be demoted or deactivated.'}
-                            </div>
-                          )}
                         </TableCell>
                       </TableRow>
                     );
@@ -485,21 +618,24 @@ export default function StaffSettingsPage() {
         )}
       </Card>
 
-      <CreateStaffDialog
-        key={creating ? 'create-open' : 'create-closed'}
-        open={creating}
-        onOpenChange={setCreating}
-        onCreated={(response) => {
-          setCreating(false);
-          setCreated(response);
-        }}
-      />
+      {creating && (
+        <CreateStaffDialog
+          key="staff-create"
+          open
+          roles={roleRows}
+          actor={actor}
+          onOpenChange={(open) => {
+            if (!open) setCreating(false);
+          }}
+          onCreated={(response) => {
+            setCreating(false);
+            setCreated(response);
+          }}
+        />
+      )}
 
       {created && (
-        <TempPasswordDialog
-          created={created}
-          onDone={() => setCreated(null)}
-        />
+        <TempPasswordDialog created={created} onDone={() => setCreated(null)} />
       )}
     </div>
   );
