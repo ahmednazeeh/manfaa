@@ -1011,3 +1011,22 @@ it('excludes an eligible customer missing bank details and reports the money wai
         ->and($stranded->refresh()->payout_item_id)->toBeNull()
         ->and($stranded->state)->toBe(TransactionState::Confirmed);
 });
+
+it('returns every column the database defaulted, not nulls the client cannot parse', function () {
+    // A model from create() carries only what was handed to it — anything
+    // the DATABASE supplied is absent until the row is re-read. The row was
+    // always correct; it was the RESPONSE that carried a null, so the build
+    // looked like it had failed while the batch sat there, and the retry
+    // answered "already exists".
+    $response = $this->postJson('/api/admin/payout-batches', [
+        'cutoff_date' => '2026-08-24',
+    ])->assertCreated();
+
+    expect($response->json('data.currency'))->toBe('MVR');
+
+    // The same assertion the client's schema makes: nothing non-nullable is
+    // null on the way out.
+    foreach (['reference', 'state', 'currency', 'period_start', 'period_end'] as $key) {
+        expect($response->json("data.{$key}"))->not->toBeNull();
+    }
+});

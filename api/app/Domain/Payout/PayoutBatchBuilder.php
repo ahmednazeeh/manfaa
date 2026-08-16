@@ -143,7 +143,14 @@ final readonly class PayoutBatchBuilder
                 'excluded_total_laari' => $excludedLaari,
             ])->save();
 
-            return $batch;
+            // refresh(): `currency` comes from a column default, and a model
+            // built by create() does not carry the values the DATABASE
+            // supplied until it is re-read. The row was always right; the
+            // RESPONSE carried a null the client refused to parse, so the
+            // build looked like it had failed while the batch sat there —
+            // and the retry then answered "already exists". Any future
+            // defaulted column is covered by the same line.
+            return $batch->refresh();
         });
     }
 
