@@ -1,5 +1,47 @@
 # Round plan — merchant/customer maps, and payouts that can run weekly
 
+## STATUS — task list (2026-08-16)
+
+The harness task tool disconnected mid-round, so the list lives here instead.
+
+| # | Task | State |
+|---|---|---|
+| 43 | Pin the batch-window property with a regression test | **done** — the owner's own scenario is a named test; nothing was ever lost, only delayed |
+| 44 | Build batches to an as-of date, not a calendar month | **done** — `PB-YYYYMMDD`, cutoff chosen, weekly runs possible |
+| 45 | Collapse dual approval to a single admin | **done** — `SameApproverException` deleted, columns collapsed |
+| 46 | Persist an `MNF` idempotency key on every item | **done** — Postgres sequence, NOT NULL, unique |
+| 47 | Export the transfer sheet as xlsx | **done** — seven columns, numeric Amount Owed |
+| 48 | Settle: upload the filled sheet, one customer, or all | **done** — one shared ledger path |
+| 49 | Shared Google Maps loader | **done** — loader only in `packages/ui`, no styled markup |
+| 50 | Pin merchant location at signup and in branch settings | **done** — new `setup/location` endpoint, wizard step at index 1 |
+| 51 | Map view for the customer's nearby stores | **done** — entries now publish branch coordinates |
+| 52 | Restore the wiped database + install backups | **done** — baseline seeded, nightly pg_dump at 03:25 |
+| 53 | **Deploy the three frontends** | **BLOCKED on the owner.** See below — this is now load-bearing, not cosmetic |
+| 54 | Browser-verify the two map surfaces | blocked by 53 (and the Chrome extension is currently disconnected) |
+| 55 | Fold this round into PLAN.md §13b and delete this file | **done for §13b**; delete this file once 53/54 close |
+
+### Why 53 stopped being optional
+
+PHP deploys the instant it is committed; the Next.js apps only deploy when they
+are rebuilt. So the API is already serving the new contract while the three
+browser bundles are still the old ones — and for the admin payout screens that
+gap is fatal rather than tolerable:
+
+`PayoutBatchSchema` in the deployed bundle declares `approved_by_first`,
+`approved_by_second`, `first_approved_at` and `second_approved_at`. Zod's
+`.nullable()` permits a null VALUE, not a missing KEY, so when the API stops
+sending those four the parse fails and both payout screens die at query time.
+The survey called this exactly: *"the schema edit and the resource edit must
+ship together; there is no tolerant window."* Committing the API half without
+building the frontends opened that window.
+
+Everything else survives the skew: zod strips keys it does not declare, so the
+old storefront bundle simply ignores the new `branches` on each entry, and the
+old merchant bundle ignores the new `location` step.
+
+**So the deploy is the remedy, not the risk.** Until it runs,
+admin.manfaa.app/payouts is broken.
+
 Working plan for the round started **2026-08-16**. PLAN.md §13b stays the
 long-lived record; this file is the scratch that survives a context loss.
 When the round lands, fold a summary into §13b and delete this file.

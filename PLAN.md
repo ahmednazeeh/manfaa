@@ -527,7 +527,7 @@ No integrations. The riskiest logic, built first and in isolation.
 ## 13b. Build queue (status — 2026-08-15, autonomous run complete)
 
 Phases 0–3 plus the post-launch rounds are BUILT, DEPLOYED and LIVE at
-manfaa.app / merchant. / admin. / api. — **1008 tests, 21,185 assertions green**,
+manfaa.app / merchant. / admin. / api. — **1022 tests, 21,368 assertions green**,
 twelve adversarial review rounds (50+ serious findings confirmed and fixed).
 
 ### Done beyond the phases
@@ -666,6 +666,59 @@ invisible" is a normal state and an admin should not have to guess which.
 There is no delete; deactivation retires a campaign and keeps it on the
 record.
 
+### Payouts on a chosen date, and maps — DONE (deploy pending)
+
+**Verified before anything was touched:** a reward confirmed after a batch's
+cutoff was never LOST. `EligibilityQuery` has a cutoff but no lower bound, so
+the next batch always reached back and swept it up. The defect was the delay —
+and that the cutoff was hard-wired to the 24th, so "a batch on 27 August" could
+not be asked for at all. The owner's own scenario is now a named test.
+
+The cutoff is a **date the admin picks**, defaulting to today, so payouts can
+run weekly or on any cadence. Reference `PB-YYYYMMDD`; a period starts where
+the previous batch's cutoff ended. A future cutoff is still refused — a batch
+built ahead of itself would silently miss confirmations still to come. §3.1 and
+§3.2 of the round plan contradicted each other on *today* specifically (end of
+today is in the future until midnight); resolved in the controller, which
+records end-of-day for a past date and *now* for today, leaving the domain
+guard untouched.
+
+**Dual approval is gone.** The rule cost nothing to enforce and everything to
+satisfy on a platform with one admin.
+
+**The bank file is an xlsx transfer sheet** — Idempotency Key, Customer Name,
+Customer Phone, Customer Account Name, Customer Account Number, Amount Owed,
+Transfer Reference Number left blank. The key is `MNF` + a Postgres sequence,
+minted at build time rather than from the row id, which does not exist until
+after the insert. Amount Owed is a NUMERIC cell, never a formatted string, or
+the finance team's own SUM lies. Customer name and phone join the bank details
+already snapshotted, so a re-export says what the first export said. §14's
+"bank bulk payout file format" is answered on an interim basis by this sheet;
+the real BML format stays another `BankFileFormatter`.
+
+**Settlement takes three routes to one ledger path**: upload the filled sheet
+(matched on the key, which must belong to *this* batch; a filled reference pays
+that row, a blank one is untouched, so a half-filled sheet can be uploaded
+again), settle one customer, or settle all under one shared reference — a bulk
+transfer is one bank transaction covering many payees, so a single reference is
+the honest record. All three post through `ItemResultService`; marking an item
+failed stays a deliberate UI act, never a spreadsheet column.
+
+**Maps.** Merchants pin at signup — search, drag, locate me — and the same
+picker replaces the typed coordinate boxes in branch settings. The pin is
+*asked for*, not demanded: required to leave the step, deliberately absent from
+`missingRequirements()`, because gating approval on it would make any store
+already in `pending_review` instantly un-approvable. Shoppers get a map beside
+the Near you list; the list stays the default and is the only thing that works
+without a key or a location grant. Discovery entries had to start publishing
+branch coordinates first — they existed inside the service and were stripped on
+the way out, so the map could not have placed one pin. The shared package holds
+the loader and nothing else: Tailwind does not scan it through its pnpm
+symlink, so styled markup there would ship with its classes missing.
+
+`leaflet`, `react-leaflet` and `@types/leaflet` dropped from all three apps —
+zero imports, inherited template weight.
+
 ### Queue: EMPTY. Next work needs a product decision — see below.
 
 ### Open decisions awaiting the owner
@@ -690,7 +743,19 @@ record.
 - Upload real category artwork for the nine curated store categories; until
   then each falls back to its curated glyph.
 - SPF/DKIM/DMARC before any outbound email.
-- Bank bulk payout file format (§14) — blocks real payout runs.
+- Bank bulk payout file format (§14) — the xlsx transfer sheet is the interim
+  answer and unblocks real runs; swap in the true BML format when it is known.
+- **Nightly DB backup now exists** (`/usr/local/bin/manfaa-db-backup.sh`, cron
+  03:25, 14-day retention in `/var/backups/manfaa`). It was written on
+  2026-08-16 after a mis-scoped `migrate:fresh` destroyed the live database —
+  the SECOND database lost that way on this host (ScorePath, 2026-07-26).
+  Postgres still runs `archive_mode = off`, so there is no recovery between
+  nightly dumps, and other databases on this box may still have no backup at
+  all. Worth an audit.
+- Restrict the Google Maps API key by HTTP referrer. It is shared with
+  avasprint and is currently unrestricted — confirmed by a Static Maps call
+  succeeding under a `manfaa.app` referrer — so it can be lifted from page
+  source and billed to that project.
 - Consolidate the suspended-store refusal onto EnsureMerchantApproved:trading
   (CredentialController currently emits the same code independently).
 - Config caches stay OFF on this box (tests + production share the checkout;
