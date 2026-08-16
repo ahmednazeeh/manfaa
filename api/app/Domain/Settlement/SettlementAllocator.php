@@ -71,14 +71,25 @@ final class SettlementAllocator
      * pending until an admin matches it; the settlement moves to
      * payment_review so the matching queue picks it up.
      *
-     * Idempotent per transfer: the unique (settlement_id, bank_ref) index and
-     * the partial unique (merchant_id, bank_ref) index (non-rejected rows)
-     * are together the authority on duplicates — recording the same reference
-     * twice, on this batch or on a second batch the merchant just created,
-     * rolls the whole attempt back and surfaces as DuplicateBankRefException,
-     * so one real transfer can never book cash twice.
+     * Idempotent per transfer WHEN A REFERENCE IS GIVEN: the unique
+     * (settlement_id, bank_ref) index and the partial unique
+     * (merchant_id, bank_ref) index (non-rejected rows) are together the
+     * authority on duplicates — recording the same reference twice, on this
+     * batch or on a second batch the merchant just created, rolls the whole
+     * attempt back and surfaces as DuplicateBankRefException, so one real
+     * transfer can never book cash twice.
+     *
+     * The reference is OPTIONAL, because a merchant standing at the slip
+     * upload frequently does not have it and the slip image carries it
+     * anyway. Postgres treats NULLs as distinct and the merchant-scoped
+     * index is explicitly `WHERE bank_ref IS NOT NULL`, so unreferenced
+     * payments simply do not participate in that check — which means the
+     * ADMIN MATCHING QUEUE is the only thing standing between one real
+     * transfer and two booked payments. That is the trade: fewer merchants
+     * blocked at upload, more resting on the reviewer comparing the slip to
+     * the statement.
      */
-    public function recordBankPayment(Settlement $settlement, Laari $amount, string $bankRef, ?ReceiptSlip $slip = null): SettlementPayment
+    public function recordBankPayment(Settlement $settlement, Laari $amount, ?string $bankRef, ?ReceiptSlip $slip = null): SettlementPayment
     {
         if ($amount->value() <= 0) {
             throw new InvalidArgumentException('A settlement payment must be a positive amount.');
@@ -91,7 +102,7 @@ final class SettlementAllocator
         }
     }
 
-    private function storeBankPayment(Settlement $settlement, Laari $amount, string $bankRef, ?ReceiptSlip $slip): SettlementPayment
+    private function storeBankPayment(Settlement $settlement, Laari $amount, ?string $bankRef, ?ReceiptSlip $slip): SettlementPayment
     {
         return DB::transaction(function () use ($settlement, $amount, $bankRef, $slip): SettlementPayment {
             $settlement = $this->locked($settlement);

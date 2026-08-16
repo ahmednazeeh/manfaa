@@ -102,7 +102,10 @@ class SettlementController extends Controller
             'transaction_ids' => ['required_without:settle_all', 'array', 'min:1'],
             'transaction_ids.*' => ['integer'],
             'amount' => ['required', 'integer', 'min:1'],
-            'bank_ref' => ['required', 'string', 'max:128'],
+            // Optional: a merchant uploading a slip often does not have the
+            // bank's reference to hand, and the slip itself carries it. When
+            // one IS given it still deduplicates — see recordBankPayment.
+            'bank_ref' => ['sometimes', 'nullable', 'string', 'max:128'],
             // First-pass gate only. The authority on what this file IS lives
             // in SlipStorage, which reads the magic bytes — `mimes` here
             // trusts finfo/extension and would happily pass a renamed SVG.
@@ -121,7 +124,7 @@ class SettlementController extends Controller
                 $user,
                 $this->selection($validated),
                 Laari::of((int) $validated['amount']),
-                $validated['bank_ref'],
+                $validated['bank_ref'] ?? null,
                 $request->file('slip'),
                 isset($validated['platform_bank_account_id']) ? (int) $validated['platform_bank_account_id'] : null,
             );
@@ -150,7 +153,10 @@ class SettlementController extends Controller
     {
         $validated = $request->validate([
             'amount' => ['required', 'integer', 'min:1'],
-            'bank_ref' => ['required', 'string', 'max:128'],
+            // Optional: a merchant uploading a slip often does not have the
+            // bank's reference to hand, and the slip itself carries it. When
+            // one IS given it still deduplicates — see recordBankPayment.
+            'bank_ref' => ['sometimes', 'nullable', 'string', 'max:128'],
             'slip' => ['required', 'file', 'max:'.intdiv(SlipStorage::MAX_BYTES, 1024)],
             // No destination here on purpose: a batch's account is chosen
             // once, when it is created. A further receipt pays down the same
@@ -167,7 +173,7 @@ class SettlementController extends Controller
                 $settlement,
                 $user,
                 Laari::of((int) $validated['amount']),
-                $validated['bank_ref'],
+                $validated['bank_ref'] ?? null,
                 $request->file('slip'),
             );
         } catch (InvalidSlipException $e) {

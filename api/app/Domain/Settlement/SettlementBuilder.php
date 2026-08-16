@@ -83,7 +83,7 @@ final class SettlementBuilder
         MerchantUser $uploader,
         ?array $transactionIds,
         Laari $amount,
-        string $bankRef,
+        ?string $bankRef,
         UploadedFile $slip,
         ?int $platformBankAccountId = null,
     ): Settlement {
@@ -151,7 +151,7 @@ final class SettlementBuilder
         Settlement $settlement,
         MerchantUser $uploader,
         Laari $amount,
-        string $bankRef,
+        ?string $bankRef,
         UploadedFile $slip,
     ): SettlementPayment {
         $inspection = $this->slips->inspect($slip);

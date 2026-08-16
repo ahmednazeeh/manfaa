@@ -16,7 +16,7 @@ use DomainException;
  */
 final class DuplicateBankRefException extends DomainException
 {
-    public static function forSettlement(Settlement $settlement, string $bankRef): self
+    public static function forSettlement(Settlement $settlement, ?string $bankRef): self
     {
         return new self(sprintf(
             'Bank reference %s is already recorded against settlement %s.',

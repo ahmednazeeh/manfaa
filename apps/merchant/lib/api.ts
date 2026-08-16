@@ -396,7 +396,8 @@ export function getSettlement(
 export interface ReceiptSubmission {
   /** Laari actually transferred — normally the previewed amount due. */
   amountLaari: number;
-  bankRef: string;
+  /** The bank's reference, when the merchant has it. Optional — the slip carries it. */
+  bankRef?: string;
   slip: File;
   /**
    * WHICH platform account received it. Sent so the batch can be reconciled
@@ -418,7 +419,9 @@ export function submitSettlementWithReceipt(
   const form = new FormData();
   appendSelection((key, value) => form.append(key, value), selection);
   form.append('amount', String(receipt.amountLaari));
-  form.append('bank_ref', receipt.bankRef);
+  if (receipt.bankRef !== undefined && receipt.bankRef !== '') {
+    form.append('bank_ref', receipt.bankRef);
+  }
   form.append('slip', receipt.slip);
   if (receipt.platformBankAccountId !== undefined) {
     form.append(
@@ -448,7 +451,9 @@ export function addSettlementReceipt(
 ): Promise<MerchantSettlement> {
   const form = new FormData();
   form.append('amount', String(receipt.amountLaari));
-  form.append('bank_ref', receipt.bankRef);
+  if (receipt.bankRef !== undefined && receipt.bankRef !== '') {
+    form.append('bank_ref', receipt.bankRef);
+  }
   form.append('slip', receipt.slip);
   return apiFetch(
     `/api/merchant/settlements/${id}/receipts`,

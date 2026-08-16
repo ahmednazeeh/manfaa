@@ -383,7 +383,7 @@ export interface SettlementReceiptInput {
   /** Integer laari actually transferred, >= 1 — not necessarily the amount due. */
   amount: number;
   /** The bank's reference for the transfer; unique per settlement. */
-  bank_ref: string;
+  bank_ref?: string;
   slip: File | Blob;
   /**
    * WHICH platform account the transfer went to, from
@@ -433,7 +433,9 @@ export type SettlementErrorCode = z.infer<typeof SettlementErrorCodeSchema>;
 function receiptForm(receipt: SettlementReceiptInput): FormData {
   const form = new FormData();
   form.append('amount', String(receipt.amount));
-  form.append('bank_ref', receipt.bank_ref);
+  if (receipt.bank_ref !== undefined && receipt.bank_ref !== '') {
+    form.append('bank_ref', receipt.bank_ref);
+  }
   form.append('slip', receipt.slip);
   if (receipt.platform_bank_account_id !== undefined) {
     form.append(

@@ -98,7 +98,6 @@ export function ReceiptForm({
   const [fileError, setFileError] = useState<string | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
-  const [bankRef, setBankRef] = useState('');
   const [amountInput, setAmountInput] = useState(() =>
     laariToInput(amountDueLaari),
   );
@@ -140,15 +139,14 @@ export function ReceiptForm({
 
   const amountLaari = safeParseMvr(amountInput);
   const amountInvalid = amountLaari === null || amountLaari < 1;
-  const bankRefTrimmed = bankRef.trim();
   const isPdf = file?.type === 'application/pdf';
   const canSubmit =
-    file !== null && !amountInvalid && bankRefTrimmed !== '' && !pending;
+    file !== null && !amountInvalid && !pending;
 
   const submit = () => {
     setTouched(true);
     if (!canSubmit || file === null || amountLaari === null) return;
-    onSubmit({ amountLaari, bankRef: bankRefTrimmed, slip: file });
+    onSubmit({ amountLaari, slip: file });
   };
 
   const duplicateRef = apiErrorCode(error) === 'duplicate_bank_ref';
@@ -165,7 +163,10 @@ export function ReceiptForm({
         onDragLeave={() => setDragging(false)}
         onDrop={onDrop}
         className={cn(
-          'rounded-lg border border-dashed p-6 text-center transition-colors',
+          // No padding here: when the zone is empty the padding belongs to
+          // the button inside it, so the whole dashed area is the hit area
+          // rather than just the sentence in the middle of it.
+          'rounded-lg border border-dashed text-center transition-colors',
           dragging ? 'border-primary bg-primary/5' : 'border-border',
         )}
       >
@@ -182,21 +183,28 @@ export function ReceiptForm({
         />
 
         {file === null ? (
-          <div className="flex flex-col items-center gap-2">
+          // The whole zone is the control. It was a button around the
+          // sentence only, so the icon, the hint and every empty pixel
+          // between them looked clickable and were not — the reader is
+          // aiming at a dashed box, not at a line of text. A real button
+          // rather than a click handler on the div, so it takes keyboard
+          // focus and answers Enter and Space without any of that being
+          // re-implemented.
+          <button
+            type="button"
+            className="flex w-full cursor-pointer flex-col items-center gap-2 rounded-lg p-6 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+            onClick={() => inputRef.current?.click()}
+          >
             <Upload className="size-6 text-muted-foreground" />
-            <button
-              type="button"
-              className="text-sm font-medium text-primary cursor-pointer"
-              onClick={() => inputRef.current?.click()}
-            >
+            <span className="text-sm font-medium text-primary">
               {t('settlement.dropzone')}
-            </button>
+            </span>
             <span className="text-xs text-muted-foreground">
               {t('settlement.dropzoneHint')}
             </span>
-          </div>
+          </button>
         ) : (
-          <div className="flex flex-col items-center gap-3">
+          <div className="flex flex-col items-center gap-3 p-6">
             {isPdf ? (
               <object
                 data={previewUrl ?? undefined}
@@ -261,28 +269,11 @@ export function ReceiptForm({
         </p>
       )}
 
+      {/* The bank reference used to sit beside the amount. It is gone: a
+          merchant at the slip upload rarely has it to hand, and the slip
+          itself carries it. The API still accepts one, and still dedupes on
+          it when given — see recordBankPayment. */}
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-        <div className="flex flex-col gap-2.5">
-          <Label htmlFor="bank-ref">{t('settlement.bankRefLabel')}</Label>
-          <Input
-            id="bank-ref"
-            value={bankRef}
-            maxLength={128}
-            dir="ltr"
-            onChange={(event) => setBankRef(event.target.value)}
-            aria-invalid={touched && bankRefTrimmed === ''}
-          />
-          {touched && bankRefTrimmed === '' ? (
-            <p className="text-xs text-destructive">
-              {t('settlement.bankRefRequired')}
-            </p>
-          ) : (
-            <p className="text-xs text-muted-foreground">
-              {t('settlement.bankRefHint')}
-            </p>
-          )}
-        </div>
-
         <div className="flex flex-col gap-2.5">
           <Label htmlFor="transferred-amount">
             {t('settlement.amountLabel')}

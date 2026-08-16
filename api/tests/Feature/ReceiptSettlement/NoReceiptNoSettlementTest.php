@@ -57,15 +57,30 @@ it('refuses a settlement submission with no slip at all', function () {
     expect(Settlement::query()->count())->toBe(0);
 });
 
-it('refuses a settlement submission with no bank reference and no amount', function () {
+it('refuses a settlement submission with no amount', function () {
     $this->post('/api/merchant/settlements', [
         'settle_all' => '1',
         'slip' => Slips::jpeg(),
     ])
         ->assertUnprocessable()
-        ->assertJsonValidationErrors(['amount', 'bank_ref']);
+        ->assertJsonValidationErrors('amount');
 
     expect(Settlement::query()->count())->toBe(0);
+});
+
+it('accepts a receipt with no bank reference at all', function () {
+    // The reference is no longer asked for: a merchant at the upload rarely
+    // has it, and the slip carries it. What still cannot be missing is the
+    // slip and the amount — the two things a claim is made of.
+    $this->post('/api/merchant/settlements', [
+        'settle_all' => '1',
+        'amount' => 11825,
+        'slip' => Slips::jpeg(),
+    ])->assertCreated();
+
+    $payment = Settlement::query()->sole()->payments()->sole();
+
+    expect($payment->bank_ref)->toBeNull();
 });
 
 it('leaves nothing behind when the receipt is refused', function () {
