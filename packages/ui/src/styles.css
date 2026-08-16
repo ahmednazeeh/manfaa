@@ -159,10 +159,10 @@ html[lang='dv'] body {
  * sit on the element for both languages.
  *
  * THE CANDIDATE UNDER TRIAL IS THE FIRST NAME HERE. The alternatives are
- * 'DAM Kalhi' and 'Faagathi Dheli'; all three are loaded.
+ * 'MV Waheed' and 'Faagathi Dheli'; all three are loaded.
  */
 html[lang='dv'] .font-dv-display {
-  font-family: 'MV Waheed', 'Faruma', 'Noto Sans Thaana', sans-serif;
+  font-family: 'DAM Kalhi', 'Faruma', 'Noto Sans Thaana', sans-serif;
 }
 
 /*
