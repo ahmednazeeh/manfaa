@@ -8,6 +8,8 @@ use App\Domain\Cashback\Actor;
 use App\Domain\Cashback\TransactionState;
 use App\Domain\Cashback\TransitionService;
 use App\Domain\Ledger\Postings;
+use App\Domain\Notifications\NotificationService;
+use App\Domain\Notifications\NotificationTemplateKey;
 use App\Models\PayoutBatch;
 use App\Models\PayoutItem;
 use App\Models\Transaction;
@@ -44,6 +46,7 @@ final readonly class ItemResultService
     public function __construct(
         private TransitionService $transitions,
         private Postings $postings,
+        private NotificationService $notifications,
     ) {}
 
     public function accepts(PayoutBatch $batch): bool
@@ -76,6 +79,23 @@ final readonly class ItemResultService
                 Actor::system(),
                 'payout_completed',
             );
+        }
+
+        // Tell them the money is coming. After the ledger work, and
+        // deferred to afterCommit inside the service, so a customer is never
+        // told about a payout that then rolls back.
+        $customer = $item->customer;
+
+        if ($customer !== null) {
+            $template = $this->notifications->template(NotificationTemplateKey::PayoutPaid);
+
+            $this->notifications->send(NotificationTemplateKey::PayoutPaid, $customer, [
+                'amount' => NotificationService::money(
+                    (int) $item->amount_laari,
+                    $template?->sendsDhivehi() ?? false,
+                ),
+                'reference' => (string) ($reference ?? ''),
+            ]);
         }
 
         // One journal per item, for the stored item integer — never a

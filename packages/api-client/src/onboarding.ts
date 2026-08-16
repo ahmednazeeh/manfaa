@@ -880,3 +880,77 @@ export function deleteStoreCategoryIcon(
     { method: 'DELETE', signal: options.signal },
   );
 }
+
+// ---------------------------------------------------------------------------
+// Customer notification templates
+// ---------------------------------------------------------------------------
+
+/**
+ * One thing the platform says to a customer. The KEYS are code — a template
+ * nothing fires would be words nobody reads — so there is no create and no
+ * delete here, only editing the sentence and the switch.
+ */
+export const NotificationTemplateSchema = z.object({
+  id: z.number().int(),
+  key: z.string(),
+  label: z.string(),
+  /** When it fires, in the words of someone deciding whether to enable it. */
+  description: z.string(),
+  body_en: z.string(),
+  body_dv: z.string().nullable(),
+  active: z.boolean(),
+  /**
+   * Which body actually goes out. Customers carry no language preference
+   * yet, so a written Dhivehi body wins and English is the fallback.
+   */
+  sends: z.enum(['en', 'dv']),
+  /** Read from the code catalogue, so it lists what is really substituted. */
+  variables: z.array(z.object({ token: z.string(), description: z.string() })),
+  updated_at: z.string().nullable(),
+  updated_by: z.string().nullable(),
+});
+export type NotificationTemplate = z.infer<typeof NotificationTemplateSchema>;
+
+export const NotificationTemplateListResponseSchema = z.object({
+  data: z.array(NotificationTemplateSchema),
+});
+export type NotificationTemplateListResponse = z.infer<
+  typeof NotificationTemplateListResponseSchema
+>;
+
+export const NotificationTemplateResponseSchema = dataWrapped(
+  NotificationTemplateSchema,
+);
+export type NotificationTemplateResponse = z.infer<
+  typeof NotificationTemplateResponseSchema
+>;
+
+/** GET /api/admin/notification-templates — every moment, in key order. */
+export function listNotificationTemplates(
+  options: RequestOptions = {},
+): Promise<NotificationTemplateListResponse> {
+  return apiFetch(
+    '/api/admin/notification-templates',
+    NotificationTemplateListResponseSchema,
+    { signal: options.signal },
+  );
+}
+
+export interface UpdateNotificationTemplateInput {
+  body_en?: string;
+  body_dv?: string | null;
+  active?: boolean;
+}
+
+/** PATCH /api/admin/notification-templates/{id} — superadmin only. */
+export function updateNotificationTemplate(
+  id: number,
+  body: UpdateNotificationTemplateInput,
+  options: RequestOptions = {},
+): Promise<NotificationTemplateResponse> {
+  return apiFetch(
+    `/api/admin/notification-templates/${id}`,
+    NotificationTemplateResponseSchema,
+    { method: 'PATCH', body, signal: options.signal },
+  );
+}

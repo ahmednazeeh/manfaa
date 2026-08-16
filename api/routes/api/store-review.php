@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Admin\NotificationTemplatesController;
 use App\Http\Controllers\Admin\StoreCategoriesController;
 use App\Http\Controllers\Admin\StoreOffersController;
 use App\Http\Controllers\Admin\StoreReviewController;
@@ -35,11 +36,19 @@ Route::prefix('admin')->middleware('auth:admin')->group(function () {
     // superadmin only, like the approval queue and the platform's own bank
     // accounts. Any admin may still read the list.
     Route::get('store-offers', [StoreOffersController::class, 'index']);
+    // Reading what we say to customers is ordinary admin work; changing it
+    // is not — see the superadmin group below.
+    Route::get('notification-templates', [NotificationTemplatesController::class, 'index']);
     Route::middleware(EnsureSuperadmin::class)->group(function () {
         Route::post('store-offers', [StoreOffersController::class, 'store']);
         Route::patch('store-offers/{id}', [StoreOffersController::class, 'update'])->whereNumber('id');
         Route::post('store-offers/{id}/image', [StoreOffersController::class, 'uploadImage'])->whereNumber('id');
         // Removing the artwork turns an image banner back into a text one.
         Route::delete('store-offers/{id}/image', [StoreOffersController::class, 'destroyImage'])->whereNumber('id');
+
+        // What the platform says to customers. Superadmin for writes, like
+        // the other money-adjacent settings: the words on an SMS about
+        // someone's payout are as much a commitment as the payout.
+        Route::patch('notification-templates/{id}', [NotificationTemplatesController::class, 'update'])->whereNumber('id');
     });
 });

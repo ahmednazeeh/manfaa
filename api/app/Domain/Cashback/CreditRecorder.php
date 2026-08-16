@@ -8,6 +8,8 @@ use App\Domain\Ledger\Postings;
 use App\Domain\Money\CashbackCalculator;
 use App\Domain\Money\Laari;
 use App\Domain\Money\Rate;
+use App\Domain\Notifications\NotificationService;
+use App\Domain\Notifications\NotificationTemplateKey;
 use App\Domain\Platform\RateNotPricedException;
 use App\Domain\Platform\TierScheduleService;
 use App\Domain\Promotions\PromotionResolver;
@@ -108,6 +110,7 @@ final readonly class CreditRecorder
         private TermsResolver $terms,
         private TierScheduleService $schedules,
         private PromotionResolver $promotions,
+        private NotificationService $notifications,
     ) {}
 
     /**
@@ -345,6 +348,21 @@ final readonly class CreditRecorder
                     if ((int) $merchant->validation_window_days === 0) {
                         $this->transitions->makePayable($transaction, Actor::system());
                     }
+                }
+
+                // Tell the customer, unless nothing was earned. A reversed or
+                // zero-value credit has nothing to announce, and announcing
+                // it would be the platform's most confusing possible message.
+                // The service defers to afterCommit, so a sale that fails to
+                // commit never sends.
+                if (! $zeroed && $transaction->cashback_laari > 0) {
+                    $template = $this->notifications->template(NotificationTemplateKey::CashbackEarned);
+                    $dhivehi = $template?->sendsDhivehi() ?? false;
+
+                    $this->notifications->send(NotificationTemplateKey::CashbackEarned, $customer, [
+                        'amount' => NotificationService::money((int) $transaction->cashback_laari, $dhivehi),
+                        'store' => (string) ($dhivehi && $merchant->name_dv !== null ? $merchant->name_dv : $merchant->name),
+                    ]);
                 }
 
                 return $transaction;
