@@ -8,6 +8,38 @@ abstract class TestCase extends BaseTestCase
 {
     protected function setUp(): void
     {
+        /*
+         * BEFORE parent::setUp(), and that ordering is the whole point.
+         *
+         * RefreshDatabase does its work from inside parent::setUp() —
+         * setUpTraits() runs the trait's hook, which migrates the database
+         * fresh. A guard placed after the parent call therefore reports the
+         * danger it was supposed to prevent, having already caused it. That
+         * is not theoretical: this check was written after it, run once with
+         * DB_DATABASE pointed at production to prove it worked, and destroyed
+         * the live database in the process of proving it.
+         *
+         * The name is the check because it is the thing that differs:
+         * phpunit.xml pins DB_DATABASE to manfaa_test, and any run that has
+         * lost that — a stale cached config, an exported DB_DATABASE, an
+         * edited phpunit.xml — lands on a name without "test" in it.
+         */
+        // Read straight from the environment, not through config(): the
+        // container is not booted until parent::setUp(), and config() before
+        // it throws. phpunit.xml sets DB_DATABASE, which is precisely the
+        // thing that goes missing when a run is dangerous.
+        $database = (string) ($_ENV['DB_DATABASE'] ?? getenv('DB_DATABASE') ?: '');
+
+        if (! str_contains($database, 'test')) {
+            self::fail(sprintf(
+                'Refusing to run: DB_DATABASE is [%s], which is not a test '
+                .'database. RefreshDatabase would DROP EVERY TABLE in it. '
+                .'phpunit.xml must set DB_DATABASE to the test database; check '
+                .'it, and any DB_DATABASE exported in your shell.',
+                $database === '' ? 'unset' : $database,
+            ));
+        }
+
         parent::setUp();
 
         // This box serves production from the same checkout. A cached config
@@ -21,5 +53,6 @@ abstract class TestCase extends BaseTestCase
                 .'Tests would load PRODUCTION config. Run `php artisan config:clear` first.'
             );
         }
+
     }
 }
