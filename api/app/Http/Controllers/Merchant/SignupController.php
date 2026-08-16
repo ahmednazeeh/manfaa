@@ -6,6 +6,7 @@ namespace App\Http\Controllers\Merchant;
 
 use App\Domain\Customers\InvalidOtpException;
 use App\Domain\Customers\InvalidSignupTokenException;
+use App\Domain\Customers\Msisdn;
 use App\Domain\Customers\TooManyOtpAttemptsException;
 use App\Domain\Onboarding\EmailAlreadyRegisteredException;
 use App\Domain\Onboarding\MerchantOtpService;
@@ -29,7 +30,10 @@ use Illuminate\Validation\ValidationException;
  */
 class SignupController extends Controller
 {
-    /** Maldives mobile numbers: +960 then a 7-digit number starting 7 or 9. */
+    /**
+     * The STORED shape. Callers may send seven local digits instead —
+     * withNormalisedPhone() folds those in before this ever runs.
+     */
     private const string PHONE_RULE = 'regex:/^\+960[79]\d{6}$/';
 
     private const int PHONE_LIMIT_PER_HOUR = 3;
@@ -40,6 +44,8 @@ class SignupController extends Controller
 
     public function requestOtp(Request $request): JsonResponse
     {
+        $this->withNormalisedPhone($request);
+
         $validated = $request->validate([
             'phone' => ['required', 'string', self::PHONE_RULE],
         ]);
@@ -73,6 +79,8 @@ class SignupController extends Controller
 
     public function verifyOtp(Request $request): JsonResponse
     {
+        $this->withNormalisedPhone($request);
+
         $validated = $request->validate([
             'phone' => ['required', 'string', self::PHONE_RULE],
             'code' => ['required', 'string', 'digits:6'],
@@ -127,5 +135,23 @@ class SignupController extends Controller
         return (new MerchantUserResource($owner->loadMissing('merchant')))
             ->response($request)
             ->setStatusCode(201);
+    }
+
+    /**
+     * Folds whatever the caller sent into the stored E.164 shape BEFORE
+     * validation, so every downstream key — the OTP record, the per-phone
+     * throttle, the customer row — sees one representation of one number.
+     * Normalising later would let "7712345" and "+9607712345" become two
+     * accounts for one person, and let someone slip the throttle by
+     * alternating between them. An unparseable value is left untouched for
+     * the rule below to refuse.
+     */
+    private function withNormalisedPhone(Request $request): void
+    {
+        $raw = $request->input('phone');
+
+        if (is_string($raw)) {
+            $request->merge(['phone' => Msisdn::normalise($raw) ?? $raw]);
+        }
     }
 }

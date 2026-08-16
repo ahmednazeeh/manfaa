@@ -80,7 +80,8 @@ it('signs up a customer end to end: request-otp, verify-otp, register', function
 });
 
 it('rejects a malformed phone number', function () {
-    $this->postJson('/api/customer/auth/request-otp', ['phone' => '7712345'])
+    // A Maldivian mobile starts 7 or 9; 1 is not a mobile prefix.
+    $this->postJson('/api/customer/auth/request-otp', ['phone' => '1112345'])
         ->assertUnprocessable()
         ->assertJsonValidationErrors('phone');
 
@@ -236,4 +237,60 @@ it('stores only hashes — never the code or token in the clear', function () {
     $row->refresh();
     expect($row->signup_token_hash)->not->toBe($token)
         ->and($row->signup_token_hash)->toHaveLength(64);
+});
+
+it('takes a bare seven-digit number and signs the same person up once', function () {
+    // The forms ask for seven digits, because that is how a number is said
+    // here. Storage stays E.164, so the two shapes have to meet before the
+    // number is used as a key.
+    $this->postJson('/api/customer/auth/request-otp', ['phone' => '7712345'])
+        ->assertOk();
+
+    expect($this->sms->sent)->toHaveCount(1)
+        // The gateway is handed E.164 whatever the form sent.
+        ->and($this->sms->sent[0]['phone'])->toBe('+9607712345');
+
+    preg_match('/\b(\d{6})\b/', $this->sms->sent[0]['message'], $matches);
+
+    $token = $this->postJson('/api/customer/auth/verify-otp', [
+        'phone' => '7712345',
+        'code' => $matches[1],
+    ])->assertOk()->json('data.signup_token');
+
+    $this->postJson('/api/customer/auth/register', [
+        'signup_token' => $token,
+        'name' => 'Aishath',
+        'password' => 'correct-horse-battery',
+    ])->assertCreated();
+
+    $customer = Customer::query()->sole();
+
+    // One person, one row, stored the one way — not "7712345" beside a
+    // "+9607712345" that some other screen created.
+    expect($customer->phone)->toBe('+9607712345');
+});
+
+it('cannot be used to slip the per-phone throttle by changing format', function () {
+    // Three requests an hour, per PHONE. If the key were the raw input,
+    // alternating between the local and E.164 forms would buy six.
+    foreach (['7712345', '+9607712345', '960 771 2345'] as $shape) {
+        $this->postJson('/api/customer/auth/request-otp', ['phone' => $shape])
+            ->assertOk();
+    }
+
+    $this->postJson('/api/customer/auth/request-otp', ['phone' => '+9607712345'])
+        ->assertStatus(429);
+
+    // And the reverse direction is the same number too.
+    $this->postJson('/api/customer/auth/request-otp', ['phone' => '7712345'])
+        ->assertStatus(429);
+});
+
+it('still refuses a number that is not a Maldivian mobile', function () {
+    foreach (['1234567', '77123', '+447700900123', '77123456'] as $bad) {
+        $this->postJson('/api/customer/auth/request-otp', ['phone' => $bad])
+            ->assertStatus(422);
+    }
+
+    expect($this->sms->sent)->toBeEmpty();
 });

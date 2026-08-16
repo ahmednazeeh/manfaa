@@ -24,6 +24,7 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
+import { PhoneInput } from '@/components/app/phone-input';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -117,11 +118,7 @@ export default function LoginPage() {
                   <FormItem>
                     <FormLabel>{t('auth.phoneLabel')}</FormLabel>
                     <FormControl>
-                      <Input
-                        type="tel"
-                        inputMode="tel"
-                        autoComplete="tel"
-                        dir="ltr"
+                      <PhoneInput
                         placeholder={t('auth.phonePlaceholder')}
                         {...field}
                       />

@@ -30,6 +30,7 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
+import { PhoneInput } from '@/components/app/phone-input';
 import {
   InputOTP,
   InputOTPGroup,
@@ -245,11 +246,7 @@ export default function SignupPage() {
                     <FormItem>
                       <FormLabel>{t('auth.phoneLabel')}</FormLabel>
                       <FormControl>
-                        <Input
-                          type="tel"
-                          inputMode="tel"
-                          autoComplete="tel"
-                          dir="ltr"
+                        <PhoneInput
                           placeholder={t('auth.phonePlaceholder')}
                           {...field}
                         />

@@ -176,11 +176,24 @@ it('locks a code after 5 wrong attempts — even the correct code is then refuse
 });
 
 it('rejects non-Maldivian and malformed phone numbers', function () {
-    foreach (['+9605551234', '7712345', '+960771234', '+96077123456', 'not-a-phone'] as $phone) {
+    // '7712345' is deliberately absent: seven local digits is now the shape
+    // the form asks for, and the controller folds it to E.164 before the
+    // rule runs. 5 is not a Maldivian mobile prefix; the rest are the wrong
+    // length or not a number at all.
+    foreach (['+9605551234', '5551234', '+960771234', '+96077123456', 'not-a-phone'] as $phone) {
         $this->postJson('/api/merchant/signup/request-otp', ['phone' => $phone])->assertUnprocessable();
     }
 
     expect($this->sms->sent)->toBe([]);
+});
+
+it('takes seven local digits at merchant signup too', function () {
+    $this->postJson('/api/merchant/signup/request-otp', ['phone' => '7712345'])
+        ->assertOk();
+
+    // The gateway is handed E.164 whatever the form sent.
+    expect($this->sms->sent)->toHaveCount(1)
+        ->and($this->sms->sent[0]['phone'])->toBe('+9607712345');
 });
 
 it('keeps merchant and customer OTP storage fully separate', function () {
