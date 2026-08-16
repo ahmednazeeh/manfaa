@@ -1,0 +1,41 @@
+/**
+ * The Google Places suggestion list, used by components/app/location-picker.
+ *
+ * Google appends `.pac-container` to <body>, outside every React tree, so it
+ * cannot be styled by classes on a component and needs rules here. Two of
+ * these are load-bearing rather than cosmetic: Radix marks the body
+ * `pointer-events: none` while a modal dialog is open, which would swallow
+ * the click on the very suggestion the search box exists for, and the panel's
+ * dark theme would otherwise leave a white card floating over a dark form.
+ */
+@layer components {
+  .pac-container {
+    pointer-events: auto;
+    font-family: inherit;
+    background-color: var(--color-popover);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-lg);
+
+    & .pac-item {
+      color: var(--color-muted-foreground);
+      border-top-color: var(--color-border);
+      padding-inline: 0.625rem;
+      cursor: pointer;
+
+      &:hover,
+      &.pac-item-selected {
+        background-color: var(--color-accent);
+      }
+    }
+
+    & .pac-item-query,
+    & .pac-matched {
+      color: var(--color-foreground);
+    }
+
+    & .pac-icon {
+      opacity: 0.6;
+    }
+  }
+}

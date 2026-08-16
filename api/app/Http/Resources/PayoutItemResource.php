@@ -20,6 +20,12 @@ class PayoutItemResource extends JsonResource
             'id' => $this->id,
             'batch_id' => $this->batch_id,
             'customer_id' => $this->customer_id,
+            // The key the transfer sheet is matched on, and the customer as
+            // they were when the batch was built — both snapshots, so the
+            // items table names a person rather than a row id.
+            'idempotency_key' => $this->idempotency_key,
+            'customer_name' => $this->customer_name,
+            'customer_phone' => $this->customer_phone,
             'amount_laari' => $this->amount_laari,
             'currency' => $this->currency,
             'bank' => $this->bank,

@@ -89,22 +89,24 @@ it('excludes a customer below a raised min_payout_laari from the next batch', fu
         $transitions->makePayable($transaction, Actor::system());
         $transitions->confirm($transaction, Actor::system());
 
-        // Pin the confirmation before the August cutoff.
+        // Pin the confirmation before the chosen cutoff.
         DB::table('transaction_events')
             ->where('transaction_id', $transaction->id)
             ->where('to_state', TransactionState::Confirmed->value)
             ->update(['created_at' => CarbonImmutable::parse('2026-08-20T12:00:00+05:00')->utc()]);
     }
 
+    $cutoff = CarbonImmutable::parse('2026-08-24T23:59:59+05:00');
+
     // Default minimum (10,000): both customers are in.
-    $draft = app(PayoutBatchBuilder::class)->buildDraft(2026, 8, $this->admin);
+    $draft = app(PayoutBatchBuilder::class)->buildDraft($cutoff, $this->admin);
     expect($draft->customer_count)->toBe(2)->and($draft->total_laari)->toBe(15000 + 25000);
     app(PayoutBatchBuilder::class)->cancelDraft($draft);
 
     // Raised to 20,000: the 15,000-laari customer drops out and carries forward.
     app(PlatformConfig::class)->set('min_payout_laari', 20000);
 
-    $raised = app(PayoutBatchBuilder::class)->buildDraft(2026, 8, $this->admin);
+    $raised = app(PayoutBatchBuilder::class)->buildDraft($cutoff, $this->admin);
     expect($raised->customer_count)->toBe(1)
         ->and($raised->total_laari)->toBe(25000)
         ->and($raised->items()->sole()->customer_id)->toBe($over->id);

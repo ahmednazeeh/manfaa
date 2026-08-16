@@ -3,6 +3,8 @@
 import { useState } from 'react';
 import { ApiError, type MerchantBranch } from '@manfaa/api-client';
 import { LoaderCircle, MapPin, Pencil, Plus, Trash2 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
+import { toast } from 'sonner';
 import {
   apiErrorMessage,
   useBranches,
@@ -21,12 +23,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
-import {
-  Card,
-  CardHeader,
-  CardTable,
-  CardTitle,
-} from '@/components/ui/card';
+import { Card, CardHeader, CardTable, CardTitle } from '@/components/ui/card';
 import {
   Dialog,
   DialogBody,
@@ -45,7 +42,6 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { toast } from 'sonner';
 import {
   Toolbar,
   ToolbarActions,
@@ -58,42 +54,43 @@ import {
   ErrorBlock,
   LoadingBlock,
 } from '@/components/app/async-states';
+import {
+  formatPin,
+  isPlacesDropdownEvent,
+  LocationPicker,
+  type LatLng,
+} from '@/components/app/location-picker';
 
 /**
- * Branch management. Coordinates are optional but travel as a PAIR — the
- * customer app's Nearby discovery sorts by them, and the server rejects a
- * lone latitude or longitude.
+ * Branch management. The pin is optional but travels as a PAIR — the customer
+ * app's Nearby discovery sorts by it, and the server rejects a lone latitude
+ * or longitude. The picker can only ever hand back both halves or neither,
+ * which is what retired the two typed coordinate boxes this page used to
+ * carry along with their three separate invalid states.
+ *
+ * This is also the ONLY surface that can take a pin away again: the wizard's
+ * location step writes one or is skipped, so "remove pin" lives here.
  */
 
 interface BranchFormState {
   name: string;
   address: string;
-  lat: string;
-  lng: string;
+  pin: LatLng | null;
 }
 
 function emptyForm(): BranchFormState {
-  return { name: '', address: '', lat: '', lng: '' };
+  return { name: '', address: '', pin: null };
 }
 
 function formFromBranch(branch: MerchantBranch): BranchFormState {
   return {
     name: branch.name,
     address: branch.address ?? '',
-    lat: branch.lat === null ? '' : String(branch.lat),
-    lng: branch.lng === null ? '' : String(branch.lng),
+    pin:
+      branch.lat !== null && branch.lng !== null
+        ? { lat: branch.lat, lng: branch.lng }
+        : null,
   };
-}
-
-function parseCoordinate(
-  input: string,
-  min: number,
-  max: number,
-): number | null | undefined {
-  if (input.trim() === '') return null;
-  const value = Number(input);
-  if (!Number.isFinite(value) || value < min || value > max) return undefined;
-  return value;
 }
 
 function BranchDialog({
@@ -118,45 +115,47 @@ function BranchDialog({
     lng: number | null;
   }) => void;
 }) {
+  const { t } = useTranslation();
   // The parent remounts this dialog (via `key`) whenever it opens, so the
   // initial values are fresh per open.
   const [form, setForm] = useState(initial);
 
-  const lat = parseCoordinate(form.lat, -90, 90);
-  const lng = parseCoordinate(form.lng, -180, 180);
-  const latInvalid = lat === undefined;
-  const lngInvalid = lng === undefined;
-  const pairIncomplete =
-    !latInvalid && !lngInvalid && (lat === null) !== (lng === null);
-
-  const canSubmit =
-    form.name.trim() !== '' &&
-    !latInvalid &&
-    !lngInvalid &&
-    !pairIncomplete &&
-    !busy;
+  const canSubmit = form.name.trim() !== '' && !busy;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent
+        className="max-w-md"
+        // Choosing a Places suggestion is a pointerdown on an element Google
+        // appends to <body>, which Radix reads as a click away from the
+        // dialog — and closing on the search result is the one thing the
+        // search box must not do.
+        onPointerDownOutside={(event) => {
+          if (isPlacesDropdownEvent(event.detail.originalEvent)) {
+            event.preventDefault();
+          }
+        }}
+      >
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
         </DialogHeader>
-        <DialogBody className="flex flex-col gap-5">
+        {/* The map makes this dialog tall enough to run off a short viewport,
+            and DialogBody does not scroll on its own. */}
+        <DialogBody className="flex max-h-[65vh] flex-col gap-5 overflow-y-auto">
           <div className="flex flex-col gap-2.5">
-            <Label htmlFor="branch-name">Name</Label>
+            <Label htmlFor="branch-name">{t('branches.nameLabel')}</Label>
             <Input
               id="branch-name"
               value={form.name}
               maxLength={255}
-              placeholder="e.g. Malé — Majeedhee Magu"
+              placeholder={t('branches.namePlaceholder')}
               onChange={(event) =>
                 setForm({ ...form, name: event.target.value })
               }
             />
           </div>
           <div className="flex flex-col gap-2.5">
-            <Label htmlFor="branch-address">Address</Label>
+            <Label htmlFor="branch-address">{t('branches.addressLabel')}</Label>
             <Input
               id="branch-address"
               value={form.address}
@@ -166,67 +165,42 @@ function BranchDialog({
               }
             />
           </div>
-          <div className="grid grid-cols-2 gap-5">
-            <div className="flex flex-col gap-2.5">
-              <Label htmlFor="branch-lat">Latitude</Label>
-              <Input
-                id="branch-lat"
-                inputMode="decimal"
-                value={form.lat}
-                placeholder="4.1755"
-                aria-invalid={latInvalid}
-                onChange={(event) =>
-                  setForm({ ...form, lat: event.target.value })
-                }
-              />
-              {latInvalid && (
-                <p className="text-xs text-destructive">
-                  Must be between -90 and 90.
-                </p>
+          <div className="flex flex-col gap-2.5">
+            <div className="flex items-center justify-between gap-2.5">
+              <Label>{t('branches.pinLabel')}</Label>
+              {form.pin !== null && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setForm({ ...form, pin: null })}
+                >
+                  {t('branches.clearPin')}
+                </Button>
               )}
             </div>
-            <div className="flex flex-col gap-2.5">
-              <Label htmlFor="branch-lng">Longitude</Label>
-              <Input
-                id="branch-lng"
-                inputMode="decimal"
-                value={form.lng}
-                placeholder="73.5093"
-                aria-invalid={lngInvalid}
-                onChange={(event) =>
-                  setForm({ ...form, lng: event.target.value })
-                }
-              />
-              {lngInvalid && (
-                <p className="text-xs text-destructive">
-                  Must be between -180 and 180.
-                </p>
-              )}
-            </div>
-          </div>
-          {pairIncomplete && (
-            <p className="text-xs text-destructive">
-              Set both coordinates, or leave both empty.
+            <LocationPicker
+              value={form.pin}
+              onChange={(pin) => setForm({ ...form, pin })}
+            />
+            <p className="text-xs text-muted-foreground">
+              {t('branches.pinHint')}
             </p>
-          )}
-          <p className="text-xs text-muted-foreground">
-            Coordinates power Nearby discovery — customers around this
-            location see your store first. Leave them empty and the branch
-            simply won&apos;t appear in Nearby.
-          </p>
+          </div>
         </DialogBody>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
+            {t('common.cancel')}
           </Button>
           <Button
             disabled={!canSubmit}
             onClick={() =>
               onSubmit({
                 name: form.name.trim(),
-                address: form.address.trim() === '' ? null : form.address.trim(),
-                lat: lat as number | null,
-                lng: lng as number | null,
+                address:
+                  form.address.trim() === '' ? null : form.address.trim(),
+                lat: form.pin?.lat ?? null,
+                lng: form.pin?.lng ?? null,
               })
             }
           >
@@ -240,6 +214,7 @@ function BranchDialog({
 }
 
 export default function BranchesSettingsPage() {
+  const { t } = useTranslation();
   const branches = useBranches();
   const createBranch = useCreateBranch();
   const updateBranch = useUpdateBranch();
@@ -252,16 +227,15 @@ export default function BranchesSettingsPage() {
   const handleDelete = (branch: MerchantBranch) => {
     deleteBranch.mutate(branch.id, {
       onSuccess: () => {
-        toast.success(`Branch ${branch.name} deleted`);
+        toast.success(t('branches.deleted', { name: branch.name }));
         setDeleting(null);
       },
       onError: (error) => {
-        const referenced =
-          error instanceof ApiError && error.status === 409;
+        const referenced = error instanceof ApiError && error.status === 409;
         toast.error(
           referenced
-            ? 'This branch has recorded sales or promotions, so it must stay on file. Stop using it instead.'
-            : apiErrorMessage(error, 'Could not delete the branch.'),
+            ? t('branches.deleteReferenced')
+            : apiErrorMessage(error, t('branches.deleteFailed')),
         );
         setDeleting(null);
       },
@@ -272,16 +246,13 @@ export default function BranchesSettingsPage() {
     <div className="container">
       <Toolbar>
         <ToolbarHeading>
-          <ToolbarPageTitle>Branches</ToolbarPageTitle>
-          <ToolbarDescription>
-            Your locations — coordinates power Nearby discovery in the
-            customer app
-          </ToolbarDescription>
+          <ToolbarPageTitle>{t('branches.title')}</ToolbarPageTitle>
+          <ToolbarDescription>{t('branches.subtitle')}</ToolbarDescription>
         </ToolbarHeading>
         <ToolbarActions>
           <Button onClick={() => setCreating(true)}>
             <Plus />
-            Add branch
+            {t('branches.add')}
           </Button>
         </ToolbarActions>
       </Toolbar>
@@ -290,8 +261,8 @@ export default function BranchesSettingsPage() {
         <CardHeader>
           <CardTitle>
             {branches.data
-              ? `${branches.data.length} branch${branches.data.length === 1 ? '' : 'es'}`
-              : 'Branches'}
+              ? t('branches.count', { count: branches.data.length })
+              : t('branches.title')}
           </CardTitle>
         </CardHeader>
 
@@ -300,20 +271,19 @@ export default function BranchesSettingsPage() {
         ) : !branches.data ? (
           <LoadingBlock lines={4} />
         ) : branches.data.length === 0 ? (
-          <EmptyBlock>
-            No branches yet — add your first location to appear in Nearby
-            discovery.
-          </EmptyBlock>
+          <EmptyBlock>{t('branches.empty')}</EmptyBlock>
         ) : (
           <CardTable>
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Address</TableHead>
-                    <TableHead>Coordinates</TableHead>
-                    <TableHead className="w-24 text-end">Actions</TableHead>
+                    <TableHead>{t('branches.headName')}</TableHead>
+                    <TableHead>{t('branches.headAddress')}</TableHead>
+                    <TableHead>{t('branches.headLocation')}</TableHead>
+                    <TableHead className="w-24 text-end">
+                      {t('branches.headActions')}
+                    </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -331,11 +301,11 @@ export default function BranchesSettingsPage() {
                         {branch.lat !== null && branch.lng !== null ? (
                           <span className="inline-flex items-center gap-1.5 tabular-nums">
                             <MapPin className="size-3.5 text-muted-foreground" />
-                            {branch.lat}, {branch.lng}
+                            {formatPin({ lat: branch.lat, lng: branch.lng })}
                           </span>
                         ) : (
                           <span className="text-muted-foreground">
-                            Not on the map
+                            {t('branches.notPinned')}
                           </span>
                         )}
                       </TableCell>
@@ -345,7 +315,9 @@ export default function BranchesSettingsPage() {
                             variant="ghost"
                             mode="icon"
                             size="sm"
-                            aria-label={`Edit ${branch.name}`}
+                            aria-label={t('branches.editAria', {
+                              name: branch.name,
+                            })}
                             onClick={() => setEditing(branch)}
                           >
                             <Pencil />
@@ -354,7 +326,9 @@ export default function BranchesSettingsPage() {
                             variant="ghost"
                             mode="icon"
                             size="sm"
-                            aria-label={`Delete ${branch.name}`}
+                            aria-label={t('branches.deleteAria', {
+                              name: branch.name,
+                            })}
                             onClick={() => setDeleting(branch)}
                           >
                             <Trash2 />
@@ -372,8 +346,8 @@ export default function BranchesSettingsPage() {
 
       <BranchDialog
         key={creating ? 'create-open' : 'create-closed'}
-        title="Add branch"
-        submitLabel="Add branch"
+        title={t('branches.add')}
+        submitLabel={t('branches.add')}
         initial={emptyForm()}
         open={creating}
         busy={createBranch.isPending}
@@ -381,21 +355,19 @@ export default function BranchesSettingsPage() {
         onSubmit={(body) =>
           createBranch.mutate(body, {
             onSuccess: (response) => {
-              toast.success(`Branch ${response.data.name} added`);
+              toast.success(t('branches.added', { name: response.data.name }));
               setCreating(false);
             },
             onError: (error) =>
-              toast.error(
-                apiErrorMessage(error, 'Could not add the branch.'),
-              ),
+              toast.error(apiErrorMessage(error, t('branches.addFailed'))),
           })
         }
       />
 
       <BranchDialog
         key={editing ? `edit-${editing.id}` : 'edit-closed'}
-        title={`Edit ${editing?.name ?? 'branch'}`}
-        submitLabel="Save changes"
+        title={t('branches.editTitle', { name: editing?.name ?? '' })}
+        submitLabel={t('common.save')}
         initial={editing ? formFromBranch(editing) : emptyForm()}
         open={editing !== null}
         busy={updateBranch.isPending}
@@ -408,13 +380,11 @@ export default function BranchesSettingsPage() {
             { id: editing.id, body },
             {
               onSuccess: () => {
-                toast.success('Branch saved');
+                toast.success(t('branches.saved'));
                 setEditing(null);
               },
               onError: (error) =>
-                toast.error(
-                  apiErrorMessage(error, 'Could not save the branch.'),
-                ),
+                toast.error(apiErrorMessage(error, t('branches.saveFailed'))),
             },
           );
         }}
@@ -429,21 +399,19 @@ export default function BranchesSettingsPage() {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              Delete {deleting?.name}?
+              {t('branches.deleteTitle', { name: deleting?.name ?? '' })}
             </AlertDialogTitle>
             <AlertDialogDescription>
-              The branch disappears from discovery and from new sales. A
-              branch that already has recorded sales or promotions cannot be
-              deleted — history must keep resolving.
+              {t('branches.deleteBody')}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
             <AlertDialogAction
               disabled={deleteBranch.isPending}
               onClick={() => deleting && handleDelete(deleting)}
             >
-              Delete branch
+              {t('branches.deleteConfirm')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

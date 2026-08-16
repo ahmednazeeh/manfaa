@@ -60,6 +60,10 @@ class StoreReviewController extends Controller
                 'contact_email' => $merchant->contact_email,
                 'contact_phone' => $merchant->contact_phone,
                 'logo_url' => $this->onboarding->logoUrl($merchant),
+                // The map pin is not an approval requirement (D17), which is
+                // exactly why the reviewer has to be shown it: nothing else
+                // on this row says whether the store can be found on a map.
+                'primary_branch' => $this->onboarding->presentPrimaryBranch($merchant),
                 // PLAN §1 wire format: 2-decimal percent string, null when
                 // the store has not set a rate yet.
                 'cashback_rate_percent' => Percent::formatOrNull($this->onboarding->currentRateBp($merchant)),

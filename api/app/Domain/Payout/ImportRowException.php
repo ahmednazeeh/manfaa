@@ -4,32 +4,45 @@ declare(strict_types=1);
 
 namespace App\Domain\Payout;
 
+use App\Models\PayoutBatch;
 use App\Models\PayoutItem;
 use DomainException;
 
 /**
- * A result file row that cannot be applied. Thrown inside the import
- * transaction, so a bad file changes nothing at all.
+ * An uploaded transfer sheet that cannot be applied. Thrown inside the import
+ * transaction, so a rejected sheet changes nothing at all.
  */
 final class ImportRowException extends DomainException
 {
-    public static function malformed(int $line): self
+    public static function unreadable(): self
     {
-        return new self(sprintf('Result file line %d is malformed — expected item_id,status[,reference[,failure_reason]].', $line));
+        return new self('The uploaded file could not be read as a transfer sheet — upload the exported .xlsx, or that same sheet saved as CSV.');
     }
 
-    public static function unknownItem(int $itemId): self
+    public static function missingHeadings(): self
     {
-        return new self(sprintf('Result file references payout item #%d, which is not part of this batch.', $itemId));
+        return new self(sprintf(
+            'The uploaded sheet has no "%s" and "%s" columns — upload the exported transfer sheet with the reference column filled in.',
+            TransferSheetExporter::KEY_HEADING,
+            TransferSheetExporter::REFERENCE_HEADING,
+        ));
     }
 
-    public static function invalidStatus(int $itemId, string $status): self
+    public static function foreignKey(string $key, PayoutBatch $batch): self
     {
-        return new self(sprintf('Result file status "%s" for payout item #%d is not one of paid, failed.', $status, $itemId));
+        return new self(sprintf(
+            'Idempotency key %s is not part of payout batch %s — the sheet belongs to another run, and nothing in it was applied.',
+            $key,
+            $batch->reference,
+        ));
     }
 
     public static function alreadyResolved(PayoutItem $item): self
     {
-        return new self(sprintf('Payout item #%d is already %s and cannot take another result.', $item->id, $item->state->value));
+        return new self(sprintf(
+            'Payout item %s is already %s and cannot take another transfer reference.',
+            $item->idempotency_key,
+            $item->state->value,
+        ));
     }
 }

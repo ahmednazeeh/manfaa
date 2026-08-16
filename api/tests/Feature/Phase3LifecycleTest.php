@@ -21,7 +21,6 @@ use App\Models\TransactionEvent;
 use Carbon\CarbonImmutable;
 use Database\Seeders\LedgerAccountSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Queue;
@@ -29,6 +28,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Testing\TestResponse;
 use Tests\Feature\ReceiptSettlement\Slips;
+use Tests\Support\TransferSheet;
 use Tests\TestCase;
 
 uses(TestCase::class, RefreshDatabase::class);
@@ -345,44 +345,42 @@ it('runs the full Phase 3 customer journey: OTP signup → promo publish → pri
         'account_name' => 'AISHATH MANIKE',
     ])->assertOk()->assertJsonPath('data.has_payout_account', true);
 
-    // ── (m) Past the §13 cutoff (the 24th 23:59), the August batch builds:
-    // one customer, 33,000 laari. Dual approval by two DISTINCT admins, bank
-    // file export, result import — and the reward is Paid.
+    // ── (m) Past the chosen cutoff, the batch builds: one customer, 33,000
+    // laari. One admin approves, the transfer sheet goes out, the filled
+    // sheet comes back — and the reward is Paid.
     Carbon::setTestNow(CarbonImmutable::parse('2026-08-26T09:00:00+05:00'));
 
     $batchId = p3ActingAs($admin)
-        ->postJson('/api/admin/payout-batches', ['year' => 2026, 'month' => 8])
+        ->postJson('/api/admin/payout-batches', ['cutoff_date' => '2026-08-24'])
         ->assertCreated()
-        ->assertJsonPath('data.reference', 'PB-2026-08')
+        ->assertJsonPath('data.reference', 'PB-20260824')
         ->assertJsonPath('data.customer_count', 1)
         ->assertJsonPath('data.total_laari', 33_000)
         ->json('data.id');
 
     $this->postJson("/api/admin/payout-batches/{$batchId}/approve")
         ->assertOk()
-        ->assertJsonPath('data.state', 'draft')
-        ->assertJsonPath('data.approved_by_first', $admin->id);
+        ->assertJsonPath('data.state', 'approved')
+        ->assertJsonPath('data.approved_by', $admin->id);
 
     p3ActingAs(AdminUser::factory()->create())
         ->postJson("/api/admin/payout-batches/{$batchId}/approve")
-        ->assertOk()
-        ->assertJsonPath('data.state', 'approved');
+        ->assertConflict();
 
     $export = $this->post("/api/admin/payout-batches/{$batchId}/export");
     $export->assertOk();
 
     $item = PayoutBatch::query()->findOrFail($batchId)->items()->sole();
 
-    expect(trim($export->getContent()))->toBe(implode("\n", [
-        'item_id,account_no,account_name,bank_name,amount_mvr',
-        "{$item->id},7712345678901,AISHATH MANIKE,Bank of Maldives,330.00",
-    ]));
+    // The seven columns the owner asked for, with the customer snapshotted as
+    // they were at build time and the reference box left empty to fill in.
+    expect(TransferSheet::cells($export->getContent()))->toBe([
+        ['Idempotency Key', 'Customer Name', 'Customer Phone', 'Customer Account Name', 'Customer Account Number', 'Amount Owed', 'Transfer Reference Number'],
+        [$item->idempotency_key, 'Aishath Manike', '+9607712345', 'AISHATH MANIKE', '7712345678901', 330, null],
+    ]);
 
     $this->post("/api/admin/payout-batches/{$batchId}/import", [
-        'file' => UploadedFile::fake()->createWithContent(
-            'results.csv',
-            "item_id,status,reference,failure_reason\n{$item->id},paid,BML-R-3300,\n",
-        ),
+        'file' => TransferSheet::filled($export->getContent(), [$item->idempotency_key => 'BML-R-3300']),
     ], ['Accept' => 'application/json'])
         ->assertOk()
         ->assertJsonPath('data.state', 'completed');

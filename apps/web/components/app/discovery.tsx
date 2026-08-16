@@ -43,12 +43,27 @@ export type GeoState =
   | { kind: 'denied' }
   | { kind: 'unavailable' };
 
+/** What `useLocationRequest` hands back — see the hook. */
+export interface LocationRequest {
+  geo: GeoState;
+  /** The granted fix; null in every other state. */
+  coords: { lat: number; lng: number } | null;
+  requestLocation: () => void;
+}
+
 /**
  * Browser geolocation behind an explicit user gesture — call requestLocation
  * from a button, never on mount, so the permission prompt is always the
  * user's own doing.
+ *
+ * Plain component state with nothing shared behind it, so each call site
+ * gets its own independent fix. Call it ONCE per screen, at the nearest
+ * parent of everything that needs the coordinates, and pass this object
+ * down. A second call somewhere further in would prompt the reader again,
+ * and its answer would never reach the useDiscovery() the first one keys —
+ * the map would know where they are while the list still did not.
  */
-export function useLocationRequest() {
+export function useLocationRequest(): LocationRequest {
   const [geo, setGeo] = useState<GeoState>({ kind: 'idle' });
   const coords = geo.kind === 'granted' ? { lat: geo.lat, lng: geo.lng } : null;
 
@@ -129,6 +144,40 @@ export function hasListedStores(sections: DiscoverySections): boolean {
     sections.in_store.length > 0 ||
     sections.online.length > 0
   );
+}
+
+/**
+ * Every store the payload can put a pin on, once each — the union of the
+ * shelves rather than `nearby` alone (D11).
+ *
+ * `nearby` is empty by construction until the visitor grants location, so a
+ * map fed from it would be blank for exactly the person who opened it; and
+ * a store sits on up to seven shelves at once, so the same branch would
+ * otherwise be pinned seven times. Which copy survives the dedupe does not
+ * matter: the API presents every shelf from one row per store, so the same
+ * slug carries the same fields — including `distance_m` — wherever it
+ * appears.
+ */
+export function mappableEntries(sections: DiscoverySections): DiscoveryEntry[] {
+  const bySlug = new Map<string, DiscoveryEntry>();
+
+  for (const entry of [
+    ...sections.nearby,
+    ...sections.increased,
+    ...sections.featured,
+    ...sections.in_store,
+    ...sections.online,
+    ...sections.recently_added,
+    ...sections.top_cashback,
+  ]) {
+    if (entry.branches.length > 0 && !bySlug.has(entry.slug)) {
+      bySlug.set(entry.slug, entry);
+    }
+  }
+
+  // Array.from, not a spread: this tsconfig targets es5, where spreading an
+  // iterator needs downlevelIteration and fails the build without it.
+  return Array.from(bySlug.values());
 }
 
 function DistanceLine({ meters }: { meters: number }) {
@@ -334,6 +383,7 @@ export function DiscoverySection({
   entries,
   emptyText,
   viewAllHref,
+  body,
   children,
 }: {
   icon: LucideIcon;
@@ -342,10 +392,18 @@ export function DiscoverySection({
   emptyText?: string;
   /** When set, a "View all" link renders beside the section title. */
   viewAllHref?: string;
+  /**
+   * Replaces the card grid — the map view of "Near you" is the same
+   * section, same heading, same actions, drawn differently. Given a body,
+   * the section renders it whatever `entries` holds: the map carries pins
+   * the shelf itself does not (see mappableEntries), so an empty shelf is
+   * not an empty map and must not fall back to `emptyText`.
+   */
+  body?: ReactNode;
   /** Header-side actions (e.g. the "Use my location" button). */
   children?: ReactNode;
 }) {
-  if (entries.length === 0 && emptyText === undefined) {
+  if (entries.length === 0 && emptyText === undefined && body === undefined) {
     return null;
   }
 
@@ -354,7 +412,9 @@ export function DiscoverySection({
       <ShelfHeader icon={icon} title={title} viewAllHref={viewAllHref}>
         {children}
       </ShelfHeader>
-      {entries.length === 0 ? (
+      {body !== undefined ? (
+        body
+      ) : entries.length === 0 ? (
         <Card>
           <EmptyBlock>{emptyText}</EmptyBlock>
         </Card>

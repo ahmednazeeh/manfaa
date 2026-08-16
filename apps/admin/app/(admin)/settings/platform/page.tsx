@@ -29,7 +29,7 @@ const SETTING_META: Record<PlatformSettingKey, SettingMeta> = {
   min_payout_laari: {
     label: 'Minimum payout',
     description:
-      'Confirmed balances below this carry to the next month instead of being paid out. Closing an account always pays the full balance regardless.',
+      'Confirmed balances below this carry to the next batch instead of being paid out. Closing an account always pays the full balance regardless.',
     unit: 'mvr',
   },
   settlement_due_days: {

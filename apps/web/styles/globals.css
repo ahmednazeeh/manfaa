@@ -232,3 +232,27 @@ html {
 
 /* Metronic Configs */
 @import './config.metronic.css';
+
+/**
+ * Google Places autocomplete, used by the nearby-stores map. Its suggestion
+ * list is injected into document.body — outside the app subtree entirely —
+ * so no component can reach it and the two things it needs are stated here.
+ * Last in the file, after every @import, because @import is only honoured
+ * while nothing else has been declared yet.
+ *
+ * The stacking order: the list lands as a sibling of the app's own overlays,
+ * every one of which sits at z-50. Google's stylesheet says 1000, which
+ * happens to win today; pinning it above that keeps it winning if they ever
+ * change their mind, rather than leaving the suggestions hidden behind the
+ * dialog whose search box produced them.
+ *
+ * The direction: this is Google's markup, and it places its icon, place name
+ * and region assuming left to right. Mirrored under dir="rtl" it becomes an
+ * unreadable jumble of Latin place names, so it is pinned LTR to match the
+ * map canvas it drives — `start` still resolves to the left edge inside it.
+ */
+.pac-container {
+  z-index: 1100;
+  direction: ltr;
+  text-align: start;
+}

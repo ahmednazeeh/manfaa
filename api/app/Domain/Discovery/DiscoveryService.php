@@ -26,8 +26,9 @@ use Illuminate\Support\Facades\Cache;
  * directory and the per-slug store page.
  *
  * Privacy contract: entries expose merchant name, slug, category, logo URL,
- * the rate now, the "usually" standing rate, the promo end, and a branch
- * distance.
+ * the rate now, the "usually" standing rate, the promo end, a branch
+ * distance, and the branch coordinates themselves — bare pairs, no branch
+ * names and no addresses.
  * Nothing else — no internal ids, no customer data, no commercial terms
  * (fees, bank details) ever appear here. The store page adds featured,
  * the customer-facing eligibility text, branch addresses and a join label —
@@ -61,7 +62,13 @@ final class DiscoveryService
     // (The top-cashback shelf needed no bump: it is a re-sort of entries
     // that already carry rate_bp, done at the presentation boundary.)
     // v6: the cached dataset gained the featured-offer banners.
-    public const string CACHE_KEY = 'discovery:entries:v7';
+    //
+    // v8: entries publish their branch coordinates — the pins the discovery
+    // map drops — and hold them keyed (`lat`/`lng`) rather than as the
+    // positional pairs only the nearby maths ever read. A v7 value left in
+    // the cache would feed nulls to that maths and positional arrays to a
+    // client expecting objects, so this bump is load-bearing, not hygiene.
+    public const string CACHE_KEY = 'discovery:entries:v8';
 
     // v4: store detail gained category_rates (Task #25).
     public const string STORE_CACHE_PREFIX = 'discovery:store:v4:';
@@ -135,7 +142,7 @@ final class DiscoveryService
             $distance = null;
 
             if ($hasCoords) {
-                foreach ($entry['branches'] as [$branchLat, $branchLng]) {
+                foreach ($entry['branches'] as ['lat' => $branchLat, 'lng' => $branchLng]) {
                     $deltaLng = abs($branchLng - $lng);
 
                     if ($deltaLng > 180.0) {
@@ -526,6 +533,13 @@ final class DiscoveryService
             'standing_cashback_rate_percent' => Percent::format($entry['standing_rate_bp']),
             'promo_ends_at' => $entry['promo_ends_at'],
             'distance_m' => $entry['distance_m'],
+            // Bare coordinate pairs, deliberately without the branch name or
+            // address the store page carries: an entry is repeated across up
+            // to seven shelves, and the payload must not grow past what a pin
+            // needs. Empty for a store with no located branch — an
+            // online-only shop is simply absent from the map, never a pin at
+            // (0, 0).
+            'branches' => $entry['branches'],
         ];
     }
 
@@ -626,8 +640,15 @@ final class DiscoveryService
                 // the closest honest answer. Microsecond resolution
                 // ("Uu"), because a seeded batch shares a second.
                 'listed_at' => (int) ($merchant->approved_at ?? $merchant->created_at)?->format('Uu'),
+                // Every branch that has a coordinate pair: the nearby maths
+                // reads them per request, and presentEntry publishes them for
+                // the map. The query already refuses a half-coordinate row,
+                // so a pin can never be placed on a null.
                 'branches' => $branches->get($merchant->id, collect())
-                    ->map(fn (MerchantBranch $b): array => [(float) $b->lat, (float) $b->lng])
+                    ->map(fn (MerchantBranch $b): array => [
+                        'lat' => (float) $b->lat,
+                        'lng' => (float) $b->lng,
+                    ])
                     ->all(),
             ];
         }

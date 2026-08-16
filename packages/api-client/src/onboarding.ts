@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { apiFetch } from './client';
-import { MerchantStaffRoleSchema } from './merchant';
+import { MerchantBranchSchema, MerchantStaffRoleSchema } from './merchant';
 import {
   CashbackPercentInputSchema,
   dataWrapped,
@@ -16,8 +16,8 @@ import {
  *    register creates a DRAFT merchant plus its owner and logs the owner in
  *    (Sanctum session; call bootstrapCsrf() before the first POST);
  *  - the OWNER-only resumable setup wizard — profile (curated category,
- *    channel, terms, contact), optional logo (FormData), initial cashback
- *    rate, then submit → pending_review;
+ *    channel, terms, contact), the primary branch's map pin, optional logo
+ *    (FormData), initial cashback rate, then submit → pending_review;
  *  - the ADMIN approval queue (approve → active / reject with a reason) and
  *    CRUD over the superadmin-curated store categories.
  *
@@ -191,6 +191,7 @@ export const MerchantSetupStateSchema = z.object({
   status: MerchantStatusSchema,
   steps: z.object({
     profile: z.boolean(),
+    location: z.boolean(),
     logo: z.boolean(),
     rate: z.boolean(),
   }),
@@ -203,6 +204,13 @@ export const MerchantSetupStateSchema = z.object({
     eligibility_basis: z.string().nullable(),
     contact_email: z.string().nullable(),
     contact_phone: z.string().nullable(),
+    /**
+     * The store's pin — its lowest-id branch, which is the primary one.
+     * Null while the store has no branch at all; a branch added from
+     * settings without coordinates answers with `lat`/`lng` null, so a
+     * branch on file is not by itself a pin.
+     */
+    primary_branch: MerchantBranchSchema.nullable(),
     logo_url: z.string().nullable(),
     /**
      * The initial standing rate as a 2-decimal percent string; null until
@@ -288,6 +296,36 @@ export function updateMerchantSetupProfile(
 ): Promise<MerchantSetupStateResponse> {
   return apiFetch(
     '/api/merchant/setup/profile',
+    MerchantSetupStateResponseSchema,
+    { method: 'PATCH', body, signal: options.signal },
+  );
+}
+
+export const UpdateMerchantSetupLocationRequestSchema = z.object({
+  lat: z.number().min(-90).max(90),
+  lng: z.number().min(-180).max(180),
+});
+export type UpdateMerchantSetupLocationRequest = z.infer<
+  typeof UpdateMerchantSetupLocationRequestSchema
+>;
+
+/**
+ * PATCH /api/merchant/setup/location — drops the pin on the store's primary
+ * branch, creating that branch under the store's own name when it has none.
+ * Re-entering the step moves the existing pin instead of adding a second
+ * branch, so the owner may pass through it as often as they like.
+ *
+ * Both coordinates are REQUIRED, unlike the nullable pair the branch
+ * endpoints take: this call exists to set a pin, and an online-only store
+ * that skips the step simply never makes it. 409 `setup_not_editable`
+ * outside draft/rejected.
+ */
+export function updateMerchantSetupLocation(
+  body: UpdateMerchantSetupLocationRequest,
+  options: RequestOptions = {},
+): Promise<MerchantSetupStateResponse> {
+  return apiFetch(
+    '/api/merchant/setup/location',
     MerchantSetupStateResponseSchema,
     { method: 'PATCH', body, signal: options.signal },
   );
@@ -410,6 +448,13 @@ export const StoreReviewSchema = z.object({
   contact_phone: z.string().nullable(),
   logo_url: z.string().nullable(),
   cashback_rate_percent: PercentSchema.nullable(),
+  /**
+   * The store's pin, so a reviewer can see whether it has one — it is
+   * deliberately NOT an approval requirement (D17), which is exactly why
+   * nothing else on the row would say. `.catch` because an API build that
+   * predates the field must not blank the whole review queue.
+   */
+  primary_branch: MerchantBranchSchema.nullable().catch(null),
   setup_state: z.record(z.string(), z.boolean()),
   submitted_at: z.string().nullable(),
   rejected_at: z.string().nullable(),

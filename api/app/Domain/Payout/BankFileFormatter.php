@@ -13,5 +13,9 @@ use App\Models\PayoutBatch;
  */
 interface BankFileFormatter
 {
+    /**
+     * The file's raw bytes, which need not be text — the transfer sheet in
+     * use today is an xlsx.
+     */
     public function format(PayoutBatch $batch): string;
 }

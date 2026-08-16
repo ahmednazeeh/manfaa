@@ -7,6 +7,7 @@ use App\Models\PayoutItem;
 use App\Models\Transaction;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 uses(TestCase::class, RefreshDatabase::class);
@@ -29,6 +30,14 @@ function payoutFor(Customer $customer, string $state, int $amount, array $batch 
         'customer_id' => $customer->id,
         'amount_laari' => $amount,
         'currency' => 'MVR',
+        // Minted from the same sequence a real build draws on, because the
+        // column is unique and not nullable and these fixtures pile up.
+        'idempotency_key' => sprintf(
+            'MNF%06d',
+            (int) DB::selectOne("select nextval('payout_items_idempotency_key_seq') as value")->value,
+        ),
+        'customer_name' => $customer->name,
+        'customer_phone' => $customer->phone,
         'bank' => 'BML',
         'account' => '7730000012894821',
         'account_name' => 'Aisha Mohamed',

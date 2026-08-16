@@ -7,10 +7,10 @@ namespace App\Domain\Payout;
  * import flow:
  *
  * draft            — built; items and links exist; rebuild is cancel + recreate.
- * approved         — two distinct admins approved; the bank file may be exported.
+ * approved         — an admin approved it; the bank file may be exported.
  * processing       — the bank file was exported (exported_at set); items are sent.
- * sent             — a result file import has started; transient within the
- *                    import transaction unless the file only covered some items.
+ * sent             — transfer outcomes have started arriving, by upload or by
+ *                    hand; the batch rests here while some items still wait.
  * completed        — every item paid.
  * partially_failed — at least one item failed; its transactions were unlinked
  *                    and roll into the next batch.

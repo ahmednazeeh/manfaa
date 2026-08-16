@@ -57,7 +57,7 @@ it('lists the review queue with per-state counts and full wizard data', function
     expect($row['id'])->toBe($pending->id)
         ->and($row)->toHaveKeys([
             'name', 'slug', 'status', 'category', 'channel', 'eligibility_basis',
-            'contact_email', 'contact_phone', 'logo_url', 'cashback_rate_percent', 'setup_state',
+            'contact_email', 'contact_phone', 'logo_url', 'primary_branch', 'cashback_rate_percent', 'setup_state',
             'submitted_at', 'rejected_at', 'rejected_reason', 'created_at',
         ])
         ->and($row['cashback_rate_percent'])->toBe('2.00')

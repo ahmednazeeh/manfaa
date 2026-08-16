@@ -1,5 +1,6 @@
 'use client';
 
+import { useCallback } from 'react';
 import { type MerchantChannel } from '@manfaa/api-client';
 import { useTranslation } from 'react-i18next';
 import { Badge } from '@/components/ui/badge';
@@ -37,10 +38,18 @@ export function useStoreName(): (store: {
   const { i18n } = useTranslation();
   const dhivehi = i18n.language.startsWith('dv');
 
-  return (store) =>
-    dhivehi && store.name_dv !== null && store.name_dv.trim() !== ''
-      ? store.name_dv
-      : store.name;
+  // Memoised on the language, which is the only thing that changes the
+  // answer. The nearby map keys a Google-marker effect on this function, and
+  // a fresh closure per render would tear down and rebuild every pin
+  // whenever anything above the map re-rendered — a keystroke in the page's
+  // search box is enough.
+  return useCallback(
+    (store) =>
+      dhivehi && store.name_dv !== null && store.name_dv.trim() !== ''
+        ? store.name_dv
+        : store.name,
+    [dhivehi],
+  );
 }
 
 /** The localised display label for a merchant channel. Never the raw enum. */

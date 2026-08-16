@@ -162,3 +162,6 @@ html {
 
 /* Metronic Configs */
 @import './config.metronic.css';
+
+/* Google Places suggestions — a body-level element no component can reach */
+@import './components/google-maps.css';

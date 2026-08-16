@@ -31,10 +31,8 @@ class PayoutBatchResource extends JsonResource
             'excluded_customer_count' => $this->excluded_customer_count,
             'excluded_total_laari' => $this->excluded_total_laari,
             'created_by' => $this->created_by,
-            'approved_by_first' => $this->approved_by_first,
-            'approved_by_second' => $this->approved_by_second,
-            'first_approved_at' => $this->first_approved_at?->toIso8601String(),
-            'second_approved_at' => $this->second_approved_at?->toIso8601String(),
+            'approved_by' => $this->approved_by,
+            'approved_at' => $this->approved_at?->toIso8601String(),
             'exported_at' => $this->exported_at?->toIso8601String(),
             'items' => PayoutItemResource::collection($this->whenLoaded('items')),
         ];

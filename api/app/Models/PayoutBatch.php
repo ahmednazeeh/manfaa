@@ -24,10 +24,8 @@ class PayoutBatch extends Model
             'total_laari' => 'integer',
             'customer_count' => 'integer',
             'created_by' => 'integer',
-            'approved_by_first' => 'integer',
-            'approved_by_second' => 'integer',
-            'first_approved_at' => 'immutable_datetime',
-            'second_approved_at' => 'immutable_datetime',
+            'approved_by' => 'integer',
+            'approved_at' => 'immutable_datetime',
             'exported_at' => 'immutable_datetime',
         ];
     }
@@ -42,13 +40,8 @@ class PayoutBatch extends Model
         return $this->belongsTo(AdminUser::class, 'created_by');
     }
 
-    public function firstApprover(): BelongsTo
+    public function approver(): BelongsTo
     {
-        return $this->belongsTo(AdminUser::class, 'approved_by_first');
-    }
-
-    public function secondApprover(): BelongsTo
-    {
-        return $this->belongsTo(AdminUser::class, 'approved_by_second');
+        return $this->belongsTo(AdminUser::class, 'approved_by');
     }
 }

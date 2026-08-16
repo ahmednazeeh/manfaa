@@ -59,6 +59,31 @@ class SetupController extends Controller
     }
 
     /**
+     * The location step — pins the store's primary branch.
+     *
+     * Both coordinates are REQUIRED here, unlike the nullable pair
+     * BranchesController takes: this endpoint exists to set a pin, and an
+     * online-only store that skips the step simply never calls it.
+     */
+    public function updateLocation(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'lat' => ['required', 'numeric', 'between:-90,90'],
+            'lng' => ['required', 'numeric', 'between:-180,180'],
+        ]);
+
+        $merchant = $this->merchant($request);
+
+        try {
+            $this->onboarding->setPrimaryLocation($merchant, $validated);
+        } catch (OnboardingException $e) {
+            return $this->onboardingError($e);
+        }
+
+        return response()->json(['data' => $this->onboarding->state($merchant->refresh())]);
+    }
+
+    /**
      * Logo upload — wizard AND post-approval settings. Strictly raster
      * images (jpg/png/webp): SVG is scriptable content served from our
      * origin and is refused outright. 2 MB cap, dimension sanity bounds.

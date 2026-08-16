@@ -33,6 +33,7 @@ import {
   updateMerchantPreferences,
   updateMerchantProductCategory,
   updateMerchantProfile,
+  updateMerchantSetupLocation,
   updateMerchantSetupProfile,
   updateMerchantSetupRate,
   updateMerchantStaff,
@@ -53,6 +54,7 @@ import {
   type UpdateMerchantBranchRequest,
   type UpdateMerchantPreferencesRequest,
   type UpdateMerchantProfileRequest,
+  type UpdateMerchantSetupLocationRequest,
   type UpdateMerchantSetupProfileRequest,
   type UpdateMerchantStaffRequest,
   type UpdateProductCategoryRequest,
@@ -838,6 +840,24 @@ export function useUpdateSetupProfile() {
     mutationFn: (body: UpdateMerchantSetupProfileRequest) =>
       updateMerchantSetupProfile(body),
     onSuccess: cache,
+  });
+}
+
+/**
+ * The wizard's location step writes the store's PRIMARY branch, so the
+ * branch list settings renders is stale the moment this succeeds — inactive
+ * queries are only marked, never refetched, so saying so costs nothing.
+ */
+export function useUpdateSetupLocation() {
+  const queryClient = useQueryClient();
+  const cache = useCacheSetupState();
+  return useMutation({
+    mutationFn: (body: UpdateMerchantSetupLocationRequest) =>
+      updateMerchantSetupLocation(body),
+    onSuccess: (response) => {
+      cache(response);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.branches });
+    },
   });
 }
 

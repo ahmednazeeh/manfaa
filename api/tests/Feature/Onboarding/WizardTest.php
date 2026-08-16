@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Models\Merchant;
+use App\Models\MerchantBranch;
 use App\Models\MerchantRate;
 use App\Models\MerchantUser;
 use App\Models\StoreCategory;
@@ -42,7 +43,7 @@ it('walks the wizard: profile, rate, submit — and resumes mid-way from GET set
     // Fresh state: nothing done, curated categories offered for the picker.
     $state = $this->getJson('/api/merchant/setup')->assertOk()->json('data');
     expect($state['status'])->toBe('draft')
-        ->and($state['steps'])->toBe(['profile' => false, 'logo' => false, 'rate' => false])
+        ->and($state['steps'])->toBe(['profile' => false, 'location' => false, 'logo' => false, 'rate' => false])
         ->and($state['values']['category'])->toBeNull()
         ->and($state['values']['cashback_rate_percent'])->toBeNull()
         ->and(collect($state['categories'])->pluck('slug'))->toContain('grocery', 'restaurant', 'other')
@@ -62,7 +63,7 @@ it('walks the wizard: profile, rate, submit — and resumes mid-way from GET set
 
     // Quit here — a new GET (fresh login) resumes with the partial state.
     $resumed = $this->getJson('/api/merchant/setup')->assertOk()->json('data');
-    expect($resumed['steps'])->toBe(['profile' => true, 'logo' => false, 'rate' => false])
+    expect($resumed['steps'])->toBe(['profile' => true, 'location' => false, 'logo' => false, 'rate' => false])
         ->and($resumed['values']['eligibility_basis'])->toBe('Full invoice total excluding delivery.')
         ->and($resumed['values']['cashback_rate_percent'])->toBeNull();
 
@@ -161,11 +162,59 @@ it('validates the profile step against the curated list and the channel enum', f
     $this->patchJson('/api/merchant/setup/profile', ['channel' => 'online'])->assertOk();
 });
 
+it('pins the primary branch, creating it once and MOVING it on every later visit', function () {
+    $owner = wizardOwner(['name' => 'Reef Mart']);
+
+    $this->patchJson('/api/merchant/setup/location', ['lat' => 4.1755, 'lng' => 73.5093])
+        ->assertOk()
+        ->assertJsonPath('data.steps.location', true)
+        // No branch name is asked for in the wizard: the first pin takes the
+        // store's own name and settings can rename it later (D15).
+        ->assertJsonPath('data.values.primary_branch.name', 'Reef Mart')
+        ->assertJsonPath('data.values.primary_branch.lat', 4.1755)
+        ->assertJsonPath('data.values.primary_branch.lng', 73.5093);
+
+    // Walking back through the step is one click on the step indicator, and
+    // the owner does it on every resume. The pin moves; the branch count
+    // does not.
+    $this->patchJson('/api/merchant/setup/location', ['lat' => 4.2, 'lng' => 73.6])->assertOk();
+
+    $branches = MerchantBranch::query()->where('merchant_id', $owner->merchant->id)->get();
+    expect($branches)->toHaveCount(1)
+        ->and((float) $branches[0]->lat)->toBe(4.2)
+        ->and((float) $branches[0]->lng)->toBe(73.6);
+});
+
+it('moves the LOWEST-id branch — the primary one — and leaves the rest alone', function () {
+    $owner = wizardOwner();
+    $primary = MerchantBranch::factory()->for($owner->merchant)->create(['lat' => null, 'lng' => null]);
+    $other = MerchantBranch::factory()->for($owner->merchant)->create(['lat' => 4.3, 'lng' => 73.4]);
+
+    $this->patchJson('/api/merchant/setup/location', ['lat' => 4.1755, 'lng' => 73.5093])->assertOk();
+
+    expect((float) $primary->refresh()->lat)->toBe(4.1755)
+        ->and((float) $other->refresh()->lat)->toBe(4.3)
+        ->and(MerchantBranch::query()->count())->toBe(2);
+});
+
+it('requires a complete, bounded coordinate pair — this step exists to set a pin', function () {
+    wizardOwner();
+
+    $this->patchJson('/api/merchant/setup/location', ['lat' => 4.1755])->assertUnprocessable();
+    $this->patchJson('/api/merchant/setup/location', ['lng' => 73.5093])->assertUnprocessable();
+    $this->patchJson('/api/merchant/setup/location', ['lat' => 91, 'lng' => 73.5093])->assertUnprocessable();
+    $this->patchJson('/api/merchant/setup/location', ['lat' => 4.1755, 'lng' => 181])->assertUnprocessable();
+
+    expect(MerchantBranch::query()->count())->toBe(0);
+});
+
 it('locks every wizard write while the store is pending review', function () {
     $owner = wizardOwner();
     $owner->merchant->update(['status' => 'pending_review', 'submitted_at' => now()]);
 
     $this->patchJson('/api/merchant/setup/profile', ['category' => 'grocery'])
+        ->assertStatus(409)->assertJsonPath('code', 'setup_not_editable');
+    $this->patchJson('/api/merchant/setup/location', ['lat' => 4.1755, 'lng' => 73.5093])
         ->assertStatus(409)->assertJsonPath('code', 'setup_not_editable');
     $this->patchJson('/api/merchant/setup/rate', ['cashback_rate_percent' => '2.00'])
         ->assertStatus(409)->assertJsonPath('code', 'setup_not_editable');

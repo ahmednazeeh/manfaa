@@ -1,12 +1,18 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { type DirectoryEntry, type PaginationMeta } from '@manfaa/api-client';
+import {
+  type DirectoryEntry,
+  type DiscoveryEntry,
+  type PaginationMeta,
+} from '@manfaa/api-client';
 import {
   Clock,
   Globe,
+  List,
   LoaderCircle,
+  Map as MapIcon,
   MapPin,
   Search,
   Sparkles,
@@ -21,16 +27,20 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { ErrorBlock, LoadingBlock } from '@/components/app/async-states';
 import {
   DiscoverySection,
   inStoreEntries,
+  mappableEntries,
   MerchantGrid,
   useLocationRequest,
   type GeoState,
+  type LocationRequest,
 } from '@/components/app/discovery';
 import { FeaturedOffers } from '@/components/app/featured-offers';
 import { ListPagination } from '@/components/app/list-pagination';
+import { MAPS_API_KEY, NearbyMap } from '@/components/app/nearby-map';
 import { PublicFooter, PublicHeader } from '@/components/app/public-header';
 import { useCategoryLabel } from '@/components/app/store-labels';
 
@@ -86,12 +96,59 @@ function toEffectiveQ(raw: string): string {
 }
 
 /**
- * Directory rows are the discovery-entry shape minus distance (the
- * directory is not geographic) — the shared card is reused with a null
- * distance so nothing renders in that slot.
+ * Directory rows are the discovery-entry shape minus the two geographic
+ * fields (the directory is not geographic) — the shared card is reused with
+ * no distance and no pins, so neither renders. The return type is written
+ * out rather than inferred so a future field on DiscoveryEntry fails here,
+ * at the one place that manufactures an entry, instead of at every caller.
  */
-function toCardEntry(entry: DirectoryEntry) {
-  return { ...entry, distance_m: null };
+function toCardEntry(entry: DirectoryEntry): DiscoveryEntry {
+  return { ...entry, distance_m: null, branches: [] };
+}
+
+/** List or map, for the "Near you" section only. */
+type NearbyMode = 'list' | 'map';
+
+/**
+ * The List/Map choice. Component state, never a URL parameter: a view
+ * preference is not a result, and on this page `view` already means
+ * something else entirely — it swaps the whole screen into facet mode
+ * (D12).
+ */
+function NearbyViewToggle({
+  mode,
+  onChange,
+}: {
+  mode: NearbyMode;
+  onChange: (mode: NearbyMode) => void;
+}) {
+  const { t } = useTranslation();
+
+  return (
+    <ToggleGroup
+      type="single"
+      variant="outline"
+      size="sm"
+      value={mode}
+      // Radix reports '' when the pressed item was already the active one.
+      // A segmented control has no "neither", so that press does nothing.
+      onValueChange={(next) => {
+        if (next !== '') {
+          onChange(next as NearbyMode);
+        }
+      }}
+      aria-label={t('discover.nearbyViewLabel')}
+    >
+      <ToggleGroupItem value="list" className="px-2">
+        <List />
+        {t('discover.listView')}
+      </ToggleGroupItem>
+      <ToggleGroupItem value="map" className="px-2">
+        <MapIcon />
+        {t('discover.mapView')}
+      </ToggleGroupItem>
+    </ToggleGroup>
+  );
 }
 
 /** The gesture that turns the nearby section on. */
@@ -245,15 +302,22 @@ function DirectoryEmpty({
  */
 function FacetSection({
   view,
+  location,
   onClear,
 }: {
   view: FacetView;
+  location: LocationRequest;
   onClear: () => void;
 }) {
   const { t } = useTranslation();
-  const { geo, coords, requestLocation } = useLocationRequest();
+  const { geo, coords, requestLocation } = location;
   const { data, isPending, isPlaceholderData, error } = useDiscovery(coords);
   const nearbyEmptyText = useNearbyEmptyText();
+  const [nearbyMode, setNearbyMode] = useState<NearbyMode>('list');
+  const pins = useMemo(
+    () => (data === undefined ? [] : mappableEntries(data)),
+    [data],
+  );
 
   if (isPending) {
     return <LoadingBlock lines={5} />;
@@ -302,6 +366,7 @@ function FacetSection({
   };
 
   const facet = facets[view];
+  const mapped = view === 'nearby' && nearbyMode === 'map';
 
   return (
     <DiscoverySection
@@ -313,13 +378,31 @@ function FacetSection({
           ? nearbyEmptyText(geo, isPlaceholderData)
           : t('discover.sectionEmpty')
       }
+      body={
+        mapped ? (
+          <NearbyMap
+            apiKey={MAPS_API_KEY}
+            entries={pins}
+            geo={geo}
+            coords={coords}
+            onRequestLocation={requestLocation}
+          />
+        ) : undefined
+      }
     >
-      {facet.entries.length > 0 && (
+      {/* The count answers "how many in this list"; on the map the pins are
+          a different, wider set, so it would be counting the wrong thing. */}
+      {facet.entries.length > 0 && !mapped && (
         <span className="text-sm text-muted-foreground">
           {t('stores.resultsCount', { count: facet.entries.length })}
         </span>
       )}
-      {view === 'nearby' && geo.kind !== 'granted' && (
+      {view === 'nearby' && MAPS_API_KEY !== '' && (
+        <NearbyViewToggle mode={nearbyMode} onChange={setNearbyMode} />
+      )}
+      {/* The map carries its own locate control, right where the reader is
+          looking; the header one would be the same action twice. */}
+      {view === 'nearby' && !mapped && geo.kind !== 'granted' && (
         <LocationButton geo={geo} onRequest={requestLocation} />
       )}
       <Button variant="outline" size="sm" onClick={onClear}>
@@ -335,11 +418,16 @@ function FacetSection({
  * (gesture-gated), Online. No per-shelf "view all" links: the full grid is
  * on this same page, right below.
  */
-function CuratedShelves() {
-  const { geo, coords, requestLocation } = useLocationRequest();
+function CuratedShelves({ location }: { location: LocationRequest }) {
+  const { geo, coords, requestLocation } = location;
   const { data, isPending, isPlaceholderData, error } = useDiscovery(coords);
   const nearbyEmptyText = useNearbyEmptyText();
   const { t } = useTranslation();
+  const [nearbyMode, setNearbyMode] = useState<NearbyMode>('list');
+  const pins = useMemo(
+    () => (data === undefined ? [] : mappableEntries(data)),
+    [data],
+  );
 
   if (isPending) {
     return <LoadingBlock lines={5} />;
@@ -387,13 +475,32 @@ function CuratedShelves() {
         />
       )}
 
+      {/* The list is the default and stays the fallback: it is what works
+          with no maps key, no permission and no WebGL. The map is the same
+          section drawn differently — same heading, same actions. */}
       <DiscoverySection
         icon={Store}
         title={t('discover.nearby')}
         entries={data.nearby}
         emptyText={nearbyEmptyText(geo, isPlaceholderData)}
+        body={
+          nearbyMode === 'map' ? (
+            <NearbyMap
+              apiKey={MAPS_API_KEY}
+              entries={pins}
+              geo={geo}
+              coords={coords}
+              onRequestLocation={requestLocation}
+            />
+          ) : undefined
+        }
       >
-        {geo.kind !== 'granted' && (
+        {MAPS_API_KEY !== '' && (
+          <NearbyViewToggle mode={nearbyMode} onChange={setNearbyMode} />
+        )}
+        {/* The map carries its own locate control, right where the reader is
+            looking; the header one would be the same action twice. */}
+        {nearbyMode === 'list' && geo.kind !== 'granted' && (
           <LocationButton geo={geo} onRequest={requestLocation} />
         )}
       </DiscoverySection>
@@ -424,6 +531,17 @@ export default function DiscoverClient() {
   const page = Number.isFinite(rawPage) && rawPage >= 1 ? rawPage : 1;
 
   const [searchInput, setSearchInput] = useState(urlQ);
+
+  /**
+   * ONE geolocation state for the whole page. The hook is plain component
+   * state with nothing shared behind it, so a second call inside the shelves
+   * or the map would be a second, independent fix — a second permission
+   * prompt for the reader, and an answer that never reaches the
+   * useDiscovery() keyed on this one. The shelves and the facet view never
+   * render together, but they do replace each other, and a grant made in
+   * one has to survive the trip to the other.
+   */
+  const location = useLocationRequest();
 
   /**
    * Writes filter state into the URL. Defaults (empty q, no category, no
@@ -587,12 +705,13 @@ export default function DiscoverClient() {
           {view !== null && (
             <FacetSection
               view={view}
+              location={location}
               onClear={() => applyParams({ view: null, page: 1 }, 'push')}
             />
           )}
 
           {/* Curated shelves only while nothing is filtered or facetted. */}
-          {view === null && !filtered && <CuratedShelves />}
+          {view === null && !filtered && <CuratedShelves location={location} />}
 
           {view === null && isPending && <LoadingBlock lines={6} />}
           {/* A 422 means the URL carried filter params outside the API's

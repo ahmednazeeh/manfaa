@@ -204,8 +204,8 @@ export type TransactionOrigin = z.infer<typeof TransactionOriginSchema>;
  *                           and recorded ineligible so the till sees truth
  *   settlement_allocated    LineAllocator — the store's payment covered this
  *                           line, so the reward confirmed
- *   payout_completed        ResultImporter — the bank confirmed the customer
- *                           transfer
+ *   payout_completed        ItemResultService — the bank confirmed the
+ *                           customer transfer
  *   merchant_default_90d    WriteOffService — 90 days past due, never settled
  *   claim_approved          ClaimApprovalService — created from an approved
  *                           missing-transaction claim
@@ -800,6 +800,12 @@ export const PayoutItemSchema = z.object({
   id: z.number().int(),
   batch_id: z.number().int(),
   customer_id: z.number().int(),
+  // The key the transfer sheet is matched on, and the customer as they were
+  // when the batch was built — both snapshots, so a rename after the fact
+  // never rewrites an instruction already with the bank.
+  idempotency_key: z.string(),
+  customer_name: z.string().nullable(),
+  customer_phone: z.string().nullable(),
   amount_laari: z.number().int(),
   currency: z.string(),
   bank: z.string().nullable(),
@@ -825,10 +831,8 @@ export const PayoutBatchSchema = z.object({
   excluded_customer_count: z.number().int(),
   excluded_total_laari: z.number().int(),
   created_by: z.number().int().nullable(),
-  approved_by_first: z.number().int().nullable(),
-  approved_by_second: z.number().int().nullable(),
-  first_approved_at: z.string().nullable(),
-  second_approved_at: z.string().nullable(),
+  approved_by: z.number().int().nullable(),
+  approved_at: z.string().nullable(),
   exported_at: z.string().nullable(),
   // Present only on endpoints that eager-load the items.
   items: z.array(PayoutItemSchema).optional(),

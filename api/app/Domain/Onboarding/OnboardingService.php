@@ -10,6 +10,7 @@ use App\Domain\Money\Rate;
 use App\Domain\Platform\TierScheduleService;
 use App\Models\AdminUser;
 use App\Models\Merchant;
+use App\Models\MerchantBranch;
 use App\Models\MerchantRate;
 use App\Models\MerchantUser;
 use App\Models\StoreCategory;
@@ -22,10 +23,10 @@ use Illuminate\Support\Str;
 
 /**
  * The resumable store setup wizard (§1 decision 2026-08-15): profile
- * (curated category, channel, terms, contact), optional logo, initial
- * cashback rate — then submit moves the store draft → pending_review, and
- * the superadmin queue approves (→ active) or rejects (→ rejected, with a
- * reason; the merchant edits and resubmits).
+ * (curated category, channel, terms, contact), the primary branch's map pin,
+ * optional logo, initial cashback rate — then submit moves the store draft →
+ * pending_review, and the superadmin queue approves (→ active) or rejects
+ * (→ rejected, with a reason; the merchant edits and resubmits).
  *
  * setup_state tracks completed step keys so quitting mid-wizard resumes on
  * next login; completeness is nevertheless re-validated from the actual
@@ -58,6 +59,7 @@ final class OnboardingService
             'status' => $merchant->status,
             'steps' => [
                 'profile' => (bool) ($steps['profile'] ?? false),
+                'location' => (bool) ($steps['location'] ?? false),
                 'logo' => (bool) ($steps['logo'] ?? false),
                 'rate' => (bool) ($steps['rate'] ?? false),
             ],
@@ -69,6 +71,10 @@ final class OnboardingService
                 'eligibility_basis' => $merchant->eligibility_basis,
                 'contact_email' => $merchant->contact_email,
                 'contact_phone' => $merchant->contact_phone,
+                // The store's pin, or null while it has no branch at all. A
+                // branch added from settings without coordinates answers with
+                // its lat/lng null — a branch on file is not a pin.
+                'primary_branch' => $this->presentPrimaryBranch($merchant),
                 'logo_url' => $this->logoUrl($merchant),
                 // PLAN §1 wire format: 2-decimal percent strings, null
                 // until the wizard's rate step is done.
@@ -110,6 +116,44 @@ final class OnboardingService
         $merchant->save();
 
         return $merchant;
+    }
+
+    /**
+     * The location step: drops the store's pin on its PRIMARY branch, which
+     * is the lowest-id one — the same rule SandboxCommand resolves a
+     * merchant's branch by, and the only one there is, since the table has no
+     * primary flag.
+     *
+     * Find-then-update, creating only when the store has no branch at all.
+     * The owner re-enters this step on every resume and on every jump from
+     * the step indicator, so a bare create would grow a duplicate branch per
+     * visit (D15). The first pin names its new branch after the merchant —
+     * one field fewer in the wizard, renameable in branch settings after.
+     *
+     * @param  array<string, mixed>  $validated  a complete lat/lng pair
+     */
+    public function setPrimaryLocation(Merchant $merchant, array $validated): MerchantBranch
+    {
+        $this->assertEditable($merchant);
+
+        return DB::transaction(function () use ($merchant, $validated): MerchantBranch {
+            $branch = $merchant->branches()->orderBy('id')->lockForUpdate()->first();
+
+            if ($branch === null) {
+                $branch = $merchant->branches()->create([
+                    'name' => $merchant->name,
+                    'lat' => $validated['lat'],
+                    'lng' => $validated['lng'],
+                ]);
+            } else {
+                $branch->fill(['lat' => $validated['lat'], 'lng' => $validated['lng']])->save();
+            }
+
+            $this->markStep($merchant, 'location');
+            $merchant->save();
+
+            return $branch;
+        });
     }
 
     /**
@@ -335,9 +379,40 @@ final class OnboardingService
     }
 
     /**
+     * The store's pin in the same shape MerchantBranchResource publishes, so
+     * the panel reads one branch object whichever endpoint handed it over —
+     * the wizard's own state and the admin review queue both render this.
+     * The coordinates are decimal(10,7) columns and arrive as strings.
+     *
+     * @return array<string, mixed>|null
+     */
+    public function presentPrimaryBranch(Merchant $merchant): ?array
+    {
+        $branch = $merchant->branches()->orderBy('id')->first();
+
+        if ($branch === null) {
+            return null;
+        }
+
+        return [
+            'id' => $branch->id,
+            'name' => $branch->name,
+            'address' => $branch->address,
+            'lat' => $branch->lat === null ? null : (float) $branch->lat,
+            'lng' => $branch->lng === null ? null : (float) $branch->lng,
+        ];
+    }
+
+    /**
      * The submit()/approve() completeness rules, evaluated from the actual
      * column values: curated-and-active category, channel enum, live
      * standing rate, non-empty terms. The logo stays optional.
+     *
+     * So does the map pin. The owner asked to ASK for one at signup, not to
+     * gate approval on it (D17) — and adding it here would instantly make
+     * every store already waiting in pending_review without a pin
+     * un-approvable, refusing with a key the review sheet cannot even name.
+     * The wizard requires it to continue; submit and approve do not.
      *
      * @return list<string>
      */

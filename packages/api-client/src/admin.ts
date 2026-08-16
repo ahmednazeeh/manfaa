@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { apiBaseUrl, apiFetch, apiFetchBlob, apiFetchText } from './client';
+import { apiBaseUrl, apiFetch, apiFetchBlob } from './client';
 import {
   CashbackPercentInputSchema,
   ClaimStateSchema,
@@ -360,14 +360,19 @@ export function listAdminPayoutBatches(
 }
 
 export const CreatePayoutBatchRequestSchema = z.object({
-  year: z.number().int().min(2020).max(2100),
-  month: z.number().int().min(1).max(12),
+  /**
+   * The as-of date, YYYY-MM-DD in business time, so a run can be weekly
+   * rather than monthly. Today is the usual answer; a later date is refused
+   * (422) because a batch built ahead of its cutoff would miss confirmations
+   * still to come.
+   */
+  cutoff_date: z.string(),
 });
 export type CreatePayoutBatchRequest = z.infer<
   typeof CreatePayoutBatchRequestSchema
 >;
 
-/** POST /api/admin/payout-batches — builds a draft for the month (201), items loaded. */
+/** POST /api/admin/payout-batches — builds a draft up to the cutoff (201), items loaded. */
 export function createAdminPayoutBatch(
   body: CreatePayoutBatchRequest,
   options: RequestOptions = {},
@@ -391,7 +396,7 @@ export function getAdminPayoutBatch(
   );
 }
 
-/** POST /api/admin/payout-batches/{batch}/approve — one of the two approvals. */
+/** POST /api/admin/payout-batches/{batch}/approve — draft → approved. */
 export function approveAdminPayoutBatch(
   batchId: number,
   options: RequestOptions = {},
@@ -416,27 +421,33 @@ export function cancelAdminPayoutBatch(
 }
 
 /**
- * POST /api/admin/payout-batches/{batch}/export — exports the bank-file CSV.
+ * POST /api/admin/payout-batches/{batch}/export — the transfer sheet, .xlsx.
  *
  * Deliberately a POST, not a link target: the first export mutates state
  * (approved → processing, items → sent), so it must never be reachable by a
  * GET a browser could prefetch or a cross-site navigation could trigger.
- * Returns the CSV text; hand it to the user as a Blob download. While the
- * batch is processing and no bank result has been imported, calling again
- * re-downloads the identical file.
+ * Returns the workbook as a Blob — an xlsx is binary, so it must never go
+ * through the text path — for `URL.createObjectURL` and a download named
+ * after the batch reference. While the batch is processing and no outcome
+ * has been recorded, calling again re-downloads the same sheet.
  */
 export function exportAdminPayoutBatch(
   batchId: number,
   options: RequestOptions = {},
-): Promise<string> {
-  return apiFetchText(`/api/admin/payout-batches/${batchId}/export`, {
+): Promise<Blob> {
+  return apiFetchBlob(`/api/admin/payout-batches/${batchId}/export`, {
     method: 'POST',
     signal: options.signal,
   });
 }
 
-/** POST /api/admin/payout-batches/{batch}/import — uploads the bank's result CSV. */
-export function importAdminPayoutResults(
+/**
+ * POST /api/admin/payout-batches/{batch}/import — uploads the filled transfer
+ * sheet, .xlsx or the same sheet saved as CSV. Rows whose Transfer Reference
+ * Number is still blank are skipped, so a half-filled sheet can be uploaded
+ * again as the bank works down it.
+ */
+export function uploadAdminPayoutSheet(
   batchId: number,
   file: File | Blob,
   options: RequestOptions = {},
@@ -447,6 +458,71 @@ export function importAdminPayoutResults(
     `/api/admin/payout-batches/${batchId}/import`,
     PayoutBatchResponseSchema,
     { method: 'POST', body, signal: options.signal },
+  );
+}
+
+/**
+ * POST /api/admin/payout-batches/{batch}/items/{item}/mark-paid — records a
+ * transfer that went out on its own, against the bank's reference. Refused
+ * (422) on an item already paid or failed.
+ */
+export function markAdminPayoutItemPaid(
+  batchId: number,
+  itemId: number,
+  bankReference: string,
+  options: RequestOptions = {},
+): Promise<PayoutBatchResponse> {
+  return apiFetch(
+    `/api/admin/payout-batches/${batchId}/items/${itemId}/mark-paid`,
+    PayoutBatchResponseSchema,
+    {
+      method: 'POST',
+      body: { bank_reference: bankReference },
+      signal: options.signal,
+    },
+  );
+}
+
+/**
+ * POST /api/admin/payout-batches/{batch}/items/{item}/mark-failed — the sheet
+ * has no failure column on purpose, so a rejected transfer is recorded here.
+ * The item's transactions are unlinked and re-enter the next batch.
+ */
+export function markAdminPayoutItemFailed(
+  batchId: number,
+  itemId: number,
+  failureReason: string,
+  options: RequestOptions = {},
+): Promise<PayoutBatchResponse> {
+  return apiFetch(
+    `/api/admin/payout-batches/${batchId}/items/${itemId}/mark-failed`,
+    PayoutBatchResponseSchema,
+    {
+      method: 'POST',
+      body: { failure_reason: failureReason },
+      signal: options.signal,
+    },
+  );
+}
+
+/**
+ * POST /api/admin/payout-batches/{batch}/settle-all — one bulk transfer, one
+ * reference, applied to every item still waiting. Items already paid or
+ * failed are passed over.
+ */
+export function settleAllAdminPayoutItems(
+  batchId: number,
+  bankReference: string,
+  options: RequestOptions = {},
+): Promise<PayoutBatchResponse> {
+  return apiFetch(
+    `/api/admin/payout-batches/${batchId}/settle-all`,
+    PayoutBatchResponseSchema,
+    {
+      method: 'POST',
+      body: { bank_reference: bankReference },
+      signal: options.signal,
+    },
   );
 }
 

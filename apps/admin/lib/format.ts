@@ -23,10 +23,11 @@ const dateFormat = new Intl.DateTimeFormat('en-GB', {
   timeZone: TIME_ZONE,
 });
 
-const monthFormat = new Intl.DateTimeFormat('en-GB', {
-  month: 'long',
+const businessDateFormat = new Intl.DateTimeFormat('en-GB', {
+  day: '2-digit',
+  month: '2-digit',
   year: 'numeric',
-  timeZone: 'UTC',
+  timeZone: TIME_ZONE,
 });
 
 /** ISO timestamp -> "14 Aug 2026, 16:05" in Maldives time. */
@@ -45,7 +46,20 @@ export function formatDate(iso: string | null | undefined): string {
   return dateFormat.format(new Date(iso));
 }
 
-/** Date-only string ("2026-07-01") -> "July 2026". */
-export function formatMonth(dateOnly: string): string {
-  return monthFormat.format(new Date(`${dateOnly}T00:00:00Z`));
+/**
+ * Today's date as the business day sees it, "YYYY-MM-DD" — the form a payout
+ * cutoff travels in.
+ *
+ * From 19:00 UTC the Maldives is already on the next day, so the UTC date
+ * names yesterday through those five hours. An admin building a batch then
+ * would cut it off a day early and strand a day of confirmed rewards until
+ * the next run, and the same wrong date as the input's `max` would forbid
+ * correcting it.
+ */
+export function businessToday(): string {
+  const parts = businessDateFormat.formatToParts(new Date());
+  const part = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((candidate) => candidate.type === type)?.value ?? '';
+
+  return `${part('year')}-${part('month')}-${part('day')}`;
 }

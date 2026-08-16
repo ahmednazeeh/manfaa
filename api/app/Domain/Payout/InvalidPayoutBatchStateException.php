@@ -32,6 +32,15 @@ final class InvalidPayoutBatchStateException extends DomainException
         ));
     }
 
+    public static function settle(PayoutBatch $batch): self
+    {
+        return new self(sprintf(
+            'Payout batch %s is %s and cannot be settled — the bank file must be exported first.',
+            $batch->reference,
+            $batch->state->label(),
+        ));
+    }
+
     public static function cancel(PayoutBatch $batch): self
     {
         return self::action($batch, 'cancelled', PayoutBatchState::Draft);

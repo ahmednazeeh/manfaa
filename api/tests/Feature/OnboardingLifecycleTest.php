@@ -77,7 +77,10 @@ it('runs signup → resume → submit → reject → resubmit → approve → pu
 
     $resumed = $this->getJson('/api/merchant/setup')->assertOk()->json('data');
     expect($resumed['status'])->toBe('draft')
-        ->and($resumed['steps'])->toBe(['profile' => true, 'logo' => false, 'rate' => false])
+        // location is false and stays false through this whole lifecycle: a
+        // pin is asked for at signup but is deliberately not an approval
+        // requirement, so a store reaches active without one.
+        ->and($resumed['steps'])->toBe(['profile' => true, 'location' => false, 'logo' => false, 'rate' => false])
         ->and($resumed['values']['category'])->toBe('grocery')
         ->and($resumed['values']['channel'])->toBe('both')
         ->and($resumed['values']['cashback_rate_percent'])->toBeNull();

@@ -7,7 +7,7 @@ import { MoneyText } from '@manfaa/ui';
 import { useQuery } from '@tanstack/react-query';
 import { TriangleAlert } from 'lucide-react';
 import { apiErrorMessage } from '@/lib/api-error';
-import { formatDate, formatMonth } from '@/lib/format';
+import { formatDate } from '@/lib/format';
 import { Alert, AlertDescription, AlertIcon } from '@/components/ui/alert';
 import { Card, CardTable } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -37,7 +37,7 @@ export default function PayoutBatchesPage() {
     <div className="flex flex-col">
       <PageHeader
         title="Payout batches"
-        description="Monthly customer payouts: build, dual-approve, export the bank file, then import the bank's results."
+        description="Customer payouts, run as often as you like: build a draft to a cutoff date, approve it, export the transfer sheet, then record what the bank paid."
         actions={<CreateBatchDialog />}
       />
 
@@ -60,7 +60,7 @@ export default function PayoutBatchesPage() {
                     <TableHead>State</TableHead>
                     <TableHead className="text-end">Total</TableHead>
                     <TableHead className="text-end">Customers</TableHead>
-                    <TableHead>Approvals</TableHead>
+                    <TableHead>Approved</TableHead>
                     <TableHead>Cutoff</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -79,40 +79,39 @@ export default function PayoutBatchesPage() {
                         colSpan={7}
                         className="py-10 text-center text-muted-foreground"
                       >
-                        No payout batches yet — create one for a settled month.
+                        No payout batches yet — create one with today as the
+                        cutoff.
                       </TableCell>
                     </TableRow>
                   ) : (
-                    query.data.data.map((batch) => {
-                      const approvals =
-                        (batch.approved_by_first !== null ? 1 : 0) +
-                        (batch.approved_by_second !== null ? 1 : 0);
-                      return (
-                        <TableRow
-                          key={batch.id}
-                          className="cursor-pointer"
-                          onClick={() => router.push(`/payouts/${batch.id}`)}
-                        >
-                          <TableCell className="font-medium">
-                            {batch.reference}
-                          </TableCell>
-                          <TableCell>
-                            {formatMonth(batch.period_start)}
-                          </TableCell>
-                          <TableCell>
-                            <PayoutBatchStateBadge state={batch.state} />
-                          </TableCell>
-                          <TableCell className="text-end">
-                            <MoneyText laari={batch.total_laari} />
-                          </TableCell>
-                          <TableCell className="text-end">
-                            {batch.customer_count}
-                          </TableCell>
-                          <TableCell>{approvals}/2</TableCell>
-                          <TableCell>{formatDate(batch.cutoff_at)}</TableCell>
-                        </TableRow>
-                      );
-                    })
+                    query.data.data.map((batch) => (
+                      <TableRow
+                        key={batch.id}
+                        className="cursor-pointer"
+                        onClick={() => router.push(`/payouts/${batch.id}`)}
+                      >
+                        <TableCell className="font-medium">
+                          {batch.reference}
+                        </TableCell>
+                        {/* Since the previous batch's cutoff, up to this
+                            one's — a rolling window, not a calendar month. */}
+                        <TableCell>
+                          {formatDate(batch.period_start)} –{' '}
+                          {formatDate(batch.period_end)}
+                        </TableCell>
+                        <TableCell>
+                          <PayoutBatchStateBadge state={batch.state} />
+                        </TableCell>
+                        <TableCell className="text-end">
+                          <MoneyText laari={batch.total_laari} />
+                        </TableCell>
+                        <TableCell className="text-end">
+                          {batch.customer_count}
+                        </TableCell>
+                        <TableCell>{formatDate(batch.approved_at)}</TableCell>
+                        <TableCell>{formatDate(batch.cutoff_at)}</TableCell>
+                      </TableRow>
+                    ))
                   )}
                 </TableBody>
               </Table>

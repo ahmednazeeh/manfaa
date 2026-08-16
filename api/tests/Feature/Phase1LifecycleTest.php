@@ -19,11 +19,11 @@ use App\Models\TransactionEvent;
 use Carbon\CarbonImmutable;
 use Database\Seeders\LedgerAccountSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Tests\Feature\ReceiptSettlement\Slips;
+use Tests\Support\TransferSheet;
 use Tests\TestCase;
 
 uses(TestCase::class, RefreshDatabase::class);
@@ -383,8 +383,8 @@ it('runs the full Phase 1 lifecycle: credit → sweep → settle → forgive →
         ->and($merchantD->refresh()->status)->toBe('suspended')
         ->and(MerchantNotice::query()->where('type', 'reinstated')->count())->toBe(1);
 
-    // ── (f) Aug 26: build the 2026-08 payout batch. Cutoff is the 24th at
-    // 23:59 business time, so B3–B5 (confirmed Aug 25) roll to next month:
+    // ── (f) Aug 26: build the payout batch to a cutoff of the 24th at 23:59
+    // business time, so B3–B5 (confirmed Aug 25) roll into the next run:
     // customer 1 collects §4's 8,600 plus B1's 3,225 = exactly the §4 batch
     // total 11,825; customer 2 sits exactly AT the MVR 100 minimum with B2's
     // 10,000 (B5's 1,200 excluded by the cutoff); customer 3's pre-cutoff
@@ -392,14 +392,14 @@ it('runs the full Phase 1 lifecycle: credit → sweep → settle → forgive →
     Carbon::setTestNow(CarbonImmutable::parse('2026-08-26T10:00:00+05:00'));
 
     $this->actingAs($admin1, 'admin')
-        ->postJson('/api/admin/payout-batches', ['year' => 2026, 'month' => 8])
+        ->postJson('/api/admin/payout-batches', ['cutoff_date' => '2026-08-24'])
         ->assertCreated()
-        ->assertJsonPath('data.reference', 'PB-2026-08')
+        ->assertJsonPath('data.reference', 'PB-20260824')
         ->assertJsonPath('data.state', 'draft')
         ->assertJsonPath('data.customer_count', 2)
         ->assertJsonPath('data.total_laari', 21_825);
 
-    $batch = PayoutBatch::query()->where('reference', 'PB-2026-08')->sole();
+    $batch = PayoutBatch::query()->where('reference', 'PB-20260824')->sole();
 
     expect($batch->cutoff_at->equalTo(CarbonImmutable::parse('2026-08-24T23:59:59+05:00')))->toBeTrue();
 
@@ -410,51 +410,55 @@ it('runs the full Phase 1 lifecycle: credit → sweep → settle → forgive →
         ->and($item2->amount_laari)->toBe(10_000)
         ->and($batch->items()->where('customer_id', $customer3->id)->exists())->toBeFalse();
 
-    // ── (g) Dual approval: the same admin twice is rejected in the domain;
-    // a second admin completes it.
+    // ── (g) One admin approves and the batch may go out; a second admin
+    // finds nothing left to approve.
     $this->postJson("/api/admin/payout-batches/{$batch->id}/approve")
         ->assertOk()
-        ->assertJsonPath('data.state', 'draft')
-        ->assertJsonPath('data.approved_by_first', $admin1->id);
-
-    $this->postJson("/api/admin/payout-batches/{$batch->id}/approve")->assertUnprocessable();
-
-    expect($batch->refresh()->approved_by_second)->toBeNull();
+        ->assertJsonPath('data.state', 'approved')
+        ->assertJsonPath('data.approved_by', $admin1->id);
 
     $this->actingAs($admin2, 'admin')
         ->postJson("/api/admin/payout-batches/{$batch->id}/approve")
-        ->assertOk()
-        ->assertJsonPath('data.state', 'approved')
-        ->assertJsonPath('data.approved_by_second', $admin2->id);
+        ->assertConflict();
 
-    // Export: the §4 customer's row carries the amount string 118.25 — the
-    // §4 batch total, straight from stored integers.
+    expect($batch->refresh()->approved_by)->toBe($admin1->id);
+
+    // Export: the transfer sheet carries one row per payee, keyed by the MNF
+    // idempotency key, and Amount Owed is a number — 118.25 for the §4
+    // customer, straight from the stored integer.
     $export = $this->post("/api/admin/payout-batches/{$batch->id}/export");
     $export->assertOk();
 
-    $lines = explode("\n", trim($export->getContent()));
+    $sheet = TransferSheet::open($export->getContent());
+    $row1 = TransferSheet::rowOf($sheet, $item1->idempotency_key);
+    $row2 = TransferSheet::rowOf($sheet, $item2->idempotency_key);
 
-    expect($lines[0])->toBe('item_id,account_no,account_name,bank_name,amount_mvr')
-        ->and($lines)->toContain("{$item1->id},7730000000101,Aminath Naseem,BML,118.25")
-        ->and($lines)->toContain("{$item2->id},7730000000102,Ibrahim Waheed,BML,100.00")
+    expect($sheet->getCell('D'.$row1)->getValue())->toBe('Aminath Naseem')
+        ->and($sheet->getCell('E'.$row1)->getValue())->toBe('7730000000101')
+        ->and($sheet->getCell('F'.$row1)->getValue())->toBe(118.25)
+        ->and($sheet->getCell('D'.$row2)->getValue())->toBe('Ibrahim Waheed')
+        ->and($sheet->getCell('E'.$row2)->getValue())->toBe('7730000000102')
+        ->and($sheet->getCell('F'.$row2)->getValue())->toBe(100)
         ->and($batch->refresh()->state->value)->toBe('processing');
 
-    // Import: customer 1 paid, customer 2 failed. Paid transactions move to
+    // Results: customer 1's transfer comes back on the filled sheet with the
+    // bank's reference in it; customer 2's was rejected, which the sheet has
+    // no column for and an admin records by hand. Paid transactions move to
     // paid with one payoutSent journal for the stored item integer; the
     // failed item's transaction is unlinked and re-eligible; the liability
     // shrinks by exactly the paid 11,825.
     $liabilityBefore = $balances->naturalBalance(AccountCode::CustomerCashbackLiability);
     expect($liabilityBefore)->toBe(29_025);
 
-    $results = implode("\n", [
-        'item_id,status,reference,failure_reason',
-        "{$item1->id},paid,BML-PAY-1,",
-        "{$item2->id},failed,,Account closed",
-    ]);
-
     $this->post("/api/admin/payout-batches/{$batch->id}/import", [
-        'file' => UploadedFile::fake()->createWithContent('results.csv', $results),
+        'file' => TransferSheet::filled($export->getContent(), [$item1->idempotency_key => 'BML-PAY-1']),
     ], ['Accept' => 'application/json'])
+        ->assertOk()
+        ->assertJsonPath('data.state', 'sent');
+
+    $this->postJson("/api/admin/payout-batches/{$batch->id}/items/{$item2->id}/mark-failed", [
+        'failure_reason' => 'Account closed',
+    ])
         ->assertOk()
         ->assertJsonPath('data.state', 'partially_failed');
 
@@ -474,14 +478,14 @@ it('runs the full Phase 1 lifecycle: credit → sweep → settle → forgive →
 
     // The failed amount re-enters the very next build, joined by B5 which
     // confirmed after the August cutoff — customer 3 still under the minimum.
-    // September's own cutoff (the 24th) must have passed before it can build.
+    // The chosen cutoff has to be a day the clock has already passed.
     Carbon::setTestNow(CarbonImmutable::parse('2026-09-26T10:00:00+05:00'));
-    $this->postJson('/api/admin/payout-batches', ['year' => 2026, 'month' => 9])
+    $this->postJson('/api/admin/payout-batches', ['cutoff_date' => '2026-09-24'])
         ->assertCreated()
         ->assertJsonPath('data.customer_count', 1)
         ->assertJsonPath('data.total_laari', 11_200);
 
-    $september = PayoutBatch::query()->where('reference', 'PB-2026-09')->sole();
+    $september = PayoutBatch::query()->where('reference', 'PB-20260924')->sole();
 
     expect($september->items()->sole()->customer_id)->toBe($customer2->id);
 

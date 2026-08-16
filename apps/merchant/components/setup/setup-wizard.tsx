@@ -54,17 +54,36 @@ import { Input, InputAddon, InputGroup } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Textarea } from '@/components/ui/textarea';
+import { formatPin } from '@/components/app/location-picker';
+import {
+  locationRequired,
+  LocationStep,
+  pinnedLocation,
+} from '@/components/setup/location-step';
 
 /**
- * The resumable store setup wizard (§1 decision 2026-08-15). Five steps —
- * Store profile (curated category + channel), Logo (skippable), Cashback
- * rate (percent input via parsePercentToBp with the all-in preview), Terms
- * & exclusions, Review & submit. Every step is persisted server-side the
- * moment it saves, so quitting mid-wizard resumes exactly where the owner
- * left off (GET /merchant/setup).
+ * The resumable store setup wizard (§1 decision 2026-08-15). Six steps —
+ * Store profile (curated category + channel), Location (the primary branch's
+ * map pin; required for a store with a counter, skippable online), Logo
+ * (skippable), Cashback rate (percent input via parsePercentToBp with the
+ * all-in preview), Terms & exclusions, Review & submit. Every step is
+ * persisted server-side the moment it saves, so quitting mid-wizard resumes
+ * exactly where the owner left off (GET /merchant/setup).
+ *
+ * STEPS is the only place a step's position is written down. Every jump —
+ * resume, the "fix this" links on the review step, each row's Edit button —
+ * resolves through STEPS.indexOf, so inserting or reordering a step here is
+ * the whole change rather than the first of a dozen.
  */
 
-const STEPS = ['profile', 'logo', 'rate', 'terms', 'review'] as const;
+const STEPS = [
+  'profile',
+  'location',
+  'logo',
+  'rate',
+  'terms',
+  'review',
+] as const;
 type StepId = (typeof STEPS)[number];
 
 const CHANNELS: readonly MerchantChannel[] = ['in_store', 'online', 'both'];
@@ -88,9 +107,18 @@ function staticFeeBp(rateBp: number): number {
 
 /** Resume at the first step whose REQUIRED value is still missing. */
 function firstIncompleteStep(state: MerchantSetupState): number {
-  if (!state.steps.profile || state.values.category === null) return 0;
-  if (state.values.cashback_rate_percent === null) return 2;
-  if ((state.values.eligibility_basis ?? '').trim() === '') return 3;
+  if (!state.steps.profile || state.values.category === null) {
+    return STEPS.indexOf('profile');
+  }
+  // An online-only store may pass this step unpinned, so being unpinned does
+  // not make it incomplete — only a store customers can walk into.
+  if (locationRequired(state) && pinnedLocation(state) === null) {
+    return STEPS.indexOf('location');
+  }
+  if (state.values.cashback_rate_percent === null) return STEPS.indexOf('rate');
+  if ((state.values.eligibility_basis ?? '').trim() === '') {
+    return STEPS.indexOf('terms');
+  }
   return STEPS.length - 1;
 }
 
@@ -118,6 +146,7 @@ function StepIndicator({
 
   const labels: Record<StepId, string> = {
     profile: t('setup.stepProfile'),
+    location: t('setup.stepLocation'),
     logo: t('setup.stepLogo'),
     rate: t('setup.stepRate'),
     terms: t('setup.stepTerms'),
@@ -819,6 +848,7 @@ function ReviewStep({
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   const values = state.values;
+  const pin = pinnedLocation(state);
   const category = state.categories.find(
     (option) => option.slug === values.category,
   );
@@ -845,10 +875,10 @@ function ReviewStep({
 
   /** The wizard step that fixes a missing requirement key. */
   const stepForMissing: Record<SetupMissingKey, number> = {
-    category: 0,
-    channel: 0,
-    rate: 2,
-    terms: 3,
+    category: STEPS.indexOf('profile'),
+    channel: STEPS.indexOf('profile'),
+    rate: STEPS.indexOf('rate'),
+    terms: STEPS.indexOf('terms'),
   };
 
   const row = (label: string, value: ReactNode, editIndex: number) => (
@@ -879,7 +909,7 @@ function ReviewStep({
         </p>
 
         <div className="flex flex-col">
-          {row(t('setup.reviewName'), values.name, 0)}
+          {row(t('setup.reviewName'), values.name, STEPS.indexOf('profile'))}
           {row(
             t('setup.reviewCategory'),
             category !== undefined ? (
@@ -889,12 +919,23 @@ function ReviewStep({
                 {t('common.notSet')}
               </span>
             ),
-            0,
+            STEPS.indexOf('profile'),
           )}
           {row(
             t('setup.reviewChannel'),
             merchantChannelLabel(t, values.channel),
-            0,
+            STEPS.indexOf('profile'),
+          )}
+          {row(
+            t('setup.reviewLocation'),
+            pin !== null ? (
+              <span className="tabular-nums">{formatPin(pin)}</span>
+            ) : (
+              <span className="text-muted-foreground">
+                {t('setup.reviewNoLocation')}
+              </span>
+            ),
+            STEPS.indexOf('location'),
           )}
           {row(
             t('setup.reviewLogo'),
@@ -909,7 +950,7 @@ function ReviewStep({
                 {t('setup.reviewNoLogo')}
               </span>
             ),
-            1,
+            STEPS.indexOf('logo'),
           )}
           {row(
             t('setup.reviewRate'),
@@ -924,7 +965,7 @@ function ReviewStep({
                 {t('common.notSet')}
               </span>
             ),
-            2,
+            STEPS.indexOf('rate'),
           )}
           {row(
             t('setup.reviewTerms'),
@@ -937,7 +978,7 @@ function ReviewStep({
                 {t('common.notSet')}
               </span>
             ),
-            3,
+            STEPS.indexOf('terms'),
           )}
         </div>
 
@@ -1037,11 +1078,20 @@ export function SetupWizard({ state }: { state: MerchantSetupState }) {
 
       {rejectionBanner}
 
-      {step === 0 && <ProfileStep state={state} onDone={next} />}
-      {step === 1 && <LogoStep state={state} onDone={next} onBack={back} />}
-      {step === 2 && <RateStep state={state} onDone={next} onBack={back} />}
-      {step === 3 && <TermsStep state={state} onDone={next} onBack={back} />}
-      {step === 4 && (
+      {STEPS[step] === 'profile' && <ProfileStep state={state} onDone={next} />}
+      {STEPS[step] === 'location' && (
+        <LocationStep state={state} onDone={next} onBack={back} />
+      )}
+      {STEPS[step] === 'logo' && (
+        <LogoStep state={state} onDone={next} onBack={back} />
+      )}
+      {STEPS[step] === 'rate' && (
+        <RateStep state={state} onDone={next} onBack={back} />
+      )}
+      {STEPS[step] === 'terms' && (
+        <TermsStep state={state} onDone={next} onBack={back} />
+      )}
+      {STEPS[step] === 'review' && (
         <ReviewStep state={state} onBack={back} onNavigate={setStep} />
       )}
     </div>

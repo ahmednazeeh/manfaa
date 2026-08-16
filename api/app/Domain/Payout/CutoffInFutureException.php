@@ -8,9 +8,9 @@ use Carbon\CarbonImmutable;
 use DomainException;
 
 /**
- * The period's cutoff instant has not passed yet — a batch built now would
- * silently miss every confirmation still to come before the 24th, so early
- * builds are refused outright rather than producing a short batch.
+ * The chosen cutoff has not arrived yet — a batch built now would silently
+ * miss every confirmation still to come before it, so a build ahead of its
+ * own cutoff is refused outright rather than producing a short batch.
  */
 final class CutoffInFutureException extends DomainException
 {

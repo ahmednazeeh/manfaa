@@ -18,6 +18,19 @@ interface RequestOptions {
 }
 
 /**
+ * One located branch of a discoverable store — a bare coordinate pair, all a
+ * map pin needs. Deliberately narrower than `StoreBranchSchema`: an entry is
+ * repeated across up to seven shelves, so the discovery payload carries no
+ * branch names or addresses. Branches without coordinates are absent, never
+ * present with nulls.
+ */
+export const DiscoveryBranchSchema = z.object({
+  lat: z.number(),
+  lng: z.number(),
+});
+export type DiscoveryBranch = z.infer<typeof DiscoveryBranchSchema>;
+
+/**
  * One discoverable merchant. `cashback_rate_percent` is the rate the
  * customer gets NOW; `standing_cashback_rate_percent` is the "usually" rate
  * — when they differ, a published promotion is live and `promo_ends_at`
@@ -42,6 +55,16 @@ export const DiscoveryEntrySchema = z.object({
   promo_ends_at: z.string().nullable(),
   /** Metres to the nearest branch; null without coordinates. */
   distance_m: z.number().int().nullable(),
+  /**
+   * Every located branch, for the map view. Empty for an online-only store —
+   * such a store belongs on the list and not on the map.
+   *
+   * `.catch([])` degrades to "no pins" rather than failing the entry, and
+   * with it the whole discovery parse: `featured`, `increased`, `nearby` and
+   * `online` have no `.catch` of their own, so an API build from before this
+   * field existed would blank the landing page during a deploy window.
+   */
+  branches: z.array(DiscoveryBranchSchema).catch([]),
 });
 export type DiscoveryEntry = z.infer<typeof DiscoveryEntrySchema>;
 

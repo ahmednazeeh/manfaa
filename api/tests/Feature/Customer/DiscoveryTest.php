@@ -194,8 +194,14 @@ it('leaks nothing: no internal ids, no PII, no commercial terms', function () {
     foreach (['featured', 'increased', 'nearby', 'in_store', 'online', 'recently_added'] as $shelf) {
         foreach ($data[$shelf] as $entry) {
             expect(array_keys($entry))->toBe([
-                'name', 'name_dv', 'slug', 'category', 'logo_url', 'channel', 'cashback_rate_percent', 'standing_cashback_rate_percent', 'promo_ends_at', 'distance_m',
+                'name', 'name_dv', 'slug', 'category', 'logo_url', 'channel', 'cashback_rate_percent', 'standing_cashback_rate_percent', 'promo_ends_at', 'distance_m', 'branches',
             ]);
+
+            // Pins carry the coordinate pair and nothing else — the branch
+            // name and address stay on the store page.
+            foreach ($entry['branches'] as $branch) {
+                expect(array_keys($branch))->toBe(['lat', 'lng']);
+            }
         }
     }
 
@@ -306,6 +312,53 @@ it('builds the in-store shelf from the whole listed set, never from another capp
     expect(collect($data['online'])->pluck('slug'))->toContain('both-ways');
 });
 
+// -------------------------------------------------------------- map pins
+
+it('carries one pin per located branch', function () {
+    // The map draws from the entry itself — there is no second call — so a
+    // two-site store has to arrive with both of its coordinates.
+    $merchant = discoveryMerchant(['name' => 'Two Sites', 'slug' => 'two-sites'], 200);
+    MerchantBranch::factory()->for($merchant)->create(['lat' => 4.1752, 'lng' => 73.5089]);
+    MerchantBranch::factory()->for($merchant)->create(['lat' => 4.2105, 'lng' => 73.5401]);
+
+    $entry = collect($this->getJson('/api/discover')->assertOk()->json('data.recently_added'))
+        ->firstWhere('slug', 'two-sites');
+
+    // Compared as a set: the payload promises the pins, not an order.
+    expect(collect($entry['branches'])->sortBy('lat')->values()->all())->toBe([
+        ['lat' => 4.1752, 'lng' => 73.5089],
+        ['lat' => 4.2105, 'lng' => 73.5401],
+    ]);
+});
+
+it('gives an online-only store an empty pin list, never a null', function () {
+    discoveryMerchant(['name' => 'Web Only', 'slug' => 'web-only', 'channel' => 'online'], 100);
+
+    $response = $this->getJson('/api/discover')->assertOk();
+    $entry = collect($response->json('data.online'))->firstWhere('slug', 'web-only');
+
+    // A store with nowhere to walk into is simply absent from the map. Sent
+    // as a null it would make every map surface guard the field before
+    // iterating it, and one that forgot would throw on the whole shelf.
+    expect($entry['branches'])->toBe([]);
+    expect($response->getContent())->not->toContain('"branches":null');
+});
+
+it('never builds a pin from a half-coordinate branch row', function () {
+    // lat and lng are independently nullable, so a store can save one
+    // without the other. Defaulting the missing half to zero would drop the
+    // pin in the Gulf of Guinea; the row is dropped instead.
+    $merchant = discoveryMerchant(['name' => 'Half Pinned', 'slug' => 'half-pinned'], 200);
+    MerchantBranch::factory()->for($merchant)->create(['lat' => 4.1752, 'lng' => null]);
+    MerchantBranch::factory()->for($merchant)->create(['lat' => null, 'lng' => 73.5089]);
+    MerchantBranch::factory()->for($merchant)->create(['lat' => 4.2105, 'lng' => 73.5401]);
+
+    $entry = collect($this->getJson('/api/discover')->assertOk()->json('data.recently_added'))
+        ->firstWhere('slug', 'half-pinned');
+
+    expect($entry['branches'])->toBe([['lat' => 4.2105, 'lng' => 73.5401]]);
+});
+
 // ------------------------------------------------------- recently added
 
 it('orders the recently added shelf by approval, falling back to creation', function () {
@@ -344,7 +397,7 @@ it('orders the recently added shelf by approval, falling back to creation', func
     // Same entry shape and the same percent-string wire format as every
     // other shelf — the shelf differs only in its ordering.
     expect(array_keys($shelf[0]))->toBe([
-        'name', 'name_dv', 'slug', 'category', 'logo_url', 'channel', 'cashback_rate_percent', 'standing_cashback_rate_percent', 'promo_ends_at', 'distance_m',
+        'name', 'name_dv', 'slug', 'category', 'logo_url', 'channel', 'cashback_rate_percent', 'standing_cashback_rate_percent', 'promo_ends_at', 'distance_m', 'branches',
     ]);
     expect($shelf[0]['cashback_rate_percent'])->toBe('2.00');
     expect($shelf[1]['cashback_rate_percent'])->toBe('1.00');

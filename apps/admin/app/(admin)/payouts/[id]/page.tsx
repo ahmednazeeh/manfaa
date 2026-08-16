@@ -13,8 +13,6 @@ import { MoneyText } from '@manfaa/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft,
-  CircleCheck,
-  CircleDashed,
   Download,
   ShieldCheck,
   TriangleAlert,
@@ -22,7 +20,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiErrorMessage } from '@/lib/api-error';
-import { formatDateTime, formatMonth } from '@/lib/format';
+import { formatDate, formatDateTime } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import {
   Alert,
@@ -53,52 +51,27 @@ import {
   PayoutBatchStateBadge,
   PayoutItemStateBadge,
 } from '@/components/admin/state-badge';
-import { useAdminUser } from '@/components/auth/admin-guard';
-import { ImportResultsButton } from '@/components/payouts/import-results-button';
+import { MarkFailedDialog } from '@/components/payouts/mark-failed-dialog';
+import { MarkPaidDialog } from '@/components/payouts/mark-paid-dialog';
+import { SettleAllButton } from '@/components/payouts/settle-all-button';
+import { UploadSheetButton } from '@/components/payouts/upload-sheet-button';
 
-const IMPORTABLE_STATES: PayoutBatch['state'][] = [
+/**
+ * The batch states in which a transfer outcome can be recorded, mirroring
+ * ItemResultService: the sheet has to be with the bank before the bank can
+ * have paid anything.
+ */
+const RESULT_STATES: PayoutBatch['state'][] = [
   'processing',
   'sent',
   'completed',
   'partially_failed',
 ];
 
-function ApprovalSlot({
-  label,
-  approvedBy,
-  approvedAt,
-  isCurrentAdmin,
-}: {
-  label: string;
-  approvedBy: number | null;
-  approvedAt: string | null;
-  isCurrentAdmin: boolean;
-}) {
-  const approved = approvedBy !== null;
-  return (
-    <div className="flex items-center gap-3 rounded-lg border border-border p-3">
-      {approved ? (
-        <CircleCheck className="size-5 shrink-0 text-[var(--color-success-accent,var(--color-green-600))]" />
-      ) : (
-        <CircleDashed className="size-5 shrink-0 text-muted-foreground" />
-      )}
-      <div className="flex flex-col">
-        <span className="text-sm font-medium">{label}</span>
-        <span className="text-xs text-muted-foreground">
-          {approved
-            ? `Admin #${approvedBy}${isCurrentAdmin ? ' (you)' : ''} · ${formatDateTime(approvedAt)}`
-            : 'Awaiting approval'}
-        </span>
-      </div>
-    </div>
-  );
-}
-
 export default function PayoutBatchDetailPage() {
   const params = useParams<{ id: string }>();
   const batchId = Number(params.id);
   const queryClient = useQueryClient();
-  const admin = useAdminUser();
 
   const query = useQuery({
     queryKey: ['admin', 'payout-batch', batchId],
@@ -127,11 +100,7 @@ export default function PayoutBatchDetailPage() {
     mutationFn: () => approveAdminPayoutBatch(batchId),
     onSuccess: (response) => {
       setBatch(response);
-      toast.success(
-        response.data.state === 'approved'
-          ? 'Second approval recorded — the batch is approved and ready to export.'
-          : 'First approval recorded — a second, different admin must approve.',
-      );
+      toast.success('Batch approved — the transfer sheet can be exported.');
       // The show endpoint eager-loads items; approve does not. Refetch so the
       // items stay on screen.
       queryClient.invalidateQueries({
@@ -155,27 +124,28 @@ export default function PayoutBatchDetailPage() {
 
   // POST + Blob download, never a plain link: the first export mutates state
   // (approved → processing, items → sent), so it must not sit on a GET a
-  // browser could prefetch. Re-running while processing (before any result
-  // import) re-downloads the identical file — a lost download is recoverable.
+  // browser could prefetch. Re-running while processing (before any outcome
+  // is recorded) re-downloads the identical file — a lost download is
+  // recoverable. The response's own Blob is saved as it arrived; re-wrapping
+  // it in a hand-declared mime would relabel the workbook.
   const exportFile = useMutation({
     mutationFn: () => exportAdminPayoutBatch(batchId),
-    onSuccess: (csv) => {
+    onSuccess: (sheet) => {
       const reference =
         queryClient.getQueryData<BatchResponse>([
           'admin',
           'payout-batch',
           batchId,
         ])?.data.reference ?? `payout-batch-${batchId}`;
-      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
-      const url = URL.createObjectURL(blob);
+      const url = URL.createObjectURL(sheet);
       const anchor = document.createElement('a');
       anchor.href = url;
-      anchor.download = `${reference}.csv`;
+      anchor.download = `${reference}.xlsx`;
       document.body.appendChild(anchor);
       anchor.click();
       anchor.remove();
       URL.revokeObjectURL(url);
-      toast.success('Bank file downloaded.');
+      toast.success('Transfer sheet downloaded.');
       queryClient.invalidateQueries({
         queryKey: ['admin', 'payout-batch', batchId],
       });
@@ -208,9 +178,7 @@ export default function PayoutBatchDetailPage() {
   const batch = query.data.data;
   const items = batch.items ?? [];
   const failedItems = items.filter((item) => item.state === 'failed');
-  const alreadyApprovedByMe =
-    batch.approved_by_first === admin.id ||
-    batch.approved_by_second === admin.id;
+  const acceptsResults = RESULT_STATES.includes(batch.state);
 
   return (
     <div className="flex flex-col">
@@ -223,8 +191,14 @@ export default function PayoutBatchDetailPage() {
         }
         description={
           <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
-            <span>Period: {formatMonth(batch.period_start)}</span>
+            <span>
+              Since {formatDate(batch.period_start)} · up to{' '}
+              {formatDate(batch.period_end)}
+            </span>
             <span>Cutoff {formatDateTime(batch.cutoff_at)}</span>
+            {batch.approved_at ? (
+              <span>Approved {formatDateTime(batch.approved_at)}</span>
+            ) : null}
             {batch.exported_at ? (
               <span>Exported {formatDateTime(batch.exported_at)}</span>
             ) : null}
@@ -250,14 +224,10 @@ export default function PayoutBatchDetailPage() {
                 </Button>
                 <Button
                   onClick={() => approve.mutate()}
-                  disabled={approve.isPending || alreadyApprovedByMe}
+                  disabled={approve.isPending}
                 >
                   <ShieldCheck />
-                  {alreadyApprovedByMe
-                    ? 'Awaiting second approver'
-                    : batch.approved_by_first === null
-                      ? 'Approve (1 of 2)'
-                      : 'Approve (2 of 2)'}
+                  Approve
                 </Button>
               </>
             ) : null}
@@ -268,12 +238,15 @@ export default function PayoutBatchDetailPage() {
               >
                 <Download />
                 {batch.state === 'approved'
-                  ? 'Export bank file'
-                  : 'Re-download bank file'}
+                  ? 'Export transfer sheet'
+                  : 'Re-download transfer sheet'}
               </Button>
             ) : null}
-            {IMPORTABLE_STATES.includes(batch.state) ? (
-              <ImportResultsButton batchId={batch.id} />
+            {acceptsResults ? (
+              <>
+                <UploadSheetButton batchId={batch.id} />
+                <SettleAllButton batch={batch} />
+              </>
             ) : null}
           </>
         }
@@ -285,9 +258,10 @@ export default function PayoutBatchDetailPage() {
             <Download />
           </AlertIcon>
           <AlertDescription>
-            Exporting downloads the bank CSV and moves the batch to processing —
-            items are marked sent. The identical file can be re-downloaded until
-            the bank&apos;s results are imported.
+            Exporting downloads the transfer sheet (.xlsx) and moves the batch
+            to processing — items are marked sent. The identical sheet can be
+            re-downloaded until the first outcome is recorded. Fill in the
+            Transfer Reference Number column and upload it back.
           </AlertDescription>
         </Alert>
       ) : null}
@@ -303,15 +277,15 @@ export default function PayoutBatchDetailPage() {
               {failedItems.length === 1 ? '' : 's'} failed
             </AlertTitle>
             <AlertDescription>
-              Failed items are flagged below with the bank&apos;s reason. Fix
-              the customer&apos;s account details — failed amounts roll into a
-              future batch, they are never lost.
+              Failed items are flagged below with the reason recorded against
+              them. Fix the customer&apos;s account details — failed amounts
+              roll into a future batch, they are never lost.
             </AlertDescription>
           </AlertContent>
         </Alert>
       ) : null}
 
-      <div className="mb-5 grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <div className="mb-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Card>
           <CardContent className="flex flex-col gap-1 py-4">
             <span className="text-xs font-medium uppercase text-muted-foreground">
@@ -339,31 +313,6 @@ export default function PayoutBatchDetailPage() {
             </span>
           </CardContent>
         </Card>
-        <Card>
-          <CardHeader className="pb-0">
-            <CardTitle className="text-xs font-medium uppercase text-muted-foreground">
-              Dual approval
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-2 py-3">
-            <ApprovalSlot
-              label="First approval"
-              approvedBy={batch.approved_by_first}
-              approvedAt={batch.first_approved_at}
-              isCurrentAdmin={batch.approved_by_first === admin.id}
-            />
-            <ApprovalSlot
-              label="Second approval"
-              approvedBy={batch.approved_by_second}
-              approvedAt={batch.second_approved_at}
-              isCurrentAdmin={batch.approved_by_second === admin.id}
-            />
-            <span className="text-xs text-muted-foreground">
-              Two distinct admins are required — the server rejects a second
-              approval from the same account.
-            </span>
-          </CardContent>
-        </Card>
       </div>
 
       <Card>
@@ -375,6 +324,7 @@ export default function PayoutBatchDetailPage() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead>Idempotency key</TableHead>
                   <TableHead>Customer</TableHead>
                   <TableHead>Account name</TableHead>
                   <TableHead>Bank</TableHead>
@@ -383,13 +333,14 @@ export default function PayoutBatchDetailPage() {
                   <TableHead>State</TableHead>
                   <TableHead>Bank ref</TableHead>
                   <TableHead>Failure reason</TableHead>
+                  <TableHead className="text-end">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {items.length === 0 ? (
                   <TableRow>
                     <TableCell
-                      colSpan={8}
+                      colSpan={10}
                       className="py-8 text-center text-muted-foreground"
                     >
                       No items on this batch.
@@ -403,8 +354,19 @@ export default function PayoutBatchDetailPage() {
                         item.state === 'failed' && 'bg-destructive/5',
                       )}
                     >
-                      <TableCell className="font-medium">
-                        #{item.customer_id}
+                      <TableCell className="font-mono text-xs">
+                        {item.idempotency_key}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex min-w-0 flex-col">
+                          <span className="font-medium">
+                            {item.customer_name ??
+                              `Customer #${item.customer_id}`}
+                          </span>
+                          <span className="text-xs text-muted-foreground">
+                            {item.customer_phone ?? '—'}
+                          </span>
+                        </div>
                       </TableCell>
                       <TableCell>{item.account_name ?? '—'}</TableCell>
                       <TableCell>{item.bank ?? '—'}</TableCell>
@@ -415,13 +377,28 @@ export default function PayoutBatchDetailPage() {
                       <TableCell>
                         <PayoutItemStateBadge state={item.state} />
                       </TableCell>
-                      <TableCell>{item.bank_reference ?? '—'}</TableCell>
+                      <TableCell className="font-mono text-xs">
+                        {item.bank_reference ?? '—'}
+                      </TableCell>
                       <TableCell
                         className={cn(
                           item.failure_reason && 'text-destructive',
                         )}
                       >
                         {item.failure_reason ?? '—'}
+                      </TableCell>
+                      {/* Paid and failed are terminal: an outcome already on
+                          record is not re-recorded from here. */}
+                      <TableCell className="text-end">
+                        {acceptsResults &&
+                        (item.state === 'pending' || item.state === 'sent') ? (
+                          <div className="flex flex-wrap items-center justify-end gap-1.5">
+                            <MarkPaidDialog item={item} />
+                            <MarkFailedDialog item={item} />
+                          </div>
+                        ) : (
+                          '—'
+                        )}
                       </TableCell>
                     </TableRow>
                   ))

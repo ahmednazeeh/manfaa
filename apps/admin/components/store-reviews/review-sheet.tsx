@@ -59,6 +59,7 @@ const REVIEWS_KEY_PREFIX = ['admin', 'store-reviews'] as const;
 
 const STEP_LABELS: Record<string, string> = {
   profile: 'Profile',
+  location: 'Location',
   logo: 'Logo',
   rate: 'Rate',
 };
@@ -81,9 +82,9 @@ function Empty({ children = 'Not provided' }: { children?: ReactNode }) {
 /**
  * Everything the merchant entered in the setup wizard, reviewable in one
  * drawer: logo preview, category, channel, the offered rate priced against
- * the ACTIVE fee tier schedule (all-in = cashback + platform fee), the
- * terms & exclusions text shown verbatim to customers, contacts and step
- * completion. Approve asks for confirmation — it makes the store publicly
+ * the ACTIVE fee tier schedule (all-in = cashback + platform fee), the map
+ * pin, the terms & exclusions text shown verbatim to customers, contacts and
+ * step completion. Approve asks for confirmation — it makes the store publicly
  * visible; Reject requires a reason the merchant will read verbatim.
  */
 export function ReviewSheet({
@@ -270,6 +271,34 @@ export function ReviewSheet({
                   {formatDateTime(review.created_at)}
                 </Field>
               </div>
+
+              {/* A pin is asked for in the wizard but is deliberately not an
+                  approval requirement (D17), so nothing else on this sheet
+                  would tell a reviewer whether the store can be found. */}
+              <Field label="Location">
+                {review.primary_branch === null ||
+                review.primary_branch.lat === null ||
+                review.primary_branch.lng === null ? (
+                  <Empty>No pin — the store cannot appear in Nearby</Empty>
+                ) : (
+                  <div className="flex flex-col gap-0.5">
+                    <a
+                      href={`https://www.google.com/maps/search/?api=1&query=${review.primary_branch.lat},${review.primary_branch.lng}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-primary underline underline-offset-2"
+                    >
+                      {review.primary_branch.lat},{' '}
+                      {review.primary_branch.lng}
+                    </a>
+                    {review.primary_branch.address === null ? null : (
+                      <span className="text-xs text-muted-foreground">
+                        {review.primary_branch.address}
+                      </span>
+                    )}
+                  </div>
+                )}
+              </Field>
 
               <Field label="Terms & exclusions (shown to customers verbatim)">
                 {review.eligibility_basis ? (

@@ -15,31 +15,37 @@ use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
 /**
- * Builds one draft payout batch per calendar month. The cutoff is the 24th
- * at 23:59:59 in the business timezone (§13), converted to a UTC instant;
- * everything confirmed at or before it and not yet linked to a payout item
- * is a candidate, subject to the per-customer minimum.
+ * Builds one draft payout batch as of a cutoff the admin picks, so a run can
+ * be weekly, fortnightly, or whatever the week needs. Everything confirmed at
+ * or before that instant and not yet linked to a payout item is a candidate,
+ * subject to the per-customer minimum. There is deliberately no lower bound
+ * on eligibility: whatever an earlier batch left behind — a customer under
+ * the minimum, a customer without bank details, a reward confirmed after the
+ * last cutoff — is swept into the next one.
  *
  * Rebuilding an existing draft is allowed by cancel + recreate only:
  * cancelDraft() releases the transaction links and retires the reference,
- * after which buildDraft() for the same period starts clean. There is no
+ * after which buildDraft() for the same cutoff date starts clean. There is no
  * in-place rebuild — a draft's items are never mutated.
  */
 final readonly class PayoutBatchBuilder
 {
-    private const int CUTOFF_DAY = 24;
-
     public function __construct(
         private EligibilityQuery $eligibility,
         private PlatformConfig $config,
     ) {}
 
-    public function buildDraft(int $periodYear, int $periodMonth, AdminUser $creator): PayoutBatch
+    public function buildDraft(CarbonImmutable $cutoff, AdminUser $creator): PayoutBatch
     {
         $timezone = (string) config('app.business_timezone', 'Indian/Maldives');
-        $cutoff = CarbonImmutable::create($periodYear, $periodMonth, self::CUTOFF_DAY, 23, 59, 59, $timezone)->utc();
-        $periodStart = CarbonImmutable::create($periodYear, $periodMonth, 1, 0, 0, 0, $timezone);
-        $reference = sprintf('PB-%04d-%02d', $periodYear, $periodMonth);
+        // Compared and stored in UTC, whatever the caller handed over: a query
+        // binding carrying a +05:00 instant is formatted without its offset and
+        // read back as UTC, five hours from where it belongs.
+        $cutoff = $cutoff->utc();
+        // Reference and period name the business day the batch was taken as
+        // of; the same instant in UTC can land on the day either side of it.
+        $businessCutoff = $cutoff->setTimezone($timezone);
+        $reference = 'PB-'.$businessCutoff->format('Ymd');
 
         // A batch built before the cutoff would silently miss every
         // confirmation still to come — refuse early builds outright.
@@ -47,7 +53,9 @@ final readonly class PayoutBatchBuilder
             throw CutoffInFutureException::for($reference, $cutoff);
         }
 
-        return DB::transaction(function () use ($reference, $cutoff, $periodStart, $creator): PayoutBatch {
+        $periodStart = $this->periodStart($cutoff, $timezone);
+
+        return DB::transaction(function () use ($reference, $cutoff, $businessCutoff, $periodStart, $creator): PayoutBatch {
             $exists = PayoutBatch::query()
                 ->where('reference', $reference)
                 ->where('state', '!=', PayoutBatchState::Cancelled)
@@ -60,8 +68,8 @@ final readonly class PayoutBatchBuilder
 
             $batch = PayoutBatch::query()->create([
                 'reference' => $reference,
-                'period_start' => $periodStart->toDateString(),
-                'period_end' => $periodStart->endOfMonth()->toDateString(),
+                'period_start' => $periodStart,
+                'period_end' => $businessCutoff->toDateString(),
                 'cutoff_at' => $cutoff,
                 'state' => PayoutBatchState::Draft,
                 'created_by' => $creator->id,
@@ -93,8 +101,13 @@ final readonly class PayoutBatchBuilder
                     'batch_id' => $batch->id,
                     'customer_id' => $customer->id,
                     'amount_laari' => $eligible->amountLaari,
-                    // Bank details are snapshotted at build time — a later
-                    // change on the customer never rewrites a built item.
+                    'idempotency_key' => $this->mintIdempotencyKey(),
+                    // Who the transfer is for and where it goes are both
+                    // snapshotted at build time — a later change on the
+                    // customer never rewrites a built item, and the sheet
+                    // re-exports word for word what the bank already has.
+                    'customer_name' => $customer->name,
+                    'customer_phone' => $customer->phone,
                     'bank' => $customer->payout_bank,
                     'account' => $customer->payout_account,
                     'account_name' => $customer->payout_account_name,
@@ -132,6 +145,44 @@ final readonly class PayoutBatchBuilder
 
             return $batch;
         });
+    }
+
+    /**
+     * Where the batch's period is shown as starting: the cutoff of the last
+     * batch that still counts, because with a rolling cutoff the honest
+     * period is "since the last run". Display only — eligibility itself is
+     * open-ended below, so nothing falls between two periods.
+     *
+     * The first batch ever has no predecessor and genuinely does reach back
+     * to the beginning, so it opens at the oldest confirmation on record
+     * rather than at its own cutoff: a zero-length period on the one batch
+     * whose reach is longest would read as a bug. With nothing confirmed at
+     * all there is no earlier date to name, and the cutoff stands.
+     */
+    private function periodStart(CarbonImmutable $cutoff, string $timezone): string
+    {
+        $previousCutoff = PayoutBatch::query()
+            ->where('state', '!=', PayoutBatchState::Cancelled)
+            ->where('cutoff_at', '<', $cutoff)
+            ->orderByDesc('cutoff_at')
+            ->value('cutoff_at');
+
+        $start = $previousCutoff ?? $this->eligibility->earliestConfirmationAt() ?? $cutoff;
+
+        return $start->setTimezone($timezone)->toDateString();
+    }
+
+    /**
+     * MNF plus a six-digit sequence value. Minted here rather than derived at
+     * export time because a key that changes between two exports of the same
+     * batch is not an idempotency key — it is what the filled sheet is
+     * matched on when it comes back.
+     */
+    private function mintIdempotencyKey(): string
+    {
+        $next = DB::selectOne("select nextval('payout_items_idempotency_key_seq') as value");
+
+        return sprintf('MNF%06d', (int) $next->value);
     }
 
     /**

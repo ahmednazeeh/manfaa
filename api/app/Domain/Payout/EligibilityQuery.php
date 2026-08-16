@@ -13,7 +13,7 @@ use Illuminate\Support\Facades\DB;
  * linked to a payout item whose confirmation happened at or before the
  * cutoff, grouped per customer, keeping only customers at or above the
  * MVR 100 minimum (§13). Below-minimum sums are simply not selected — they
- * stay unlinked and carry forward to the first month they clear the bar.
+ * stay unlinked and carry forward to the first batch they clear the bar in.
  *
  * Confirmation instant: transactions.confirmed_at where settlement stamped
  * it, else derived from the append-only event log (latest to_state =
@@ -24,6 +24,13 @@ final class EligibilityQuery
 {
     /** MVR 100 (§13) — the default when no explicit minimum is passed. */
     public const int MINIMUM_PAYOUT_LAARI = 10000;
+
+    /**
+     * The confirmation instant as described above, in one place because two
+     * callers ask the question. The single placeholder binds the confirmed
+     * state for the event-log fallback.
+     */
+    private const string CONFIRMED_AT = 'coalesce(transactions.confirmed_at, (select max(created_at) from transaction_events where transaction_events.transaction_id = transactions.id and transaction_events.to_state = ?))';
 
     /**
      * $minimumLaari lets PayoutBatchBuilder pass the admin-managed
@@ -42,7 +49,7 @@ final class EligibilityQuery
             ->whereNotNull('customer_id')
             ->where('cashback_laari', '>', 0)
             ->whereRaw(
-                'coalesce(transactions.confirmed_at, (select max(created_at) from transaction_events where transaction_events.transaction_id = transactions.id and transaction_events.to_state = ?)) <= ?',
+                self::CONFIRMED_AT.' <= ?',
                 [TransactionState::Confirmed->value, $cutoff->utc()],
             )
             ->orderBy('id')
@@ -67,5 +74,21 @@ final class EligibilityQuery
         }
 
         return $eligible;
+    }
+
+    /**
+     * The oldest confirmation the platform has on record, or null when
+     * nothing has ever been confirmed. PayoutBatchBuilder opens the very
+     * first batch's display period here, having no earlier batch to start
+     * from; a never-confirmed transaction has no instant on either side of
+     * the coalesce and drops out of the minimum on its own.
+     */
+    public function earliestConfirmationAt(): ?CarbonImmutable
+    {
+        $earliest = DB::table('transactions')
+            ->selectRaw('min('.self::CONFIRMED_AT.') as confirmed_at', [TransactionState::Confirmed->value])
+            ->value('confirmed_at');
+
+        return $earliest === null ? null : CarbonImmutable::parse($earliest)->utc();
     }
 }

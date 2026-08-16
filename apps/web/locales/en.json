@@ -226,7 +226,17 @@
     "storesLabel": "Stores",
     "topCashback": "Highest cashback",
     "newStores": "New stores",
-    "featuredOffers": "Featured offers"
+    "featuredOffers": "Featured offers",
+    "nearbyViewLabel": "Show nearby stores as",
+    "listView": "List",
+    "mapView": "Map",
+    "mapLabel": "Map of stores near you",
+    "mapLoading": "Loading the map…",
+    "mapUnavailable": "The map couldn't load. Switch back to the list to browse stores.",
+    "mapSearchPlaceholder": "Search a place to move the map",
+    "mapHint": "Tap a pin to see the store.",
+    "mapNoPins": "No store has shared its location yet.",
+    "myLocation": "My location"
   },
   "categories": {
     "grocery": "Grocery",

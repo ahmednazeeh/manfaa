@@ -25,6 +25,7 @@ Route::prefix('merchant/signup')->group(function () {
 Route::prefix('merchant')->middleware(['auth:merchant', 'merchant.role:owner'])->group(function () {
     Route::get('setup', [SetupController::class, 'show']);
     Route::patch('setup/profile', [SetupController::class, 'updateProfile']);
+    Route::patch('setup/location', [SetupController::class, 'updateLocation']);
     Route::post('setup/logo', [SetupController::class, 'storeLogo'])->middleware('throttle:20,1');
     Route::patch('setup/rate', [SetupController::class, 'updateRate']);
     Route::post('setup/submit', [SetupController::class, 'submit'])->middleware('throttle:20,1');
