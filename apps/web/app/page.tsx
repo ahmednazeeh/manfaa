@@ -204,7 +204,10 @@ function Hero({ promoted }: { promoted: DiscoveryEntry | null }) {
               that fight the break below it. RotatingWords owns its own
               display — passing a display class here would override the
               grid that holds its box open. */}
-          <h1 className="font-display text-3xl leading-[1.08] text-mono sm:text-4xl lg:text-5xl">
+          {/* font-faagathi is TEMPORARY and Dhivehi-only (see
+              packages/ui/src/styles.css) — the Latin headline keeps
+              font-display, so one class serves both languages. */}
+          <h1 className="font-display font-faagathi text-3xl leading-[1.08] text-mono sm:text-4xl lg:text-5xl">
             <span className="block">{t('landing.heroTitleLead')}</span>
             <span className="block">{t('landing.heroTitleWhenYou')}</span>
             <RotatingWords words={channels} className="text-brand" />
