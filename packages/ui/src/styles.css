@@ -47,10 +47,9 @@
 }
 
 /*
- * HEADINGS stay off the body face. `.font-display` is every section heading
- * in the app, and the hero it sits beside is DAM Kalhi — so headings take
- * Kalhi too and the page has one display voice, with MV Waheed doing the
- * reading underneath it.
+ * HEADINGS take DAM Kalhi, matching the hero, so the page has one display
+ * voice. MV Waheed backs it up — sun.mv's heading face, and a sensible
+ * understudy for another. Neither belongs under paragraphs.
  */
 html[lang='dv'] .font-display {
   font-family: 'DAM Kalhi', 'MV Waheed', 'Faruma', 'Noto Sans Thaana', system-ui, sans-serif;
@@ -59,15 +58,25 @@ html[lang='dv'] .font-display {
 }
 
 /*
- * MV Waheed is the PRIMARY Thaana face, chosen after reading Faruma on the
- * real screens: Faruma's letters sit small on the em and its fili thin out,
- * which is what made body copy hard going even after the leading, tracking
- * and scale were fixed for it.
+ * Two faces, split by job, following sun.mv — the reference for Dhivehi
+ * that reads well at length:
  *
- * Faruma stays directly behind it, then Noto Sans Thaana — which hints best
- * at small sizes and is the only one of the four with a REAL bold. None of
- * the Maldivian faces has one, which is why synthesis is switched off
- * further down: a clean 400 outreads a smeared 700.
+ *   BODY     MV Faseyha, falling back to Faruma
+ *   HEADINGS DAM Kalhi (see .font-display and .font-dv-display)
+ *
+ * MV Waheed is deliberately NOT in the body stack. It is a heading face —
+ * sun.mv uses it for exactly that and nothing else — and putting it under
+ * paragraphs is what made body copy read worse, not better.
+ *
+ * MV Faseyha is NOT YET IN THE REPO. The name leads the stack so the swap
+ * is a single file drop, and until it lands Faruma does the reading, which
+ * is sun.mv's own fallback for the same slot. Faruma's real problem was
+ * never the drawing so much as the space around it: at 1.8 leading, with
+ * synthesis off and antialiasing on, it is a different thing to read.
+ *
+ * Noto Sans Thaana sits last as the only face here with a REAL bold — held
+ * for nothing today, since synthesis is off and Dhivehi carries hierarchy
+ * by size instead.
  *
  * All self-hosted: no CDN, and no dependence on the reader's device having
  * a Thaana font installed. Most do not.
@@ -132,7 +141,7 @@ html[lang='dv'] .font-display {
 
 /* Thaana text block: self-hosted fonts, right-to-left. */
 .thaana {
-  font-family: 'MV Waheed', 'Faruma', 'Noto Sans Thaana', 'DAM Kalhi', sans-serif;
+  font-family: 'MV Faseyha', 'Faruma', 'Noto Sans Thaana', 'DAM Kalhi', sans-serif;
   direction: rtl;
   text-align: start;
 }
@@ -155,7 +164,7 @@ html[lang='dv'] .font-display {
 .font-thaana,
 [lang='dv'],
 html[lang='dv'] body {
-  font-family: 'MV Waheed', 'Faruma', 'Noto Sans Thaana', 'DAM Kalhi', system-ui, sans-serif;
+  font-family: 'MV Faseyha', 'Faruma', 'Noto Sans Thaana', 'DAM Kalhi', system-ui, sans-serif;
 }
 
 /*
@@ -205,50 +214,67 @@ html[lang='dv'] {
 
 /*
  * ---------------------------------------------------------------------
- * Making Faruma readable, without replacing it.
+ * Thaana typography, following how sun.mv sets Dhivehi.
  * ---------------------------------------------------------------------
  *
- * Faruma ships ONE weight. Every font-semibold and font-bold in the app was
- * therefore being SYNTHESISED — the browser redraws the glyph thicker — and
- * on Thaana that is not a cosmetic loss. The fili (the marks above and below
- * the letters) are thin strokes sitting close to the letterform; thickening
- * them merges them into it, so aa and oo stop being distinguishable at a
- * glance and every heading, label and button in Dhivehi turns muddy.
+ * sun.mv is the reference for Dhivehi that reads well at length, and its
+ * rules are unusually explicit. Three things carry the quality, and none of
+ * them is the typeface:
  *
- * Turning synthesis off renders those elements at Faruma's real 400. The
- * cost is real and worth stating: Dhivehi loses weight as a hierarchy
- * signal, leaving size and colour to carry it. That is the standard trade
- * for a single-weight script, and a clean 400 outreads a smeared 700.
- * (Noto Sans Thaana in the stack does have a true bold — using it for bold
- * text only would restore the contrast at the cost of two typefaces on one
- * page. Offered, not taken.)
+ *   1. LEADING, and much more of it than Latin wants. Body copy is set at
+ *      1.8, headings at 1.5. Thaana stacks fili above and below the letter,
+ *      so the line box has to clear two rows of marks, not one. Tailwind's
+ *      defaults are built for Latin and land near 1.5 for body — which is
+ *      their HEADING value, and is most of why our paragraphs felt tight.
+ *
+ *   2. WEIGHT IS NEVER SYNTHESISED. Every rule of theirs restates
+ *      font-weight: normal. The Maldivian faces ship one weight, and a
+ *      browser asked for 700 redraws the glyph thicker — which on Thaana
+ *      merges the fili into the letterform. Said twice here: the synthesis
+ *      property for browsers that honour it, and an explicit 400 for the
+ *      rest.
+ *
+ *   3. SMOOTHING. antialiased plus optimizeLegibility, because the fili are
+ *      one-pixel strokes and subpixel rendering breaks them up.
+ *
+ * They also give headings and body DIFFERENT faces — Waheed for headings,
+ * Faseyha for body — which is the one part not reproduced here yet: we do
+ * not have Faseyha. See the note on the body stack.
  */
 html[lang='dv'] {
   font-synthesis-weight: none;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
 /*
- * Fili need vertical room. Tailwind's tight leadings are set for Latin,
- * where nothing sits above the cap line or below the baseline; in Thaana
- * they crowd the marks of one line against the next, which is most of what
- * makes a paragraph feel dense rather than merely small.
- *
- * Only the tight cases are raised — normal body leading is already fine, and
- * rewriting every line-height would be a redesign rather than a fix.
+ * Body leading. Applied to the text-bearing elements rather than by raising
+ * every line-height, so cards, buttons and table cells keep the box heights
+ * the layout was built around; it is the reading copy that needs the room.
+ */
+html[lang='dv'] :is(p, li, dd, blockquote, .leading-relaxed, .text-sm, .text-base) {
+  line-height: 1.8;
+}
+
+/*
+ * Headings take the tighter 1.5 — still far looser than Latin display type,
+ * which is where Tailwind's leading-tight and the hero's leading-[1.08]
+ * would otherwise leave them.
  */
 html[lang='dv']
-  :is(h1, h2, h3, h4, .leading-none, .leading-tight, .leading-snug) {
+  :is(h1, h2, h3, h4, .font-display, .font-dv-display, .leading-none, .leading-tight, .leading-snug) {
   line-height: 1.5;
 }
 
-/* The hero sets its own leading-[1.08], too tight for Thaana at any size. */
-html[lang='dv'] .font-dv-display {
-  line-height: 1.45;
+/* No faux bold anywhere in Dhivehi, including where synthesis is ignored. */
+html[lang='dv'] :is(.font-medium, .font-semibold, .font-bold) {
+  font-weight: 400;
 }
 
 /*
- * Thaana is not tracked. Latin display type is often tightened a little to
- * hold a headline together; doing that to Thaana pulls the fili over their
+ * Thaana is not tracked. Latin display type is often tightened to hold a
+ * headline together; doing that to Thaana pulls the fili over their
  * neighbours. The arbitrary tracking on the Manfaa code is deliberately not
  * matched here — that run is Latin digits and wants its spacing.
  */
@@ -258,13 +284,13 @@ html[lang='dv']
 }
 
 /*
- * The smallest step in the scale is below Faruma's floor: at that size the
- * fili land on a sub-pixel and disappear or alias into a smudge. Raised to
- * the next step rather than removed, so the hierarchy survives.
+ * The smallest step in the scale sits below the floor of every Thaana face
+ * here: the fili land on a sub-pixel and alias into a smudge. Raised one
+ * step rather than removed, so the hierarchy survives.
  */
 html[lang='dv'] .text-2xs {
   font-size: 0.75rem;
-  line-height: 1.5;
+  line-height: 1.6;
 }
 
 /*
@@ -285,7 +311,7 @@ html[lang='dv'] .text-2xs {
  * only if we say so explicitly.
  */
 [lang='dv']::placeholder {
-  font-family: 'MV Waheed', 'Faruma', 'Noto Sans Thaana', 'DAM Kalhi', system-ui, sans-serif;
+  font-family: 'MV Faseyha', 'Faruma', 'Noto Sans Thaana', 'DAM Kalhi', system-ui, sans-serif;
 }
 
 /* Money values align in columns regardless of theme or direction. */
