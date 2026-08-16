@@ -92,10 +92,12 @@ html[lang='dv'] .font-display {
 }
 
 /*
- * TEMPORARY (2026-08-16, owner's request): Faagathi Dheli, for the landing
- * hero headline only, while the display face for Dhivehi is being decided.
+ * TEMPORARY (2026-08-16): a display face for the Dhivehi landing hero,
+ * while the owner compares candidates. Faagathi Dheli is loaded alongside
+ * DAM Kalhi so switching between them is one line — the `.font-dv-display`
+ * rule below — and needs no component change.
  *
- * To remove: delete this @font-face and the .font-faagathi rule below, then
+ * To remove entirely: delete both @font-face blocks and that rule, then
  * drop the class from the hero <h1> in apps/web/app/page.tsx. Nothing else
  * references it, so the headline falls back to the Faruma stack on its own.
  */
@@ -144,12 +146,15 @@ html[lang='dv'] body {
 }
 
 /*
- * TEMPORARY, paired with the @font-face above. Only bites under Dhivehi:
- * the Latin headline keeps its own display face, so one class can sit on
- * the element for both languages.
+ * TEMPORARY, paired with the @font-face blocks above. Only bites under
+ * Dhivehi: the Latin headline keeps its own display face, so one class can
+ * sit on the element for both languages.
+ *
+ * THE CANDIDATE UNDER TRIAL IS THE FIRST NAME HERE. Swap it for
+ * 'Faagathi Dheli' to go back; both faces are already loaded.
  */
-html[lang='dv'] .font-faagathi {
-  font-family: 'Faagathi Dheli', 'Faruma', 'Noto Sans Thaana', sans-serif;
+html[lang='dv'] .font-dv-display {
+  font-family: 'DAM Kalhi', 'Faruma', 'Noto Sans Thaana', sans-serif;
 }
 
 /*
