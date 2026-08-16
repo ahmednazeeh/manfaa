@@ -2,10 +2,12 @@
 
 namespace App\Http\Controllers\Customer;
 
+use App\Domain\Platform\Bank;
 use App\Http\Controllers\Controller;
 use App\Models\Customer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 /**
  * Payout account registration (§10 apps/web).
@@ -29,7 +31,7 @@ class PayoutAccountController extends Controller
     public function store(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'bank_name' => ['required', 'string', 'max:100'],
+            'bank_name' => ['required', Rule::enum(Bank::class)],
             'account_no' => ['required', 'string', 'max:32', 'regex:/^\d{6,32}$/'],
             'account_name' => ['required', 'string', 'max:120'],
         ]);

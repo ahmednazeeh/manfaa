@@ -176,7 +176,7 @@ it('says the discount is disabled rather than pretending there is none to give',
 
 it('submits the previewed discounted amount over HTTP and carries the grant onto the settlement', function () {
     app(BankAccountService::class)->create([
-        'bank_name' => 'Bank of Maldives',
+        'bank_name' => 'bml',
         'account_no' => '7730000123456',
         'account_name' => 'Manfaa Pvt Ltd',
         'is_primary' => true,

@@ -3,7 +3,9 @@
 import { MoneyText } from '@manfaa/ui';
 import { Landmark, TriangleAlert } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { bankLabel, type SettlementDestination } from '@manfaa/api-client';
 import type { PlatformBankAccount } from '@/lib/api';
+import { cn } from '@/lib/utils';
 import {
   Alert,
   AlertContent,
@@ -11,6 +13,7 @@ import {
   AlertIcon,
   AlertTitle,
 } from '@/components/ui/alert';
+import { BankLabel, BankLogo } from '@/components/app/bank-select';
 import { CopyButton } from '@/components/settlement/copy-button';
 
 /**
@@ -27,6 +30,9 @@ export function PaymentInstructions({
   referenceIsFinal,
   amountDueLaari,
   bankAccount,
+  bankAccounts,
+  selectedAccountId,
+  onSelectAccount,
   needsConfiguration,
 }: {
   reference: string;
@@ -34,10 +40,23 @@ export function PaymentInstructions({
   referenceIsFinal: boolean;
   amountDueLaari: number;
   bankAccount: PlatformBankAccount | null;
+  /** Every account the merchant may send to — one per bank. */
+  bankAccounts?: SettlementDestination[];
+  selectedAccountId?: number | null;
+  onSelectAccount?: (id: number) => void;
   needsConfiguration: boolean;
 }) {
   const { t } = useTranslation();
-  const account = needsConfiguration ? null : bankAccount;
+
+  const choices = bankAccounts ?? [];
+  // A choice is only offered when there is genuinely one to make. With a
+  // single configured account a picker is a control that can only be set to
+  // what it already says.
+  const choosable = choices.length > 1 && onSelectAccount !== undefined;
+  const chosen =
+    choices.find((candidate) => candidate.id === selectedAccountId) ?? null;
+
+  const account = needsConfiguration ? null : (chosen ?? bankAccount);
 
   return (
     <div className="flex flex-col gap-5">
@@ -80,17 +99,58 @@ export function PaymentInstructions({
           <div className="mb-3 text-xs uppercase text-muted-foreground">
             {t('settlement.transferTo')}
           </div>
+
+          {choosable && (
+            <div className="mb-4 flex flex-col gap-2">
+              <span className="text-xs text-muted-foreground">
+                {t('settlement.chooseBank')}
+              </span>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {choices.map((candidate) => {
+                  const active = candidate.id === chosen?.id;
+                  return (
+                    <button
+                      key={candidate.id}
+                      type="button"
+                      onClick={() => onSelectAccount?.(candidate.id)}
+                      aria-pressed={active}
+                      className={cn(
+                        'flex items-center gap-3 rounded-md border p-3 text-start transition-colors',
+                        active
+                          ? 'border-primary bg-primary/5'
+                          : 'border-border hover:border-primary/40',
+                      )}
+                    >
+                      <BankLogo bank={candidate.bank_name} />
+                      <span className="flex min-w-0 flex-col">
+                        <span className="truncate text-sm font-medium text-mono">
+                          {bankLabel(candidate.bank_name)}
+                        </span>
+                        <span className="truncate text-xs text-muted-foreground" dir="ltr">
+                          {candidate.account_no}
+                        </span>
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+              <span className="text-xs text-muted-foreground">
+                {t('settlement.chooseBankHint')}
+              </span>
+            </div>
+          )}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <div className="flex flex-col gap-1">
               <span className="text-xs text-muted-foreground">
                 {t('settlement.bankName')}
               </span>
               <div className="flex items-center gap-2">
-                <span className="text-sm font-medium text-mono" dir="ltr">
-                  {account.bank_name}
-                </span>
+                <BankLabel
+                  bank={account.bank_name}
+                  className="text-sm font-medium text-mono"
+                />
                 <CopyButton
-                  value={account.bank_name}
+                  value={bankLabel(account.bank_name)}
                   label={t('settlement.copyBankName')}
                 />
               </div>

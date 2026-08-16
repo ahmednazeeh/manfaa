@@ -7,7 +7,9 @@ import { useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { z } from 'zod';
+import { BankSlugSchema } from '@manfaa/api-client';
 import { maskAccountNo } from '@/lib/format';
+import { BankLabel, BankSelect } from '@/components/app/bank-select';
 import { usePayoutAccount, useSavePayoutAccount } from '@/lib/queries';
 import { Alert, AlertIcon, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -36,7 +38,7 @@ export default function PayoutAccountPage() {
   const { t } = useTranslation();
 
   const FormSchema = z.object({
-    bank_name: z.string().min(1, t('payout.bankRequired')).max(100),
+    bank_name: BankSlugSchema,
     account_no: z.string().regex(/^\d{6,32}$/, t('payout.accountNoInvalid')),
     account_name: z.string().min(1, t('payout.accountNameRequired')).max(120),
   });
@@ -44,7 +46,7 @@ export default function PayoutAccountPage() {
 
   const form = useForm<FormValues>({
     resolver: zodResolver(FormSchema),
-    defaultValues: { bank_name: '', account_no: '', account_name: '' },
+    defaultValues: { account_no: '', account_name: '' },
   });
 
   const onSubmit = (values: FormValues) => {
@@ -87,7 +89,7 @@ export default function PayoutAccountPage() {
                     </span>
                     <div className="flex flex-col gap-0.5 min-w-0">
                       <span className="text-sm font-medium text-mono">
-                        {account.bank_name}
+                        <BankLabel bank={account.bank_name} />
                       </span>
                       <span
                         className="text-sm text-secondary-foreground tabular-nums"
@@ -138,9 +140,10 @@ export default function PayoutAccountPage() {
                         <FormItem>
                           <FormLabel>{t('payout.bankLabel')}</FormLabel>
                           <FormControl>
-                            <Input
+                            <BankSelect
+                              value={field.value}
+                              onChange={field.onChange}
                               placeholder={t('payout.bankPlaceholder')}
-                              {...field}
                             />
                           </FormControl>
                           <FormMessage />

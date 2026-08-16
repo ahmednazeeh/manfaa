@@ -85,12 +85,13 @@ final class SettlementBuilder
         Laari $amount,
         string $bankRef,
         UploadedFile $slip,
+        ?int $platformBankAccountId = null,
     ): Settlement {
         $inspection = $this->slips->inspect($slip);
         $storedPath = null;
 
         try {
-            return DB::transaction(function () use ($merchant, $uploader, $transactionIds, $amount, $bankRef, $slip, $inspection, &$storedPath): Settlement {
+            return DB::transaction(function () use ($merchant, $uploader, $transactionIds, $amount, $bankRef, $slip, $inspection, $platformBankAccountId, &$storedPath): Settlement {
                 $settlement = $this->submit($this->createDraft($merchant, $transactionIds));
 
                 // Fully netted by §7 credits, or by them plus the PLAN §1
@@ -106,6 +107,14 @@ final class SettlementBuilder
                 // submitted batch owe nothing.
                 if ($settlement->state !== SettlementState::AwaitingPayment) {
                     throw NotEligibleForSettlementException::nothingDue($merchant);
+                }
+
+                // WHERE they paid, recorded before the receipt so the two
+                // are one act. Left alone when the caller names nothing, so
+                // an older client that never offered the choice still
+                // settles rather than failing on a field it does not know.
+                if ($platformBankAccountId !== null) {
+                    $settlement->forceFill(['platform_bank_account_id' => $platformBankAccountId])->save();
                 }
 
                 $storedPath = $this->slips->store($merchant, $settlement, $slip, $inspection);

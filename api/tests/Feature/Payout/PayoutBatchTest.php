@@ -106,7 +106,7 @@ function endOfBusinessDay(string $date): CarbonImmutable
 function payoutCustomer(array $attributes = []): Customer
 {
     return Customer::factory()->create($attributes + [
-        'payout_bank' => 'BML',
+        'payout_bank' => 'bml',
         'payout_account' => (string) fake()->unique()->numberBetween(7730000000000, 7739999999999),
         'payout_account_name' => fake()->name(),
     ]);
@@ -474,7 +474,7 @@ it('exports what was true when the batch was built, not what the customer change
     $customer = payoutCustomer([
         'name' => 'Aishath Nazeeh',
         'phone' => '+9607712345',
-        'payout_bank' => 'BML',
+        'payout_bank' => 'bml',
         'payout_account' => '7730000000001',
         'payout_account_name' => 'AISHATH NAZEEH',
     ]);
@@ -491,7 +491,7 @@ it('exports what was true when the batch was built, not what the customer change
     $customer->forceFill([
         'name' => 'Aishath Nazeeh Ibrahim',
         'phone' => '+9607799999',
-        'payout_bank' => 'MIB',
+        'payout_bank' => 'mib',
         'payout_account' => '9990000000009',
         'payout_account_name' => 'A N IBRAHIM',
     ])->save();
@@ -505,7 +505,7 @@ it('exports what was true when the batch was built, not what the customer change
 
     expect($item->refresh()->customer_name)->toBe('Aishath Nazeeh')
         ->and($item->customer_phone)->toBe('+9607712345')
-        ->and($item->bank)->toBe('BML')
+        ->and($item->bank)->toBe('bml')
         ->and($item->account)->toBe('7730000000001')
         ->and($item->account_name)->toBe('AISHATH NAZEEH');
 });

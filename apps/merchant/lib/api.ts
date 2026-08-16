@@ -398,6 +398,12 @@ export interface ReceiptSubmission {
   amountLaari: number;
   bankRef: string;
   slip: File;
+  /**
+   * WHICH platform account received it. Sent so the batch can be reconciled
+   * against the right statement instead of against whichever account was
+   * primary when the screen loaded.
+   */
+  platformBankAccountId?: number;
 }
 
 /**
@@ -414,6 +420,12 @@ export function submitSettlementWithReceipt(
   form.append('amount', String(receipt.amountLaari));
   form.append('bank_ref', receipt.bankRef);
   form.append('slip', receipt.slip);
+  if (receipt.platformBankAccountId !== undefined) {
+    form.append(
+      'platform_bank_account_id',
+      String(receipt.platformBankAccountId),
+    );
+  }
   return apiFetch(
     '/api/merchant/settlements',
     MerchantSettlementResponseSchema,

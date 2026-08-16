@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { type MerchantBankAccount } from '@manfaa/api-client';
+import { type BankSlug, type MerchantBankAccount } from '@manfaa/api-client';
 import { CircleCheck, Info, LoaderCircle } from 'lucide-react';
 import { apiErrorMessage, useUpdateBankAccount } from '@/lib/queries';
 import {
@@ -12,6 +12,7 @@ import {
   AlertTitle,
 } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
+import { BankLabel, BankSelect } from '@/components/app/bank-select';
 import {
   Card,
   CardContent,
@@ -38,21 +39,26 @@ import {
 export default function BankAccountSettingsPage() {
   const updateBankAccount = useUpdateBankAccount();
 
-  const [bankName, setBankName] = useState('');
+  const [bankName, setBankName] = useState<BankSlug | ''>('');
   const [bankAccount, setBankAccount] = useState('');
   const [bankAccountName, setBankAccountName] = useState('');
   const [saved, setSaved] = useState<MerchantBankAccount | null>(null);
 
   const canSave =
-    bankName.trim() !== '' &&
+    bankName !== '' &&
     bankAccount.trim() !== '' &&
     bankAccountName.trim() !== '' &&
     !updateBankAccount.isPending;
 
   const save = () => {
+    // canSave already refuses the empty case; this narrows for the compiler
+    // rather than casting, so a future edit that loosens canSave fails here
+    // instead of posting an empty bank.
+    if (bankName === '') return;
+
     updateBankAccount.mutate(
       {
-        bank_name: bankName.trim(),
+        bank_name: bankName,
         bank_account: bankAccount.trim(),
         bank_account_name: bankAccountName.trim(),
       },
@@ -104,9 +110,12 @@ export default function BankAccountSettingsPage() {
             </AlertIcon>
             <AlertContent>
               <AlertTitle>Bank account on file</AlertTitle>
-              <AlertDescription>
-                {saved.bank_name} · {saved.bank_account} ·{' '}
-                {saved.bank_account_name}
+              <AlertDescription className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                <BankLabel bank={saved.bank_name} />
+                <span>·</span>
+                <span>{saved.bank_account}</span>
+                <span>·</span>
+                <span>{saved.bank_account_name}</span>
               </AlertDescription>
             </AlertContent>
           </Alert>
@@ -119,12 +128,10 @@ export default function BankAccountSettingsPage() {
           <CardContent className="flex flex-col gap-5">
             <div className="flex flex-col gap-2.5">
               <Label htmlFor="bank-name">Bank</Label>
-              <Input
+              <BankSelect
                 id="bank-name"
                 value={bankName}
-                maxLength={255}
-                placeholder="e.g. Bank of Maldives"
-                onChange={(event) => setBankName(event.target.value)}
+                onChange={setBankName}
               />
             </div>
             <div className="flex flex-col gap-2.5">

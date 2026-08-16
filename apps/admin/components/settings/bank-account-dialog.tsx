@@ -3,9 +3,11 @@
 import { ReactNode, useState } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
+  BankSlugSchema,
+  bankOf,
   createAdminPlatformBankAccount,
-  updateAdminPlatformBankAccount,
   type PlatformBankAccount,
+  updateAdminPlatformBankAccount,
 } from '@manfaa/api-client';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
@@ -34,13 +36,11 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
+import { BankSelect } from '@/components/admin/bank-select';
 import { Label } from '@/components/ui/label';
 
 const FormSchema = z.object({
-  bank_name: z
-    .string()
-    .min(1, 'The bank name is required.')
-    .max(255, 'At most 255 characters.'),
+  bank_name: BankSlugSchema,
   account_no: z
     .string()
     .min(1, 'The account number is required.')
@@ -74,7 +74,7 @@ export function BankAccountDialog({
   const form = useForm<FormValues>({
     resolver: zodResolver(FormSchema),
     defaultValues: {
-      bank_name: account?.bank_name ?? '',
+      bank_name: bankOf(account?.bank_name)?.slug,
       account_no: account?.account_no ?? '',
       account_name: account?.account_name ?? '',
     },
@@ -109,7 +109,7 @@ export function BankAccountDialog({
         setOpen(next);
         if (next) {
           form.reset({
-            bank_name: account?.bank_name ?? '',
+            bank_name: bankOf(account?.bank_name)?.slug,
             account_no: account?.account_no ?? '',
             account_name: account?.account_name ?? '',
           });
@@ -143,7 +143,10 @@ export function BankAccountDialog({
                   <FormItem>
                     <FormLabel>Bank</FormLabel>
                     <FormControl>
-                      <Input placeholder="e.g. Bank of Maldives" {...field} />
+                      <BankSelect
+                        value={field.value}
+                        onChange={field.onChange}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

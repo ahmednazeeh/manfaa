@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { apiBaseUrl, apiFetch, apiFetchBlob } from './client';
 import {
+  BankSlugSchema,
   CashbackPercentInputSchema,
   ClaimStateSchema,
   dataWrapped,
@@ -722,7 +723,7 @@ export function listAdminPlatformBankAccounts(
 }
 
 export const CreatePlatformBankAccountRequestSchema = z.object({
-  bank_name: z.string().min(1).max(255),
+  bank_name: BankSlugSchema,
   account_no: z.string().min(1).max(255),
   account_name: z.string().min(1).max(255),
   /** MVR only in v1; defaults to MVR when omitted. */
@@ -747,7 +748,7 @@ export function createAdminPlatformBankAccount(
 }
 
 export const UpdatePlatformBankAccountRequestSchema = z.object({
-  bank_name: z.string().min(1).max(255).optional(),
+  bank_name: BankSlugSchema.optional(),
   account_no: z.string().min(1).max(255).optional(),
   account_name: z.string().min(1).max(255).optional(),
   currency: z.literal('MVR').optional(),

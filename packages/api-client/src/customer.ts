@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { apiFetch } from './client';
 import {
+  BankSlugSchema,
   ClaimStateSchema,
   dataWrapped,
   paginated,
@@ -454,7 +455,7 @@ export function getCustomerPayoutAccount(
 }
 
 export const SavePayoutAccountRequestSchema = z.object({
-  bank_name: z.string().min(1).max(100),
+  bank_name: BankSlugSchema,
   /** Digits only, 6–32. */
   account_no: z.string().regex(/^\d{6,32}$/),
   account_name: z.string().min(1).max(120),

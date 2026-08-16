@@ -18,7 +18,7 @@ uses(TestCase::class, RefreshDatabase::class);
 function bankAccountPayload(array $overrides = []): array
 {
     return [
-        'bank_name' => 'Bank of Maldives',
+        'bank_name' => 'bml',
         'account_no' => '7730000123456',
         'account_name' => 'Manfaa Pvt Ltd',
         'is_primary' => true,
@@ -49,7 +49,7 @@ function settlementForMerchantView(): array
 
 it('enforces exactly one active primary at the database via the partial unique index', function () {
     DB::table('platform_bank_accounts')->insert([
-        'bank_name' => 'BML', 'account_no' => '1', 'account_name' => 'A',
+        'bank_name' => 'bml', 'account_no' => '1', 'account_name' => 'A',
         'currency' => 'MVR', 'is_primary' => true, 'active' => true,
         'created_at' => now(), 'updated_at' => now(),
     ]);
@@ -57,18 +57,18 @@ it('enforces exactly one active primary at the database via the partial unique i
     // A second active primary collides; an inactive primary and an active
     // non-primary both slot in freely.
     DB::table('platform_bank_accounts')->insert([
-        'bank_name' => 'MIB', 'account_no' => '2', 'account_name' => 'B',
+        'bank_name' => 'mib', 'account_no' => '2', 'account_name' => 'B',
         'currency' => 'MVR', 'is_primary' => true, 'active' => false,
         'created_at' => now(), 'updated_at' => now(),
     ]);
     DB::table('platform_bank_accounts')->insert([
-        'bank_name' => 'MIB', 'account_no' => '3', 'account_name' => 'C',
+        'bank_name' => 'mib', 'account_no' => '3', 'account_name' => 'C',
         'currency' => 'MVR', 'is_primary' => false, 'active' => true,
         'created_at' => now(), 'updated_at' => now(),
     ]);
 
     expect(fn () => DB::table('platform_bank_accounts')->insert([
-        'bank_name' => 'MIB', 'account_no' => '4', 'account_name' => 'D',
+        'bank_name' => 'mib', 'account_no' => '4', 'account_name' => 'D',
         'currency' => 'MVR', 'is_primary' => true, 'active' => true,
         'created_at' => now(), 'updated_at' => now(),
     ]))->toThrow(UniqueConstraintViolationException::class);
@@ -80,7 +80,7 @@ it('manages bank accounts over the admin endpoints, promotion demoting the incum
 
     $first = $this->postJson('/api/admin/platform/bank-accounts', bankAccountPayload())
         ->assertCreated()
-        ->assertJsonPath('data.bank_name', 'Bank of Maldives')
+        ->assertJsonPath('data.bank_name', 'bml')
         ->assertJsonPath('data.is_primary', true)
         ->assertJsonPath('data.active', true)
         ->assertJsonPath('data.currency', 'MVR')
@@ -88,7 +88,7 @@ it('manages bank accounts over the admin endpoints, promotion demoting the incum
 
     // A second primary demotes the first — never two active primaries.
     $second = $this->postJson('/api/admin/platform/bank-accounts', bankAccountPayload([
-        'bank_name' => 'Maldives Islamic Bank',
+        'bank_name' => 'mib',
         'account_no' => '9990000654321',
     ]))->assertCreated()->assertJsonPath('data.is_primary', true)->json('data.id');
 
@@ -114,7 +114,7 @@ it('requires an authenticated admin for bank account management', function () {
 
 it('embeds the active primary account in merchant settlement payment instructions', function () {
     app(BankAccountService::class)->create([
-        'bank_name' => 'Bank of Maldives',
+        'bank_name' => 'bml',
         'account_no' => '7730000123456',
         'account_name' => 'Manfaa Pvt Ltd',
         'is_primary' => true,
@@ -129,7 +129,7 @@ it('embeds the active primary account in merchant settlement payment instruction
         ->assertJsonPath('data.payment_instructions.amount_due_laari', 11825)
         ->assertJsonPath('data.payment_instructions.amount_due_mvr', '118.25')
         ->assertJsonPath('data.payment_instructions.needs_configuration', false)
-        ->assertJsonPath('data.payment_instructions.bank_account.bank_name', 'Bank of Maldives')
+        ->assertJsonPath('data.payment_instructions.bank_account.bank_name', 'bml')
         ->assertJsonPath('data.payment_instructions.bank_account.account_no', '7730000123456')
         ->assertJsonPath('data.payment_instructions.bank_account.account_name', 'Manfaa Pvt Ltd');
 });
@@ -137,11 +137,11 @@ it('embeds the active primary account in merchant settlement payment instruction
 it('flags needs_configuration with a null account when no active primary exists — details are never invented', function () {
     // An inactive primary and an active non-primary must both be ignored.
     app(BankAccountService::class)->create([
-        'bank_name' => 'Old Bank', 'account_no' => '1', 'account_name' => 'Old',
+        'bank_name' => 'bml', 'account_no' => '1', 'account_name' => 'Old',
         'is_primary' => true, 'active' => false,
     ]);
     app(BankAccountService::class)->create([
-        'bank_name' => 'Side Bank', 'account_no' => '2', 'account_name' => 'Side',
+        'bank_name' => 'mib', 'account_no' => '2', 'account_name' => 'Side',
         'is_primary' => false,
     ]);
 

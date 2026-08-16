@@ -304,7 +304,7 @@ function RoleDialog({
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
         </DialogHeader>
-        <DialogBody className="flex flex-col gap-5">
+        <DialogBody className="flex max-h-[65vh] flex-col gap-5 overflow-y-auto">
           <div className="flex flex-col gap-2.5">
             <Label htmlFor="role-name">{t('roles.nameLabel')}</Label>
             <Input

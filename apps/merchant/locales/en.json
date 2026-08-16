@@ -117,6 +117,7 @@
     "logoChoose": "Choose image",
     "logoReplace": "Choose a different image",
     "logoUpload": "Upload logo",
+    "logoUploading": "Uploading…",
     "logoUploaded": "Logo uploaded",
     "logoInvalidType": "Use a JPG, PNG or WebP image.",
     "logoTooLarge": "That image is over 2 MB — pick a smaller file.",
@@ -725,7 +726,9 @@
     "notFound": "Settlement not found.",
     "settledTitle": "Settled — the rewards on this batch are confirmed",
     "settledBody": "Settlement {{reference}} is closed and funded from your wallet. Nothing else is needed from you.",
-    "stepTransfer": "Transfer & confirm"
+    "stepTransfer": "Transfer & confirm",
+    "chooseBank": "Choose where to send it",
+    "chooseBankHint": "Sending to your own bank is usually free and same-day."
   },
   "credit": {
     "backdatedTitle": "Backdated sale — this credit is final",

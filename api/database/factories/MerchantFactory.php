@@ -27,7 +27,7 @@ class MerchantFactory extends Factory
             'business_reg_no' => 'C-'.fake()->numberBetween(1000, 9999).'/'.fake()->year(),
             'tin' => (string) fake()->numberBetween(1000000000, 1999999999),
             'settlement_method' => 'bank',
-            'bank_name' => 'Bank of Maldives',
+            'bank_name' => 'bml',
             'bank_account' => (string) fake()->numberBetween(7700000000000, 7799999999999),
             'validation_window_days' => 3,
             'min_eligible_laari' => 5000,

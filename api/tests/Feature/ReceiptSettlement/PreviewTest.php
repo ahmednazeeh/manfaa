@@ -33,7 +33,7 @@ afterEach(function () {
 
 it('previews the exact amount the eventual settlement will owe', function () {
     app(BankAccountService::class)->create([
-        'bank_name' => 'Bank of Maldives',
+        'bank_name' => 'bml',
         'account_no' => '7730000123456',
         'account_name' => 'Manfaa Pvt Ltd',
         'is_primary' => true,
@@ -48,7 +48,7 @@ it('previews the exact amount the eventual settlement will owe', function () {
         ->assertJsonPath('data.amount_due_laari', 11_825)
         ->assertJsonPath('data.amount_due_mvr', '118.25')
         // Where to send it, and what to quote — before any commitment.
-        ->assertJsonPath('data.payment_instructions.bank_account.bank_name', 'Bank of Maldives')
+        ->assertJsonPath('data.payment_instructions.bank_account.bank_name', 'bml')
         ->assertJsonPath('data.payment_instructions.bank_account.account_no', '7730000123456')
         ->assertJsonPath('data.payment_instructions.needs_configuration', false)
         ->assertJsonPath('data.payment_instructions.reference_preview', 'ST-2026-00001')

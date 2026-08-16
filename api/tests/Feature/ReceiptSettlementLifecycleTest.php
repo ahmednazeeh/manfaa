@@ -125,7 +125,7 @@ it('walks the receipt-first settlement lifecycle over HTTP: credits → preview 
     // writing it is superadmin-only, and no merchant role can touch it.
     $this->actingAs($this->superadmin, 'admin')
         ->postJson('/api/admin/platform/bank-accounts', [
-            'bank_name' => 'Bank of Maldives',
+            'bank_name' => 'bml',
             'account_no' => '7730000123456',
             'account_name' => 'Manfaa Pvt Ltd',
             'is_primary' => true,
@@ -202,7 +202,7 @@ it('walks the receipt-first settlement lifecycle over HTTP: credits → preview 
         ->assertJsonPath('data.amount_due_mvr', '116.63')
         // PLAN §1: "see amount due + platform bank account (copy button) +
         // reference" — the whole point of previewing before walking to the bank.
-        ->assertJsonPath('data.payment_instructions.bank_account.bank_name', 'Bank of Maldives')
+        ->assertJsonPath('data.payment_instructions.bank_account.bank_name', 'bml')
         ->assertJsonPath('data.payment_instructions.bank_account.account_no', '7730000123456')
         ->assertJsonPath('data.payment_instructions.bank_account.account_name', 'Manfaa Pvt Ltd')
         ->assertJsonPath('data.payment_instructions.needs_configuration', false)
@@ -436,7 +436,7 @@ it('takes a 30-day-old credit straight to payable, settles it the same day, and 
     // path and /v1 alike.
     $this->actingAs($this->superadmin, 'admin')
         ->postJson('/api/admin/platform/bank-accounts', [
-            'bank_name' => 'Bank of Maldives',
+            'bank_name' => 'bml',
             'account_no' => '7730000123456',
             'account_name' => 'Manfaa Pvt Ltd',
             'is_primary' => true,

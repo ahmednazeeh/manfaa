@@ -132,7 +132,19 @@ class SettlementResource extends JsonResource
      */
     private function paymentInstructions(): array
     {
-        $account = app(BankAccountService::class)->activePrimaryDetails();
+        $service = app(BankAccountService::class);
+
+        // The account this batch was actually sent to, when the merchant
+        // chose one. Falling back to the current primary only for batches
+        // that predate the choice: quoting today's primary at a settlement
+        // paid into a different account is how a reconciliation goes looking
+        // at the wrong statement.
+        $chosen = $this->platform_bank_account_id === null
+            ? null
+            : collect($service->activeAccounts())
+                ->firstWhere('id', $this->platform_bank_account_id);
+
+        $account = $chosen ?? $service->activePrimaryDetails();
 
         return [
             'reference' => $this->reference,
@@ -143,6 +155,7 @@ class SettlementResource extends JsonResource
                 'account_no' => $account['account_no'],
                 'account_name' => $account['account_name'],
             ],
+            'bank_accounts' => $service->activeAccounts(),
             'needs_configuration' => $account === null,
         ];
     }

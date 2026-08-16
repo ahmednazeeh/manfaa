@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Domain\Platform\Bank;
 use App\Domain\Platform\BankAccountException;
 use App\Domain\Platform\BankAccountService;
 use App\Http\Controllers\Controller;
@@ -10,6 +11,7 @@ use App\Models\PlatformBankAccount;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Validation\Rule;
 
 /**
  * Admin CRUD over the platform's own bank accounts — where merchants send
@@ -33,7 +35,7 @@ class PlatformBankAccountsController extends Controller
     public function store(Request $request, BankAccountService $service): JsonResponse
     {
         $validated = $request->validate([
-            'bank_name' => ['required', 'string', 'max:255'],
+            'bank_name' => ['required', Rule::enum(Bank::class)],
             'account_no' => ['required', 'string', 'max:255'],
             'account_name' => ['required', 'string', 'max:255'],
             'currency' => ['sometimes', 'string', 'in:MVR'],
@@ -53,7 +55,7 @@ class PlatformBankAccountsController extends Controller
         $account = PlatformBankAccount::query()->findOrFail($id);
 
         $validated = $request->validate([
-            'bank_name' => ['sometimes', 'string', 'max:255'],
+            'bank_name' => ['sometimes', Rule::enum(Bank::class)],
             // Accepted only when unchanged (edit forms echo it back); the
             // service refuses any actual account_no mutation.
             'account_no' => ['sometimes', 'string', 'max:255'],

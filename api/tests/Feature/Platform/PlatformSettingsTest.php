@@ -73,7 +73,7 @@ it('excludes a customer below a raised min_payout_laari from the next batch', fu
     ]);
     $creditor = MerchantUser::factory()->for($merchant)->owner()->create();
 
-    $bank = ['payout_bank' => 'BML', 'payout_account' => '7730000000001', 'payout_account_name' => 'Holder'];
+    $bank = ['payout_bank' => 'bml', 'payout_account' => '7730000000001', 'payout_account_name' => 'Holder'];
     $under = Customer::factory()->create($bank + ['customer_code' => '111111']);
     $over = Customer::factory()->create($bank + ['payout_account' => '7730000000002', 'customer_code' => '222222']);
 

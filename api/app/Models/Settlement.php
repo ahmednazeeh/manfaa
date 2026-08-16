@@ -18,6 +18,7 @@ class Settlement extends Model
     {
         return [
             'merchant_id' => 'integer',
+            'platform_bank_account_id' => 'integer',
             'state' => SettlementState::class,
             'sale_total_laari' => 'integer',
             'cashback_total_laari' => 'integer',

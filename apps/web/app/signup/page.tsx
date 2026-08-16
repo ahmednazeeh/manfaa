@@ -19,6 +19,7 @@ import {
 } from '@/lib/queries';
 import { Alert, AlertIcon, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
+import { PayoutAccountStep } from '@/components/app/payout-account-step';
 import { Card, CardContent } from '@/components/ui/card';
 import {
   Form,
@@ -35,7 +36,7 @@ import {
   InputOTPSlot,
 } from '@/components/ui/input-otp';
 
-type Step = 'phone' | 'code' | 'details';
+type Step = 'phone' | 'code' | 'details' | 'bank';
 
 /**
  * Signup (§10 apps/web): phone -> SMS OTP -> name/password. The register
@@ -138,7 +139,11 @@ export default function SignupPage() {
       { signup_token: signupToken, ...values },
       {
         onSuccess: () => {
-          router.replace('/dashboard');
+          // The account exists and the session is live — the dashboard is
+          // one skip away. Asking here rather than nudging from the
+          // dashboard later is the difference between details we have when
+          // the first payout runs and details we chase afterwards.
+          setStep('bank');
         },
         onError: (error) => {
           const keys = validationErrorKeys(error);
@@ -162,6 +167,7 @@ export default function SignupPage() {
     phone: t('auth.stepPhone'),
     code: t('auth.stepCode'),
     details: t('auth.stepDetails'),
+    bank: t('auth.stepBank'),
   };
 
   return (
@@ -191,8 +197,10 @@ export default function SignupPage() {
 
           {/* Step indicator */}
           <ol className="flex items-center justify-center gap-2">
-            {(['phone', 'code', 'details'] as const).map((s, index) => {
-              const stepIndex = ['phone', 'code', 'details'].indexOf(step);
+            {(['phone', 'code', 'details', 'bank'] as const).map((s, index) => {
+              const stepIndex = ['phone', 'code', 'details', 'bank'].indexOf(
+                step,
+              );
               const active = index <= stepIndex;
               return (
                 <li key={s} className="flex items-center gap-2">
@@ -390,15 +398,21 @@ export default function SignupPage() {
             </Form>
           )}
 
-          <p className="text-sm text-muted-foreground text-center">
-            {t('auth.alreadyHaveAccount')}{' '}
-            <Link
-              href="/login"
-              className="text-primary font-medium hover:underline"
-            >
-              {t('auth.signIn')}
-            </Link>
-          </p>
+          {step === 'bank' && (
+            <PayoutAccountStep onDone={() => router.replace('/dashboard')} />
+          )}
+
+          {step !== 'bank' && (
+            <p className="text-sm text-muted-foreground text-center">
+              {t('auth.alreadyHaveAccount')}{' '}
+              <Link
+                href="/login"
+                className="text-primary font-medium hover:underline"
+              >
+                {t('auth.signIn')}
+              </Link>
+            </p>
+          )}
         </CardContent>
       </Card>
     </div>

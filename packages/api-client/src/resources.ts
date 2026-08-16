@@ -135,6 +135,71 @@ export function paginated<Schema extends z.ZodType>(schema: Schema) {
 export const MerchantChannelSchema = z.enum(['in_store', 'online', 'both']);
 export type MerchantChannel = z.infer<typeof MerchantChannelSchema>;
 
+// ---------------------------------------------------------------------------
+// Banks
+// ---------------------------------------------------------------------------
+
+/**
+ * The banks money moves through, mirroring App\Domain\Platform\Bank.
+ *
+ * Bank was free text on every form until this landed, which made "BML",
+ * "Bank of Maldives" and a typo three banks to the database and one bank to
+ * a payments clerk — survivable in a note, not in a bulk transfer file where
+ * that column decides whether someone gets paid.
+ *
+ * NOT a closed z.enum on the read side: rows written before the enum existed
+ * hold free text, and a stored value this build does not recognise must
+ * render as itself rather than throw the whole payload away. Parse with
+ * `bankOf()` and fall back to printing what you were given.
+ */
+export const BANKS = [
+  {
+    slug: 'bml',
+    label: 'Bank of Maldives',
+    shortLabel: 'BML',
+    /** Served from each app's public/banks — see the logo files there. */
+    logo: '/banks/bml.svg',
+  },
+  {
+    slug: 'mib',
+    label: 'Maldives Islamic Bank',
+    shortLabel: 'MIB',
+    logo: '/banks/mib.png',
+  },
+] as const;
+
+export type Bank = (typeof BANKS)[number];
+export type BankSlug = Bank['slug'];
+
+/** The slug a form submits. Closed, because a WRITE may only name a real bank. */
+export const BankSlugSchema = z.enum(['bml', 'mib']);
+
+/**
+ * Resolves a stored or submitted bank, tolerating the free-text era the same
+ * way the PHP enum's parse() does — slug, short name or full name, any case.
+ * Null for anything else, which is the caller's cue to print the raw string
+ * instead of asserting a bank nobody chose.
+ */
+export function bankOf(value: string | null | undefined): Bank | null {
+  if (value === null || value === undefined || value.trim() === '') {
+    return null;
+  }
+  const needle = value.trim().toLowerCase();
+  return (
+    BANKS.find(
+      (bank) =>
+        needle === bank.slug ||
+        needle === bank.shortLabel.toLowerCase() ||
+        needle === bank.label.toLowerCase(),
+    ) ?? null
+  );
+}
+
+/** What to print for a bank field: the real name, or the raw value verbatim. */
+export function bankLabel(value: string | null | undefined): string {
+  return bankOf(value)?.label ?? (value ?? '');
+}
+
 /**
  * The full merchant lifecycle. `draft` (mid-wizard), `pending_review`
  * (submitted, awaiting the superadmin queue) and `rejected` (sent back with
@@ -600,6 +665,24 @@ export const SettlementBankAccountSchema = z.object({
 export type SettlementBankAccount = z.infer<typeof SettlementBankAccountSchema>;
 
 /**
+ * One account the merchant may transfer to — the shape above plus the id to
+ * send back, so the receipt records WHICH account the money went to. At most
+ * one per bank, enforced by a partial unique index.
+ *
+ * `is_primary` is the platform's default, not a restriction: the panel
+ * preselects it and the merchant may pick the other. A store banking with
+ * MIB pays no fee and waits no day sending to MIB, and a cross-bank transfer
+ * they did not have to make is a cost the platform imposed for its own
+ * filing convenience.
+ */
+export const SettlementDestinationSchema = SettlementBankAccountSchema.extend({
+  id: z.number().int(),
+  currency: z.string(),
+  is_primary: z.boolean(),
+});
+export type SettlementDestination = z.infer<typeof SettlementDestinationSchema>;
+
+/**
  * Where to actually send the transfer: the platform's active primary bank
  * account alongside the amount and the reference to quote. When no platform
  * account is configured, `bank_account` is null and `needs_configuration`
@@ -611,6 +694,12 @@ export const SettlementPaymentInstructionsSchema = z.object({
   amount_due_laari: z.number().int(),
   amount_due_mvr: z.string(),
   bank_account: SettlementBankAccountSchema.nullable(),
+  /**
+   * Every account the merchant may choose. `.catch([])` so a panel newer
+   * than its API degrades to the single `bank_account` above rather than
+   * failing the whole settlement payload.
+   */
+  bank_accounts: z.array(SettlementDestinationSchema).catch([]),
   needs_configuration: z.boolean(),
 });
 export type SettlementPaymentInstructions = z.infer<

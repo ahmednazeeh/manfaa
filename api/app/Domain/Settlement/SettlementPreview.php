@@ -134,6 +134,14 @@ final readonly class SettlementPreview
                     'account_no' => $account['account_no'],
                     'account_name' => $account['account_name'],
                 ],
+                // Every account the merchant may send to, one per bank, the
+                // default first. `bank_account` above is that default and
+                // stays for clients that only ever showed one; a panel that
+                // offers the choice reads this and sends back the id it used,
+                // so the receipt can be reconciled against the right
+                // statement rather than against whichever account happened to
+                // be primary when the screen loaded.
+                'bank_accounts' => $this->bankAccounts->activeAccounts(),
                 'needs_configuration' => $account === null,
             ],
         ];

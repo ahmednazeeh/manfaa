@@ -416,6 +416,16 @@ export function LogoUploader({
       if (previous !== null) URL.revokeObjectURL(previous);
       return URL.createObjectURL(picked);
     });
+
+    // Send it immediately. Choosing a file IS the intent — a second button
+    // saying "now really do it" only creates a state where the picture on
+    // screen is not the picture on the server, which is exactly the state
+    // someone leaves the wizard in when they assume the preview meant saved.
+    // The preview stays until the upload lands, so the swap is invisible.
+    upload(picked, () => {
+      setFile(null);
+      onUploaded?.();
+    });
   };
 
   const shownUrl = previewUrl ?? currentUrl;
@@ -450,32 +460,20 @@ export function LogoUploader({
             <Button
               type="button"
               variant="outline"
+              disabled={uploading}
               onClick={() => inputRef.current?.click()}
             >
               {shownUrl !== null
                 ? t('setup.logoReplace')
                 : t('setup.logoChoose')}
             </Button>
-            {file !== null && (
-              <Button
-                type="button"
-                disabled={uploading}
-                onClick={() =>
-                  upload(file, () => {
-                    setFile(null);
-                    onUploaded?.();
-                  })
-                }
-              >
-                {uploading ? (
-                  <LoaderCircle className="animate-spin" />
-                ) : (
-                  <Upload />
-                )}
-                {t('setup.logoUpload')}
-              </Button>
-            )}
           </div>
+          {uploading && (
+            <p className="inline-flex items-center gap-2 text-xs text-muted-foreground">
+              <LoaderCircle className="size-3.5 animate-spin" />
+              {t('setup.logoUploading')}
+            </p>
+          )}
           <p className="text-xs text-muted-foreground max-w-sm">
             {t('setup.logoHint')}
           </p>

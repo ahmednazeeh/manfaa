@@ -105,6 +105,10 @@ export function SettlementWizard() {
   const [mode, setMode] = useState<'all' | 'pick'>('all');
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [created, setCreated] = useState<MerchantSettlement | null>(null);
+  // Which platform account the merchant says they paid. Null until they pick
+  // or the default lands below; the server records nothing rather than
+  // guessing, so an unanswered choice is honest instead of wrong.
+  const [destinationId, setDestinationId] = useState<number | null>(null);
 
   const outstanding = useOutstanding();
   const wallet = useWallet();
@@ -336,10 +340,18 @@ export function SettlementWizard() {
           onBack={() => setStep(0)}
           submitPending={submitReceipt.isPending}
           submitError={submitReceipt.error}
+          destinationId={destinationId}
+          onSelectDestination={setDestinationId}
           onSubmitReceipt={(receipt) => {
             if (selection === null) return;
             submitReceipt.mutate(
-              { selection, receipt },
+              {
+                selection,
+                receipt: {
+                  ...receipt,
+                  platformBankAccountId: destinationId ?? undefined,
+                },
+              },
               { onSuccess: (settlement) => setCreated(settlement) },
             );
           }}
@@ -432,6 +444,8 @@ function ReviewStep({
   onSubmitReceipt,
   onSettleEverything,
   onWalletSettle,
+  destinationId,
+  onSelectDestination,
 }: {
   preview: ReturnType<typeof useSettlementPreview>;
   walletBalanceLaari: number | undefined;
@@ -443,6 +457,9 @@ function ReviewStep({
   /** Present only while a SUBSET is selected — the discount's way back. */
   onSettleEverything?: () => void;
   onWalletSettle: () => void;
+  /** The platform account the merchant says they paid; null until chosen. */
+  destinationId: number | null;
+  onSelectDestination: (id: number) => void;
 }) {
   const { t } = useTranslation();
 
@@ -518,6 +535,16 @@ function ReviewStep({
                 referenceIsFinal={data.payment_instructions.reference_is_final}
                 amountDueLaari={data.amount_due_laari}
                 bankAccount={data.payment_instructions.bank_account}
+                bankAccounts={data.payment_instructions.bank_accounts}
+                selectedAccountId={
+                  destinationId ??
+                  data.payment_instructions.bank_accounts.find(
+                    (candidate) => candidate.is_primary,
+                  )?.id ??
+                  data.payment_instructions.bank_accounts[0]?.id ??
+                  null
+                }
+                onSelectAccount={onSelectDestination}
                 needsConfiguration={
                   data.payment_instructions.needs_configuration
                 }

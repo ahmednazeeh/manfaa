@@ -166,9 +166,9 @@ it('runs the full Phase 1 lifecycle: credit → sweep → settle → forgive →
     [$merchantC, $userC] = lifecycleMerchant(); // small batch → forgiveness
     [$merchantD, $userD] = lifecycleMerchant(); // never pays → write-off
 
-    $customer1 = Customer::factory()->create(['payout_bank' => 'BML', 'payout_account' => '7730000000101', 'payout_account_name' => 'Aminath Naseem']);
-    $customer2 = Customer::factory()->create(['payout_bank' => 'BML', 'payout_account' => '7730000000102', 'payout_account_name' => 'Ibrahim Waheed']);
-    $customer3 = Customer::factory()->create(['payout_bank' => 'BML', 'payout_account' => '7730000000103', 'payout_account_name' => 'Mariyam Shifa']);
+    $customer1 = Customer::factory()->create(['payout_bank' => 'bml', 'payout_account' => '7730000000101', 'payout_account_name' => 'Aminath Naseem']);
+    $customer2 = Customer::factory()->create(['payout_bank' => 'bml', 'payout_account' => '7730000000102', 'payout_account_name' => 'Ibrahim Waheed']);
+    $customer3 = Customer::factory()->create(['payout_bank' => 'bml', 'payout_account' => '7730000000103', 'payout_account_name' => 'Mariyam Shifa']);
 
     $august = CarbonImmutable::parse('2026-08-01T10:00:00+05:00');
 

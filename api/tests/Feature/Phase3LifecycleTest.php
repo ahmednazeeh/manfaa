@@ -340,7 +340,7 @@ it('runs the full Phase 3 customer journey: OTP signup → promo publish → pri
     Carbon::setTestNow(CarbonImmutable::parse('2026-08-18T10:00:00+05:00'));
 
     $this->postJson('/api/customer/payout-account', [
-        'bank_name' => 'Bank of Maldives',
+        'bank_name' => 'bml',
         'account_no' => '7712345678901',
         'account_name' => 'AISHATH MANIKE',
     ])->assertOk()->assertJsonPath('data.has_payout_account', true);

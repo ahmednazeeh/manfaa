@@ -24,7 +24,7 @@ it('starts with no payout account', function () {
 it('registers a payout account and reads it back', function () {
     $this->actingAs($this->customer, 'customer')
         ->postJson('/api/customer/payout-account', [
-            'bank_name' => 'Bank of Maldives',
+            'bank_name' => 'bml',
             'account_no' => '7701234567890',
             'account_name' => 'AISHATH MANIKE',
         ])
@@ -36,45 +36,45 @@ it('registers a payout account and reads it back', function () {
 
     $this->getJson('/api/customer/payout-account')
         ->assertOk()
-        ->assertJsonPath('data.bank_name', 'Bank of Maldives')
+        ->assertJsonPath('data.bank_name', 'bml')
         ->assertJsonPath('data.account_no', '7701234567890')
         ->assertJsonPath('data.account_name', 'AISHATH MANIKE');
 
     $this->customer->refresh();
-    expect($this->customer->payout_bank)->toBe('Bank of Maldives');
+    expect($this->customer->payout_bank)->toBe('bml');
     expect($this->customer->payout_account)->toBe('7701234567890');
     expect($this->customer->payout_account_name)->toBe('AISHATH MANIKE');
 });
 
 it('allows updating an existing account (effective next batch)', function () {
     $this->customer->forceFill([
-        'payout_bank' => 'Bank of Maldives',
+        'payout_bank' => 'bml',
         'payout_account' => '7701234567890',
         'payout_account_name' => 'AISHATH MANIKE',
     ])->save();
 
     $this->actingAs($this->customer, 'customer')
         ->postJson('/api/customer/payout-account', [
-            'bank_name' => 'MIB',
+            'bank_name' => 'mib',
             'account_no' => '990001112223',
             'account_name' => 'AISHATH MANIKE',
         ])
         ->assertOk()
-        ->assertJsonPath('data.bank_name', 'MIB');
+        ->assertJsonPath('data.bank_name', 'mib');
 });
 
 it('validates the payload', function () {
     $this->actingAs($this->customer, 'customer');
 
     $this->postJson('/api/customer/payout-account', [
-        'bank_name' => 'Bank of Maldives',
+        'bank_name' => 'bml',
         'account_name' => 'AISHATH MANIKE',
     ])
         ->assertUnprocessable()
         ->assertJsonValidationErrors('account_no');
 
     $this->postJson('/api/customer/payout-account', [
-        'bank_name' => 'Bank of Maldives',
+        'bank_name' => 'bml',
         'account_no' => 'not-a-number',
         'account_name' => 'AISHATH MANIKE',
     ])

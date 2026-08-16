@@ -31,6 +31,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { BankLabel } from '@/components/admin/bank-select';
 import { Card, CardTable } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
@@ -82,7 +83,7 @@ function SetPrimaryAction({ account }: { account: PlatformBankAccount }) {
           <AlertDialogDescription>
             Merchant settlement instructions will immediately show{' '}
             <span className="font-medium text-foreground">
-              {account.bank_name} · {account.account_no}
+              <BankLabel bank={account.bank_name} /> · {account.account_no}
             </span>
             . The current primary is demoted in the same step — exactly one
             active primary exists at a time.
@@ -212,7 +213,7 @@ export default function BankAccountsPage() {
               </AlertIcon>
               <AlertContent>
                 <AlertTitle>
-                  Merchants currently see: {activePrimary.bank_name} ·{' '}
+                  Merchants currently see: <BankLabel bank={activePrimary.bank_name} /> ·{' '}
                   {activePrimary.account_no} · {activePrimary.account_name}
                 </AlertTitle>
                 <AlertDescription>
@@ -273,7 +274,7 @@ export default function BankAccountsPage() {
                       accounts.map((account) => (
                         <TableRow key={account.id}>
                           <TableCell className="font-medium">
-                            {account.bank_name}
+                            <BankLabel bank={account.bank_name} />
                           </TableCell>
                           <TableCell>
                             <div className="flex flex-col">

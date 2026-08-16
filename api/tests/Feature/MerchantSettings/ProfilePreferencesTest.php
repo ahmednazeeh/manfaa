@@ -148,21 +148,21 @@ it('rejects an invalid contact email', function () {
 
 it('updates the bank identity as one atomic triple', function () {
     $this->patchJson('/api/merchant/bank-account', [
-        'bank_name' => 'Bank of Maldives',
+        'bank_name' => 'bml',
         'bank_account' => '7730000123456',
         'bank_account_name' => 'Original Name Pvt Ltd',
     ])->assertOk()
-        ->assertJsonPath('data.bank_name', 'Bank of Maldives')
+        ->assertJsonPath('data.bank_name', 'bml')
         ->assertJsonPath('data.bank_account', '7730000123456')
         ->assertJsonPath('data.bank_account_name', 'Original Name Pvt Ltd');
 
     // A partial identity mismatches every payment: all three are required.
     $this->patchJson('/api/merchant/bank-account', [
-        'bank_name' => 'MIB',
+        'bank_name' => 'mib',
         'bank_account' => '9990000',
     ])->assertUnprocessable();
 
-    expect($this->merchant->refresh()->bank_name)->toBe('Bank of Maldives');
+    expect($this->merchant->refresh()->bank_name)->toBe('bml');
 });
 
 it('updates preferences within platform bounds', function () {

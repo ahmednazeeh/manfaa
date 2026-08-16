@@ -27,6 +27,8 @@ final class BankAccountService
 {
     private const string PRIMARY_CACHE_KEY = 'platform_bank_accounts.active_primary';
 
+    private const string ACTIVE_CACHE_KEY = 'platform_bank_accounts.active_all';
+
     private const int CACHE_TTL_SECONDS = 60;
 
     /**
@@ -125,6 +127,44 @@ final class BankAccountService
         });
     }
 
+    /**
+     * Every account a merchant may transfer to — at most one per bank, since
+     * that is what the partial unique index allows — with the primary first
+     * so a panel that preselects the head of the list preselects the default.
+     *
+     * The merchant CHOOSES from this rather than being told the primary:
+     * someone banking with MIB pays nothing and waits nothing to send to MIB,
+     * and a cross-bank transfer they did not have to make is a fee and a day
+     * the platform imposed on them for its own filing convenience.
+     *
+     * @return list<array{id: int, bank_name: string, account_no: string, account_name: string, currency: string, is_primary: bool}>
+     */
+    public function activeAccounts(): array
+    {
+        return Cache::remember(self::ACTIVE_CACHE_KEY, self::CACHE_TTL_SECONDS, function (): array {
+            // Same deploy-order safety as activePrimaryDetails().
+            if (! Schema::hasTable('platform_bank_accounts')) {
+                return [];
+            }
+
+            return PlatformBankAccount::query()
+                ->where('active', true)
+                ->orderByDesc('is_primary')
+                ->orderBy('bank_name')
+                ->get()
+                ->map(fn (PlatformBankAccount $account): array => [
+                    'id' => $account->id,
+                    'bank_name' => $account->bank_name,
+                    'account_no' => $account->account_no,
+                    'account_name' => $account->account_name,
+                    'currency' => $account->currency,
+                    'is_primary' => (bool) $account->is_primary,
+                ])
+                ->values()
+                ->all();
+        });
+    }
+
     private function demoteCurrentPrimary(?int $exceptId = null): void
     {
         PlatformBankAccount::query()
@@ -138,5 +178,6 @@ final class BankAccountService
     private function bustCache(): void
     {
         Cache::forget(self::PRIMARY_CACHE_KEY);
+        Cache::forget(self::ACTIVE_CACHE_KEY);
     }
 }

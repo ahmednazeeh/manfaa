@@ -115,7 +115,7 @@ it('reports whether a payout account exists', function () {
         ->assertJsonPath('data.has_payout_account', false);
 
     $this->customer->forceFill([
-        'payout_bank' => 'Bank of Maldives',
+        'payout_bank' => 'bml',
         'payout_account' => '7701234567890',
         'payout_account_name' => 'AISHATH MANIKE',
     ])->save();

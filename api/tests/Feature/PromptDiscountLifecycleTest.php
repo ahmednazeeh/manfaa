@@ -138,7 +138,7 @@ it('walks the prompt-payment discount over HTTP: three credits → preview → d
     // ── 0. The platform publishes where transfers must be sent ────────────
     $this->actingAs($this->superadmin, 'admin')
         ->postJson('/api/admin/platform/bank-accounts', [
-            'bank_name' => 'Bank of Maldives',
+            'bank_name' => 'bml',
             'account_no' => '7730000123456',
             'account_name' => 'Manfaa Pvt Ltd',
             'is_primary' => true,

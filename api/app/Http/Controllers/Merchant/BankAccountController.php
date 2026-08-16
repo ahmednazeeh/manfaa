@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Merchant;
 
+use App\Domain\Platform\Bank;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\MerchantBankAccountResource;
 use App\Models\MerchantUser;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 /**
  * The merchant's own bank identity: read on `bank_account.view`, written on
@@ -33,7 +35,7 @@ class BankAccountController extends Controller
     public function update(Request $request): MerchantBankAccountResource
     {
         $validated = $request->validate([
-            'bank_name' => ['required', 'string', 'max:255'],
+            'bank_name' => ['required', Rule::enum(Bank::class)],
             'bank_account' => ['required', 'string', 'max:64'],
             'bank_account_name' => ['required', 'string', 'max:255'],
         ]);

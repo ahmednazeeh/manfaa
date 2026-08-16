@@ -22,6 +22,7 @@ use App\Models\Settlement;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Validation\Rule;
 
 /**
  * Merchant-facing settlement surface (§10), receipt-first (PLAN §1): the
@@ -106,6 +107,10 @@ class SettlementController extends Controller
             // in SlipStorage, which reads the magic bytes — `mimes` here
             // trusts finfo/extension and would happily pass a renamed SVG.
             'slip' => ['required', 'file', 'max:'.intdiv(SlipStorage::MAX_BYTES, 1024)],
+            'platform_bank_account_id' => [
+                'sometimes', 'integer',
+                Rule::exists('platform_bank_accounts', 'id')->where('active', true),
+            ],
         ]);
 
         $user = $this->merchantUser($request);
@@ -118,6 +123,7 @@ class SettlementController extends Controller
                 Laari::of((int) $validated['amount']),
                 $validated['bank_ref'],
                 $request->file('slip'),
+                isset($validated['platform_bank_account_id']) ? (int) $validated['platform_bank_account_id'] : null,
             );
         } catch (InvalidSlipException $e) {
             return new JsonResponse(['message' => $e->getMessage(), 'code' => $e->errorCode], 422);
@@ -146,6 +152,11 @@ class SettlementController extends Controller
             'amount' => ['required', 'integer', 'min:1'],
             'bank_ref' => ['required', 'string', 'max:128'],
             'slip' => ['required', 'file', 'max:'.intdiv(SlipStorage::MAX_BYTES, 1024)],
+            // No destination here on purpose: a batch's account is chosen
+            // once, when it is created. A further receipt pays down the same
+            // batch, so accepting a second bank would either overwrite the
+            // account the first transfer actually went to or record two, and
+            // both make the batch harder to reconcile than knowing one.
         ]);
 
         $user = $this->merchantUser($request);

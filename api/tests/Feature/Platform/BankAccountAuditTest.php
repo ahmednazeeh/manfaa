@@ -21,7 +21,7 @@ uses(TestCase::class, RefreshDatabase::class);
 function bankAuditPayload(array $overrides = []): array
 {
     return [
-        'bank_name' => 'Bank of Maldives',
+        'bank_name' => 'bml',
         'account_no' => '7730000123456',
         'account_name' => 'Manfaa Pvt Ltd',
         'is_primary' => true,
@@ -37,7 +37,7 @@ it('refuses bank account writes from a plain admin — reading stays open', func
     $this->postJson('/api/admin/platform/bank-accounts', bankAuditPayload())->assertForbidden();
 
     $account = PlatformBankAccount::query()->create([
-        'bank_name' => 'BML', 'account_no' => '1', 'account_name' => 'A',
+        'bank_name' => 'bml', 'account_no' => '1', 'account_name' => 'A',
         'currency' => 'MVR', 'is_primary' => true, 'active' => true,
     ]);
 
@@ -59,9 +59,9 @@ it('stamps the acting superadmin on create and update', function () {
         ->json('data.id');
 
     $this->actingAs($editor, 'admin')
-        ->patchJson("/api/admin/platform/bank-accounts/{$id}", ['bank_name' => 'Bank of Maldives Main'])
+        ->patchJson("/api/admin/platform/bank-accounts/{$id}", ['bank_name' => 'bml'])
         ->assertOk()
-        ->assertJsonPath('data.bank_name', 'Bank of Maldives Main')
+        ->assertJsonPath('data.bank_name', 'bml')
         ->assertJsonPath('data.created_by', $creator->id)
         ->assertJsonPath('data.updated_by', $editor->id);
 
@@ -92,7 +92,7 @@ it('refuses changing account_no in place — replacement is create-new plus deac
     // deactivates — both rows survive, so old instructions stay explicable.
     $newId = $this->postJson('/api/admin/platform/bank-accounts', bankAuditPayload([
         'account_no' => '6660000999999',
-        'bank_name' => 'Maldives Islamic Bank',
+        'bank_name' => 'mib',
     ]))->assertCreated()->assertJsonPath('data.is_primary', true)->json('data.id');
 
     $this->patchJson("/api/admin/platform/bank-accounts/{$id}", ['active' => false])->assertOk();

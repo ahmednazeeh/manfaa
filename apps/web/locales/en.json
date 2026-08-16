@@ -76,7 +76,8 @@
     "phoneAlreadyRegistered": "This phone number already has an account. Sign in instead.",
     "finishSignup": "Create account",
     "alreadyHaveAccount": "Already have an account?",
-    "sessionCheckFailed": "Could not reach the server. Refresh to try again."
+    "sessionCheckFailed": "Could not reach the server. Refresh to try again.",
+    "stepBank": "Payout account"
   },
   "dashboard": {
     "title": "Dashboard",
@@ -153,7 +154,13 @@
     "replaceAccount": "Update account",
     "saved": "Payout account saved.",
     "changeEffectiveNote": "Changes apply from the next payout run. A payout already in progress is sent to the account on file when it was built.",
-    "saveFailed": "Could not save the account. Check the details and try again."
+    "saveFailed": "Could not save the account. Check the details and try again.",
+    "setupTitle": "Where should we send your cashback?",
+    "setupSubtitle": "Add the account now, or later from your dashboard — your cashback builds up either way.",
+    "accountNameHint": "It must match the name on the account, or the transfer will bounce.",
+    "saveAndFinish": "Save and finish",
+    "skipForNow": "Skip for now",
+    "skipHint": "You can add it any time before your first payout."
   },
   "claims": {
     "title": "Claims",

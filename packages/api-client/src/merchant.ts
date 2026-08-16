@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { ApiError, apiFetch } from './client';
 import {
+  BankSlugSchema,
   CashbackPercentInputSchema,
   dataWrapped,
   MerchantChannelSchema,
@@ -14,11 +15,12 @@ import {
   PromptDiscountReasonSchema,
   RateDescriptionSchema,
   SettlementBankAccountSchema,
+  SettlementDestinationSchema,
   SettlementFundingMethodSchema,
   SettlementSchema,
   TransactionSchema,
-  WalletSchema,
   type PromotionStatus,
+  WalletSchema,
 } from './resources';
 
 /**
@@ -204,6 +206,8 @@ export const SettlementPreviewInstructionsSchema = z.object({
   amount_due_laari: z.number().int(),
   amount_due_mvr: z.string(),
   bank_account: SettlementBankAccountSchema.nullable(),
+  /** Every account the merchant may pick, one per bank. See the settled twin. */
+  bank_accounts: z.array(SettlementDestinationSchema).catch([]),
   needs_configuration: z.boolean(),
 });
 export type SettlementPreviewInstructions = z.infer<
@@ -381,6 +385,15 @@ export interface SettlementReceiptInput {
   /** The bank's reference for the transfer; unique per settlement. */
   bank_ref: string;
   slip: File | Blob;
+  /**
+   * WHICH platform account the transfer went to, from
+   * `payment_instructions.bank_accounts`. Optional so a caller that only
+   * ever showed one account still settles; when omitted the batch simply
+   * does not record a destination, and reconciliation falls back to
+   * whichever account is primary — which is exactly the ambiguity this
+   * field exists to remove, so send it.
+   */
+  platform_bank_account_id?: number;
 }
 
 /** 5 MB — the server's own slip ceiling, so the panel can refuse first. */
@@ -422,6 +435,12 @@ function receiptForm(receipt: SettlementReceiptInput): FormData {
   form.append('amount', String(receipt.amount));
   form.append('bank_ref', receipt.bank_ref);
   form.append('slip', receipt.slip);
+  if (receipt.platform_bank_account_id !== undefined) {
+    form.append(
+      'platform_bank_account_id',
+      String(receipt.platform_bank_account_id),
+    );
+  }
   return form;
 }
 
@@ -1045,7 +1064,7 @@ export type MerchantBankAccountResponse = z.infer<
  * mismatches every payment — so all three fields are required together.
  */
 export const UpdateMerchantBankAccountRequestSchema = z.object({
-  bank_name: z.string().min(1).max(255),
+  bank_name: BankSlugSchema,
   bank_account: z.string().min(1).max(64),
   bank_account_name: z.string().min(1).max(255),
 });
