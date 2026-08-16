@@ -14,6 +14,7 @@ import {
   Globe,
   LoaderCircle,
   MapPin,
+  Phone,
   QrCode,
   Sparkles,
   Store,
@@ -367,16 +368,94 @@ function BranchRow({
           </span>
         )}
       </div>
-      {distance !== null && (
-        <span className="inline-flex shrink-0 items-center gap-1 text-xs text-muted-foreground">
-          <MapPin className="size-3" />
-          {distance.unit === 'm'
-            ? t('discover.distanceMeters', { meters: distance.value })
-            : t('discover.distanceKm', { km: distance.value })}
-        </span>
-      )}
+      <div className="flex shrink-0 flex-col items-end gap-1.5">
+        {distance !== null && (
+          <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+            <MapPin className="size-3" />
+            {distance.unit === 'm'
+              ? t('discover.distanceMeters', { meters: distance.value })
+              : t('discover.distanceKm', { km: distance.value })}
+          </span>
+        )}
+        {branch.lat !== null && branch.lng !== null && (
+          // Straight to the pin rather than to a search for the address:
+          // a Maldivian street address rarely geocodes, and the merchant
+          // dropped this pin themselves. A plain link, so the phone opens
+          // whichever maps app it prefers.
+          <a
+            href={`https://www.google.com/maps/search/?api=1&query=${branch.lat},${branch.lng}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+          >
+            <MapPin className="size-3" />
+            {t('store.viewOnMap')}
+          </a>
+        )}
+      </div>
     </li>
   );
+}
+
+
+/**
+ * How to reach the store: its own website, and the number a shopper rings.
+ *
+ * The support number is the store's if it set one and its contact number
+ * otherwise — resolved server-side, because "no separate support line" is
+ * not the same as "no phone". Renders nothing at all when the store has
+ * given neither, rather than an empty card promising contact it cannot
+ * provide.
+ */
+function StoreContact({ store }: { store: StoreDetail }) {
+  const { t } = useTranslation();
+
+  if (store.website_url === null && store.support_phone === null) {
+    return null;
+  }
+
+  return (
+    <Card className="p-5">
+      <h2 className="mb-3 text-base font-semibold text-mono">
+        {t('store.contactTitle')}
+      </h2>
+      <div className="flex flex-col gap-2.5">
+        {store.website_url !== null && (
+          <a
+            href={store.website_url}
+            target="_blank"
+            rel="noopener noreferrer nofollow"
+            className="inline-flex w-fit items-center gap-2 text-sm font-medium text-primary hover:underline"
+          >
+            <Globe className="size-4 shrink-0" />
+            {/* The bare host reads as a destination; the full URL with its
+                scheme and trailing path reads as a string. */}
+            <span dir="ltr" className="truncate">
+              {hostOf(store.website_url)}
+            </span>
+          </a>
+        )}
+        {store.support_phone !== null && (
+          <a
+            href={`tel:${store.support_phone}`}
+            className="inline-flex w-fit items-center gap-2 text-sm font-medium text-primary hover:underline"
+          >
+            <Phone className="size-4 shrink-0" />
+            <span dir="ltr">{store.support_phone}</span>
+          </a>
+        )}
+      </div>
+    </Card>
+  );
+}
+
+/** The host of a URL we already know is absolute, for a readable link. */
+function hostOf(url: string): string {
+  try {
+    return new URL(url).host.replace(/^www\./, '');
+  } catch {
+    return url;
+  }
 }
 
 /** Branch list; distances appear only after the explicit location gesture. */
@@ -525,6 +604,7 @@ function StoreContent({ store }: { store: StoreDetail }) {
       <HowToEarn store={store} />
       <CashbackDetails store={store} />
       <Branches branches={store.branches} />
+      <StoreContact store={store} />
       <StoreCta store={store} />
     </div>
   );

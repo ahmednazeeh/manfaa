@@ -6,7 +6,7 @@ import {
   type MerchantProfile,
   type MerchantSetupState,
 } from '@manfaa/api-client';
-import { LoaderCircle } from 'lucide-react';
+import { ExternalLink, LoaderCircle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { merchantChannelLabel, merchantStatusLabel } from '@/lib/labels';
@@ -19,6 +19,7 @@ import {
 } from '@/lib/queries';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { CopyButton } from '@/components/settlement/copy-button';
 import {
   Card,
   CardContent,
@@ -81,6 +82,21 @@ function ProfileForm({
   );
   const [contactEmail, setContactEmail] = useState(profile.contact_email ?? '');
   const [contactPhone, setContactPhone] = useState(profile.contact_phone ?? '');
+  const [supportPhone, setSupportPhone] = useState(profile.support_phone ?? '');
+
+  // The address a merchant hands to a customer. Kept whole rather than shown
+  // as a bare slug: a slug is a thing they have to be told how to use, and
+  // the point of the row is something they can paste into a WhatsApp
+  // message. Overridable per environment so a staging panel does not send
+  // people to production.
+  const storeUrl = `${
+    process.env.NEXT_PUBLIC_STOREFRONT_URL ?? 'https://manfaa.app'
+  }/store/${profile.slug}`;
+  const [supportSameAsContact, setSupportSameAsContact] = useState(
+    (profile.support_phone ?? '') === '',
+  );
+  const [websiteUrl, setWebsiteUrl] = useState(profile.website_url ?? '');
+  const [name, setName] = useState(profile.name);
   const [logoUrl, setLogoUrl] = useState(setup.values.logo_url);
 
   // Re-sync when a save comes back with the server's normalised values.
@@ -91,6 +107,10 @@ function ProfileForm({
     setEligibilityBasis(profile.eligibility_basis ?? '');
     setContactEmail(profile.contact_email ?? '');
     setContactPhone(profile.contact_phone ?? '');
+    setSupportPhone(profile.support_phone ?? '');
+    setSupportSameAsContact((profile.support_phone ?? '') === '');
+    setWebsiteUrl(profile.website_url ?? '');
+    setName(profile.name);
   }, [profile]);
 
   const categoryOptionLabel = (slug: string): string => {
@@ -135,7 +155,13 @@ function ProfileForm({
         eligibility_basis:
           eligibilityBasis.trim() === '' ? null : eligibilityBasis,
         contact_email: contactEmail.trim() === '' ? null : contactEmail.trim(),
+        name: name.trim(),
         contact_phone: contactPhone.trim() === '' ? null : contactPhone.trim(),
+        // Null, not a copy of the contact number — see the wizard.
+        support_phone: supportSameAsContact || supportPhone.trim() === ''
+          ? null
+          : supportPhone.trim(),
+        website_url: websiteUrl.trim() === '' ? null : websiteUrl.trim(),
       },
       {
         onSuccess: () => toast.success(t('settings.profileSaved')),
@@ -174,8 +200,18 @@ function ProfileForm({
           <span className="text-muted-foreground">
             {t('settings.publicLink')}
           </span>
-          <span className="text-mono" dir="ltr">
-            {profile.slug}
+          <span className="flex flex-wrap items-center gap-2">
+            <a
+              href={storeUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-mono inline-flex items-center gap-1.5 text-primary hover:underline"
+              dir="ltr"
+            >
+              {storeUrl.replace(/^https?:\/\//, '')}
+              <ExternalLink className="size-3.5 shrink-0" />
+            </a>
+            <CopyButton value={storeUrl} label={t('settings.copyStoreLink')} />
           </span>
           <div className="col-span-2 pt-1.5 text-xs text-muted-foreground">
             {t('settings.renameNote')}
@@ -205,6 +241,19 @@ function ProfileForm({
         </CardHeader>
         <CardContent className="flex flex-col gap-5">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+            <div className="flex flex-col gap-2.5">
+              <Label htmlFor="store-name">{t('settings.storeNameLabel')}</Label>
+              <Input
+                id="store-name"
+                value={name}
+                maxLength={120}
+                onChange={(event) => setName(event.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">
+                {t('settings.storeNameHint')}
+              </p>
+            </div>
+
             <div className="flex flex-col gap-2.5">
               <Label htmlFor="store-name-dv">
                 {t('settings.storeNameDvLabel')}
@@ -294,6 +343,42 @@ function ProfileForm({
                 value={contactPhone}
                 maxLength={32}
                 onChange={(event) => setContactPhone(event.target.value)}
+              />
+            </div>
+            <div className="flex flex-col gap-2.5">
+              <Label htmlFor="support-phone">
+                {t('setup.supportPhoneLabel')}
+              </Label>
+              <label className="inline-flex items-center gap-2 text-sm text-muted-foreground">
+                <input
+                  type="checkbox"
+                  className="size-4 rounded border-border"
+                  checked={supportSameAsContact}
+                  onChange={(event) =>
+                    setSupportSameAsContact(event.target.checked)
+                  }
+                />
+                {t('setup.supportSameAsContact')}
+              </label>
+              {!supportSameAsContact && (
+                <Input
+                  id="support-phone"
+                  dir="ltr"
+                  value={supportPhone}
+                  maxLength={32}
+                  onChange={(event) => setSupportPhone(event.target.value)}
+                />
+              )}
+            </div>
+            <div className="flex flex-col gap-2.5">
+              <Label htmlFor="website-url">{t('setup.websiteLabel')}</Label>
+              <Input
+                id="website-url"
+                dir="ltr"
+                value={websiteUrl}
+                maxLength={255}
+                placeholder="teaplus.mv"
+                onChange={(event) => setWebsiteUrl(event.target.value)}
               />
             </div>
           </div>

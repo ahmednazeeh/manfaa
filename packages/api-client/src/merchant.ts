@@ -977,6 +977,8 @@ export const MerchantProfileSchema = z.object({
   eligibility_basis: z.string().nullable(),
   contact_email: z.string().nullable(),
   contact_phone: z.string().nullable(),
+  support_phone: z.string().nullable().catch(null),
+  website_url: z.string().nullable().catch(null),
 });
 export type MerchantProfile = z.infer<typeof MerchantProfileSchema>;
 
@@ -991,6 +993,12 @@ export const UpdateMerchantProfileRequestSchema = z.object({
    * is a translation of the display name rather than the store's identity,
    * and nothing (the slug included) is derived from it.
    */
+  /**
+   * Both names are editable; the SLUG never follows either. It is the
+   * address on every link and QR code already in circulation, so a rebrand
+   * changes the words and leaves the door where it was.
+   */
+  name: z.string().min(2).max(120).optional(),
   name_dv: z.string().max(120).nullable().optional(),
   /**
    * An ACTIVE curated store-category slug (422 otherwise), or null — with
@@ -1003,6 +1011,10 @@ export const UpdateMerchantProfileRequestSchema = z.object({
   eligibility_basis: z.string().max(2000).nullable().optional(),
   contact_email: z.email().max(255).nullable().optional(),
   contact_phone: z.string().max(32).nullable().optional(),
+  /** The number shoppers ring; the panel offers "same as contact" as one tick. */
+  support_phone: z.string().max(32).nullable().optional(),
+  /** A bare domain is fine — the API adds https:// and validates the result. */
+  website_url: z.string().max(255).nullable().optional(),
 });
 export type UpdateMerchantProfileRequest = z.infer<
   typeof UpdateMerchantProfileRequestSchema

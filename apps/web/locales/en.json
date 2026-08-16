@@ -301,7 +301,9 @@
     "notFoundBody": "The link may be old, or the store may no longer offer cashback here. Browse every live store instead.",
     "browseStores": "Browse all stores",
     "ctaBody": "Join free and you'll earn {{rate}} back at {{name}} once the store confirms each purchase.",
-    "ctaSignedInBody": "You're all set — show your Manfaa code when you pay at {{name}}."
+    "ctaSignedInBody": "You're all set — show your Manfaa code when you pay at {{name}}.",
+    "viewOnMap": "View on map",
+    "contactTitle": "Contact the store"
   },
   "landing": {
     "dashboard": "Dashboard",

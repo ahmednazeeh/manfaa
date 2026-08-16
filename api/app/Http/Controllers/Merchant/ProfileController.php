@@ -19,12 +19,13 @@ use Illuminate\Validation\Rule;
  * The merchant profile: `profile.view` on the GET, `profile.edit` on the
  * PATCH — reading the store's own record is operational, rewriting its
  * public identity is not.
- * Deliberately excluded: `name` — renaming the business is an identity
- * change and stays admin-only; unknown keys are simply not validated in,
- * so a POSTed `name` is dropped on the floor. `name_dv` IS editable: it is
- * a translation of the display name rather than the identity, nothing is
- * derived from it (the slug comes from the Latin name), and the store is
- * the only party that knows how it spells itself in Thaana.
+ * Both names are editable — the store knows what it is called better than
+ * we do — but the SLUG never moves with them. It is the address on every
+ * shared link, QR code and printed card already in circulation, so a
+ * rebrand changes the words on the page and leaves the door where it was.
+ * That divergence is the point, not a defect: `/store/tea-plus` reading
+ * "Chai House" is a store that renamed, while a slug that followed the
+ * name would be a store nobody can find again.
  */
 class ProfileController extends Controller
 {
@@ -40,12 +41,18 @@ class ProfileController extends Controller
         $validated = $request->validate([
             // Curated categories only (§1 decision 2026-08-15) — see
             // categoryRule() for the one deliberate exception.
+            'name' => ['sometimes', 'string', 'min:2', 'max:120'],
             'name_dv' => ['sometimes', 'nullable', 'string', 'max:120'],
             'category' => ['sometimes', 'nullable', 'string', 'max:80', $this->categoryRule($merchant)],
             'channel' => ['sometimes', 'string', Rule::in(OnboardingService::CHANNELS)],
             'eligibility_basis' => ['sometimes', 'nullable', 'string', 'max:2000'],
             'contact_email' => ['sometimes', 'nullable', 'string', 'email', 'max:255'],
             'contact_phone' => ['sometimes', 'nullable', 'string', 'max:32'],
+            'support_phone' => ['sometimes', 'nullable', 'string', 'max:32'],
+            // A bare domain is what people type; normalising rather than
+            // refusing it is the difference between a working link and a
+            // store that gives up on the field.
+            'website_url' => ['sometimes', 'nullable', 'string', 'max:255'],
         ]);
 
         $merchant->fill($validated)->save();

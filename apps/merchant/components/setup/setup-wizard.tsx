@@ -231,6 +231,15 @@ function ProfileStep({
   const [contactPhone, setContactPhone] = useState(
     state.values.contact_phone ?? '',
   );
+  const [websiteUrl, setWebsiteUrl] = useState(state.values.website_url ?? '');
+  const [supportPhone, setSupportPhone] = useState(
+    state.values.support_phone ?? '',
+  );
+  // Ticked when the store has not set a distinct support line — which is the
+  // common case, and the state a fresh signup starts in.
+  const [supportSameAsContact, setSupportSameAsContact] = useState(
+    (state.values.support_phone ?? '') === '',
+  );
   const [categoryError, setCategoryError] = useState(false);
 
   const save = () => {
@@ -244,6 +253,13 @@ function ProfileStep({
         channel,
         contact_email: contactEmail.trim() === '' ? null : contactEmail.trim(),
         contact_phone: contactPhone.trim() === '' ? null : contactPhone.trim(),
+        // Same-as-contact is stored as NULL rather than as a copy: the
+        // storefront already falls back to the contact number, and a copy
+        // would silently go stale the day the contact number changes.
+        support_phone: supportSameAsContact || supportPhone.trim() === ''
+          ? null
+          : supportPhone.trim(),
+        website_url: websiteUrl.trim() === '' ? null : websiteUrl.trim(),
       },
       {
         onSuccess: onDone,
@@ -364,6 +380,50 @@ function ProfileStep({
           <p className="text-xs text-muted-foreground sm:col-span-2">
             {t('setup.contactHint')}
           </p>
+
+          <div className="flex flex-col gap-2.5 sm:col-span-2">
+            <Label htmlFor="setup-support-phone">
+              {t('setup.supportPhoneLabel')}
+            </Label>
+            <label className="inline-flex items-center gap-2 text-sm text-muted-foreground">
+              <input
+                type="checkbox"
+                className="size-4 rounded border-border"
+                checked={supportSameAsContact}
+                onChange={(event) =>
+                  setSupportSameAsContact(event.target.checked)
+                }
+              />
+              {t('setup.supportSameAsContact')}
+            </label>
+            {!supportSameAsContact && (
+              <Input
+                id="setup-support-phone"
+                dir="ltr"
+                maxLength={32}
+                value={supportPhone}
+                onChange={(event) => setSupportPhone(event.target.value)}
+              />
+            )}
+            <p className="text-xs text-muted-foreground">
+              {t('setup.supportPhoneHint')}
+            </p>
+          </div>
+
+          <div className="flex flex-col gap-2.5 sm:col-span-2">
+            <Label htmlFor="setup-website">{t('setup.websiteLabel')}</Label>
+            <Input
+              id="setup-website"
+              dir="ltr"
+              maxLength={255}
+              placeholder="teaplus.mv"
+              value={websiteUrl}
+              onChange={(event) => setWebsiteUrl(event.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">
+              {t('setup.websiteHint')}
+            </p>
+          </div>
         </div>
       </CardContent>
       <CardFooter className="justify-end">

@@ -357,6 +357,18 @@ export const StoreDetailSchema = z.object({
   promotion: StorePromotionSchema.nullable(),
   cashback_basis: z.string().nullable(),
   /**
+   * The number a SHOPPER rings. Falls back server-side to the store's
+   * contact number, so a store that never set a separate support line still
+   * shows one rather than nothing.
+   */
+  support_phone: z.string().nullable().catch(null),
+  /**
+   * The store's own website, already normalised to an absolute http(s) URL
+   * server-side — a bare domain in an href resolves against manfaa.app, and
+   * anything that is not http(s) is dropped rather than rendered.
+   */
+  website_url: z.string().nullable().catch(null),
+  /**
    * The store's ACTIVE product categories, merchant sort order. Empty for
    * stores without category overrides — "everything else" always earns
    * `standing_cashback_rate_percent` and is NOT a row here; the UI appends

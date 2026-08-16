@@ -229,6 +229,8 @@ export const MerchantSetupStateSchema = z.object({
     eligibility_basis: z.string().nullable(),
     contact_email: z.string().nullable(),
     contact_phone: z.string().nullable(),
+    support_phone: z.string().nullable().catch(null),
+    website_url: z.string().nullable().catch(null),
     /**
      * The store's pin — its lowest-id branch, which is the primary one.
      * Null while the store has no branch at all; a branch added from
@@ -306,6 +308,10 @@ export const UpdateMerchantSetupProfileRequestSchema = z.object({
   eligibility_basis: z.string().max(2000).nullable().optional(),
   contact_email: z.email().max(255).nullable().optional(),
   contact_phone: z.string().max(32).nullable().optional(),
+  /** The number shoppers ring; the panel offers "same as contact" as one tick. */
+  support_phone: z.string().max(32).nullable().optional(),
+  /** A bare domain is fine — the API adds https:// and validates the result. */
+  website_url: z.string().max(255).nullable().optional(),
 });
 export type UpdateMerchantSetupProfileRequest = z.infer<
   typeof UpdateMerchantSetupProfileRequestSchema

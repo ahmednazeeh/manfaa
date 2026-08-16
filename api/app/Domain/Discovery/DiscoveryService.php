@@ -71,7 +71,10 @@ final class DiscoveryService
     public const string CACHE_KEY = 'discovery:entries:v8';
 
     // v4: store detail gained category_rates (Task #25).
-    public const string STORE_CACHE_PREFIX = 'discovery:store:v4:';
+    // v5: it gained the store's support number and website — a v4 value
+    // would render the page with neither, so the bump is what makes the
+    // new links appear rather than waiting out the TTL per slug.
+    public const string STORE_CACHE_PREFIX = 'discovery:store:v5:';
 
     public const int DIRECTORY_DEFAULT_PER_PAGE = 12;
 
@@ -666,7 +669,7 @@ final class DiscoveryService
         $merchant = Merchant::query()
             ->where('status', 'active')
             ->where('slug', $slug)
-            ->first(['id', 'name', 'name_dv', 'slug', 'category', 'logo_path', 'featured', 'channel', 'eligibility_basis', 'created_at']);
+            ->first(['id', 'name', 'name_dv', 'slug', 'category', 'logo_path', 'featured', 'channel', 'eligibility_basis', 'contact_phone', 'support_phone', 'website_url', 'created_at']);
 
         if ($merchant === null) {
             return null;
@@ -744,6 +747,12 @@ final class DiscoveryService
             // The merchant's own eligibility wording, verbatim (§11: shown to
             // customers, never used in computation). Null when unset.
             'cashback_basis' => $merchant->eligibility_basis,
+            // How a shopper reaches the store. The support number falls back
+            // to the contact number so the storefront always has one to show
+            // — a store that never set a separate line is not a store with
+            // no phone.
+            'support_phone' => $merchant->support_phone ?? $merchant->contact_phone,
+            'website_url' => self::normaliseUrl($merchant->website_url),
             // "Everything else" earns the standing rate above; excluded
             // categories earn nothing, even during promotions.
             'category_rates' => $categoryRates,
@@ -771,6 +780,29 @@ final class DiscoveryService
      * store is active, owner/admin-only otherwise (MerchantLogo). Null when
      * no logo is set; the raw storage path never leaves the API.
      */
+    /**
+     * A stored website as a link a browser will follow. Merchants type
+     * "teaplus.mv" far more often than they type a scheme, and a bare
+     * domain in an href resolves against our own host — so the link would
+     * quietly point at manfaa.app/teaplus.mv. Anything that is not
+     * http(s) after that is dropped rather than rendered: javascript: in a
+     * merchant-supplied field is a stored XSS on a public page.
+     */
+    private static function normaliseUrl(?string $url): ?string
+    {
+        $trimmed = trim((string) $url);
+
+        if ($trimmed === '') {
+            return null;
+        }
+
+        if (! preg_match('#^https?://#i', $trimmed)) {
+            $trimmed = 'https://'.$trimmed;
+        }
+
+        return filter_var($trimmed, FILTER_VALIDATE_URL) === false ? null : $trimmed;
+    }
+
     private function logoUrl(string $slug, ?string $logoPath): ?string
     {
         return MerchantLogo::url($slug, $logoPath);

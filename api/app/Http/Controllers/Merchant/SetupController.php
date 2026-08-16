@@ -45,6 +45,11 @@ class SetupController extends Controller
             'eligibility_basis' => ['sometimes', 'nullable', 'string', 'max:2000'],
             'contact_email' => ['sometimes', 'nullable', 'string', 'email', 'max:255'],
             'contact_phone' => ['sometimes', 'nullable', 'string', 'max:32'],
+            'support_phone' => ['sometimes', 'nullable', 'string', 'max:32'],
+            // A bare domain is what people type; normalising rather than
+            // refusing it is the difference between a working link and a
+            // store that gives up on the field.
+            'website_url' => ['sometimes', 'nullable', 'string', 'max:255'],
         ]);
 
         $merchant = $this->merchant($request);

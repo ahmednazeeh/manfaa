@@ -12,8 +12,9 @@ use Illuminate\Http\Resources\Json\JsonResource;
  *
  * Purpose: matching INBOUND settlement payments (the admin matching queue
  * verifies the payer against this identity) and future wallet withdrawals.
- * Manfaa does not pay merchants — money flows merchant -> platform
- * (cashback + fee), so this is never a payout destination.
+ * Used in both directions: matching the merchant -> platform settlement
+ * transfers (the ordinary flow, cashback + fee), and as the destination for
+ * anything the platform returns — a refund, an overpayment, a correction.
  *
  * @mixin Merchant
  */

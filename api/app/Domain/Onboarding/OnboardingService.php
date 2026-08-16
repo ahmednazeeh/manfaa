@@ -71,6 +71,8 @@ final class OnboardingService
                 'eligibility_basis' => $merchant->eligibility_basis,
                 'contact_email' => $merchant->contact_email,
                 'contact_phone' => $merchant->contact_phone,
+                'support_phone' => $merchant->support_phone,
+                'website_url' => $merchant->website_url,
                 // The store's pin, or null while it has no branch at all. A
                 // branch added from settings without coordinates answers with
                 // its lat/lng null — a branch on file is not a pin.

@@ -93,7 +93,14 @@ final readonly class SettlementPreview
         $discount = $this->discounts->evaluate($merchant, $selected, $now)->cappedTo($dueBeforeDiscount);
         $due = $dueBeforeDiscount - $discount->discountLaari;
 
-        $account = $this->bankAccounts->activePrimaryDetails();
+        $accounts = $this->bankAccounts->activeAccounts();
+        // The default to show, and the answer to "is anything configured".
+        // Keyed on the LIST, not on a primary flag: with an account per bank
+        // and the merchant choosing, an estate where nobody happened to tick
+        // primary is fully configured — and telling that merchant to contact
+        // Manfaa while two accounts sit there would be a lie the platform
+        // told itself.
+        $account = $accounts === [] ? null : ($accounts[0] ?? null);
         $selectedIds = $this->ids($selected);
 
         return [
@@ -141,7 +148,7 @@ final readonly class SettlementPreview
                 // so the receipt can be reconciled against the right
                 // statement rather than against whichever account happened to
                 // be primary when the screen loaded.
-                'bank_accounts' => $this->bankAccounts->activeAccounts(),
+                'bank_accounts' => $accounts,
                 'needs_configuration' => $account === null,
             ],
         ];

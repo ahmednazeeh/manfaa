@@ -56,7 +56,15 @@ export function PaymentInstructions({
   const chosen =
     choices.find((candidate) => candidate.id === selectedAccountId) ?? null;
 
-  const account = needsConfiguration ? null : (chosen ?? bankAccount);
+  // With a real choice on the table, the details stay hidden until it is
+  // made. Showing one bank's account number under an unanswered question is
+  // how somebody copies it, pays, and only then notices the other option —
+  // and a transfer to the wrong bank is a fee and a day they cannot undo.
+  const account = needsConfiguration
+    ? null
+    : choosable
+      ? chosen
+      : (chosen ?? bankAccount);
 
   return (
     <div className="flex flex-col gap-5">
@@ -94,7 +102,7 @@ export function PaymentInstructions({
         </div>
       </div>
 
-      {account !== null ? (
+      {account !== null || (choosable && !needsConfiguration) ? (
         <div className="rounded-md border border-border p-4">
           <div className="mb-3 text-xs uppercase text-muted-foreground">
             {t('settlement.transferTo')}
@@ -139,6 +147,11 @@ export function PaymentInstructions({
               </span>
             </div>
           )}
+          {account === null ? (
+            <p className="text-sm text-muted-foreground">
+              {t('settlement.chooseBankFirst')}
+            </p>
+          ) : (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <div className="flex flex-col gap-1">
               <span className="text-xs text-muted-foreground">
@@ -187,6 +200,7 @@ export function PaymentInstructions({
               </div>
             </div>
           </div>
+          )}
         </div>
       ) : (
         <Alert variant="warning" appearance="light">

@@ -134,8 +134,11 @@ it('embeds the active primary account in merchant settlement payment instruction
         ->assertJsonPath('data.payment_instructions.bank_account.account_name', 'Manfaa Pvt Ltd');
 });
 
-it('flags needs_configuration with a null account when no active primary exists — details are never invented', function () {
-    // An inactive primary and an active non-primary must both be ignored.
+it('treats any ACTIVE account as configured, primary flag or not', function () {
+    // Once the platform banks with more than one bank and the merchant picks
+    // between them, "no primary" stopped meaning "nothing set up". A store
+    // told to contact Manfaa while two usable accounts sit there is the
+    // platform lying to itself.
     app(BankAccountService::class)->create([
         'bank_name' => 'bml', 'account_no' => '1', 'account_name' => 'Old',
         'is_primary' => true, 'active' => false,
@@ -143,6 +146,23 @@ it('flags needs_configuration with a null account when no active primary exists 
     app(BankAccountService::class)->create([
         'bank_name' => 'mib', 'account_no' => '2', 'account_name' => 'Side',
         'is_primary' => false,
+    ]);
+
+    [$user, $settlement] = settlementForMerchantView();
+    $this->actingAs($user, 'merchant');
+
+    $this->getJson("/api/merchant/settlements/{$settlement->id}")
+        ->assertOk()
+        // The inactive one is still ignored — deactivated means gone.
+        ->assertJsonPath('data.payment_instructions.needs_configuration', false)
+        ->assertJsonPath('data.payment_instructions.bank_account.account_no', '2')
+        ->assertJsonCount(1, 'data.payment_instructions.bank_accounts');
+});
+
+it('flags needs_configuration only when NO active account exists at all', function () {
+    app(BankAccountService::class)->create([
+        'bank_name' => 'bml', 'account_no' => '1', 'account_name' => 'Old',
+        'is_primary' => true, 'active' => false,
     ]);
 
     [$user, $settlement] = settlementForMerchantView();

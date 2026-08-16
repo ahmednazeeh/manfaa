@@ -117,14 +117,18 @@ it('lets the owner set the Dhivehi name later and drops the storefront cache', f
         ->assertJsonPath('data.featured.0.name_dv', 'ކާނު މާޓް');
 });
 
-it('never lets the profile rename the store itself', function () {
+it('renames the store in both scripts while its slug stays put', function () {
     $merchant = listedMerchant(['name' => 'Kaanu Mart']);
     $owner = MerchantUser::factory()->owner()->create(['merchant_id' => $merchant->id]);
+    $slugBefore = $merchant->slug;
 
     $this->actingAs($owner, 'merchant')
         ->patchJson('/api/merchant/profile', ['name' => 'Something Else', 'name_dv' => 'ކާނު'])
         ->assertOk();
 
-    expect($merchant->refresh()->name)->toBe('Kaanu Mart')
-        ->and($merchant->name_dv)->toBe('ކާނު');
+    expect($merchant->refresh()->name)->toBe('Something Else')
+        ->and($merchant->name_dv)->toBe('ކާނު')
+        // The Thaana name never fed the slug and the Latin one no longer
+        // does either — a rebrand must not strand a printed QR code.
+        ->and($merchant->slug)->toBe($slugBefore);
 });

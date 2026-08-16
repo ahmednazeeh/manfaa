@@ -33,6 +33,7 @@ import {
   CardTable,
   CardTitle,
 } from '@/components/ui/card';
+import { BankLabel } from '@/components/admin/bank-select';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   Table,
@@ -345,6 +346,30 @@ export default function SettlementDetailPage() {
           />
         ) : null}
       </div>
+
+      {/* WHICH of our accounts the merchant says they paid. Without it a
+          match means opening both bank statements and guessing; with it the
+          reviewer knows which one to open. Absent on batches created before
+          the merchant was offered the choice. */}
+      {settlement.payment_instructions.bank_account !== null && (
+        <Card className="mb-5">
+          <CardHeader>
+            <CardTitle>Paid into</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-wrap items-center gap-x-6 gap-y-2 py-4">
+            <BankLabel
+              bank={settlement.payment_instructions.bank_account.bank_name}
+              className="text-sm font-medium"
+            />
+            <span className="text-sm" dir="ltr">
+              {settlement.payment_instructions.bank_account.account_no}
+            </span>
+            <span className="text-sm text-muted-foreground">
+              {settlement.payment_instructions.bank_account.account_name}
+            </span>
+          </CardContent>
+        </Card>
+      )}
 
       <Card className="mb-5">
         <CardHeader>

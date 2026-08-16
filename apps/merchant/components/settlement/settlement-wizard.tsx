@@ -537,12 +537,13 @@ function ReviewStep({
                 bankAccount={data.payment_instructions.bank_account}
                 bankAccounts={data.payment_instructions.bank_accounts}
                 selectedAccountId={
+                  // Preselected ONLY when there is nothing to choose. With
+                  // two banks on offer a default is a decision made for
+                  // someone about where their money goes.
                   destinationId ??
-                  data.payment_instructions.bank_accounts.find(
-                    (candidate) => candidate.is_primary,
-                  )?.id ??
-                  data.payment_instructions.bank_accounts[0]?.id ??
-                  null
+                  (data.payment_instructions.bank_accounts.length === 1
+                    ? data.payment_instructions.bank_accounts[0].id
+                    : null)
                 }
                 onSelectAccount={onSelectDestination}
                 needsConfiguration={

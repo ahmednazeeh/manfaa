@@ -123,10 +123,15 @@ class SettlementResource extends JsonResource
     }
 
     /**
-     * Where to actually send the transfer: the platform's active primary
-     * bank account (admin-managed, cached briefly) alongside the amount and
-     * the reference to quote. When no account is configured the details are
-     * null with needs_configuration set — never invented.
+     * Where the transfer went, or should go: the account the merchant CHOSE
+     * when they submitted, alongside the amount and the reference to quote.
+     * Every active account rides along so a panel can name them all.
+     *
+     * The fallback is only for batches that predate the choice. Quoting
+     * today's default at a settlement paid into a different account is how a
+     * reconciliation goes looking at the wrong statement. When nothing is
+     * configured at all the details are null with needs_configuration set —
+     * never invented.
      *
      * @return array<string, mixed>
      */
@@ -134,17 +139,13 @@ class SettlementResource extends JsonResource
     {
         $service = app(BankAccountService::class);
 
-        // The account this batch was actually sent to, when the merchant
-        // chose one. Falling back to the current primary only for batches
-        // that predate the choice: quoting today's primary at a settlement
-        // paid into a different account is how a reconciliation goes looking
-        // at the wrong statement.
         $chosen = $this->platform_bank_account_id === null
             ? null
             : collect($service->activeAccounts())
                 ->firstWhere('id', $this->platform_bank_account_id);
 
-        $account = $chosen ?? $service->activePrimaryDetails();
+        $accounts = $service->activeAccounts();
+        $account = $chosen ?? ($accounts[0] ?? null);
 
         return [
             'reference' => $this->reference,
@@ -155,7 +156,7 @@ class SettlementResource extends JsonResource
                 'account_no' => $account['account_no'],
                 'account_name' => $account['account_name'],
             ],
-            'bank_accounts' => $service->activeAccounts(),
+            'bank_accounts' => $accounts,
             'needs_configuration' => $account === null,
         ];
     }

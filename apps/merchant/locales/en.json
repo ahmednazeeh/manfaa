@@ -173,7 +173,12 @@
     "rejectedTitle": "Your store needs changes",
     "rejectedBody": "Manfaa reviewed your store and sent it back with a note:",
     "editAndResubmit": "Edit and resubmit",
-    "notEditable": "The setup can't be changed right now — refresh to see the latest status."
+    "notEditable": "The setup can't be changed right now — refresh to see the latest status.",
+    "supportPhoneLabel": "Customer support number",
+    "supportSameAsContact": "Same as the contact number above",
+    "supportPhoneHint": "This is the number shown to shoppers on your store page. Your contact number is how Manfaa reaches you.",
+    "websiteLabel": "Website (optional)",
+    "websiteHint": "Shown on your store page. Just the address is fine — teaplus.mv."
   },
   "roles": {
     "title": "Roles",
@@ -342,7 +347,7 @@
     "identityTitle": "Business identity",
     "storeName": "Store name",
     "publicLink": "Public link",
-    "renameNote": "Renaming the business is an identity change — contact Manfaa to update it.",
+    "renameNote": "Renaming the store never changes its link — anything you have already shared keeps working.",
     "logoTitle": "Store logo",
     "logoSubtitle": "Shown on your public store page and discovery cards",
     "publicProfileTitle": "Public profile",
@@ -370,7 +375,10 @@
     },
     "storeNameDvLabel": "Store name in Dhivehi",
     "storeNameDvPlaceholder": "ފިހާރައިގެ ނަން",
-    "storeNameDvHint": "Shown to shoppers reading Manfaa in Dhivehi. Leave it blank and they see your name above. Your public link never changes."
+    "storeNameDvHint": "Shown to shoppers reading Manfaa in Dhivehi. Leave it blank and they see your name above. Your public link never changes.",
+    "copyStoreLink": "Copy store link",
+    "storeNameLabel": "Store name",
+    "storeNameHint": "Your public name. Your store link never changes with it, so anything already shared keeps working."
   },
   "branches": {
     "title": "Branches",
@@ -728,7 +736,8 @@
     "settledBody": "Settlement {{reference}} is closed and funded from your wallet. Nothing else is needed from you.",
     "stepTransfer": "Transfer & confirm",
     "chooseBank": "Choose where to send it",
-    "chooseBankHint": "Sending to your own bank is usually free and same-day."
+    "chooseBankHint": "Sending to your own bank is usually free and same-day.",
+    "chooseBankFirst": "Choose a bank above to see where to send it."
   },
   "credit": {
     "backdatedTitle": "Backdated sale — this credit is final",

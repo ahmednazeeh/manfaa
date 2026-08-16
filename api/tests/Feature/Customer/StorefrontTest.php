@@ -286,7 +286,7 @@ it('serves the full public store page for an active merchant', function () {
 
     expect(array_keys($data))->toBe([
         'name', 'name_dv', 'slug', 'category', 'logo_url', 'channel', 'featured',
-        'cashback_rate_percent', 'standing_cashback_rate_percent', 'promotion', 'cashback_basis', 'category_rates', 'branches', 'joined',
+        'cashback_rate_percent', 'standing_cashback_rate_percent', 'promotion', 'cashback_basis', 'support_phone', 'website_url', 'category_rates', 'branches', 'joined',
     ]);
 
     // No product categories defined — the rates table is an empty list
@@ -496,4 +496,42 @@ it('ignores the internal header entirely when no token is configured', function 
 
     $this->getJson('/api/discover/merchants', ['X-Discovery-Internal' => ''])->assertStatus(429);
     $this->getJson('/api/discover/merchants', ['X-Discovery-Internal' => 'anything'])->assertStatus(429);
+});
+
+it('publishes the store\'s support number and website, normalising a bare domain', function () {
+    $merchant = storefrontMerchant([
+        'contact_phone' => '+9603001111',
+        'support_phone' => '+9607779999',
+        // What a merchant actually types. A bare domain in an href resolves
+        // against manfaa.app, so the API is what must fix it.
+        'website_url' => 'teaplus.mv',
+    ]);
+
+    $data = $this->getJson("/api/discover/merchants/{$merchant->slug}")
+        ->assertOk()
+        ->json('data');
+
+    expect($data['support_phone'])->toBe('+9607779999')
+        ->and($data['website_url'])->toBe('https://teaplus.mv');
+});
+
+it('falls back to the contact number when no support line is set', function () {
+    // "No separate support line" is not "no phone" — the storefront still
+    // has a number to show, which is the whole point of the fallback.
+    $merchant = storefrontMerchant([
+        'contact_phone' => '+9603001111',
+        'support_phone' => null,
+    ]);
+
+    expect($this->getJson("/api/discover/merchants/{$merchant->slug}")->json('data.support_phone'))
+        ->toBe('+9603001111');
+});
+
+it('drops a website that is not http(s) rather than rendering it', function () {
+    // A javascript: URL in a merchant-supplied field is a stored XSS on a
+    // public page, so the refusal is silent absence, not a broken link.
+    $merchant = storefrontMerchant(['website_url' => 'javascript:alert(1)']);
+
+    expect($this->getJson("/api/discover/merchants/{$merchant->slug}")->json('data.website_url'))
+        ->toBeNull();
 });

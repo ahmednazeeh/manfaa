@@ -68,11 +68,16 @@ it('clears nullable profile fields explicitly', function () {
         ->assertJsonPath('data.category', null);
 });
 
-it('never lets the profile rename the business — identity is admin-only', function () {
+it('renames the business without moving its slug', function () {
+    $slugBefore = $this->merchant->slug;
+
     $this->patchJson('/api/merchant/profile', ['name' => 'Sneaky Rebrand', 'category' => 'cafe'])
         ->assertOk();
 
-    expect($this->merchant->refresh()->name)->toBe('Original Name');
+    // The name is the store's to change; the slug is not, because it is the
+    // address already printed on QR codes and shared in messages.
+    expect($this->merchant->refresh()->name)->toBe('Sneaky Rebrand')
+        ->and($this->merchant->slug)->toBe($slugBefore);
 });
 
 it('drops the discovery read model so the storefront never serves a stale card', function () {
@@ -219,4 +224,20 @@ it('caps the validation window at the platform-governed bound — the §11 stale
         ->assertJsonPath('data.validation_window_max_days', 10);
 
     $this->patchJson('/api/merchant/preferences', ['validation_window_days' => 11])->assertUnprocessable();
+});
+
+it('renames the store without moving its link', function () {
+    // The slug is the address on every QR code and shared link already in
+    // circulation. A rebrand changes the words on the page; moving the door
+    // would strand everyone holding the old one.
+    $slugBefore = $this->merchant->slug;
+
+    $this->patchJson('/api/merchant/profile', ['name' => 'Chai House'])
+        ->assertOk()
+        ->assertJsonPath('data.name', 'Chai House');
+
+    $merchant = $this->merchant->refresh();
+
+    expect($merchant->name)->toBe('Chai House')
+        ->and($merchant->slug)->toBe($slugBefore);
 });

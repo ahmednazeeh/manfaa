@@ -31,10 +31,14 @@ import {
 } from '@/components/app-layout/toolbar';
 
 /**
- * The merchant's own bank identity — used to MATCH the transfers they send
- * us against their settlements. Money flows merchant → Manfaa only; this is
- * never a payout destination. There is no read endpoint, so the form is
- * write-only: all three fields are saved together as one identity.
+ * The merchant's own bank identity, used in both directions: to MATCH the
+ * settlement transfers they send us, and as the destination for anything
+ * Manfaa owes them back — a refund, an overpayment returned, a correction.
+ * Ordinary flow is merchant → Manfaa, but "only" would be a promise the
+ * platform breaks the first time it returns money.
+ *
+ * There is no read endpoint, so the form is write-only: all three fields
+ * are saved together as one identity.
  */
 export default function BankAccountSettingsPage() {
   const updateBankAccount = useUpdateBankAccount();
@@ -84,7 +88,7 @@ export default function BankAccountSettingsPage() {
         <ToolbarHeading>
           <ToolbarPageTitle>Bank account</ToolbarPageTitle>
           <ToolbarDescription>
-            The account you send settlement transfers from
+            The account you settle from, and the one we refund to
           </ToolbarDescription>
         </ToolbarHeading>
       </Toolbar>
@@ -95,10 +99,11 @@ export default function BankAccountSettingsPage() {
             <Info />
           </AlertIcon>
           <AlertContent>
-            <AlertTitle>For payment matching only</AlertTitle>
+            <AlertTitle>How we use these details</AlertTitle>
             <AlertDescription>
-              We use these details to recognise your incoming settlement
-              transfers. Manfaa does not send payments to this account.
+              We use them to recognise the settlement transfers you send us,
+              and to send you anything we owe back — a refund, an
+              overpayment, or a correction. Keep them current.
             </AlertDescription>
           </AlertContent>
         </Alert>
