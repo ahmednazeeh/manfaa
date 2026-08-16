@@ -1,4 +1,5 @@
 import { format, parseISO } from 'date-fns';
+import i18n from 'i18next';
 
 /**
  * Display-only formatting helpers. Money arithmetic stays in integer laari
@@ -46,16 +47,74 @@ export function maskAccountNo(accountNo: string): string {
   return ltrIsolate(`•••• ${tail}`);
 }
 
-/** "2026-08-14" or ISO 8601 -> "14 Aug 2026". */
-export function formatDate(value: string): string {
-  return format(parseISO(value), 'd MMM yyyy');
+/**
+ * Dhivehi month names. date-fns ships no `dv` locale, and there is no
+ * Intl data for it either — every runtime falls back to English — so the
+ * twelve names live here.
+ *
+ * Numerals stay Latin: Thaana defines no digits of its own and Maldivian
+ * dates are written with Latin figures everywhere, from a bank statement
+ * to a newspaper. Only the month is translated.
+ */
+const MONTHS_DV = [
+  'ޖެނުއަރީ',
+  'ފެބްރުއަރީ',
+  'މާޗް',
+  'އެޕްރީލް',
+  'މެއި',
+  'ޖޫން',
+  'ޖުލައި',
+  'އޮގަސްޓް',
+  'ސެޕްޓެމްބަރު',
+  'އޮކްޓޫބަރު',
+  'ނޮވެމްބަރު',
+  'ޑިސެމްބަރު',
+] as const;
+
+/**
+ * True when the app is currently in Dhivehi.
+ *
+ * Read off the i18next singleton rather than passed in. These formatters
+ * are called from 22 places, several of them plain helpers rather than
+ * components, and a language argument threaded through all of them is a
+ * language argument that one call site forgets — printing an English month
+ * inside a Dhivehi sentence, which is exactly the bug being fixed. The
+ * singleton is the same instance useTranslation() reads, so the two can
+ * never disagree.
+ *
+ * Re-render is not a concern: switching language re-renders the tree
+ * through react-i18next, and these run during that render.
+ */
+function inDhivehi(): boolean {
+  return i18n.language?.startsWith('dv') ?? false;
 }
 
-/** Machine month "2026-03" -> "March 2026" (same date-fns styling as
- *  formatDate; the surrounding sentence is composed via i18n). */
-export function formatMonthYear(value: string): string {
-  return format(parseISO(`${value}-01`), 'MMMM yyyy');
+/** "2026-08-14" or ISO 8601 -> "14 Aug 2026", or the Dhivehi month. */
+export function formatDate(value: string): string {
+  const date = parseISO(value);
+
+  if (inDhivehi()) {
+    // Day and year keep their Latin figures; the whole run is isolated so
+    // the bidi algorithm cannot reorder "14" and "2026" around the month.
+    return ltrIsolate(
+      `${date.getDate()} ${MONTHS_DV[date.getMonth()]} ${date.getFullYear()}`,
+    );
+  }
+
+  return format(date, 'd MMM yyyy');
 }
+
+/** Machine month "2026-03" -> "March 2026", or the Dhivehi month. */
+export function formatMonthYear(value: string): string {
+  const date = parseISO(`${value}-01`);
+
+  if (inDhivehi()) {
+    return ltrIsolate(`${MONTHS_DV[date.getMonth()]} ${date.getFullYear()}`);
+  }
+
+  return format(date, 'MMMM yyyy');
+}
+
 
 /** Metres -> { km: "1.2" } or { m: 450 } for the distance strings. */
 export function splitDistance(

@@ -118,7 +118,10 @@ export default function DashboardPage() {
                     {t('dashboard.yourCode')}
                   </span>
                   <span
-                    className="text-3xl font-semibold tracking-[0.2em] text-mono tabular-nums"
+                    // -me cancels the trailing letter-space, which would
+                    // otherwise widen the box past the glyphs and leave the
+                    // centred code sitting off to one side.
+                    className="-me-[0.2em] text-3xl font-semibold tracking-[0.2em] text-mono tabular-nums"
                     dir="ltr"
                   >
                     {me.customer_code}

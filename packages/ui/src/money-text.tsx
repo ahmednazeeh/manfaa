@@ -160,7 +160,22 @@ export function MoneyText({
       className={['tabular-nums', className].filter(Boolean).join(' ')}
       {...props}
     >
-      {formatMoney(laari, active)}
+      {active.placement === 'after' ? (
+        <>
+          {/* The FIGURE is the message; the unit is a label on it. At one
+              size they compete, and ރުފިޔާ — five Thaana letters with fili
+              above and below — reads visibly larger beside four digits even
+              though both are set at the same em. Stepping the word down
+              settles it, and matches how money is set in print here.
+              Composed as elements rather than in formatMoney, because that
+              returns a plain string for interpolation into sentences where
+              no markup can reach. */}
+          <span>{formatMoney(laari, { ...active, label: '' }).trimEnd()}</span>{' '}
+          <span className="text-[0.82em]">{active.label}</span>
+        </>
+      ) : (
+        formatMoney(laari, active)
+      )}
     </span>
   );
 }

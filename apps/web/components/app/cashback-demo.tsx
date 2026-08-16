@@ -105,7 +105,11 @@ export function CashbackDemo({ className }: { className?: string }) {
             </span>
             <span
               dir="ltr"
-              className="font-mono text-lg font-semibold tracking-[0.3em] text-mono"
+              // -me-[0.3em] cancels the trailing letter-space. CSS adds the
+              // tracking AFTER every character including the last, so the
+              // box is wider than the glyphs and centring it leaves the
+              // digits sitting visibly off to one side.
+              className="font-mono -me-[0.3em] text-lg font-semibold tracking-[0.3em] text-mono"
             >
               482917
             </span>
