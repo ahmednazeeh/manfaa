@@ -142,7 +142,7 @@
     "currentAccount": "Current account",
     "noAccountYet": "No payout account yet. Add one below so we can pay your cashback.",
     "bankLabel": "Bank",
-    "bankPlaceholder": "e.g. Bank of Maldives",
+    "bankPlaceholder": "Choose your bank",
     "bankRequired": "Enter the bank name.",
     "accountNoLabel": "Account number",
     "accountNoPlaceholder": "Digits only",
