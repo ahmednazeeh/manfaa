@@ -93,9 +93,9 @@ html[lang='dv'] .font-display {
 
 /*
  * TEMPORARY (2026-08-16): a display face for the Dhivehi landing hero,
- * while the owner compares candidates. Faagathi Dheli is loaded alongside
- * DAM Kalhi so switching between them is one line — the `.font-dv-display`
- * rule below — and needs no component change.
+ * while the owner compares candidates. Faagathi Dheli, DAM Kalhi and MV
+ * Waheed are all loaded, so switching between them is one line — the
+ * `.font-dv-display` rule below — and needs no component change.
  *
  * To remove entirely: delete both @font-face blocks and that rule, then
  * drop the class from the hero <h1> in apps/web/app/page.tsx. Nothing else
@@ -104,6 +104,14 @@ html[lang='dv'] .font-display {
 @font-face {
   font-family: 'Faagathi Dheli';
   src: url('../fonts/faagathi.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'MV Waheed';
+  src: url('../fonts/mv-waheed.woff2') format('woff2');
   font-weight: 400;
   font-style: normal;
   font-display: swap;
@@ -150,11 +158,11 @@ html[lang='dv'] body {
  * Dhivehi: the Latin headline keeps its own display face, so one class can
  * sit on the element for both languages.
  *
- * THE CANDIDATE UNDER TRIAL IS THE FIRST NAME HERE. Swap it for
- * 'Faagathi Dheli' to go back; both faces are already loaded.
+ * THE CANDIDATE UNDER TRIAL IS THE FIRST NAME HERE. The alternatives are
+ * 'DAM Kalhi' and 'Faagathi Dheli'; all three are loaded.
  */
 html[lang='dv'] .font-dv-display {
-  font-family: 'DAM Kalhi', 'Faruma', 'Noto Sans Thaana', sans-serif;
+  font-family: 'MV Waheed', 'Faruma', 'Noto Sans Thaana', sans-serif;
 }
 
 /*
