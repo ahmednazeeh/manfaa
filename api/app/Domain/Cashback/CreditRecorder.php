@@ -327,6 +327,24 @@ final readonly class CreditRecorder
                         'auto_validation_window',
                         stampReasonOnRow: false,
                     );
+
+                    // A window of ZERO means there is no window. The sweeper
+                    // would release this row on its very next pass — its
+                    // predicate is `occurred_at + 0 days <= now`, true the
+                    // instant the sale lands — but it runs hourly, so the
+                    // store would watch a sale it can never refund sit in the
+                    // refund window for up to an hour, and the customer would
+                    // see a Pending that was never pending on anything.
+                    //
+                    // Doing it here is not a shortcut past the state machine:
+                    // it is the same two events the sweeper writes, in the
+                    // same order, with the same actor and no reason — the
+                    // history is indistinguishable from a sweep that happened
+                    // to run a second later, which is exactly what it stands
+                    // in for.
+                    if ((int) $merchant->validation_window_days === 0) {
+                        $this->transitions->makePayable($transaction, Actor::system());
+                    }
                 }
 
                 return $transaction;

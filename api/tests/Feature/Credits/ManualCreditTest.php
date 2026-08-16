@@ -295,3 +295,36 @@ it('returns 404 for an unknown customer code', function () {
 
     expect(Transaction::query()->count())->toBe(0);
 });
+
+it('makes a sale payable at once when the store keeps no validation window', function () {
+    // A window of zero means there is no window. The sweeper's predicate
+    // (occurred_at + 0 days <= now) is true the instant the sale lands, so
+    // it would release this on its next pass — but it runs hourly, and a
+    // store that cannot refund should not watch an hour of "refund window"
+    // it does not have.
+    $this->merchant->forceFill(['validation_window_days' => 0])->save();
+
+    $this->postJson('/api/merchant/credits', manualCreditPayload())
+        ->assertCreated()
+        ->assertJsonPath('data.state', 'payable_unfunded');
+
+    $transaction = Transaction::query()->sole();
+
+    // The 15-day settlement clock starts here, not at some later sweep.
+    expect($transaction->clock_start_at)->not->toBeNull()
+        ->and($transaction->due_at)->not->toBeNull();
+
+    // The history is the same two hops a sweep would have written — the
+    // state machine is not short-circuited, only run on time.
+    $states = $transaction->events()->orderBy('id')->pluck('to_state')->all();
+    expect($states)->toBe(['tracked', 'awaiting_validation', 'payable_unfunded']);
+});
+
+it('still holds a sale for a store that keeps a window', function () {
+    // The guard above must not have flattened the ordinary path.
+    $this->postJson('/api/merchant/credits', manualCreditPayload())
+        ->assertCreated()
+        ->assertJsonPath('data.state', 'awaiting_validation');
+
+    expect(Transaction::query()->sole()->clock_start_at)->toBeNull();
+});
