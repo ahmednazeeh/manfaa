@@ -47,22 +47,25 @@
 }
 
 html[lang='dv'] .font-display {
-  font-family: 'Noto Sans Thaana', 'Faruma', 'DAM Kalhi', system-ui, sans-serif;
+  font-family: 'Faruma', 'Noto Sans Thaana', 'DAM Kalhi', system-ui, sans-serif;
   font-weight: 400;
   letter-spacing: normal;
 }
 
 /*
- * Noto Sans Thaana is the PRIMARY Thaana face. Faruma is the traditional
- * Maldivian font and stays as a fallback, but its glyphs sit small on the
- * em and its fili (the marks above and below the letters) thin out badly at
- * UI sizes — which is what made Dhivehi screens hard to read. Noto is
- * drawn larger on the same em, hints properly at small sizes, and ships a
- * real bold, so headings stop faking weight.
+ * Faruma is the PRIMARY Thaana face — it is what Maldivian readers expect
+ * Dhivehi to look like, and the owner asked for it by name. Its @font-face
+ * used to point at a file that was never added, so the stack fell straight
+ * through to whatever Thaana font the device happened to carry; that is why
+ * pages rendered in something nobody chose.
  *
- * Self-hosted, ~8 KB each: no CDN, and no dependence on the reader's device
- * happening to have a Thaana font installed (most do not, which is how
- * Dhivehi text ended up rendering in whatever the browser could find).
+ * Noto Sans Thaana stays behind it. It hints better at small sizes and
+ * ships a real bold where Faruma has none, so a heading in Dhivehi is
+ * synthesised rather than drawn — a trade accepted deliberately, because a
+ * familiar face beats a technically cleaner unfamiliar one.
+ *
+ * All self-hosted: no CDN, and no dependence on the reader's device having
+ * a Thaana font installed. Most do not.
  */
 @font-face {
   font-family: 'Noto Sans Thaana';
@@ -82,7 +85,7 @@ html[lang='dv'] .font-display {
 
 @font-face {
   font-family: 'Faruma';
-  src: url('../fonts/faruma.ttf') format('truetype');
+  src: url('../fonts/faruma.woff2') format('woff2');
   font-weight: 400;
   font-style: normal;
   font-display: swap;
@@ -90,7 +93,7 @@ html[lang='dv'] .font-display {
 
 @font-face {
   font-family: 'DAM Kalhi';
-  src: url('../fonts/dam-kalhi.otf') format('opentype');
+  src: url('../fonts/dam-kalhi.woff2') format('woff2');
   font-weight: 400;
   font-style: normal;
   font-display: swap;
@@ -98,7 +101,7 @@ html[lang='dv'] .font-display {
 
 /* Thaana text block: self-hosted fonts, right-to-left. */
 .thaana {
-  font-family: 'Noto Sans Thaana', 'Faruma', 'DAM Kalhi', sans-serif;
+  font-family: 'Faruma', 'Noto Sans Thaana', 'DAM Kalhi', sans-serif;
   direction: rtl;
   text-align: start;
 }
@@ -121,7 +124,7 @@ html[lang='dv'] .font-display {
 .font-thaana,
 [lang='dv'],
 html[lang='dv'] body {
-  font-family: 'Noto Sans Thaana', 'Faruma', 'DAM Kalhi', system-ui, sans-serif;
+  font-family: 'Faruma', 'Noto Sans Thaana', 'DAM Kalhi', system-ui, sans-serif;
 }
 
 /*
@@ -168,7 +171,7 @@ html[lang='dv'] {
  * only if we say so explicitly.
  */
 [lang='dv']::placeholder {
-  font-family: 'Noto Sans Thaana', 'Faruma', 'DAM Kalhi', system-ui, sans-serif;
+  font-family: 'Faruma', 'Noto Sans Thaana', 'DAM Kalhi', system-ui, sans-serif;
 }
 
 /* Money values align in columns regardless of theme or direction. */

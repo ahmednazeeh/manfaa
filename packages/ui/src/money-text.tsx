@@ -143,14 +143,20 @@ export function MoneyText({
   const contextLocale = useMoneyLocale();
   const active = locale ?? resolveMoneyLocale(contextLocale, currency);
 
+  // The container's direction decides which SIDE the currency word lands
+  // on; the digits are already protected by the isolate inside
+  // formatMoney, so they keep their order either way.
+  //
+  // English says "MVR 1,240.00" and reads left to right, so the word is
+  // leftmost. Dhivehi says the amount and THEN the unit, and reads right to
+  // left — so the number is rightmost and ރުފިޔާ sits to its left. Forcing
+  // ltr here rendered the Dhivehi form in English reading order, which put
+  // ރުފިޔާ on the wrong side of every figure in the app.
+  const direction = active.placement === 'after' ? 'rtl' : 'ltr';
+
   return (
-    // dir="ltr" isolates the amount from an RTL (Dhivehi) paragraph so the
-    // digits, the decimal point and a leading minus keep their order — the
-    // bidi algorithm moves a leading "-" to the other end under dir="rtl".
-    // The Thaana currency word inside is itself an RTL run and still shapes
-    // correctly; only the sequence amount-then-word is being pinned here.
     <span
-      dir="ltr"
+      dir={direction}
       className={['tabular-nums', className].filter(Boolean).join(' ')}
       {...props}
     >
