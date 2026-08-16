@@ -61,6 +61,22 @@ export interface AppMenuSection {
  */
 export const APP_MENU: AppMenuSection[] = [
   {
+    // No label, and first: the dashboard is not one screen among a group,
+    // it is the answer to "how is the shop doing" that everything else
+    // qualifies. Filing it under Money made it a peer of the wallet.
+    items: [
+      // It IS the outstanding read model — the ageing buckets, the total
+      // payable — which is why it stands on the settlements permission
+      // rather than one of its own.
+      {
+        title: 'Dashboard',
+        path: '/dashboard',
+        icon: LayoutGrid,
+        permission: 'settlements.view',
+      },
+    ],
+  },
+  {
     label: 'Till',
     items: [
       {
@@ -80,15 +96,6 @@ export const APP_MENU: AppMenuSection[] = [
   {
     label: 'Money',
     items: [
-      // The dashboard IS the outstanding read model — the ageing buckets,
-      // the total payable — which is why it stands on the same permission
-      // as the settlements list rather than one of its own.
-      {
-        title: 'Dashboard',
-        path: '/dashboard',
-        icon: LayoutGrid,
-        permission: 'settlements.view',
-      },
       {
         title: 'Transactions',
         path: '/transactions',
