@@ -35,3 +35,6 @@ Thumbs.db
 .vscode/*
 !.vscode/extensions.json
 *.log
+
+# App download artifacts (the page and its images are committed; the APK is not).
+download/public/*.apk

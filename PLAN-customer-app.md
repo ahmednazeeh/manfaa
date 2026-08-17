@@ -246,10 +246,25 @@ green at every round end.
   titles, together — everything Dhivehi is machine-drafted; (2) PIXEL golden
   tests, deferred to the macOS build box (font hinting differs by platform,
   so Linux goldens would fail there — generate with --update-goldens on CI).
-- **R7 — Release.** Icons/splash from the brand mark, store listings (en+dv),
-  Codemagic signing for both stores, **APNs .p8 upload** (still outstanding —
-  iOS push silently dead until then), version-gate values set, privacy
-  policy URL + Play data-safety forms.
+- **R7 — Release — ANDROID APK SHIPPED 2026-08-17.** DONE: launcher icon +
+  adaptive icon + splash generated from the brand emblem (cropped out of the
+  supplied lockup); a RELEASE-SIGNED universal APK (keystore
+  `/home/ubuntu/manfaa-customer-release.jks`, passwords in the gitignored
+  `android/key.properties` — BACK BOTH UP; losing them means no Play updates
+  under this key later); compileSdk pinned to 37 (flutter_secure_storage
+  needs it); minify + resource-shrink on. A public download page is LIVE at
+  **https://manfaa.app/app** (served static from `download/public/` via a new
+  nginx `/app` location, mirroring `/docs/`; APK byte-verified through the
+  Cloudflare edge). The version gate is wired: `api/.env`
+  MOBILE_CUSTOMER_ANDROID_* set, `/config` now hands the app
+  `store_url = https://manfaa.app/app`.
+  **STILL OWED (needs the owner / external accounts):** Play Store + App
+  Store listings; iOS build (Codemagic + a Mac); **APNs .p8** (iOS push is
+  silently dead until uploaded); privacy-policy URL + Play data-safety forms;
+  native Thaana review; pixel goldens on the macOS box.
+  **NOTE:** the supplied logo is teal/navy; the in-app theme is the
+  owner-approved rose. The icon/page use the logo, the app UI stays rose —
+  worth a deliberate brand decision before store submission.
 
 ## 6. Testing
 

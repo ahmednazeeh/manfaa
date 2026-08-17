@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Get the Manfaa app</title>
+<meta name="description" content="Download Manfaa — earn cashback at stores across the Maldives.">
+<link rel="icon" type="image/png" href="/app/favicon.png">
+<style>
+  :root {
+    --navy: #1B2A4A;
+    --navy-soft: #33456b;
+    --teal: #17A6B8;
+    --teal-deep: #0E7C8A;
+    --coral: #F4626B;
+    --cream: #FAF8F4;
+    --card: #ffffff;
+    --line: #ECE7DF;
+    --muted: #6b7280;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--navy);
+    background:
+      radial-gradient(1200px 600px at 50% -10%, #eef7f8 0%, rgba(238,247,248,0) 60%),
+      var(--cream);
+    -webkit-font-smoothing: antialiased;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+  .wrap { width: 100%; max-width: 560px; margin: 0 auto; padding: 40px 22px 24px; flex: 1; }
+  header { text-align: center; }
+  .logo { width: 100%; max-width: 340px; height: auto; }
+  .tagline { margin: 6px 0 0; color: var(--navy-soft); font-size: 18px; }
+  .tagline-dv { margin: 6px 0 0; color: var(--muted); font-size: 16px; direction: rtl; }
+
+  .card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 22px;
+    padding: 26px 22px;
+    margin-top: 30px;
+    box-shadow: 0 10px 30px rgba(27,42,74,0.06);
+  }
+  .row { display: flex; align-items: center; gap: 16px; }
+  .appicon { width: 64px; height: 64px; border-radius: 16px; box-shadow: 0 4px 12px rgba(27,42,74,0.12); }
+  .app-name { font-size: 20px; font-weight: 800; margin: 0; }
+  .app-meta { margin: 3px 0 0; color: var(--muted); font-size: 14px; }
+
+  .btn {
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+    width: 100%; margin-top: 22px;
+    padding: 16px 20px;
+    border-radius: 14px;
+    background: var(--navy);
+    color: #fff; font-size: 17px; font-weight: 700;
+    text-decoration: none;
+    border: none;
+    transition: transform .06s ease, background .15s ease;
+  }
+  .btn:hover { background: #16233f; }
+  .btn:active { transform: translateY(1px); }
+  .btn svg { flex: none; }
+
+  .note {
+    margin-top: 14px;
+    font-size: 13.5px;
+    color: var(--muted);
+    line-height: 1.5;
+    text-align: center;
+  }
+
+  .soon-title { text-align: center; margin: 34px 0 12px; font-size: 13px; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+  .soon { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+  .badge {
+    display: flex; align-items: center; gap: 9px;
+    border: 1px solid var(--line);
+    background: #fff;
+    border-radius: 12px;
+    padding: 10px 16px;
+    color: var(--navy);
+    opacity: .55;
+  }
+  .badge small { display: block; font-size: 10px; color: var(--muted); letter-spacing: .04em; text-transform: uppercase; }
+  .badge b { font-size: 14px; }
+
+  .steps { margin: 30px 0 0; padding: 0; list-style: none; }
+  .steps li { display: flex; gap: 12px; align-items: flex-start; padding: 8px 0; color: var(--navy-soft); font-size: 14.5px; }
+  .steps .n {
+    flex: none; width: 24px; height: 24px; border-radius: 50%;
+    background: #e8f5f6; color: var(--teal-deep);
+    font-size: 13px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+  }
+
+  footer { text-align: center; color: var(--muted); font-size: 12.5px; padding: 26px 22px 34px; }
+  footer a { color: var(--teal-deep); text-decoration: none; }
+
+  @media (prefers-color-scheme: dark) {
+    :root { --card:#141b2b; --line:#26314a; --cream:#0e1523; --navy:#eaf0fb; --navy-soft:#b7c2d8; --muted:#8b97ad; }
+    body { background: radial-gradient(1200px 600px at 50% -10%, #12303a 0%, rgba(18,48,58,0) 60%), var(--cream); }
+    .badge, .btn { border-color: var(--line); }
+  }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <img class="logo" src="/app/logo.png" alt="Manfaa" width="340">
+      <p class="tagline">Earn cashback at stores across the Maldives.</p>
+      <p class="tagline-dv">ރާއްޖޭގެ ފިހާރަތަކުން ކޭޝްބެކް ހޯއްދަވާ.</p>
+    </header>
+
+    <div class="card">
+      <div class="row">
+        <img class="appicon" src="/app/icon.png" alt="" width="64" height="64">
+        <div>
+          <p class="app-name">Manfaa</p>
+          <p class="app-meta">Android 5.0+ &middot; 56&nbsp;MB &middot; v1.0.0</p>
+        </div>
+      </div>
+
+      <a class="btn" href="/app/manfaa-customer.apk" download>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 11 5 5 5-5"/><path d="M4 21h16"/></svg>
+        Download for Android
+      </a>
+
+      <p class="note">
+        Your browser may ask you to allow installs from this source — that's
+        normal for an app not yet on the Play Store. Open the downloaded file
+        and tap <b>Install</b>.
+      </p>
+    </div>
+
+    <p class="soon-title">Coming soon</p>
+    <div class="soon">
+      <span class="badge">
+        <svg width="20" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M3.6 2.2 13 12 3.6 21.8a1 1 0 0 1-.6-.9V3.1a1 1 0 0 1 .6-.9Zm11.1 10.5 2.9 3-9.2 5.3 6.3-8.3Zm0-1.4L8.4 3l9.2 5.3-2.9 3ZM19 10.3l2.4 1.4c.8.5.8 1.6 0 2l-2.4 1.4L15.9 12 19 10.3Z"/></svg>
+        <span><small>Get it on</small><b>Google Play</b></span>
+      </span>
+      <span class="badge">
+        <svg width="19" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M16.5 3c.1 1.1-.3 2.2-1 3-.7.9-1.9 1.5-3 1.4-.1-1.1.4-2.2 1-3 .7-.8 2-1.4 3-1.4ZM19.5 17c-.5 1.2-.8 1.7-1.5 2.7-1 1.5-2.4 3.3-4.1 3.3-1.5 0-1.9-1-4-1-2 0-2.5 1-4 1-1.7 0-3-1.7-4-3.1C-.4 16 .3 10 3.4 8.4c1.2-.7 2.3-.6 3.5-.6 1.2 0 2 .7 3.1.7 1 0 1.7-.7 3.1-.7 1 0 2.1.3 3 .9-2.6 1.5-2.2 5.3.4 6.6Z"/></svg>
+        <span><small>Download on the</small><b>App Store</b></span>
+      </span>
+    </div>
+
+    <ol class="steps">
+      <li><span class="n">1</span> Tap <b>Download for Android</b> above.</li>
+      <li><span class="n">2</span> Open the file from your notifications or Downloads.</li>
+      <li><span class="n">3</span> Allow the install if asked, then tap <b>Install</b>.</li>
+      <li><span class="n">4</span> Open Manfaa and sign in with your phone number.</li>
+    </ol>
+  </div>
+
+  <footer>
+    Manfaa &middot; Maldives cashback &middot; <a href="https://manfaa.app">manfaa.app</a>
+  </footer>
+</body>
+</html>

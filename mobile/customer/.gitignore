@@ -46,3 +46,11 @@ app.*.map.json
 
 # Generated localizations — flutter rebuilds them from the ARBs.
 lib/l10n/gen/
+
+# Release signing — never in the repo.
+android/key.properties
+**/*.jks
+**/*.keystore
+
+# R7: generated splash + launcher-icon caches are rebuilt from branding/ + config.
+**/flutter_native_splash*.png
