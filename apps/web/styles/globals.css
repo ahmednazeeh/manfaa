@@ -29,7 +29,9 @@
   --chart-3: var(--color-yellow-500);
   --chart-4: var(--color-red-500);
   --chart-5: var(--color-purple-500);
-  --border: oklch(94% 0.004 286.32); /* between --color-zinc-100 and --color-zinc-200 */
+  --border: oklch(
+    94% 0.004 286.32
+  ); /* between --color-zinc-100 and --color-zinc-200 */
   --input: var(--color-zinc-200);
   --ring: var(--color-zinc-400);
   --radius: 0.5rem;
@@ -55,20 +57,22 @@
   --panel-accent: oklch(0.88 0.13 88);
 
   /*
-   * The BRAND accent — the storefront's one hue.
+   * The BRAND accent — the one hue, and it is the LOGO's hue.
    *
    * Every other colour in this theme is a zinc: --primary is zinc-900,
    * --secondary/--muted/--accent are all zinc-100. That is right for a
    * dense admin panel and wrong for a shop window, where the page ends up
    * black type on white with grey chips and nothing to look at. This token
-   * exists so the storefront can carry a hue WITHOUT repainting --primary,
-   * which the merchant and admin panels share.
+   * exists so the customer app can carry a hue WITHOUT repainting
+   * --primary, which the merchant and admin panels share.
    *
    * A lagoon teal, continuing the --panel-from line the old hero gradient
-   * used. Spent on exactly two things: the cashback figure — the number
-   * people came to read — and the navigation that leads to it. Buttons,
-   * text and borders elsewhere stay zinc, so the accent never has to
-   * compete with itself.
+   * used — REVERTED here after a day as the logo coral (owner, 2026-08-17:
+   * "previous colour scheme was better, too hard on eyes"). The coral
+   * stays the LOGO MARK's own colour; the page-wide accent — the hero
+   * cashback figure, the payout progress bar, active navigation, key
+   * icons/buttons — is the calmer teal. Everything else stays zinc, so
+   * the accent never has to compete with itself.
    *
    * L 0.48 puts it at ~4.8:1 on white, so it is safe for small text and
    * icons, and white on it clears the same bar for a filled button.
@@ -218,16 +222,23 @@ html {
 }
 
 /** Custom Containers **/
+/*
+ * Phone gutters are 20px, not the template's 16px: on a 360–390px screen
+ * with cards running the full width, 16px reads as content touching the
+ * glass (owner, 2026-08-17). Desktop caps at 87.5rem rather than the
+ * 80rem breakpoint so a large monitor is not half dead space; padding is
+ * symmetric-logical, so Dhivehi mirrors for free.
+ */
 @utility container {
-  @apply mx-auto max-w-none px-4 lg:px-5;
+  @apply mx-auto max-w-none px-5 lg:px-6;
 
   @media (width >= --theme(--breakpoint-xl)) {
-    @apply max-w-(--breakpoint-xl);
+    @apply max-w-[87.5rem];
   }
 }
 
 @utility container-fluid {
-  @apply w-full mx-auto px-4 lg:px-5;
+  @apply mx-auto w-full px-5 lg:px-6;
 }
 
 /* Metronic Configs */

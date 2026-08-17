@@ -301,5 +301,6 @@
   },
   "storeCall": "Call",
   "storeWebsite": "Website",
-  "storeMap": "On the map"
+  "storeMap": "On the map",
+  "copiedToClipboard": "Copied."
 }

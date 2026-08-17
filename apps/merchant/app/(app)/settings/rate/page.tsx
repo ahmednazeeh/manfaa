@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { redirect } from 'next/navigation';
 import { parsePercentToBp, percentToBp } from '@manfaa/api-client';
 import { format } from 'date-fns';
 import {
@@ -10,6 +11,7 @@ import {
   LoaderCircle,
   TriangleAlert,
 } from 'lucide-react';
+import { toast } from 'sonner';
 import { type MerchantRate, type RateChangeSummary } from '@/lib/api';
 import {
   formatBp,
@@ -41,12 +43,7 @@ import {
 } from '@/components/ui/card';
 import { Input, InputAddon, InputGroup } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { toast } from 'sonner';
 import {
-  Toolbar,
-  ToolbarDescription,
-  ToolbarHeading,
-  ToolbarPageTitle,
 } from '@/components/app-layout/toolbar';
 import { ErrorBlock, LoadingBlock } from '@/components/app/async-states';
 
@@ -170,7 +167,8 @@ function ChangeSummaryAlert({ change }: { change: RateChangeSummary }) {
       </AlertIcon>
       <AlertContent>
         <AlertTitle>
-          Cashback rate {change.applies === 'immediately' ? 'is now' : 'will be'}{' '}
+          Cashback rate{' '}
+          {change.applies === 'immediately' ? 'is now' : 'will be'}{' '}
           {formatRate(change.new.cashback_rate_percent)}
         </AlertTitle>
         <AlertDescription>
@@ -310,10 +308,10 @@ function RateChangeForm({ rate }: { rate: MerchantRate }) {
             <p className="text-xs text-destructive">{inputError}</p>
           ) : (
             <p className="text-xs text-muted-foreground">
-              Percent of the eligible amount, up to two decimal places.
-              Allowed range {formatBp(MIN_RATE_BP)} to {formatBp(MAX_RATE_BP)}.
-              Fee bands: up to 0.99% cashback → 0.25% fee · 1–1.99% → 0.5% ·
-              2–4.99% → 0.75% · 5–20% → 1%.
+              Percent of the eligible amount, up to two decimal places. Allowed
+              range {formatBp(MIN_RATE_BP)} to {formatBp(MAX_RATE_BP)}. Fee
+              bands: up to 0.99% cashback → 0.25% fee · 1–1.99% → 0.5% · 2–4.99%
+              → 0.75% · 5–20% → 1%.
             </p>
           )}
           {isSameAsCurrent && rate.pending === null && (
@@ -323,8 +321,8 @@ function RateChangeForm({ rate }: { rate: MerchantRate }) {
           )}
           {cancelsPending && (
             <p className="text-xs text-muted-foreground">
-              This matches your current rate — submitting cancels the
-              scheduled change and keeps the rate as it is.
+              This matches your current rate — submitting cancels the scheduled
+              change and keeps the rate as it is.
             </p>
           )}
         </div>
@@ -336,26 +334,26 @@ function RateChangeForm({ rate }: { rate: MerchantRate }) {
           current.all_in_percent !== null &&
           prospectiveFee !== null &&
           validBp !== null && (
-          <Alert variant="warning" appearance="light">
-            <AlertIcon>
-              <TriangleAlert />
-            </AlertIcon>
-            <AlertContent>
-              <AlertTitle>This change moves your fee tier.</AlertTitle>
-              <AlertDescription>
-                {validBp > currentBp ? 'Raising' : 'Lowering'} from{' '}
-                {formatRate(current.cashback_rate_percent)} to{' '}
-                {formatBp(validBp)} moves your fee tier from{' '}
-                {formatRate(current.platform_fee_percent)} to{' '}
-                {formatBp(prospectiveFee)} — your all-in cost goes from{' '}
-                {formatRate(current.all_in_percent)} to{' '}
-                {formatBp(validBp + prospectiveFee)} of each eligible sale.
-                The platform&apos;s fee schedule confirms the exact fee when
-                the change is applied.
-              </AlertDescription>
-            </AlertContent>
-          </Alert>
-        )}
+            <Alert variant="warning" appearance="light">
+              <AlertIcon>
+                <TriangleAlert />
+              </AlertIcon>
+              <AlertContent>
+                <AlertTitle>This change moves your fee tier.</AlertTitle>
+                <AlertDescription>
+                  {validBp > currentBp ? 'Raising' : 'Lowering'} from{' '}
+                  {formatRate(current.cashback_rate_percent)} to{' '}
+                  {formatBp(validBp)} moves your fee tier from{' '}
+                  {formatRate(current.platform_fee_percent)} to{' '}
+                  {formatBp(prospectiveFee)} — your all-in cost goes from{' '}
+                  {formatRate(current.all_in_percent)} to{' '}
+                  {formatBp(validBp + prospectiveFee)} of each eligible sale.
+                  The platform&apos;s fee schedule confirms the exact fee when
+                  the change is applied.
+                </AlertDescription>
+              </AlertContent>
+            </Alert>
+          )}
 
         {validBp !== null && currentBp !== null && !isSameAsCurrent && (
           <Alert variant="info" appearance="light">
@@ -405,30 +403,23 @@ function RateChangeForm({ rate }: { rate: MerchantRate }) {
   );
 }
 
-export default function RateSettingsPage() {
+/** The standing-rate half of the merged Cashback settings screen. */
+export function RateSection() {
   const rate = useRate();
 
-  return (
-    <div className="container">
-      <Toolbar>
-        <ToolbarHeading>
-          <ToolbarPageTitle>Cashback rate</ToolbarPageTitle>
-          <ToolbarDescription>
-            The standing rate every sale earns, and what it costs you
-          </ToolbarDescription>
-        </ToolbarHeading>
-      </Toolbar>
-
-      {rate.error ? (
-        <ErrorBlock error={rate.error} />
-      ) : !rate.data ? (
-        <LoadingBlock lines={4} />
-      ) : (
-        <div className="max-w-xl flex flex-col gap-5 pb-7.5">
-          <RateWindowCard rate={rate.data} />
-          <RateChangeForm rate={rate.data} />
-        </div>
-      )}
+  return rate.error ? (
+    <ErrorBlock error={rate.error} />
+  ) : !rate.data ? (
+    <LoadingBlock lines={4} />
+  ) : (
+    <div className="max-w-xl flex flex-col gap-5">
+      <RateWindowCard rate={rate.data} />
+      <RateChangeForm rate={rate.data} />
     </div>
   );
+}
+
+/** The old standalone screen forwards to the merged one (owner, 2026-08-17). */
+export default function RateSettingsPage() {
+  redirect('/settings/cashback');
 }

@@ -460,10 +460,13 @@ function CuratedShelves({ location }: { location: LocationRequest }) {
     <div className="flex flex-col gap-8">
       {/* The banners lead: they are the one part of this page an admin has
           hand-placed, and the reason a shopper opens Discover before
-          deciding where to go. The -mx/-px pair lets them use the full
-          width while the shelves below keep the container's gutters. */}
+          deciding where to go. The negative margins cancel the outer
+          container's gutters (px-5, lg:px-6 — keep in step with the
+          `container` utility) so the section's own inner container is not
+          double-padded, letting the row use the full width while the
+          shelves below keep their gutters. */}
       {data.offers.length > 0 && (
-        <div className="-mx-[calc(var(--spacing)*4)] -mt-3">
+        <div className="-mx-5 -mt-3 lg:-mx-6">
           <FeaturedOffers offers={data.offers} />
         </div>
       )}

@@ -15,31 +15,22 @@ function SidebarHeader() {
 
   return (
     <div className="sidebar-header hidden lg:flex items-center relative justify-between px-3 lg:px-6 shrink-0">
-      <Link href="/dashboard">
-        <div className="dark:hidden">
-          <img
-            src={toAbsoluteUrl('/media/app/default-logo.svg')}
-            className="default-logo h-[22px] max-w-none"
-            alt={t('common.appName')}
-          />
-          <img
-            src={toAbsoluteUrl('/media/app/mini-logo.svg')}
-            className="small-logo h-[22px] max-w-none"
-            alt={t('common.appName')}
-          />
-        </div>
-        <div className="hidden dark:block">
-          <img
-            src={toAbsoluteUrl('/media/app/default-logo-dark.svg')}
-            className="default-logo h-[22px] max-w-none"
-            alt={t('common.appName')}
-          />
-          <img
-            src={toAbsoluteUrl('/media/app/mini-logo.svg')}
-            className="small-logo h-[22px] max-w-none"
-            alt={t('common.appName')}
-          />
-        </div>
+      {/* The coral M mark + the app's own wordmark (the template SVGs spell
+          "METRONIC"). The mark always shows; the `default-logo` class hides
+          the word while the sidebar is collapsed (demo1.css). */}
+      <Link
+        href="/dashboard"
+        className="flex items-center gap-2"
+        aria-label={t('common.appName')}
+      >
+        <img
+          src={toAbsoluteUrl('/media/app/mini-logo.svg')}
+          className="h-[22px] max-w-none shrink-0"
+          alt=""
+        />
+        <span className="default-logo text-lg font-semibold tracking-tight text-mono">
+          {t('common.appName')}
+        </span>
       </Link>
       <Button
         onClick={() => setSidebarCollapse(!sidebarCollapse)}

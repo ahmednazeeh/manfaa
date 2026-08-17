@@ -1,4 +1,5 @@
 import type {
+  CustomerStatus,
   MerchantStatus,
   PayoutBatchState,
   PayoutItemState,
@@ -7,6 +8,7 @@ import type {
   TransactionState,
 } from '@manfaa/api-client';
 import {
+  customerStatusLabel,
   merchantStatusLabel,
   payoutBatchStateLabel,
   payoutItemStateLabel,
@@ -163,6 +165,21 @@ export function MerchantStatusBadge({ status }: { status: MerchantStatus }) {
     <StateChip
       label={merchantStatusLabel(status)}
       style={{ variant: MERCHANT_VARIANTS[status], appearance: 'light' }}
+    />
+  );
+}
+
+const CUSTOMER_VARIANTS: Record<CustomerStatus, BadgeProps['variant']> = {
+  active: 'success',
+  suspended: 'destructive',
+  closed: 'secondary',
+};
+
+export function CustomerStatusBadge({ status }: { status: CustomerStatus }) {
+  return (
+    <StateChip
+      label={customerStatusLabel(status)}
+      style={{ variant: CUSTOMER_VARIANTS[status], appearance: 'light' }}
     />
   );
 }

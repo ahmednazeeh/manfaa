@@ -18,7 +18,18 @@ const classNames: AccordionMenuClassNames = {
   root: 'lg:ps-1 space-y-3',
   group: 'gap-px',
   label: 'uppercase text-xs font-medium text-muted-foreground/70 pt-2.25 pb-px',
-  item: 'h-8 hover:bg-transparent text-accent-foreground hover:text-primary data-[selected=true]:text-primary data-[selected=true]:bg-muted data-[selected=true]:font-medium',
+  // Active item: a thin brand pill on the item's start edge (logical
+  // inset, so Dhivehi mirrors it to the right edge) plus a slightly
+  // stronger label and a full-strength brand icon. The pill sits INSIDE
+  // the item box — the ScrollArea viewport clips anything hung outside it.
+  // It is always present but transparent, so selection never shifts layout.
+  item: cn(
+    'h-8 hover:bg-transparent text-accent-foreground hover:text-primary',
+    'before:absolute before:start-0 before:top-1/2 before:h-4.5 before:w-[3px]',
+    'before:-translate-y-1/2 before:rounded-full before:bg-transparent before:content-[""]',
+    'data-[selected=true]:text-primary data-[selected=true]:bg-muted data-[selected=true]:font-semibold',
+    'data-[selected=true]:before:bg-brand data-[selected=true]:[&_svg]:opacity-100 data-[selected=true]:[&_svg]:text-brand',
+  ),
 };
 
 export function SidebarMenu({ className }: { className?: string }) {

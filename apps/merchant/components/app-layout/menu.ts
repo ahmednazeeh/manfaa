@@ -1,5 +1,4 @@
 import type { MerchantPermission } from '@manfaa/api-client';
-import { can, type PermissionHolder } from '@/lib/roles';
 import {
   Banknote,
   HandCoins,
@@ -12,12 +11,11 @@ import {
   Plug,
   ReceiptText,
   ShieldCheck,
-  SlidersHorizontal,
   Store,
-  Tags,
   Users,
   Wallet,
 } from 'lucide-react';
+import { can, type PermissionHolder } from '@/lib/roles';
 
 export interface AppMenuItem {
   title: string;
@@ -31,6 +29,15 @@ export interface AppMenuItem {
    * a screen nobody deliberately granted is a screen that silently opened.
    */
   permission: MerchantPermission;
+
+  /**
+   * ANY-of gate for a screen that merges several formerly separate screens
+   * (Cashback settings). When set, holding any listed permission shows the
+   * entry; `permission` stays the primary one for consumers that need a
+   * single answer. The screen gates its own SECTIONS per permission, so
+   * permissionForPath() deliberately skips such items (see below).
+   */
+  anyOf?: MerchantPermission[];
 }
 
 export interface AppMenuSection {
@@ -125,16 +132,14 @@ export const APP_MENU: AppMenuSection[] = [
     label: 'Store',
     items: [
       {
-        title: 'Cashback rate',
-        path: '/settings/rate',
+        // Rate + product categories + preferences merged (owner,
+        // 2026-08-17): one screen for everything that decides what a sale
+        // earns.
+        title: 'Cashback settings',
+        path: '/settings/cashback',
         icon: Percent,
         permission: 'rate.view',
-      },
-      {
-        title: 'Product categories',
-        path: '/settings/product-categories',
-        icon: Tags,
-        permission: 'product_categories.view',
+        anyOf: ['rate.view', 'product_categories.view', 'preferences.update'],
       },
       {
         title: 'Branches',
@@ -177,15 +182,6 @@ export const APP_MENU: AppMenuSection[] = [
         icon: Plug,
         permission: 'api_credentials.view',
       },
-      // Preferences has no read permission because it has no read route:
-      // the screen loads its current values with an empty PATCH, so seeing
-      // the screen at all is `preferences.update`.
-      {
-        title: 'Preferences',
-        path: '/settings/preferences',
-        icon: SlidersHorizontal,
-        permission: 'preferences.update',
-      },
     ],
   },
 ];
@@ -201,10 +197,19 @@ const SETTINGS_PREFIX = '/settings/';
  * across Store and Account, grouped by when a shopkeeper reaches for them,
  * and no section owns all of them.
  */
+export function menuItemAllowed(
+  me: PermissionHolder,
+  item: AppMenuItem,
+): boolean {
+  return item.anyOf
+    ? item.anyOf.some((permission) => can(me, permission))
+    : can(me, item.permission);
+}
+
 export function firstSettingsPathFor(me: PermissionHolder): string | null {
   for (const section of APP_MENU) {
     for (const item of section.items) {
-      if (item.path.startsWith(SETTINGS_PREFIX) && can(me, item.permission)) {
+      if (item.path.startsWith(SETTINGS_PREFIX) && menuItemAllowed(me, item)) {
         return item.path;
       }
     }
@@ -226,6 +231,11 @@ export function permissionForPath(pathname: string): MerchantPermission | null {
   for (const section of APP_MENU) {
     for (const item of section.items) {
       if (pathname !== item.path && !pathname.startsWith(`${item.path}/`)) {
+        continue;
+      }
+      // A merged screen gates its own sections — the layout must leave it
+      // open rather than demand one permission of several.
+      if (item.anyOf) {
         continue;
       }
       if (match === null || item.path.length > match.path.length) {

@@ -527,6 +527,198 @@ export function setAdminMerchantStaffActive(
 }
 
 // ---------------------------------------------------------------------------
+// Customer accounts (superadmin support surface)
+// ---------------------------------------------------------------------------
+
+/** active | suspended | closed — the customers_status_check literals. */
+export const CustomerStatusSchema = z.enum(['active', 'suspended', 'closed']);
+export type CustomerStatus = z.infer<typeof CustomerStatusSchema>;
+
+export const AdminCustomerRowSchema = z.object({
+  id: z.number().int(),
+  /** The 6-digit public identity — printed, scanned at the till. */
+  customer_code: z.string(),
+  name: z.string(),
+  /** Full stored E.164 (+960XXXXXXX) — the login identity this surface exists to verify. */
+  phone: z.string(),
+  status: CustomerStatusSchema,
+  kyc_status: z.string(),
+  /** Bank + number + name all on file — the payout batch skips them otherwise. */
+  has_payout_account: z.boolean(),
+  created_at: z.string().nullable(),
+});
+export type AdminCustomerRow = z.infer<typeof AdminCustomerRowSchema>;
+
+export const AdminCustomerListResponseSchema = paginated(
+  AdminCustomerRowSchema,
+);
+export type AdminCustomerListResponse = z.infer<
+  typeof AdminCustomerListResponseSchema
+>;
+
+/**
+ * GET /api/admin/customers — paginated, newest first. `q` searches name,
+ * phone (any typed form — "7712345" folds into the stored +960 shape, and a
+ * partial number matches too) and customer code.
+ */
+export function listAdminCustomers(
+  params: { q?: string; page?: number; per_page?: number } = {},
+  options: RequestOptions = {},
+): Promise<AdminCustomerListResponse> {
+  return apiFetch(
+    `/api/admin/customers${queryString({
+      q: params.q,
+      page: params.page,
+      per_page: params.per_page,
+    })}`,
+    AdminCustomerListResponseSchema,
+    { signal: options.signal },
+  );
+}
+
+export const AdminCustomerDetailSchema = z.object({
+  id: z.number().int(),
+  customer_code: z.string(),
+  name: z.string(),
+  phone: z.string(),
+  /** Null after an admin phone change until the next OTP sign-in re-earns it. */
+  phone_verified_at: z.string().nullable(),
+  email: z.string().nullable(),
+  status: CustomerStatusSchema,
+  kyc_status: z.string(),
+  avatar_url: z.string().nullable(),
+  has_payout_account: z.boolean(),
+  /** MASKED account number ("•••• 4821") — the full digits never cross this boundary. */
+  payout_account: z
+    .object({
+      bank: z.string(),
+      account_masked: z.string().nullable(),
+      account_name: z.string(),
+    })
+    .nullable(),
+  /** The same stored-integer sums the customer's own balance screen shows. */
+  balance: z.object({
+    currency: z.string(),
+    confirmed_laari: z.number().int(),
+    pending_laari: z.number().int(),
+    paid_this_month_laari: z.number().int(),
+  }),
+  /** Live app sign-ins (unexpired mobile tokens). */
+  devices_count: z.number().int(),
+  created_at: z.string().nullable(),
+});
+export type AdminCustomerDetail = z.infer<typeof AdminCustomerDetailSchema>;
+
+export const AdminCustomerDetailResponseSchema = dataWrapped(
+  AdminCustomerDetailSchema,
+);
+export type AdminCustomerDetailResponse = z.infer<
+  typeof AdminCustomerDetailResponseSchema
+>;
+
+/** GET /api/admin/customers/{customer} — the full record for the detail drawer. */
+export function getAdminCustomer(
+  customerId: number,
+  options: RequestOptions = {},
+): Promise<AdminCustomerDetailResponse> {
+  return apiFetch(
+    `/api/admin/customers/${customerId}`,
+    AdminCustomerDetailResponseSchema,
+    { signal: options.signal },
+  );
+}
+
+export const UpdateAdminCustomerRequestSchema = z.object({
+  name: z.string().min(1).max(120).optional(),
+  email: z.string().max(255).nullable().optional(),
+  /**
+   * The sensitive one — the login identity and OTP destination. Accepts any
+   * form a person types ("7712345", "+960 771-2345"); the server folds it
+   * into the stored +960 shape, refuses anything that is not a Maldivian
+   * mobile, and refuses another customer's number. The change deliberately
+   * revokes NOTHING: the support scenario is a lost SIM, and the customer's
+   * own app install and web session are still theirs.
+   */
+  phone: z.string().optional(),
+});
+export type UpdateAdminCustomerRequest = z.infer<
+  typeof UpdateAdminCustomerRequestSchema
+>;
+
+/**
+ * PATCH /api/admin/customers/{customer} — superadmin edit over name, email
+ * and phone. Answers the fresh detail record.
+ */
+export function updateAdminCustomer(
+  customerId: number,
+  body: UpdateAdminCustomerRequest,
+  options: RequestOptions = {},
+): Promise<AdminCustomerDetailResponse> {
+  return apiFetch(
+    `/api/admin/customers/${customerId}`,
+    AdminCustomerDetailResponseSchema,
+    { method: 'PATCH', body, signal: options.signal },
+  );
+}
+
+export const AdminCustomerResetPasswordResponseSchema = z.object({
+  data: AdminCustomerDetailSchema,
+  /** Returned exactly once — only the hash survives server-side. */
+  temp_password: z.string(),
+});
+export type AdminCustomerResetPasswordResponse = z.infer<
+  typeof AdminCustomerResetPasswordResponseSchema
+>;
+
+/**
+ * POST /api/admin/customers/{customer}/reset-password — superadmin-only.
+ * A strong temporary WEB password, returned exactly once. Live web sessions
+ * die on their next request; the app deliberately stays signed in — it is
+ * passwordless (OTP), so the password never guarded it. Use the status
+ * endpoint if the ACCOUNT is in the wrong hands.
+ */
+export function resetAdminCustomerPassword(
+  customerId: number,
+  options: RequestOptions = {},
+): Promise<AdminCustomerResetPasswordResponse> {
+  return apiFetch(
+    `/api/admin/customers/${customerId}/reset-password`,
+    AdminCustomerResetPasswordResponseSchema,
+    { method: 'POST', signal: options.signal },
+  );
+}
+
+export const CustomerStatusChangeResponseSchema = dataWrapped(
+  z.object({
+    id: z.number().int(),
+    status: CustomerStatusSchema,
+  }),
+);
+export type CustomerStatusChangeResponse = z.infer<
+  typeof CustomerStatusChangeResponseSchema
+>;
+
+/**
+ * POST /api/admin/customers/{customer}/status — superadmin enable/disable
+ * (active | suspended; `closed` is ledger bookkeeping this endpoint never
+ * sets, and a closed account answers 409). Suspending destroys every app
+ * token (push registrations cascade with them) and logs any live web
+ * session out on its next request; sign-in is refused everywhere until
+ * re-enabled.
+ */
+export function setAdminCustomerStatus(
+  customerId: number,
+  body: { status: 'active' | 'suspended'; reason?: string },
+  options: RequestOptions = {},
+): Promise<CustomerStatusChangeResponse> {
+  return apiFetch(
+    `/api/admin/customers/${customerId}/status`,
+    CustomerStatusChangeResponseSchema,
+    { method: 'POST', body, signal: options.signal },
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Reconciliation runs
 // ---------------------------------------------------------------------------
 

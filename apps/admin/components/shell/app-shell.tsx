@@ -22,6 +22,7 @@ import {
   Smartphone,
   Store,
   Tags,
+  Users,
   type LucideIcon,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -100,6 +101,7 @@ function OpenHoldsBadge() {
 const NAV_ITEMS: NavItem[] = [
   { href: '/settlements', label: 'Settlements', icon: Landmark },
   { href: '/merchants', label: 'Merchants', icon: Store },
+  { href: '/customers', label: 'Customers', icon: Users },
   { href: '/zones', label: 'Zones', icon: MapIcon },
   {
     href: '/holds',

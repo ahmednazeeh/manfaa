@@ -103,6 +103,20 @@ contact + map.
       mobile token), shown in the app (Profile + top-bar avatar) and web
       (header/dashboard). Merchant-logo storage pattern reused.
 
+### 7. Web dashboard v2 + mobile web + admin customers (owner, 2026-08-17)
+- [x] Dashboard desktop: Available-cashback HERO (32–36px value, tinted/
+      accent card, View-transactions inside), Paid-this-month + Next-payout
+      merged into one summary card, code card with bigger QR + fullscreen +
+      copy, payout-minimum PROGRESS bar, brand accent used deliberately,
+      stronger sidebar active state, consistent muted labels, recent-activity
+      rows (merchant · amount · +cashback · date), wider content, footer gone
+      from authed screens.
+- [x] Mobile web: bottom nav (Home/Dashboard/Transactions/Bank Acc/More),
+      proper side margins in en + dv, code card first.
+- [x] Admin: superadmin customer management — search/list, detail (masked
+      payout account), edit name/email/PHONE, one-time password reset,
+      enable/disable with token+session revocation.
+
 ## Decisions
 - **Web maps = Google Maps** (the shared loader + key already power the
   merchant picker and web nearby map — consistency wins). **App map =

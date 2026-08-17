@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { redirect } from 'next/navigation';
 import {
   formatLaari,
   parseMvrToLaari,
@@ -8,6 +9,7 @@ import {
   type SettlementFundingMethod,
 } from '@manfaa/api-client';
 import { Info, LoaderCircle } from 'lucide-react';
+import { toast } from 'sonner';
 import {
   apiErrorMessage,
   usePreferences,
@@ -37,12 +39,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { toast } from 'sonner';
 import {
-  Toolbar,
-  ToolbarDescription,
-  ToolbarHeading,
-  ToolbarPageTitle,
 } from '@/components/app-layout/toolbar';
 import { ErrorBlock, LoadingBlock } from '@/components/app/async-states';
 
@@ -130,8 +127,8 @@ function PreferencesForm({
         <AlertContent>
           <AlertTitle>Changes apply to future sales only.</AlertTitle>
           <AlertDescription>
-            Every recorded sale keeps the terms that were in force at its
-            sale time — history never moves.
+            Every recorded sale keeps the terms that were in force at its sale
+            time — history never moves.
           </AlertDescription>
         </AlertContent>
       </Alert>
@@ -158,9 +155,9 @@ function PreferencesForm({
               </SelectContent>
             </Select>
             <p className="text-xs text-muted-foreground">
-              How your settlements are funded by default: a bank transfer
-              using our payment instructions, or your Manfaa wallet balance.
-              Either way the batches, deadlines and records are identical.
+              How your settlements are funded by default: a bank transfer using
+              our payment instructions, or your Manfaa wallet balance. Either
+              way the batches, deadlines and records are identical.
             </p>
           </div>
 
@@ -228,27 +225,20 @@ function PreferencesForm({
   );
 }
 
-export default function PreferencesSettingsPage() {
+/** The earning-rules half of the merged Cashback settings screen. */
+export function PreferencesSection() {
   const preferences = usePreferences();
 
-  return (
-    <div className="container">
-      <Toolbar>
-        <ToolbarHeading>
-          <ToolbarPageTitle>Preferences</ToolbarPageTitle>
-          <ToolbarDescription>
-            How your store earns and settles
-          </ToolbarDescription>
-        </ToolbarHeading>
-      </Toolbar>
-
-      {preferences.error ? (
-        <ErrorBlock error={preferences.error} />
-      ) : !preferences.data ? (
-        <LoadingBlock lines={5} />
-      ) : (
-        <PreferencesForm preferences={preferences.data} />
-      )}
-    </div>
+  return preferences.error ? (
+    <ErrorBlock error={preferences.error} />
+  ) : !preferences.data ? (
+    <LoadingBlock lines={5} />
+  ) : (
+    <PreferencesForm preferences={preferences.data} />
   );
+}
+
+/** The old standalone screen forwards to the merged one (owner, 2026-08-17). */
+export default function PreferencesSettingsPage() {
+  redirect('/settings/cashback');
 }

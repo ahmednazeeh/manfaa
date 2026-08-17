@@ -1,6 +1,8 @@
 'use client';
 
 import { useCallback } from 'react';
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import {
   AccordionMenu,
@@ -10,11 +12,8 @@ import {
   AccordionMenuLabel,
 } from '@/components/ui/accordion-menu';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { usePathname } from 'next/navigation';
-import Link from 'next/link';
-import { can } from '@/lib/roles';
 import { useLayout } from './context';
-import { APP_MENU } from './menu';
+import { APP_MENU, menuItemAllowed } from './menu';
 
 const classNames: AccordionMenuClassNames = {
   root: 'lg:ps-1 space-y-3',
@@ -40,12 +39,15 @@ export function SidebarMenu({ className }: { className?: string }) {
   // `permission_required`) is the actual enforcement.
   const sections = APP_MENU.map((section) => ({
     ...section,
-    items: section.items.filter((item) => can(me, item.permission)),
+    items: section.items.filter((item) => menuItemAllowed(me, item)),
   })).filter((section) => section.items.length > 0);
 
   return (
     <ScrollArea
-      className={cn('flex grow shrink-0 py-5 px-5 lg:h-[calc(100vh-5.5rem)]', className)}
+      className={cn(
+        'flex grow shrink-0 py-5 px-5 lg:h-[calc(100vh-5.5rem)]',
+        className,
+      )}
     >
       <AccordionMenu
         selectedValue={pathname}
@@ -65,10 +67,7 @@ export function SidebarMenu({ className }: { className?: string }) {
                 value={item.path}
                 className="text-sm font-medium"
               >
-                <Link
-                  href={item.path}
-                  className="flex items-center grow gap-2"
-                >
+                <Link href={item.path} className="flex items-center grow gap-2">
                   <item.icon data-slot="accordion-menu-icon" />
                   <span data-slot="accordion-menu-title">{item.title}</span>
                 </Link>

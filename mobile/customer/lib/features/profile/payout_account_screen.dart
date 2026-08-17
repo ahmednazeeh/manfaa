@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:manfaa_core/manfaa_core.dart';
@@ -158,9 +159,23 @@ class _FormState extends ConsumerState<_Form> {
     return ListView(
       padding: const EdgeInsets.fromLTRB(Gap.lg, Gap.md, Gap.lg, Gap.huge),
       children: [
-        Text(
-          l10n.payoutAccountIntro,
-          style: theme.textTheme.bodyMedium?.copyWith(color: muted),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Text(
+                l10n.payoutAccountIntro,
+                style: theme.textTheme.bodyMedium?.copyWith(color: muted),
+              ),
+            ),
+            const SizedBox(width: Gap.md),
+            // The mock's floating bank tile — pure decoration.
+            Transform.rotate(
+              angle: 0.12,
+              child: const IconTile(Icons.account_balance_rounded,
+                  tint: ManfaaTint.green, size: 54, iconSize: 28),
+            ),
+          ],
         ),
         const SizedBox(height: Gap.lg),
 
@@ -179,25 +194,26 @@ class _FormState extends ConsumerState<_Form> {
                 ],
               ),
               const SizedBox(height: Gap.sm),
+              const SizedBox(height: Gap.sm),
               // Locked once a code is out — the bank is part of what the code
               // confirms, so it must not shift underneath the confirmation.
               IgnorePointer(
                 ignoring: _busy || _codeSent,
                 child: Opacity(
                   opacity: _codeSent ? 0.6 : 1,
-                  child: RadioGroup<String>(
-                    groupValue: _bank,
-                    onChanged: (v) => setState(() => _bank = v ?? _bank),
-                    child: Column(
-                      children: [
-                        for (final (value, label) in _banks)
-                          RadioListTile<String>(
-                            value: value,
-                            title: Text(label),
-                            contentPadding: EdgeInsets.zero,
-                          ),
+                  child: Column(
+                    children: [
+                      for (final (value, label) in _banks) ...[
+                        _BankRow(
+                          label: label,
+                          logoAsset: 'assets/banks/$value.png',
+                          selected: _bank == value,
+                          onTap: () => setState(() => _bank = value),
+                        ),
+                        if (value != _banks.last.$1)
+                          const SizedBox(height: Gap.sm),
                       ],
-                    ),
+                    ],
                   ),
                 ),
               ),
@@ -208,8 +224,11 @@ class _FormState extends ConsumerState<_Form> {
                 keyboardType: TextInputType.number,
                 textDirection: TextDirection.ltr,
                 onChanged: (_) => setState(() {}),
-                decoration:
-                    InputDecoration(labelText: l10n.payoutAccountNoLabel),
+                decoration: InputDecoration(
+                  labelText: l10n.payoutAccountNoLabel,
+                  floatingLabelBehavior: FloatingLabelBehavior.always,
+                  suffixIcon: _CopySuffix(controller: _accountNo),
+                ),
               ),
               const SizedBox(height: Gap.md),
               TextField(
@@ -217,8 +236,11 @@ class _FormState extends ConsumerState<_Form> {
                 enabled: !_codeSent,
                 textCapitalization: TextCapitalization.words,
                 onChanged: (_) => setState(() {}),
-                decoration:
-                    InputDecoration(labelText: l10n.payoutAccountNameLabel),
+                decoration: InputDecoration(
+                  labelText: l10n.payoutAccountNameLabel,
+                  floatingLabelBehavior: FloatingLabelBehavior.always,
+                  suffixIcon: _CopySuffix(controller: _accountName),
+                ),
               ),
             ],
           ),
@@ -299,13 +321,139 @@ class _FormState extends ConsumerState<_Form> {
         ),
         Padding(
           padding: const EdgeInsets.only(top: Gap.md),
-          child: Text(
-            l10n.payoutChangeEffective,
-            textAlign: TextAlign.center,
-            style: theme.textTheme.bodySmall?.copyWith(color: muted),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.verified_user_outlined, size: 15, color: muted),
+              const SizedBox(width: Gap.xs),
+              Flexible(
+                child: Text(
+                  l10n.payoutChangeEffective,
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.bodySmall?.copyWith(color: muted),
+                ),
+              ),
+            ],
           ),
         ),
       ],
+    );
+  }
+}
+
+
+/// A bank choice as the mock draws it: radio ring, name, and the bank's real
+/// logo trailing. Selected rows fill softly and take the outline.
+class _BankRow extends StatelessWidget {
+  const _BankRow({
+    required this.label,
+    required this.logoAsset,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final String logoAsset;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
+    return Material(
+      color: selected
+          ? scheme.surfaceContainer
+          : scheme.surfaceContainerLowest,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(Corner.control),
+        side: BorderSide(
+          color: selected ? scheme.outline : scheme.outlineVariant,
+          width: selected ? 1.4 : 1,
+        ),
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(Corner.control),
+        onTap: onTap,
+        child: Padding(
+          padding:
+              const EdgeInsets.symmetric(horizontal: Gap.md, vertical: Gap.md),
+          child: Row(
+            children: [
+              // The radio ring, drawn to match the ink brand rather than the
+              // Material default.
+              Container(
+                width: 20,
+                height: 20,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: selected ? scheme.onSurface : scheme.outline,
+                    width: 2,
+                  ),
+                ),
+                child: selected
+                    ? Center(
+                        child: Container(
+                          width: 10,
+                          height: 10,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: scheme.onSurface,
+                          ),
+                        ),
+                      )
+                    : null,
+              ),
+              const SizedBox(width: Gap.md),
+              Expanded(
+                child: Text(label, style: theme.textTheme.titleSmall),
+              ),
+              const SizedBox(width: Gap.sm),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(6),
+                child: Image.asset(
+                  logoAsset,
+                  width: 28,
+                  height: 28,
+                  fit: BoxFit.contain,
+                  errorBuilder: (_, _, _) => Icon(
+                    Icons.account_balance_rounded,
+                    size: 22,
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The mock's copy affordance on the account fields.
+class _CopySuffix extends StatelessWidget {
+  const _CopySuffix({required this.controller});
+
+  final TextEditingController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      icon: const Icon(Icons.copy_rounded, size: 18),
+      color: Theme.of(context).colorScheme.onSurfaceVariant,
+      onPressed: () async {
+        final text = controller.text.trim();
+        if (text.isEmpty) return;
+        await Clipboard.setData(ClipboardData(text: text));
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(context.l10n.copiedToClipboard)),
+          );
+        }
+      },
     );
   }
 }

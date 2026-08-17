@@ -3,8 +3,8 @@
 import { ReactNode, useEffect } from 'react';
 import { type Customer } from '@manfaa/api-client';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { BottomNav } from './bottom-nav';
 import { LayoutProvider, useLayout } from './context';
-import { Footer } from './footer';
 import { Header } from './header';
 import { Sidebar } from './sidebar';
 
@@ -56,12 +56,18 @@ function Main({ children }: { children: ReactNode }) {
       <div className="wrapper flex grow flex-col">
         <Header />
 
-        <main className="grow pt-5" role="content">
+        {/* No footer on authenticated screens — the wallet is a tool, not a
+            page that needs a colophon. The bottom padding below lg clears
+            the fixed BottomNav (h ≈ 3.5rem) plus the device safe area. */}
+        <main
+          className="grow pt-5 pb-[calc(4.5rem+env(safe-area-inset-bottom))] lg:pb-5"
+          role="content"
+        >
           {children}
         </main>
-
-        <Footer />
       </div>
+
+      <BottomNav />
     </>
   );
 }

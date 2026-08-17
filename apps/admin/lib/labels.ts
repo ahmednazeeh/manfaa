@@ -2,6 +2,7 @@ import {
   isTransactionReasonCode,
   type AdminRole,
   type ClaimState,
+  type CustomerStatus,
   type MerchantChannel,
   type MerchantNoticeType,
   type MerchantStatus,
@@ -124,6 +125,12 @@ const MERCHANT_STATUSES: Record<MerchantStatus, string> = {
   rejected: 'Rejected',
   active: 'Active',
   suspended: 'Suspended',
+  closed: 'Closed',
+};
+
+const CUSTOMER_STATUSES: Record<CustomerStatus, string> = {
+  active: 'Active',
+  suspended: 'Disabled',
   closed: 'Closed',
 };
 
@@ -250,6 +257,11 @@ export function payoutItemStateLabel(state: PayoutItemState): string {
 
 export function merchantStatusLabel(status: MerchantStatus): string {
   return MERCHANT_STATUSES[status];
+}
+
+/** `suspended` reads as "Disabled" — the admin lever is enable/disable. */
+export function customerStatusLabel(status: CustomerStatus): string {
+  return CUSTOMER_STATUSES[status];
 }
 
 export function claimStateLabel(state: ClaimState): string {

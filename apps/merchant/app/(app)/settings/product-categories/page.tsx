@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { redirect } from 'next/navigation';
 import {
   bpToPercentString,
   parsePercentToBp,
@@ -51,11 +52,6 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import {
-  Toolbar,
-  ToolbarActions,
-  ToolbarDescription,
-  ToolbarHeading,
-  ToolbarPageTitle,
 } from '@/components/app-layout/toolbar';
 import {
   EmptyBlock,
@@ -328,7 +324,8 @@ function CategoryDialog({
   );
 }
 
-export default function ProductCategoriesSettingsPage() {
+/** The per-category half of the merged Cashback settings screen. */
+export function ProductCategoriesSection() {
   const { t, i18n } = useTranslation();
   const categories = useProductCategories();
   const createCategory = useCreateProductCategory();
@@ -448,21 +445,13 @@ export default function ProductCategoriesSettingsPage() {
   };
 
   return (
-    <div className="container">
-      <Toolbar>
-        <ToolbarHeading>
-          <ToolbarPageTitle>{t('productCategories.title')}</ToolbarPageTitle>
-          <ToolbarDescription>
-            {t('productCategories.subtitle')}
-          </ToolbarDescription>
-        </ToolbarHeading>
-        <ToolbarActions>
-          <Button onClick={() => setCreating(true)}>
-            <Plus />
-            {t('productCategories.add')}
-          </Button>
-        </ToolbarActions>
-      </Toolbar>
+    <div>
+      <div className="flex justify-end pb-4">
+        <Button onClick={() => setCreating(true)}>
+          <Plus />
+          {t('productCategories.add')}
+        </Button>
+      </div>
 
       <Card className="mb-7.5">
         <CardHeader>
@@ -655,4 +644,9 @@ export default function ProductCategoriesSettingsPage() {
       </AlertDialog>
     </div>
   );
+}
+
+/** The old standalone screen forwards to the merged one (owner, 2026-08-17). */
+export default function ProductCategoriesSettingsPage() {
+  redirect('/settings/cashback');
 }
