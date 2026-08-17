@@ -503,6 +503,14 @@ fix lives.
       Home still shows the old outstanding/due figures. Invalidate the
       dashboard providers (outstanding, settle-all preview, home) on
       every successful credit submit, and refresh on tab re-entry.
+- [ ] **Pay-now shows a stale amount** (app settlements): the
+      "Transfer exactly this amount" step keeps the preview it was
+      opened with — after the balance changes (a fresh credit, another
+      settlement) the amount-to-transfer is wrong until the owner backs
+      out, refreshes and re-enters. The pay screen must re-fetch its
+      settlement preview every time it opens (and before submit, since
+      the server prices the slip amount server-side anyway — surface a
+      changed amount rather than letting a mismatched transfer happen).
 - [ ] **Split-by-category: eligible amount must not contradict lines**
       (app, web parity): when the split is ON, hide the eligible-amount
       field and derive it from the lines sum in the background — the
