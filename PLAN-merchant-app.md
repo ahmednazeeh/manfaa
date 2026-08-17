@@ -137,10 +137,18 @@ via the polymorphic device_tokens path the customer app already exercises
       MVR X").
 
 ## Task list — status
-- **MR0 Foundation — IN PROGRESS (started 2026-08-17)**
+- MR0 Foundation — DONE 2026-08-17
 - MR1 Signup + setup wizard — DONE 2026-08-17 (API mounted + app flow;
   all three Flutter suites green, goldens EYE-reviewed)
+- **MR2 Till round — workflow running (started 2026-08-17)**
 - MR3 Money (Dashboard/Settlements/Wallet) — queued
+- Follow-up (post-MR2, deferred to dodge the MR2 l10n regen): review_step
+  needs the new `contact` missing-requirement key — add to stepForMissing
+  (→ profile step 0), missingOrder, missingLabel + `missingContact` in
+  both arbs. Server side shipped 2026-08-17: submit refuses a store with
+  no phone (`missing: ['contact']`), support_phone is always materialised
+  from contact (Merchant::booted()), "same as contact" ticks by comparison
+  — profile_step.dart already does this.
 - MR4 Notifications — queued (Firebase registration blocker)
 - MR5 More estate — queued
 - MR6 Release — queued
