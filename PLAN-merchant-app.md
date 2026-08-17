@@ -360,6 +360,13 @@ touches only apps/merchant.
 - [ ] Nice-to-have: render the merchant app's real Dashboard via the
       screenshot-harness pattern (marketing fixture) as the landing's
       phone mockup, like the manfaa.app hero.
+- [ ] Split-panel auth pages (same round, owner yes 2026-08-17): /login
+      and /signup entry step get a split layout — form on one side, the
+      landing's OWN pitch panel (same component: three bullets + mockup)
+      on the other — so a bookmarked login still tells the brand story.
+      Entry step only: inside the signup wizard the panel disappears and
+      the form stays clean. Today's login is a bare centered card on
+      grey; that look retires.
 - [ ] After MR6 ships the APK: add the app download card
       (manfaa-merchant.apk slot + Cloudflare purge rule applies).
 
