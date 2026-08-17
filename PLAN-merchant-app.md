@@ -87,9 +87,12 @@ Mount the rest under `mobile/v1/merchant` + `mobile.token:merchant`,
 reusing the existing panel controllers unchanged (EnsureMobileToken sets
 the merchant guard user, so `merchant.can:*` and EnsureMerchantApproved
 just work):
-- [ ] **Settlements suite**: outstanding, wallet, settlements list/{id},
+- [x] **Settlements suite**: outstanding, wallet, settlements list/{id},
       preview (`settle_all` | ids), POST settlements (multipart receipt),
       POST settlements/wallet, POST settlements/{id}/receipts.
+      (Mounted 2026-08-17 with MR3 — web SettlementController reused
+      unchanged, permission-first then default EnsureMerchantApproved on
+      the writes; 12 feature tests in MobileMerchantSettlementsTest.)
 - [x] **Customer lookup** (`/merchant/customers/lookup`) — the credit
       screen's name-confirmation; notably absent from mobile today.
       (Mounted 2026-08-17 with MR2 step 1, plus rate + product-categories
@@ -132,11 +135,11 @@ via the polymorphic device_tokens path the customer app already exercises
       permission asked after sign-in from Dashboard), POST_NOTIFICATIONS,
       foreground banner, tap-routing by template key (settlement_* →
       Settlements/detail, discount/due reminders → Settlements).
-- [ ] Dashboard mirrors the reminder: the **prompt-discount deadline
+- [x] Dashboard mirrors the reminder: the **prompt-discount deadline
       banner** (from `settlements/preview?settle_all=1`) exactly as
       Dashboard.png draws it ("Your oldest sale stops earning the 5%
       prompt-payment discount on DATE — settle before then and save
-      MVR X").
+      MVR X"). (Shipped with MR3's Dashboard.)
 
 ## Task list — status
 - MR0 Foundation — DONE 2026-08-17
@@ -149,10 +152,18 @@ via the polymorphic device_tokens path the customer app already exercises
   MobileError 429→500 header-cast production bug. The `contact`
   missing-requirement key is wired app-side too — server refuses submit
   for a phoneless store, support_phone always materialised from contact.)
-- **MR3 Money (Dashboard/Settlements/Wallet) — NEXT**
-- MR4 Notifications — queued (Firebase registration blocker)
+- MR3 Money — DONE 2026-08-17 (settlements suite mounted + 12 feature
+  tests; manfaa_core settlement models/API with 18 wire-shape tests;
+  Dashboard money build-out, Settlements tab with bank + wallet pay flows,
+  settlement detail, Wallet screen; en+dv strings aligned with the web
+  panel's dv.json; 6 new goldens EYE-checked vs both refs; all suites
+  green: merchant 56, core 72, ui 3, customer 35.)
+- **MR4 Notifications — NEXT** (the server reminder work can start now;
+  only the app push wiring waits on the Firebase registration blocker)
 - MR5 More estate — queued
 - MR6 Release — queued
+- MR7 Tablet optimisation (merchant only) — queued after MR6 (owner-agreed
+  2026-08-17; phone-first until then)
 
 ## Rounds
 
@@ -216,12 +227,12 @@ harness goldens reviewed by EYE (light+dark, en+dv where layout-affecting)
       while `awaiting_validation` && !backdated, with the web's reason set.
 - [x] Dashboard today-tally strip (credit_count / eligible / cashback).
 
-### MR3 — Money (Dashboard + Settlements + Wallet)
-- [ ] Dashboard per Dashboard.png: Outstanding hero + Settle now,
+### MR3 — Money (Dashboard + Settlements + Wallet) — DONE 2026-08-17
+- [x] Dashboard per Dashboard.png: Outstanding hero + Settle now,
       discount-deadline banner, aging buckets (0–5/6–10/11–15/Overdue),
       payable breakdown (cashback/fee/GST + tx count + pending
       adjustments), wallet card, credit CTA.
-- [ ] Settlements per Settlements.png: amount-due hero + Pay now, discount
+- [x] Settlements per Settlements.png: amount-due hero + Pay now, discount
       banner with oldest due date, **payment method** (wallet with
       insufficient state vs bank transfer), breakdown, included
       transactions, recent settlements; wizard = select (buckets presets,
@@ -229,7 +240,9 @@ harness goldens reviewed by EYE (light+dark, en+dv where layout-affecting)
       credit applied, platform bank instructions with copy buttons) →
       receipt camera/file upload (≤5MB, pre-flight) or wallet settle;
       detail screen with status story, lines, payments, add-receipt.
-- [ ] Wallet: balance + movements.
+      (Settle-all is the default MODE and travels as `settle_all`; a preset
+      narrows to the SERVER's bucket ids and POSTs exactly those.)
+- [x] Wallet: balance + movements.
 
 ### MR4 — Notifications (the owner requirement)
 - [ ] Server reminder work (section above) + tests incl. the day-9 fire,
@@ -270,6 +283,30 @@ harness goldens reviewed by EYE (light+dark, en+dv where layout-affecting)
       Cloudflare purge rule applies; set `MOBILE_MERCHANT_ANDROID_URL` /
       admin App-releases gate values.
 - [ ] v1.0.0+1 build, on-device pass, commit + push.
+
+### MR7 — Tablet optimisation (merchant app only; owner-agreed 2026-08-17)
+
+Deferred by design until MR0–MR6 land. Phone-first per the refs; the
+column-of-cards layouts carry no fixed-width assumptions, so this round
+is additive. Customer app stays phone-only (owner call).
+
+- [ ] Width-adaptive shell: content rail capped ~640dp on phones-in-
+      landscape/small tablets; ≥840dp gets a NavigationRail (left) instead
+      of the bottom bar — same 5 destinations, same permission gating.
+- [ ] Two-pane estates where a list drives a detail: Transactions
+      (list | amend/detail), Settlements (list | detail/receipts),
+      More → Employees/Roles/Branches (list | editor).
+- [ ] Till on tablet: Credit screen as two columns ≥840dp — identify +
+      amounts left, split editor + cost preview + CTA right (the counter
+      use-case this round exists for).
+- [ ] Dashboard: aging buckets 2×2 → 4-across; cards flow into two
+      columns.
+- [ ] Unlock landscape on tablets only (keep phones portrait if that is
+      what the manifest does today — check, don't assume).
+- [ ] Golden harness gains a tablet surface (1280×800 or similar) for the
+      key screens; eye-check vs taste, no refs exist for tablet.
+- [ ] Text-scale + keyboard/mouse sanity pass (tab focus on the code
+      boxes, scanner-gun Enter submits the code field).
 
 ## Standing blockers / owner asks
 - Firebase console: register `mv.manfaa.merchant` (Android; iOS later).

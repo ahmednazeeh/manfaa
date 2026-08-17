@@ -1957,6 +1957,942 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Cashback'**
   String get todayCashback;
+
+  /// No description provided for @dashOutstandingTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Outstanding to settle'**
+  String get dashOutstandingTitle;
+
+  /// No description provided for @dashOutstandingSub.
+  ///
+  /// In en, this message translates to:
+  /// **'Cashback owed to platform'**
+  String get dashOutstandingSub;
+
+  /// No description provided for @settleNow.
+  ///
+  /// In en, this message translates to:
+  /// **'Settle now'**
+  String get settleNow;
+
+  /// No description provided for @discountDeadlineTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Your oldest sale stops earning the {rate} prompt-payment discount on {date}'**
+  String discountDeadlineTitle(String rate, String date);
+
+  /// No description provided for @discountDeadlineBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Settle everything outstanding before then and save {amount}'**
+  String discountDeadlineBody(String amount);
+
+  /// No description provided for @bucket05.
+  ///
+  /// In en, this message translates to:
+  /// **'0–5 days'**
+  String get bucket05;
+
+  /// No description provided for @bucket610.
+  ///
+  /// In en, this message translates to:
+  /// **'6–10 days'**
+  String get bucket610;
+
+  /// No description provided for @bucket1115.
+  ///
+  /// In en, this message translates to:
+  /// **'11–15 days'**
+  String get bucket1115;
+
+  /// No description provided for @bucketOverdue.
+  ///
+  /// In en, this message translates to:
+  /// **'Overdue'**
+  String get bucketOverdue;
+
+  /// No description provided for @bucketTransactions.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 transaction} other{{count} transactions}}'**
+  String bucketTransactions(int count);
+
+  /// No description provided for @payableBreakdownTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Payable breakdown'**
+  String get payableBreakdownTitle;
+
+  /// No description provided for @payableCashback.
+  ///
+  /// In en, this message translates to:
+  /// **'Customer cashback'**
+  String get payableCashback;
+
+  /// No description provided for @payableFee.
+  ///
+  /// In en, this message translates to:
+  /// **'Platform fee'**
+  String get payableFee;
+
+  /// No description provided for @payableGst.
+  ///
+  /// In en, this message translates to:
+  /// **'GST on fee'**
+  String get payableGst;
+
+  /// No description provided for @payableOutstandingCount.
+  ///
+  /// In en, this message translates to:
+  /// **'Outstanding transactions'**
+  String get payableOutstandingCount;
+
+  /// No description provided for @payablePendingCredit.
+  ///
+  /// In en, this message translates to:
+  /// **'Pending adjustment credit'**
+  String get payablePendingCredit;
+
+  /// No description provided for @walletCardTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Wallet'**
+  String get walletCardTitle;
+
+  /// No description provided for @walletCardHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Available to fund settlements instead of a bank transfer.'**
+  String get walletCardHint;
+
+  /// No description provided for @walletViewMovements.
+  ///
+  /// In en, this message translates to:
+  /// **'View movements'**
+  String get walletViewMovements;
+
+  /// No description provided for @walletUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Wallet unavailable right now.'**
+  String get walletUnavailable;
+
+  /// No description provided for @creditCtaTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Credit customer cashback'**
+  String get creditCtaTitle;
+
+  /// No description provided for @creditCtaBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Issue cashback directly to your customers.'**
+  String get creditCtaBody;
+
+  /// No description provided for @discountReasonNotAll.
+  ///
+  /// In en, this message translates to:
+  /// **'Settle everything outstanding to earn {rate} off the platform fee.'**
+  String discountReasonNotAll(String rate);
+
+  /// No description provided for @discountReasonTooOld.
+  ///
+  /// In en, this message translates to:
+  /// **'One of these sales is {days} days or older, so no prompt-payment discount applies.'**
+  String discountReasonTooOld(int days);
+
+  /// No description provided for @discountReasonClockNotStarted.
+  ///
+  /// In en, this message translates to:
+  /// **'One of these sales has no settlement date on record, so no prompt-payment discount applies — contact Manfaa to fix it.'**
+  String get discountReasonClockNotStarted;
+
+  /// No description provided for @discountNudgeTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Settle everything outstanding for {rate} off the platform fee'**
+  String discountNudgeTitle(String rate);
+
+  /// No description provided for @discountNudgeSaving.
+  ///
+  /// In en, this message translates to:
+  /// **'You would save {amount}'**
+  String discountNudgeSaving(String amount);
+
+  /// No description provided for @settlementsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Settlements'**
+  String get settlementsTitle;
+
+  /// No description provided for @settlementsSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Pay outstanding cashback and fees to Manfaa.'**
+  String get settlementsSubtitle;
+
+  /// No description provided for @amountDueNow.
+  ///
+  /// In en, this message translates to:
+  /// **'Amount due now'**
+  String get amountDueNow;
+
+  /// No description provided for @outstandingTxCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 outstanding transaction} other{{count} outstanding transactions}}'**
+  String outstandingTxCount(int count);
+
+  /// No description provided for @payNow.
+  ///
+  /// In en, this message translates to:
+  /// **'Pay now'**
+  String get payNow;
+
+  /// No description provided for @discountKeepTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Pay within {days} days to keep your {rate} prompt-payment discount.'**
+  String discountKeepTitle(int days, String rate);
+
+  /// No description provided for @oldestDueDate.
+  ///
+  /// In en, this message translates to:
+  /// **'Oldest due date: {date}'**
+  String oldestDueDate(String date);
+
+  /// No description provided for @paymentMethodTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment method'**
+  String get paymentMethodTitle;
+
+  /// No description provided for @methodWalletTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Wallet balance'**
+  String get methodWalletTitle;
+
+  /// No description provided for @methodBankTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Bank transfer'**
+  String get methodBankTitle;
+
+  /// No description provided for @methodRecommended.
+  ///
+  /// In en, this message translates to:
+  /// **'Recommended'**
+  String get methodRecommended;
+
+  /// No description provided for @methodInsufficient.
+  ///
+  /// In en, this message translates to:
+  /// **'Insufficient'**
+  String get methodInsufficient;
+
+  /// No description provided for @breakdownTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Breakdown'**
+  String get breakdownTitle;
+
+  /// No description provided for @totalDueLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Total due'**
+  String get totalDueLabel;
+
+  /// No description provided for @includedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Included transactions'**
+  String get includedTitle;
+
+  /// No description provided for @awaitingSettlementChip.
+  ///
+  /// In en, this message translates to:
+  /// **'Awaiting settlement'**
+  String get awaitingSettlementChip;
+
+  /// No description provided for @feeShort.
+  ///
+  /// In en, this message translates to:
+  /// **'Fee'**
+  String get feeShort;
+
+  /// No description provided for @discountRow.
+  ///
+  /// In en, this message translates to:
+  /// **'Prompt payment discount ({rate})'**
+  String discountRow(String rate);
+
+  /// No description provided for @discountAdvisoryNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirmed when you submit the slip. If a sale reaches {days} days before then, the full fee is due.'**
+  String discountAdvisoryNote(int days);
+
+  /// No description provided for @creditAppliedRow.
+  ///
+  /// In en, this message translates to:
+  /// **'Credit applied'**
+  String get creditAppliedRow;
+
+  /// No description provided for @creditAppliedHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Credit from earlier adjustments, netted off this batch.'**
+  String get creditAppliedHint;
+
+  /// No description provided for @recentTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Recent settlements'**
+  String get recentTitle;
+
+  /// No description provided for @payAmountCta.
+  ///
+  /// In en, this message translates to:
+  /// **'Pay {amount}'**
+  String payAmountCta(String amount);
+
+  /// No description provided for @confirmNothingDueCta.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm settlement'**
+  String get confirmNothingDueCta;
+
+  /// No description provided for @nothingDueTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Your credit covers this fully'**
+  String get nothingDueTitle;
+
+  /// No description provided for @nothingDueBody.
+  ///
+  /// In en, this message translates to:
+  /// **'There is nothing to transfer. Confirming closes these transactions against your credit.'**
+  String get nothingDueBody;
+
+  /// No description provided for @presetOlder5.
+  ///
+  /// In en, this message translates to:
+  /// **'Older than 5 days'**
+  String get presetOlder5;
+
+  /// No description provided for @presetOlder10.
+  ///
+  /// In en, this message translates to:
+  /// **'Older than 10 days'**
+  String get presetOlder10;
+
+  /// No description provided for @settleEverythingCta.
+  ///
+  /// In en, this message translates to:
+  /// **'Settle everything outstanding'**
+  String get settleEverythingCta;
+
+  /// No description provided for @emptySettleTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing to settle right now'**
+  String get emptySettleTitle;
+
+  /// No description provided for @emptySettleBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Transactions appear here when their validation window ends.'**
+  String get emptySettleBody;
+
+  /// No description provided for @noSettlementsYet.
+  ///
+  /// In en, this message translates to:
+  /// **'No settlements yet.'**
+  String get noSettlementsYet;
+
+  /// No description provided for @settlePreviewFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t price this selection.'**
+  String get settlePreviewFailed;
+
+  /// No description provided for @payBankTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Transfer exactly this amount'**
+  String get payBankTitle;
+
+  /// No description provided for @payBankLead.
+  ///
+  /// In en, this message translates to:
+  /// **'Transfer exactly this amount at your bank, then upload the slip below. Nothing is created until then — your transactions stay payable.'**
+  String get payBankLead;
+
+  /// No description provided for @amountToTransfer.
+  ///
+  /// In en, this message translates to:
+  /// **'Amount to transfer'**
+  String get amountToTransfer;
+
+  /// No description provided for @referenceLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment reference'**
+  String get referenceLabel;
+
+  /// No description provided for @referencePreviewNote.
+  ///
+  /// In en, this message translates to:
+  /// **'The final reference is assigned when the slip is submitted. If the settlement shows a different one, that one is official.'**
+  String get referencePreviewNote;
+
+  /// No description provided for @referenceFinalNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Quote this reference with your transfer — it is how we recognise your money.'**
+  String get referenceFinalNote;
+
+  /// No description provided for @transferToLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Transfer to'**
+  String get transferToLabel;
+
+  /// No description provided for @bankNameLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Bank'**
+  String get bankNameLabel;
+
+  /// No description provided for @accountNoLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Account number'**
+  String get accountNoLabel;
+
+  /// No description provided for @accountNameLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Account name'**
+  String get accountNameLabel;
+
+  /// No description provided for @copyTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy'**
+  String get copyTooltip;
+
+  /// No description provided for @copiedToast.
+  ///
+  /// In en, this message translates to:
+  /// **'Copied'**
+  String get copiedToast;
+
+  /// No description provided for @chooseBankLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose the bank you\'ll transfer to'**
+  String get chooseBankLabel;
+
+  /// No description provided for @chooseBankFirst.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick a bank above to see where to send the money.'**
+  String get chooseBankFirst;
+
+  /// No description provided for @noAccountTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Transfer details not published yet'**
+  String get noAccountTitle;
+
+  /// No description provided for @noAccountBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Contact Manfaa for the account to send to. Nothing is lost — come back with the slip after you transfer.'**
+  String get noAccountBody;
+
+  /// No description provided for @uploadSlipTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Upload the transfer slip'**
+  String get uploadSlipTitle;
+
+  /// No description provided for @uploadSlipLead.
+  ///
+  /// In en, this message translates to:
+  /// **'The slip is what creates the settlement — Manfaa matches it to your transfer before customer cashback is confirmed.'**
+  String get uploadSlipLead;
+
+  /// No description provided for @slipTakePhoto.
+  ///
+  /// In en, this message translates to:
+  /// **'Take photo'**
+  String get slipTakePhoto;
+
+  /// No description provided for @slipChooseFile.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose file'**
+  String get slipChooseFile;
+
+  /// No description provided for @slipHint.
+  ///
+  /// In en, this message translates to:
+  /// **'JPEG, PNG, WebP or PDF — up to 5 MB'**
+  String get slipHint;
+
+  /// No description provided for @slipTooLarge.
+  ///
+  /// In en, this message translates to:
+  /// **'That file is over 5 MB. Take a smaller photo of the slip, or upload the bank\'s PDF.'**
+  String get slipTooLarge;
+
+  /// No description provided for @slipUnsupported.
+  ///
+  /// In en, this message translates to:
+  /// **'The slip must be a JPEG, PNG, WebP or PDF file.'**
+  String get slipUnsupported;
+
+  /// No description provided for @slipRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Attach the transfer slip.'**
+  String get slipRequired;
+
+  /// No description provided for @slipReplace.
+  ///
+  /// In en, this message translates to:
+  /// **'Replace'**
+  String get slipReplace;
+
+  /// No description provided for @slipRemove.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove'**
+  String get slipRemove;
+
+  /// No description provided for @transferredAmountLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Amount transferred'**
+  String get transferredAmountLabel;
+
+  /// No description provided for @transferredAmountHint.
+  ///
+  /// In en, this message translates to:
+  /// **'The exact amount that left your account — change it only if you sent something different.'**
+  String get transferredAmountHint;
+
+  /// No description provided for @transferredAmountInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the transferred amount, e.g. 1,250.00.'**
+  String get transferredAmountInvalid;
+
+  /// No description provided for @amountUnderNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Less than the amount due. Money is applied oldest first: uncovered transactions stay payable on this settlement.'**
+  String get amountUnderNote;
+
+  /// No description provided for @amountOverNote.
+  ///
+  /// In en, this message translates to:
+  /// **'More than the amount due. The excess becomes wallet credit for your next settlement.'**
+  String get amountOverNote;
+
+  /// No description provided for @submitSlipCta.
+  ///
+  /// In en, this message translates to:
+  /// **'Submit slip'**
+  String get submitSlipCta;
+
+  /// No description provided for @duplicateBankRefMsg.
+  ///
+  /// In en, this message translates to:
+  /// **'A slip with this bank reference was already submitted. Check the slip\'s reference, or open that settlement.'**
+  String get duplicateBankRefMsg;
+
+  /// No description provided for @selectionNotEligibleMsg.
+  ///
+  /// In en, this message translates to:
+  /// **'Some of these transactions are no longer payable. Go back and reselect.'**
+  String get selectionNotEligibleMsg;
+
+  /// No description provided for @submitSlipFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Something went wrong submitting the slip.'**
+  String get submitSlipFailed;
+
+  /// No description provided for @successVerifyingTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Manfaa is verifying your transfer'**
+  String get successVerifyingTitle;
+
+  /// No description provided for @successVerifyingBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Settlement {reference} reached our team. Customer cashback confirms once the slip is matched to your transfer. Nothing more is needed from you.'**
+  String successVerifyingBody(String reference);
+
+  /// No description provided for @settledOutrightTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Settled — this batch\'s rewards are confirmed'**
+  String get settledOutrightTitle;
+
+  /// No description provided for @settledOutrightBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Settlement {reference} is closed and paid from your wallet. Nothing more is needed from you.'**
+  String settledOutrightBody(String reference);
+
+  /// No description provided for @discountSavedNote.
+  ///
+  /// In en, this message translates to:
+  /// **'You saved {amount}'**
+  String discountSavedNote(String amount);
+
+  /// No description provided for @viewSettlementCta.
+  ///
+  /// In en, this message translates to:
+  /// **'View settlement'**
+  String get viewSettlementCta;
+
+  /// No description provided for @doneCta.
+  ///
+  /// In en, this message translates to:
+  /// **'Done'**
+  String get doneCta;
+
+  /// No description provided for @walletSettleConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Settle from wallet?'**
+  String get walletSettleConfirmTitle;
+
+  /// No description provided for @walletSettleConfirmBody.
+  ///
+  /// In en, this message translates to:
+  /// **'{amount} will be drawn from your wallet and this batch settles immediately. No transfer, no slip.'**
+  String walletSettleConfirmBody(String amount);
+
+  /// No description provided for @walletSettleCta.
+  ///
+  /// In en, this message translates to:
+  /// **'Settle from wallet'**
+  String get walletSettleCta;
+
+  /// No description provided for @walletSettleFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t settle from the wallet.'**
+  String get walletSettleFailed;
+
+  /// No description provided for @detailCreated.
+  ///
+  /// In en, this message translates to:
+  /// **'Created {date}'**
+  String detailCreated(String date);
+
+  /// No description provided for @setlStateDraft.
+  ///
+  /// In en, this message translates to:
+  /// **'Draft'**
+  String get setlStateDraft;
+
+  /// No description provided for @setlStateAwaitingPayment.
+  ///
+  /// In en, this message translates to:
+  /// **'Awaiting your transfer'**
+  String get setlStateAwaitingPayment;
+
+  /// No description provided for @setlStatePaymentReview.
+  ///
+  /// In en, this message translates to:
+  /// **'Slip in review'**
+  String get setlStatePaymentReview;
+
+  /// No description provided for @setlStateSettled.
+  ///
+  /// In en, this message translates to:
+  /// **'Settled'**
+  String get setlStateSettled;
+
+  /// No description provided for @setlStatePartiallySettled.
+  ///
+  /// In en, this message translates to:
+  /// **'Partially settled'**
+  String get setlStatePartiallySettled;
+
+  /// No description provided for @setlStateCancelled.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancelled'**
+  String get setlStateCancelled;
+
+  /// No description provided for @statusVerifyingBody.
+  ///
+  /// In en, this message translates to:
+  /// **'The slip is being matched to your transfer. Customer cashback confirms the moment it matches.'**
+  String get statusVerifyingBody;
+
+  /// No description provided for @statusSettledTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Settled — this batch\'s rewards are confirmed.'**
+  String get statusSettledTitle;
+
+  /// No description provided for @statusPartialTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Part of this batch is settled; the rest is still due.'**
+  String get statusPartialTitle;
+
+  /// No description provided for @statusAwaitingTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Awaiting your transfer'**
+  String get statusAwaitingTitle;
+
+  /// No description provided for @statusAwaitingBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Manfaa prepared this batch. Transfer the amount due and upload the slip here.'**
+  String get statusAwaitingBody;
+
+  /// No description provided for @statusRejectedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Manfaa could not verify your transfer'**
+  String get statusRejectedTitle;
+
+  /// No description provided for @statusRejectedBody.
+  ///
+  /// In en, this message translates to:
+  /// **'This settlement was cancelled and its transactions are payable again. Start a new settlement with the correct slip.'**
+  String get statusRejectedBody;
+
+  /// No description provided for @statusRejectedReason.
+  ///
+  /// In en, this message translates to:
+  /// **'Manfaa\'s reason'**
+  String get statusRejectedReason;
+
+  /// No description provided for @statusRejectedNoReason.
+  ///
+  /// In en, this message translates to:
+  /// **'No reason recorded.'**
+  String get statusRejectedNoReason;
+
+  /// No description provided for @statusCancelledTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'This settlement was cancelled; its transactions are payable again.'**
+  String get statusCancelledTitle;
+
+  /// No description provided for @statusDraftTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Draft — not yet submitted.'**
+  String get statusDraftTitle;
+
+  /// No description provided for @remainderTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Pay the remainder'**
+  String get remainderTitle;
+
+  /// No description provided for @remainderBody.
+  ///
+  /// In en, this message translates to:
+  /// **'This batch is still {amount} short. Its transactions stay held here until it is fully paid — transfer the rest and upload that slip.'**
+  String remainderBody(String amount);
+
+  /// No description provided for @uploadReceiptCta.
+  ///
+  /// In en, this message translates to:
+  /// **'Upload a slip'**
+  String get uploadReceiptCta;
+
+  /// No description provided for @receiptAddedToast.
+  ///
+  /// In en, this message translates to:
+  /// **'Slip submitted — Manfaa is checking it.'**
+  String get receiptAddedToast;
+
+  /// No description provided for @linesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 line} other{{count} lines}}'**
+  String linesTitle(int count);
+
+  /// No description provided for @totalsLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Total'**
+  String get totalsLabel;
+
+  /// No description provided for @summaryTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Summary'**
+  String get summaryTitle;
+
+  /// No description provided for @summaryDue.
+  ///
+  /// In en, this message translates to:
+  /// **'Amount due'**
+  String get summaryDue;
+
+  /// No description provided for @summaryReceived.
+  ///
+  /// In en, this message translates to:
+  /// **'Received so far'**
+  String get summaryReceived;
+
+  /// No description provided for @summaryMethod.
+  ///
+  /// In en, this message translates to:
+  /// **'Paid via'**
+  String get summaryMethod;
+
+  /// No description provided for @methodBank.
+  ///
+  /// In en, this message translates to:
+  /// **'Bank transfer'**
+  String get methodBank;
+
+  /// No description provided for @methodWallet.
+  ///
+  /// In en, this message translates to:
+  /// **'Wallet'**
+  String get methodWallet;
+
+  /// No description provided for @discountAppliedHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Already subtracted from the amount due. Nothing is taken from customers\' cashback.'**
+  String get discountAppliedHint;
+
+  /// No description provided for @paymentsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Payments'**
+  String get paymentsTitle;
+
+  /// No description provided for @paymentSlipAttached.
+  ///
+  /// In en, this message translates to:
+  /// **'Slip attached'**
+  String get paymentSlipAttached;
+
+  /// No description provided for @paymentNoSlip.
+  ///
+  /// In en, this message translates to:
+  /// **'No slip'**
+  String get paymentNoSlip;
+
+  /// No description provided for @paymentPending.
+  ///
+  /// In en, this message translates to:
+  /// **'Awaiting review'**
+  String get paymentPending;
+
+  /// No description provided for @paymentMatched.
+  ///
+  /// In en, this message translates to:
+  /// **'Verified'**
+  String get paymentMatched;
+
+  /// No description provided for @paymentRejected.
+  ///
+  /// In en, this message translates to:
+  /// **'Refused'**
+  String get paymentRejected;
+
+  /// No description provided for @settlementNotFound.
+  ///
+  /// In en, this message translates to:
+  /// **'Settlement not found.'**
+  String get settlementNotFound;
+
+  /// No description provided for @startNewSettlement.
+  ///
+  /// In en, this message translates to:
+  /// **'Start a new settlement'**
+  String get startNewSettlement;
+
+  /// No description provided for @walletScreenTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Wallet'**
+  String get walletScreenTitle;
+
+  /// No description provided for @walletBalanceLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Balance'**
+  String get walletBalanceLabel;
+
+  /// No description provided for @walletTopUpHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Top-ups are recorded by our team when your transfer arrives.'**
+  String get walletTopUpHint;
+
+  /// No description provided for @movementsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Movements'**
+  String get movementsTitle;
+
+  /// No description provided for @movementsEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No wallet movements yet.'**
+  String get movementsEmpty;
+
+  /// No description provided for @movementTopUp.
+  ///
+  /// In en, this message translates to:
+  /// **'Top-up'**
+  String get movementTopUp;
+
+  /// No description provided for @movementSettlement.
+  ///
+  /// In en, this message translates to:
+  /// **'Spent on a settlement'**
+  String get movementSettlement;
+
+  /// No description provided for @movementSettlementCredit.
+  ///
+  /// In en, this message translates to:
+  /// **'Credit from a settlement'**
+  String get movementSettlementCredit;
+
+  /// No description provided for @movementOther.
+  ///
+  /// In en, this message translates to:
+  /// **'Adjustment'**
+  String get movementOther;
+
+  /// No description provided for @balanceAfterLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Balance after: {amount}'**
+  String balanceAfterLabel(String amount);
+
+  /// No description provided for @presetAllLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'All'**
+  String get presetAllLabel;
 }
 
 class _AppLocalizationsDelegate

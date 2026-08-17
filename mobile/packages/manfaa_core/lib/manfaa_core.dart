@@ -16,3 +16,4 @@ export 'src/merchant_models.dart';
 export 'src/models.dart';
 export 'src/money.dart';
 export 'src/session.dart';
+export 'src/settlement_models.dart';

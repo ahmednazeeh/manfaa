@@ -10,6 +10,7 @@ use App\Http\Controllers\Devices\MerchantPushTokenController;
 use App\Http\Controllers\Merchant\CustomerLookupController;
 use App\Http\Controllers\Merchant\ProductCategoriesController;
 use App\Http\Controllers\Merchant\RateController;
+use App\Http\Controllers\Merchant\SettlementController;
 use App\Http\Controllers\Merchant\SetupController;
 use App\Http\Controllers\Merchant\TransactionCorrectionController;
 use App\Http\Controllers\Mobile\ConfigController;
@@ -273,6 +274,71 @@ Route::prefix('mobile/v1')
                 // feeds the credit form, and posting credits is till work.
                 Route::get('product-categories', [ProductCategoriesController::class, 'index'])
                     ->middleware('merchant.can:product_categories.view');
+
+                /*
+                 * The settlements suite (merchant app MR3) — the web mount
+                 * (routes/api/settlements.php) verbatim: same controller, same
+                 * domain services (OutstandingSummary, SettlementPreview,
+                 * SettlementBuilder), same permission slugs in the same order.
+                 * Receipt-first (PLAN §1): the app previews what a selection
+                 * costs and where to send it, the merchant transfers at their
+                 * bank, and SUBMITTING the slip is the single act that creates
+                 * a settlement — multipart, because the slip travels with the
+                 * claim, and what that file really IS is decided by SlipStorage
+                 * reading its magic bytes, not by anything this layer trusts.
+                 *
+                 * The three writes take the DEFAULT EnsureMerchantApproved, not
+                 * the `:trading` strength the till void above uses — and that
+                 * difference is the point. Submitting a settlement freezes
+                 * lines irreversibly and claims a real bank transfer, so it
+                 * belongs to a store that has actually passed review (draft /
+                 * pending_review / rejected → 409 store_not_approved, in the
+                 * envelope). But a SUSPENDED or closed store is deliberately
+                 * admitted: suspension is the platform's only credit control
+                 * (§7, day 16 of non-payment) and settling is the one act that
+                 * ends it — a gate that refused a suspended shopkeeper's money
+                 * would make the suspension permanent. Suspension is never a
+                 * locked panel.
+                 *
+                 * Permission FIRST on every route, as everywhere on this
+                 * surface: an account that may not touch money is refused
+                 * before the response can reveal the store's standing.
+                 * `outstanding` answers to settlements.view — it is the
+                 * unsettled-lines read model the builder assembles from, not a
+                 * separate surface — while the wallet is its own pair, because
+                 * spending a wallet balance settles real money without a bank
+                 * transfer ever being made. Every {id} resolves through the
+                 * authenticated merchant's own relations: another merchant's
+                 * settlement is indistinguishable from a missing one.
+                 */
+                Route::get('outstanding', [SettlementController::class, 'outstanding'])
+                    ->middleware('merchant.can:settlements.view');
+
+                Route::get('wallet', [SettlementController::class, 'wallet'])
+                    ->middleware('merchant.can:wallet.view');
+
+                Route::get('settlements', [SettlementController::class, 'index'])
+                    ->middleware('merchant.can:settlements.view');
+
+                Route::get('settlements/preview', [SettlementController::class, 'preview'])
+                    ->middleware('merchant.can:settlements.preview');
+
+                Route::get('settlements/{id}', [SettlementController::class, 'show'])
+                    ->whereNumber('id')
+                    ->middleware('merchant.can:settlements.view');
+
+                Route::post('settlements', [SettlementController::class, 'store'])
+                    ->middleware(['merchant.can:settlements.create', EnsureMerchantApproved::class]);
+
+                Route::post('settlements/wallet', [SettlementController::class, 'walletSettle'])
+                    ->middleware(['merchant.can:wallet.settle', EnsureMerchantApproved::class]);
+
+                // A further transfer against a batch still owed money (§7
+                // partial payments, or an admin-built fallback batch) — also
+                // receipt-bearing, also multipart.
+                Route::post('settlements/{id}/receipts', [SettlementController::class, 'storeReceipt'])
+                    ->whereNumber('id')
+                    ->middleware(['merchant.can:settlements.receipt_add', EnsureMerchantApproved::class]);
 
                 Route::get('devices', [MerchantDevicesController::class, 'index']);
                 Route::delete('devices/{id}', [MerchantDevicesController::class, 'destroy'])->whereNumber('id');

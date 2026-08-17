@@ -6,6 +6,7 @@ import 'api_base.dart';
 import 'merchant_models.dart';
 import 'models.dart';
 import 'session.dart';
+import 'settlement_models.dart';
 
 /// The merchant app's client for /api/mobile/v1 — the till in the pocket.
 ///
@@ -435,6 +436,179 @@ class MerchantApi extends ManfaaApiBase<MerchantSession> {
       replayed:
           response.headers.value('idempotency-replay') == 'true' ||
           response.statusCode == 200,
+    );
+  }
+
+  // --------------------------------------------------- settlements (MR3)
+
+  /// The dashboard's ageing summary (OutstandingSummary::forMerchant, with
+  /// as_of — unlike /merchant/home's projection). Gate: `settlements.view`.
+  Future<MerchantOutstanding> outstanding() async =>
+      MerchantOutstanding.fromJson(await getJson('/merchant/outstanding'));
+
+  /// Balance + movements, newest first. The wallet row is created on the
+  /// first read (which answers 201 — same body). Gate: `wallet.view`.
+  Future<MerchantWalletState> wallet() async =>
+      MerchantWalletState.fromJson(await getJson('/merchant/wallet'));
+
+  /// Settlement history, newest first, PAGE-numbered (paginate(25) — not
+  /// the cursor shape transactions use). Gate: `settlements.view`.
+  Future<SettlementPage> settlements({int page = 1}) async {
+    final data = await run(
+      () => dio.get<Map<String, dynamic>>(
+        '/merchant/settlements',
+        queryParameters: {'page': page},
+      ),
+    );
+
+    return SettlementPage.fromJson(data ?? const {});
+  }
+
+  /// One batch with its frozen lines (transaction loaded) and payments.
+  /// Another merchant's id is a plain 404. Gate: `settlements.view`.
+  Future<MerchantSettlement> settlement(int id) async =>
+      MerchantSettlement.fromJson(await getJson('/merchant/settlements/$id'));
+
+  /// Price a selection BEFORE any commitment: totals, §7 credit netting,
+  /// the advisory discount verdict, every eligible row, the preset buckets
+  /// and the platform's bank instructions. Reservation-free — nothing is
+  /// claimed. [settleAll] previews everything eligible; otherwise
+  /// [transactionIds] names the subset exactly (a named row that is not
+  /// eligible is a 422 refusal, never a silent drop).
+  /// Gate: `settlements.preview`.
+  Future<SettlementPreviewData> settlementPreview({
+    bool settleAll = false,
+    List<int>? transactionIds,
+  }) async {
+    final data = await run(
+      () => dio.get<Map<String, dynamic>>(
+        '/merchant/settlements/preview',
+        queryParameters: settleAll
+            ? {'settle_all': 1}
+            : {'transaction_ids[]': transactionIds ?? const <int>[]},
+      ),
+    );
+
+    return SettlementPreviewData.fromJson(
+      (data?['data'] as Map?)?.cast<String, dynamic>() ?? {},
+    );
+  }
+
+  /// The one shared body for the two selection-carrying writes: settle-all
+  /// is a MODE (`settle_all`), never an id list — a sale that becomes
+  /// payable between preview and submit then joins the batch instead of
+  /// silently costing the merchant the discount.
+  Map<String, dynamic> _selectionBody({
+    required bool settleAll,
+    List<int>? transactionIds,
+  }) =>
+      settleAll
+          ? {'settle_all': true}
+          : {'transaction_ids': transactionIds ?? const <int>[]};
+
+  /// The receipt-first submission (PLAN §1): the selection, the laari
+  /// actually transferred, the slip, and optionally the bank's reference
+  /// and WHICH platform account was paid. One server transaction builds the
+  /// batch in payment_review — or not at all. 201 with the settlement.
+  ///
+  /// Refusals: `slip_too_large` / `slip_unsupported_type` (422, decided by
+  /// magic bytes), `duplicate_bank_ref` (409), `validation_failed` with the
+  /// server's prose when the selection is no longer eligible, `conflict`
+  /// (409) when the rows are locked or moved on.
+  /// Gate: `settlements.create` (+ approved store; suspended still settles).
+  Future<MerchantSettlement> createSettlement({
+    bool settleAll = false,
+    List<int>? transactionIds,
+    required int amountLaari,
+    String? bankRef,
+    required Uint8List slipBytes,
+    required String slipFilename,
+    int? platformBankAccountId,
+  }) async {
+    final form = FormData();
+    if (settleAll) {
+      form.fields.add(const MapEntry('settle_all', '1'));
+    } else {
+      for (final id in transactionIds ?? const <int>[]) {
+        form.fields.add(MapEntry('transaction_ids[]', '$id'));
+      }
+    }
+    form.fields.add(MapEntry('amount', '$amountLaari'));
+    if (bankRef != null && bankRef.isNotEmpty) {
+      form.fields.add(MapEntry('bank_ref', bankRef));
+    }
+    if (platformBankAccountId != null) {
+      form.fields.add(
+        MapEntry('platform_bank_account_id', '$platformBankAccountId'),
+      );
+    }
+    form.files.add(
+      MapEntry('slip', MultipartFile.fromBytes(slipBytes, filename: slipFilename)),
+    );
+
+    final data = await run(
+      () => dio.post<Map<String, dynamic>>('/merchant/settlements', data: form),
+    );
+
+    return MerchantSettlement.fromJson(
+      (data?['data'] as Map?)?.cast<String, dynamic>() ?? {},
+    );
+  }
+
+  /// §7 wallet settlement — build and settle in one call, no receipt (the
+  /// top-up that funded the wallet is the evidence). Also the ONLY honest
+  /// path for a batch §7 credits netted to zero: it draws nothing.
+  ///
+  /// Refusals: `validation_failed` (422) with the server's prose when the
+  /// balance cannot cover the batch. Gate: `wallet.settle`.
+  Future<MerchantSettlement> walletSettle({
+    bool settleAll = false,
+    List<int>? transactionIds,
+  }) async {
+    final data = await run(
+      () => dio.post<Map<String, dynamic>>(
+        '/merchant/settlements/wallet',
+        data: _selectionBody(
+          settleAll: settleAll,
+          transactionIds: transactionIds,
+        ),
+      ),
+    );
+
+    return MerchantSettlement.fromJson(
+      (data?['data'] as Map?)?.cast<String, dynamic>() ?? {},
+    );
+  }
+
+  /// A FURTHER receipt against a batch still owed money — the remainder
+  /// after a §7 partial payment, or the transfer for an admin-built
+  /// awaiting_payment batch. No destination: the batch's account was chosen
+  /// once, at creation. Gate: `settlements.receipt_add`.
+  Future<MerchantSettlement> addSettlementReceipt({
+    required int id,
+    required int amountLaari,
+    String? bankRef,
+    required Uint8List slipBytes,
+    required String slipFilename,
+  }) async {
+    final form = FormData();
+    form.fields.add(MapEntry('amount', '$amountLaari'));
+    if (bankRef != null && bankRef.isNotEmpty) {
+      form.fields.add(MapEntry('bank_ref', bankRef));
+    }
+    form.files.add(
+      MapEntry('slip', MultipartFile.fromBytes(slipBytes, filename: slipFilename)),
+    );
+
+    final data = await run(
+      () => dio.post<Map<String, dynamic>>(
+        '/merchant/settlements/$id/receipts',
+        data: form,
+      ),
+    );
+
+    return MerchantSettlement.fromJson(
+      (data?['data'] as Map?)?.cast<String, dynamic>() ?? {},
     );
   }
 

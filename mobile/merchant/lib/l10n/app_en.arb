@@ -34,13 +34,11 @@
   "transactionsComingBody": "Every sale you've credited will live here.",
   "settlementsComingBody": "Amounts due, the prompt-payment discount and your receipts will live here.",
   "moreComingBody": "Profile, employees, roles, branches and cashback settings will live here.",
-
   "continueLabel": "Continue",
   "back": "Back",
   "skip": "Skip",
   "skipForNow": "Skip for now",
   "notSet": "Not set",
-
   "newMerchantPrompt": "New merchant?",
   "registerStore": "Register your store",
   "signupTitle": "Register your store",
@@ -80,7 +78,6 @@
   "errSignupExpired": "That verification expired. Start again with your phone number.",
   "errEmailRegistered": "That email already has a merchant account. Log in instead.",
   "errSignupDetailsMissing": "Enter the store name, an email, and a password of at least 8 characters.",
-
   "setupTitle": "Set up your store",
   "setupStepOf": "Step {current} of {total}",
   "@setupStepOf": {
@@ -218,11 +215,9 @@
   },
   "staffSetupTitle": "Setup needs the owner",
   "staffSetupBody": "This store hasn't finished setup, and your role can't edit it. Ask the store owner to finish it on their account.",
-
   "cancel": "Cancel",
   "save": "Save",
   "optionalLabel": "optional",
-
   "creditTitle": "Credit customer",
   "creditSubtitle": "Record a sale and credit the customer's cashback.",
   "modeEnterCode": "Enter code",
@@ -251,7 +246,6 @@
   "fullSaleLabel": "Full sale amount",
   "fullSaleHint": "The whole invoice total — reference only, never used in computation.",
   "fullSaleInvalid": "Must be a valid amount, at least the eligible amount.",
-
   "customRateToggle": "Custom cashback for this sale",
   "customRateToggleHint": "Pay this customer more than your usual rate.",
   "customRateLabel": "Cashback for this sale",
@@ -295,7 +289,6 @@
   },
   "customRateRefusedBodyNoRate": "A custom rate can only raise what this sale already earns. Enter a higher rate, or switch the custom rate off.",
   "customRateNotPricedTitle": "That rate isn't available yet.",
-
   "splitToggle": "Split by category",
   "splitToggleHint": "Split this sale into product categories.",
   "splitBreakdownTitle": "Category breakdown",
@@ -321,7 +314,6 @@
       }
     }
   },
-
   "costPreviewTitle": "Cost preview",
   "previewCashback": "Customer cashback ({rate})",
   "@previewCashback": {
@@ -351,7 +343,6 @@
   "previewEstimateNote": "Estimate — final amounts use the rate at the sale time.",
   "previewNoRate": "No cashback rate is in effect yet — contact Manfaa before crediting customers.",
   "previewUnavailable": "Your current rate is unavailable right now — the credit still uses the correct rate on the server.",
-
   "backdatedTitle": "Backdated sale — this credit is final",
   "backdatedBody": "This sale is older than your refund window — once credited it cannot be reversed, and it becomes payable to Manfaa immediately.",
   "backdatedMaybeTitle": "This sale may be backdated",
@@ -360,7 +351,6 @@
   "backdatedConfirmRequired": "Confirm you understand before recording this credit.",
   "backdatedResultTitle": "Credited — final and payable now",
   "backdatedResultBody": "This backdated sale skipped the refund window. The customer's cashback is payable to Manfaa immediately, and neither you nor your POS can reverse it — contact Manfaa if it needs correcting.",
-
   "pendingNote": "Credited cashback will appear as pending. It will be validated and released to the customer after settlement.",
   "creditCta": "Credit customer",
   "errDuplicateInvoiceTitle": "This invoice is already credited.",
@@ -368,7 +358,6 @@
   "errSuspendedTitle": "Your store is suspended — new cashback is paused.",
   "errSuspendedBody": "Settle your outstanding balance to resume crediting customers, or contact Manfaa if you believe this is wrong.",
   "errCreditFailed": "Could not record the credit.",
-
   "queuedBannerTitle": "{count, plural, =1{1 sale waiting to sync} other{{count} sales waiting to sync}}",
   "@queuedBannerTitle": {
     "placeholders": {
@@ -384,7 +373,6 @@
   "attentionBody": "These queued sales were refused when they synced — review each one.",
   "attentionRetry": "Try again",
   "attentionDiscard": "Dismiss",
-
   "resultRecordedTitle": "Cashback recorded",
   "resultBelowMinTitle": "Recorded — no reward",
   "resultBelowMinBody": "This sale is below your store's minimum eligible amount. It was recorded with zero cashback — the customer earns nothing on it and nothing is payable.",
@@ -398,7 +386,6 @@
   "resultYouPay": "You pay",
   "resultLinesTitle": "Priced lines",
   "creditAnother": "Credit another customer",
-
   "stateTracked": "Recorded",
   "stateAwaitingValidation": "In refund window",
   "statePayableUnfunded": "Payable to Manfaa",
@@ -408,7 +395,6 @@
   "stateReversed": "Reversed",
   "stateWrittenOff": "Written off — unpaid",
   "stateOther": "Updated",
-
   "reasonAutoValidation": "Validated automatically",
   "reasonBackdatedFinal": "Backdated — cannot be reversed",
   "reasonBelowMinimum": "Below minimum sale",
@@ -421,7 +407,6 @@
   "reasonOtherCorrected": "Corrected — other reason",
   "reasonStaleTimestamp": "Held — sale was backdated",
   "reasonUnknown": "Updated by Manfaa",
-
   "transactionsTitle": "Transactions",
   "filterAll": "All states",
   "txEmptyTitle": "No transactions yet",
@@ -479,9 +464,317 @@
   "cancelReasonError": "Keyed in error",
   "errNotAmendable": "This sale can no longer be changed — its window has closed.",
   "errBackdatedIrreversible": "Backdated credits can never be reversed.",
-
   "todayTitle": "Today",
   "todayCredits": "Credits",
   "todayEligible": "Eligible sales",
-  "todayCashback": "Cashback"
+  "todayCashback": "Cashback",
+  "dashOutstandingTitle": "Outstanding to settle",
+  "dashOutstandingSub": "Cashback owed to platform",
+  "settleNow": "Settle now",
+  "discountDeadlineTitle": "Your oldest sale stops earning the {rate} prompt-payment discount on {date}",
+  "@discountDeadlineTitle": {
+    "placeholders": {
+      "rate": {
+        "type": "String"
+      },
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "discountDeadlineBody": "Settle everything outstanding before then and save {amount}",
+  "@discountDeadlineBody": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "bucket05": "0–5 days",
+  "bucket610": "6–10 days",
+  "bucket1115": "11–15 days",
+  "bucketOverdue": "Overdue",
+  "bucketTransactions": "{count, plural, =1{1 transaction} other{{count} transactions}}",
+  "@bucketTransactions": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "payableBreakdownTitle": "Payable breakdown",
+  "payableCashback": "Customer cashback",
+  "payableFee": "Platform fee",
+  "payableGst": "GST on fee",
+  "payableOutstandingCount": "Outstanding transactions",
+  "payablePendingCredit": "Pending adjustment credit",
+  "walletCardTitle": "Wallet",
+  "walletCardHint": "Available to fund settlements instead of a bank transfer.",
+  "walletViewMovements": "View movements",
+  "walletUnavailable": "Wallet unavailable right now.",
+  "creditCtaTitle": "Credit customer cashback",
+  "creditCtaBody": "Issue cashback directly to your customers.",
+  "discountReasonNotAll": "Settle everything outstanding to earn {rate} off the platform fee.",
+  "@discountReasonNotAll": {
+    "placeholders": {
+      "rate": {
+        "type": "String"
+      }
+    }
+  },
+  "discountReasonTooOld": "One of these sales is {days} days or older, so no prompt-payment discount applies.",
+  "@discountReasonTooOld": {
+    "placeholders": {
+      "days": {
+        "type": "int"
+      }
+    }
+  },
+  "discountReasonClockNotStarted": "One of these sales has no settlement date on record, so no prompt-payment discount applies — contact Manfaa to fix it.",
+  "discountNudgeTitle": "Settle everything outstanding for {rate} off the platform fee",
+  "@discountNudgeTitle": {
+    "placeholders": {
+      "rate": {
+        "type": "String"
+      }
+    }
+  },
+  "discountNudgeSaving": "You would save {amount}",
+  "@discountNudgeSaving": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "settlementsTitle": "Settlements",
+  "settlementsSubtitle": "Pay outstanding cashback and fees to Manfaa.",
+  "amountDueNow": "Amount due now",
+  "outstandingTxCount": "{count, plural, =1{1 outstanding transaction} other{{count} outstanding transactions}}",
+  "@outstandingTxCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "payNow": "Pay now",
+  "discountKeepTitle": "Pay within {days} days to keep your {rate} prompt-payment discount.",
+  "@discountKeepTitle": {
+    "placeholders": {
+      "days": {
+        "type": "int"
+      },
+      "rate": {
+        "type": "String"
+      }
+    }
+  },
+  "oldestDueDate": "Oldest due date: {date}",
+  "@oldestDueDate": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "paymentMethodTitle": "Payment method",
+  "methodWalletTitle": "Wallet balance",
+  "methodBankTitle": "Bank transfer",
+  "methodRecommended": "Recommended",
+  "methodInsufficient": "Insufficient",
+  "breakdownTitle": "Breakdown",
+  "totalDueLabel": "Total due",
+  "includedTitle": "Included transactions",
+  "awaitingSettlementChip": "Awaiting settlement",
+  "feeShort": "Fee",
+  "discountRow": "Prompt payment discount ({rate})",
+  "@discountRow": {
+    "placeholders": {
+      "rate": {
+        "type": "String"
+      }
+    }
+  },
+  "discountAdvisoryNote": "Confirmed when you submit the slip. If a sale reaches {days} days before then, the full fee is due.",
+  "@discountAdvisoryNote": {
+    "placeholders": {
+      "days": {
+        "type": "int"
+      }
+    }
+  },
+  "creditAppliedRow": "Credit applied",
+  "creditAppliedHint": "Credit from earlier adjustments, netted off this batch.",
+  "recentTitle": "Recent settlements",
+  "payAmountCta": "Pay {amount}",
+  "@payAmountCta": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "confirmNothingDueCta": "Confirm settlement",
+  "nothingDueTitle": "Your credit covers this fully",
+  "nothingDueBody": "There is nothing to transfer. Confirming closes these transactions against your credit.",
+  "presetOlder5": "Older than 5 days",
+  "presetOlder10": "Older than 10 days",
+  "settleEverythingCta": "Settle everything outstanding",
+  "emptySettleTitle": "Nothing to settle right now",
+  "emptySettleBody": "Transactions appear here when their validation window ends.",
+  "noSettlementsYet": "No settlements yet.",
+  "settlePreviewFailed": "Couldn't price this selection.",
+  "payBankTitle": "Transfer exactly this amount",
+  "payBankLead": "Transfer exactly this amount at your bank, then upload the slip below. Nothing is created until then — your transactions stay payable.",
+  "amountToTransfer": "Amount to transfer",
+  "referenceLabel": "Payment reference",
+  "referencePreviewNote": "The final reference is assigned when the slip is submitted. If the settlement shows a different one, that one is official.",
+  "referenceFinalNote": "Quote this reference with your transfer — it is how we recognise your money.",
+  "transferToLabel": "Transfer to",
+  "bankNameLabel": "Bank",
+  "accountNoLabel": "Account number",
+  "accountNameLabel": "Account name",
+  "copyTooltip": "Copy",
+  "copiedToast": "Copied",
+  "chooseBankLabel": "Choose the bank you'll transfer to",
+  "chooseBankFirst": "Pick a bank above to see where to send the money.",
+  "noAccountTitle": "Transfer details not published yet",
+  "noAccountBody": "Contact Manfaa for the account to send to. Nothing is lost — come back with the slip after you transfer.",
+  "uploadSlipTitle": "Upload the transfer slip",
+  "uploadSlipLead": "The slip is what creates the settlement — Manfaa matches it to your transfer before customer cashback is confirmed.",
+  "slipTakePhoto": "Take photo",
+  "slipChooseFile": "Choose file",
+  "slipHint": "JPEG, PNG, WebP or PDF — up to 5 MB",
+  "slipTooLarge": "That file is over 5 MB. Take a smaller photo of the slip, or upload the bank's PDF.",
+  "slipUnsupported": "The slip must be a JPEG, PNG, WebP or PDF file.",
+  "slipRequired": "Attach the transfer slip.",
+  "slipReplace": "Replace",
+  "slipRemove": "Remove",
+  "transferredAmountLabel": "Amount transferred",
+  "transferredAmountHint": "The exact amount that left your account — change it only if you sent something different.",
+  "transferredAmountInvalid": "Enter the transferred amount, e.g. 1,250.00.",
+  "amountUnderNote": "Less than the amount due. Money is applied oldest first: uncovered transactions stay payable on this settlement.",
+  "amountOverNote": "More than the amount due. The excess becomes wallet credit for your next settlement.",
+  "submitSlipCta": "Submit slip",
+  "duplicateBankRefMsg": "A slip with this bank reference was already submitted. Check the slip's reference, or open that settlement.",
+  "selectionNotEligibleMsg": "Some of these transactions are no longer payable. Go back and reselect.",
+  "submitSlipFailed": "Something went wrong submitting the slip.",
+  "successVerifyingTitle": "Manfaa is verifying your transfer",
+  "successVerifyingBody": "Settlement {reference} reached our team. Customer cashback confirms once the slip is matched to your transfer. Nothing more is needed from you.",
+  "@successVerifyingBody": {
+    "placeholders": {
+      "reference": {
+        "type": "String"
+      }
+    }
+  },
+  "settledOutrightTitle": "Settled — this batch's rewards are confirmed",
+  "settledOutrightBody": "Settlement {reference} is closed and paid from your wallet. Nothing more is needed from you.",
+  "@settledOutrightBody": {
+    "placeholders": {
+      "reference": {
+        "type": "String"
+      }
+    }
+  },
+  "discountSavedNote": "You saved {amount}",
+  "@discountSavedNote": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "viewSettlementCta": "View settlement",
+  "doneCta": "Done",
+  "walletSettleConfirmTitle": "Settle from wallet?",
+  "walletSettleConfirmBody": "{amount} will be drawn from your wallet and this batch settles immediately. No transfer, no slip.",
+  "@walletSettleConfirmBody": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "walletSettleCta": "Settle from wallet",
+  "walletSettleFailed": "Couldn't settle from the wallet.",
+  "detailCreated": "Created {date}",
+  "@detailCreated": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "setlStateDraft": "Draft",
+  "setlStateAwaitingPayment": "Awaiting your transfer",
+  "setlStatePaymentReview": "Slip in review",
+  "setlStateSettled": "Settled",
+  "setlStatePartiallySettled": "Partially settled",
+  "setlStateCancelled": "Cancelled",
+  "statusVerifyingBody": "The slip is being matched to your transfer. Customer cashback confirms the moment it matches.",
+  "statusSettledTitle": "Settled — this batch's rewards are confirmed.",
+  "statusPartialTitle": "Part of this batch is settled; the rest is still due.",
+  "statusAwaitingTitle": "Awaiting your transfer",
+  "statusAwaitingBody": "Manfaa prepared this batch. Transfer the amount due and upload the slip here.",
+  "statusRejectedTitle": "Manfaa could not verify your transfer",
+  "statusRejectedBody": "This settlement was cancelled and its transactions are payable again. Start a new settlement with the correct slip.",
+  "statusRejectedReason": "Manfaa's reason",
+  "statusRejectedNoReason": "No reason recorded.",
+  "statusCancelledTitle": "This settlement was cancelled; its transactions are payable again.",
+  "statusDraftTitle": "Draft — not yet submitted.",
+  "remainderTitle": "Pay the remainder",
+  "remainderBody": "This batch is still {amount} short. Its transactions stay held here until it is fully paid — transfer the rest and upload that slip.",
+  "@remainderBody": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "uploadReceiptCta": "Upload a slip",
+  "receiptAddedToast": "Slip submitted — Manfaa is checking it.",
+  "linesTitle": "{count, plural, =1{1 line} other{{count} lines}}",
+  "@linesTitle": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "totalsLabel": "Total",
+  "summaryTitle": "Summary",
+  "summaryDue": "Amount due",
+  "summaryReceived": "Received so far",
+  "summaryMethod": "Paid via",
+  "methodBank": "Bank transfer",
+  "methodWallet": "Wallet",
+  "discountAppliedHint": "Already subtracted from the amount due. Nothing is taken from customers' cashback.",
+  "paymentsTitle": "Payments",
+  "paymentSlipAttached": "Slip attached",
+  "paymentNoSlip": "No slip",
+  "paymentPending": "Awaiting review",
+  "paymentMatched": "Verified",
+  "paymentRejected": "Refused",
+  "settlementNotFound": "Settlement not found.",
+  "startNewSettlement": "Start a new settlement",
+  "walletScreenTitle": "Wallet",
+  "walletBalanceLabel": "Balance",
+  "walletTopUpHint": "Top-ups are recorded by our team when your transfer arrives.",
+  "movementsTitle": "Movements",
+  "movementsEmpty": "No wallet movements yet.",
+  "movementTopUp": "Top-up",
+  "movementSettlement": "Spent on a settlement",
+  "movementSettlementCredit": "Credit from a settlement",
+  "movementOther": "Adjustment",
+  "balanceAfterLabel": "Balance after: {amount}",
+  "@balanceAfterLabel": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "presetAllLabel": "All"
 }

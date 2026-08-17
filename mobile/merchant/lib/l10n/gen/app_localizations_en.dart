@@ -1051,4 +1051,561 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get todayCashback => 'Cashback';
+
+  @override
+  String get dashOutstandingTitle => 'Outstanding to settle';
+
+  @override
+  String get dashOutstandingSub => 'Cashback owed to platform';
+
+  @override
+  String get settleNow => 'Settle now';
+
+  @override
+  String discountDeadlineTitle(String rate, String date) {
+    return 'Your oldest sale stops earning the $rate prompt-payment discount on $date';
+  }
+
+  @override
+  String discountDeadlineBody(String amount) {
+    return 'Settle everything outstanding before then and save $amount';
+  }
+
+  @override
+  String get bucket05 => '0–5 days';
+
+  @override
+  String get bucket610 => '6–10 days';
+
+  @override
+  String get bucket1115 => '11–15 days';
+
+  @override
+  String get bucketOverdue => 'Overdue';
+
+  @override
+  String bucketTransactions(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count transactions',
+      one: '1 transaction',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get payableBreakdownTitle => 'Payable breakdown';
+
+  @override
+  String get payableCashback => 'Customer cashback';
+
+  @override
+  String get payableFee => 'Platform fee';
+
+  @override
+  String get payableGst => 'GST on fee';
+
+  @override
+  String get payableOutstandingCount => 'Outstanding transactions';
+
+  @override
+  String get payablePendingCredit => 'Pending adjustment credit';
+
+  @override
+  String get walletCardTitle => 'Wallet';
+
+  @override
+  String get walletCardHint =>
+      'Available to fund settlements instead of a bank transfer.';
+
+  @override
+  String get walletViewMovements => 'View movements';
+
+  @override
+  String get walletUnavailable => 'Wallet unavailable right now.';
+
+  @override
+  String get creditCtaTitle => 'Credit customer cashback';
+
+  @override
+  String get creditCtaBody => 'Issue cashback directly to your customers.';
+
+  @override
+  String discountReasonNotAll(String rate) {
+    return 'Settle everything outstanding to earn $rate off the platform fee.';
+  }
+
+  @override
+  String discountReasonTooOld(int days) {
+    return 'One of these sales is $days days or older, so no prompt-payment discount applies.';
+  }
+
+  @override
+  String get discountReasonClockNotStarted =>
+      'One of these sales has no settlement date on record, so no prompt-payment discount applies — contact Manfaa to fix it.';
+
+  @override
+  String discountNudgeTitle(String rate) {
+    return 'Settle everything outstanding for $rate off the platform fee';
+  }
+
+  @override
+  String discountNudgeSaving(String amount) {
+    return 'You would save $amount';
+  }
+
+  @override
+  String get settlementsTitle => 'Settlements';
+
+  @override
+  String get settlementsSubtitle =>
+      'Pay outstanding cashback and fees to Manfaa.';
+
+  @override
+  String get amountDueNow => 'Amount due now';
+
+  @override
+  String outstandingTxCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count outstanding transactions',
+      one: '1 outstanding transaction',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get payNow => 'Pay now';
+
+  @override
+  String discountKeepTitle(int days, String rate) {
+    return 'Pay within $days days to keep your $rate prompt-payment discount.';
+  }
+
+  @override
+  String oldestDueDate(String date) {
+    return 'Oldest due date: $date';
+  }
+
+  @override
+  String get paymentMethodTitle => 'Payment method';
+
+  @override
+  String get methodWalletTitle => 'Wallet balance';
+
+  @override
+  String get methodBankTitle => 'Bank transfer';
+
+  @override
+  String get methodRecommended => 'Recommended';
+
+  @override
+  String get methodInsufficient => 'Insufficient';
+
+  @override
+  String get breakdownTitle => 'Breakdown';
+
+  @override
+  String get totalDueLabel => 'Total due';
+
+  @override
+  String get includedTitle => 'Included transactions';
+
+  @override
+  String get awaitingSettlementChip => 'Awaiting settlement';
+
+  @override
+  String get feeShort => 'Fee';
+
+  @override
+  String discountRow(String rate) {
+    return 'Prompt payment discount ($rate)';
+  }
+
+  @override
+  String discountAdvisoryNote(int days) {
+    return 'Confirmed when you submit the slip. If a sale reaches $days days before then, the full fee is due.';
+  }
+
+  @override
+  String get creditAppliedRow => 'Credit applied';
+
+  @override
+  String get creditAppliedHint =>
+      'Credit from earlier adjustments, netted off this batch.';
+
+  @override
+  String get recentTitle => 'Recent settlements';
+
+  @override
+  String payAmountCta(String amount) {
+    return 'Pay $amount';
+  }
+
+  @override
+  String get confirmNothingDueCta => 'Confirm settlement';
+
+  @override
+  String get nothingDueTitle => 'Your credit covers this fully';
+
+  @override
+  String get nothingDueBody =>
+      'There is nothing to transfer. Confirming closes these transactions against your credit.';
+
+  @override
+  String get presetOlder5 => 'Older than 5 days';
+
+  @override
+  String get presetOlder10 => 'Older than 10 days';
+
+  @override
+  String get settleEverythingCta => 'Settle everything outstanding';
+
+  @override
+  String get emptySettleTitle => 'Nothing to settle right now';
+
+  @override
+  String get emptySettleBody =>
+      'Transactions appear here when their validation window ends.';
+
+  @override
+  String get noSettlementsYet => 'No settlements yet.';
+
+  @override
+  String get settlePreviewFailed => 'Couldn\'t price this selection.';
+
+  @override
+  String get payBankTitle => 'Transfer exactly this amount';
+
+  @override
+  String get payBankLead =>
+      'Transfer exactly this amount at your bank, then upload the slip below. Nothing is created until then — your transactions stay payable.';
+
+  @override
+  String get amountToTransfer => 'Amount to transfer';
+
+  @override
+  String get referenceLabel => 'Payment reference';
+
+  @override
+  String get referencePreviewNote =>
+      'The final reference is assigned when the slip is submitted. If the settlement shows a different one, that one is official.';
+
+  @override
+  String get referenceFinalNote =>
+      'Quote this reference with your transfer — it is how we recognise your money.';
+
+  @override
+  String get transferToLabel => 'Transfer to';
+
+  @override
+  String get bankNameLabel => 'Bank';
+
+  @override
+  String get accountNoLabel => 'Account number';
+
+  @override
+  String get accountNameLabel => 'Account name';
+
+  @override
+  String get copyTooltip => 'Copy';
+
+  @override
+  String get copiedToast => 'Copied';
+
+  @override
+  String get chooseBankLabel => 'Choose the bank you\'ll transfer to';
+
+  @override
+  String get chooseBankFirst =>
+      'Pick a bank above to see where to send the money.';
+
+  @override
+  String get noAccountTitle => 'Transfer details not published yet';
+
+  @override
+  String get noAccountBody =>
+      'Contact Manfaa for the account to send to. Nothing is lost — come back with the slip after you transfer.';
+
+  @override
+  String get uploadSlipTitle => 'Upload the transfer slip';
+
+  @override
+  String get uploadSlipLead =>
+      'The slip is what creates the settlement — Manfaa matches it to your transfer before customer cashback is confirmed.';
+
+  @override
+  String get slipTakePhoto => 'Take photo';
+
+  @override
+  String get slipChooseFile => 'Choose file';
+
+  @override
+  String get slipHint => 'JPEG, PNG, WebP or PDF — up to 5 MB';
+
+  @override
+  String get slipTooLarge =>
+      'That file is over 5 MB. Take a smaller photo of the slip, or upload the bank\'s PDF.';
+
+  @override
+  String get slipUnsupported =>
+      'The slip must be a JPEG, PNG, WebP or PDF file.';
+
+  @override
+  String get slipRequired => 'Attach the transfer slip.';
+
+  @override
+  String get slipReplace => 'Replace';
+
+  @override
+  String get slipRemove => 'Remove';
+
+  @override
+  String get transferredAmountLabel => 'Amount transferred';
+
+  @override
+  String get transferredAmountHint =>
+      'The exact amount that left your account — change it only if you sent something different.';
+
+  @override
+  String get transferredAmountInvalid =>
+      'Enter the transferred amount, e.g. 1,250.00.';
+
+  @override
+  String get amountUnderNote =>
+      'Less than the amount due. Money is applied oldest first: uncovered transactions stay payable on this settlement.';
+
+  @override
+  String get amountOverNote =>
+      'More than the amount due. The excess becomes wallet credit for your next settlement.';
+
+  @override
+  String get submitSlipCta => 'Submit slip';
+
+  @override
+  String get duplicateBankRefMsg =>
+      'A slip with this bank reference was already submitted. Check the slip\'s reference, or open that settlement.';
+
+  @override
+  String get selectionNotEligibleMsg =>
+      'Some of these transactions are no longer payable. Go back and reselect.';
+
+  @override
+  String get submitSlipFailed => 'Something went wrong submitting the slip.';
+
+  @override
+  String get successVerifyingTitle => 'Manfaa is verifying your transfer';
+
+  @override
+  String successVerifyingBody(String reference) {
+    return 'Settlement $reference reached our team. Customer cashback confirms once the slip is matched to your transfer. Nothing more is needed from you.';
+  }
+
+  @override
+  String get settledOutrightTitle =>
+      'Settled — this batch\'s rewards are confirmed';
+
+  @override
+  String settledOutrightBody(String reference) {
+    return 'Settlement $reference is closed and paid from your wallet. Nothing more is needed from you.';
+  }
+
+  @override
+  String discountSavedNote(String amount) {
+    return 'You saved $amount';
+  }
+
+  @override
+  String get viewSettlementCta => 'View settlement';
+
+  @override
+  String get doneCta => 'Done';
+
+  @override
+  String get walletSettleConfirmTitle => 'Settle from wallet?';
+
+  @override
+  String walletSettleConfirmBody(String amount) {
+    return '$amount will be drawn from your wallet and this batch settles immediately. No transfer, no slip.';
+  }
+
+  @override
+  String get walletSettleCta => 'Settle from wallet';
+
+  @override
+  String get walletSettleFailed => 'Couldn\'t settle from the wallet.';
+
+  @override
+  String detailCreated(String date) {
+    return 'Created $date';
+  }
+
+  @override
+  String get setlStateDraft => 'Draft';
+
+  @override
+  String get setlStateAwaitingPayment => 'Awaiting your transfer';
+
+  @override
+  String get setlStatePaymentReview => 'Slip in review';
+
+  @override
+  String get setlStateSettled => 'Settled';
+
+  @override
+  String get setlStatePartiallySettled => 'Partially settled';
+
+  @override
+  String get setlStateCancelled => 'Cancelled';
+
+  @override
+  String get statusVerifyingBody =>
+      'The slip is being matched to your transfer. Customer cashback confirms the moment it matches.';
+
+  @override
+  String get statusSettledTitle =>
+      'Settled — this batch\'s rewards are confirmed.';
+
+  @override
+  String get statusPartialTitle =>
+      'Part of this batch is settled; the rest is still due.';
+
+  @override
+  String get statusAwaitingTitle => 'Awaiting your transfer';
+
+  @override
+  String get statusAwaitingBody =>
+      'Manfaa prepared this batch. Transfer the amount due and upload the slip here.';
+
+  @override
+  String get statusRejectedTitle => 'Manfaa could not verify your transfer';
+
+  @override
+  String get statusRejectedBody =>
+      'This settlement was cancelled and its transactions are payable again. Start a new settlement with the correct slip.';
+
+  @override
+  String get statusRejectedReason => 'Manfaa\'s reason';
+
+  @override
+  String get statusRejectedNoReason => 'No reason recorded.';
+
+  @override
+  String get statusCancelledTitle =>
+      'This settlement was cancelled; its transactions are payable again.';
+
+  @override
+  String get statusDraftTitle => 'Draft — not yet submitted.';
+
+  @override
+  String get remainderTitle => 'Pay the remainder';
+
+  @override
+  String remainderBody(String amount) {
+    return 'This batch is still $amount short. Its transactions stay held here until it is fully paid — transfer the rest and upload that slip.';
+  }
+
+  @override
+  String get uploadReceiptCta => 'Upload a slip';
+
+  @override
+  String get receiptAddedToast => 'Slip submitted — Manfaa is checking it.';
+
+  @override
+  String linesTitle(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count lines',
+      one: '1 line',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get totalsLabel => 'Total';
+
+  @override
+  String get summaryTitle => 'Summary';
+
+  @override
+  String get summaryDue => 'Amount due';
+
+  @override
+  String get summaryReceived => 'Received so far';
+
+  @override
+  String get summaryMethod => 'Paid via';
+
+  @override
+  String get methodBank => 'Bank transfer';
+
+  @override
+  String get methodWallet => 'Wallet';
+
+  @override
+  String get discountAppliedHint =>
+      'Already subtracted from the amount due. Nothing is taken from customers\' cashback.';
+
+  @override
+  String get paymentsTitle => 'Payments';
+
+  @override
+  String get paymentSlipAttached => 'Slip attached';
+
+  @override
+  String get paymentNoSlip => 'No slip';
+
+  @override
+  String get paymentPending => 'Awaiting review';
+
+  @override
+  String get paymentMatched => 'Verified';
+
+  @override
+  String get paymentRejected => 'Refused';
+
+  @override
+  String get settlementNotFound => 'Settlement not found.';
+
+  @override
+  String get startNewSettlement => 'Start a new settlement';
+
+  @override
+  String get walletScreenTitle => 'Wallet';
+
+  @override
+  String get walletBalanceLabel => 'Balance';
+
+  @override
+  String get walletTopUpHint =>
+      'Top-ups are recorded by our team when your transfer arrives.';
+
+  @override
+  String get movementsTitle => 'Movements';
+
+  @override
+  String get movementsEmpty => 'No wallet movements yet.';
+
+  @override
+  String get movementTopUp => 'Top-up';
+
+  @override
+  String get movementSettlement => 'Spent on a settlement';
+
+  @override
+  String get movementSettlementCredit => 'Credit from a settlement';
+
+  @override
+  String get movementOther => 'Adjustment';
+
+  @override
+  String balanceAfterLabel(String amount) {
+    return 'Balance after: $amount';
+  }
+
+  @override
+  String get presetAllLabel => 'All';
 }

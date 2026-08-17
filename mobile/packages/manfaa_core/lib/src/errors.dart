@@ -57,6 +57,17 @@ abstract final class ApiCode {
   static const saleBelowEligible = 'sale_below_eligible';
   static const linesSumMismatch = 'lines_sum_mismatch';
 
+  // ------------------------------------------------------ settlements (MR3)
+  // The receipt-first flow's refusals. `duplicate_bank_ref` (409) means a
+  // slip with this bank reference was already submitted; the slip pair are
+  // decided by MAGIC BYTES server-side, so a renamed .svg fails there even
+  // after passing the client pre-flight. Insufficient wallet balance and a
+  // no-longer-eligible selection arrive as `validation_failed` with the
+  // server's own prose sentence.
+  static const duplicateBankRef = 'duplicate_bank_ref';
+  static const slipTooLarge = 'slip_too_large';
+  static const slipUnsupportedType = 'slip_unsupported_type';
+
   // -------------------------------------------------- signup + setup wizard
   // The merchant onboarding path (mobile signup/setup mounting, MR1).
   static const otpInvalid = 'otp_invalid';

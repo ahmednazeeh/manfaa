@@ -1065,4 +1065,568 @@ class AppLocalizationsDv extends AppLocalizations {
 
   @override
   String get todayCashback => 'ކޭޝްބެކް';
+
+  @override
+  String get dashOutstandingTitle => 'ސެޓްލްކުރައްވަން ދައްކަންޖެހޭ';
+
+  @override
+  String get dashOutstandingSub => 'ޕްލެޓްފޯމަށް ދައްކަންޖެހޭ ކޭޝްބެކް';
+
+  @override
+  String get settleNow => 'މިހާރު ސެޓްލްކުރައްވާ';
+
+  @override
+  String discountDeadlineTitle(String rate, String date) {
+    return 'އެންމެ ދުވަސްވީ ވިޔަފާރިއަށް $rate ގެ އަވަހަށް ދެއްކުމުގެ ޑިސްކައުންޓް ލިބުން ހުއްޓޭނީ $date ގައެވެ';
+  }
+
+  @override
+  String discountDeadlineBody(String amount) {
+    return 'އޭގެ ކުރިން ދައްކަންޖެހޭ ހުރިހާ އެއްޗެއް ސެޓްލްކުރައްވައި $amount ސަލާމަތްކުރައްވާ';
+  }
+
+  @override
+  String get bucket05 => '0–5 ދުވަސް';
+
+  @override
+  String get bucket610 => '6–10 ދުވަސް';
+
+  @override
+  String get bucket1115 => '11–15 ދުވަސް';
+
+  @override
+  String get bucketOverdue => 'ސުންގަޑި ފަހަނައަޅާފައި';
+
+  @override
+  String bucketTransactions(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count މުޢާމަލާތް',
+      one: '1 މުޢާމަލާތް',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get payableBreakdownTitle => 'ދައްކަންޖެހޭ ތަފްޞީލު';
+
+  @override
+  String get payableCashback => 'ކަސްޓަމަރުގެ ކޭޝްބެކް';
+
+  @override
+  String get payableFee => 'ޕްލެޓްފޯމް ފީ';
+
+  @override
+  String get payableGst => 'ފީގެ ޖީއެސްޓީ';
+
+  @override
+  String get payableOutstandingCount => 'ދައްކަންޖެހޭ މުޢާމަލާތްތައް';
+
+  @override
+  String get payablePendingCredit => 'ކުރީގެ އެޑްޖަސްޓްމަންޓްތަކުގެ ކްރެޑިޓް';
+
+  @override
+  String get walletCardTitle => 'ވޮލެޓް';
+
+  @override
+  String get walletCardHint =>
+      'ބޭންކް ޓްރާންސްފަރގެ ބަދަލުގައި ސެޓްލްމަންޓަށް ބޭނުންކުރެއްވޭނެ.';
+
+  @override
+  String get walletViewMovements => 'މޫވްމަންޓްތައް ބައްލަވާ';
+
+  @override
+  String get walletUnavailable => 'މިވަގުތު ވޮލެޓް ނުފެނުނު.';
+
+  @override
+  String get creditCtaTitle => 'ކަސްޓަމަރަށް ކޭޝްބެކް ދެއްވާ';
+
+  @override
+  String get creditCtaBody => 'ކަސްޓަމަރުންނަށް ސީދާ ކޭޝްބެކް ދެއްވާ.';
+
+  @override
+  String discountReasonNotAll(String rate) {
+    return 'ދައްކަންޖެހޭ ހުރިހާ އެއްޗެއް ސެޓްލްކުރައްވައިގެން ޕްލެޓްފޯމް ފީން $rate ޑިސްކައުންޓް ހޯއްދެވޭނެއެވެ.';
+  }
+
+  @override
+  String discountReasonTooOld(int days) {
+    return 'މީގެ ތެރެއިން ވިޔަފާރިއަކަށް $days ދުވަސް ނުވަތަ އެއަށްވުރެ ދުވަސްވެފައިވާތީ، އަވަހަށް ދެއްކުމުގެ ޑިސްކައުންޓެއް ނުލިބޭނެއެވެ.';
+  }
+
+  @override
+  String get discountReasonClockNotStarted =>
+      'މީގެ ތެރެއިން ވިޔަފާރިއެއްގެ ސެޓްލްމަންޓް ތާރީޚް އަޅުގަނޑުމެންގެ ރެކޯޑުގައި ނެތުމުން، އަވަހަށް ދެއްކުމުގެ ޑިސްކައުންޓެއް ނުލިބޭނެއެވެ. ގުޅުއްވުމުން މިކަން ރަނގަޅުކޮށްދޭނަމެވެ.';
+
+  @override
+  String discountNudgeTitle(String rate) {
+    return 'ދައްކަންޖެހޭ ހުރިހާ އެއްޗެއް ސެޓްލްކުރައްވައި، ޕްލެޓްފޯމް ފީން $rate ޑިސްކައުންޓް ހޯއްދަވާ';
+  }
+
+  @override
+  String discountNudgeSaving(String amount) {
+    return 'އޭރުން ސަލާމަތްވާނީ $amount';
+  }
+
+  @override
+  String get settlementsTitle => 'ސެޓްލްމަންޓްތައް';
+
+  @override
+  String get settlementsSubtitle =>
+      'ދައްކަންޖެހޭ ކޭޝްބެކާއި ފީ މަންފާއަށް ދައްކަވާ.';
+
+  @override
+  String get amountDueNow => 'މިހާރު ދައްކަންޖެހޭ އަދަދު';
+
+  @override
+  String outstandingTxCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'ދައްކަންޖެހޭ $count މުޢާމަލާތް',
+      one: 'ދައްކަންޖެހޭ 1 މުޢާމަލާތް',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get payNow => 'މިހާރު ދައްކަވާ';
+
+  @override
+  String discountKeepTitle(int days, String rate) {
+    return '$rate ގެ އަވަހަށް ދެއްކުމުގެ ޑިސްކައުންޓް ދެމެހެއްޓެވުމަށް $days ދުވަހުގެ ތެރޭގައި ދައްކަވާ.';
+  }
+
+  @override
+  String oldestDueDate(String date) {
+    return 'އެންމެ ދުވަސްވީ ސުންގަޑި: $date';
+  }
+
+  @override
+  String get paymentMethodTitle => 'ފައިސާ ދައްކަވާ ގޮތް';
+
+  @override
+  String get methodWalletTitle => 'ވޮލެޓް ބެލެންސް';
+
+  @override
+  String get methodBankTitle => 'ބޭންކް ޓްރާންސްފަރ';
+
+  @override
+  String get methodRecommended => 'ލަފާދެވޭ ގޮތް';
+
+  @override
+  String get methodInsufficient => 'ބެލެންސް ނުފުދޭ';
+
+  @override
+  String get breakdownTitle => 'ތަފްޞީލު';
+
+  @override
+  String get totalDueLabel => 'ޖުމްލަ ދައްކަންޖެހޭ';
+
+  @override
+  String get includedTitle => 'ހިމެނޭ މުޢާމަލާތްތައް';
+
+  @override
+  String get awaitingSettlementChip => 'ސެޓްލްމަންޓްގެ އިންތިޒާރުގައި';
+
+  @override
+  String get feeShort => 'ފީ';
+
+  @override
+  String discountRow(String rate) {
+    return 'އަވަހަށް ދެއްކުމުގެ ޑިސްކައުންޓް ($rate)';
+  }
+
+  @override
+  String discountAdvisoryNote(int days) {
+    return 'ކަށަވަރުވާނީ ސްލިޕް ހުށަހަޅުއްވުމުންނެވެ. އޭގެ ކުރިން ވިޔަފާރިއަކަށް $days ދުވަސް ފުރިއްޖެނަމަ ފުރިހަމަ ފީ ދައްކަވަންޖެހޭނެއެވެ.';
+  }
+
+  @override
+  String get creditAppliedRow => 'ކްރެޑިޓް ކެނޑިފައި';
+
+  @override
+  String get creditAppliedHint =>
+      'ކުރީގެ އެޑްޖަސްޓްމަންޓްތަކުގެ ކްރެޑިޓް، މި ބެޗުން ކެނޑިފައި.';
+
+  @override
+  String get recentTitle => 'ފަހުގެ ސެޓްލްމަންޓްތައް';
+
+  @override
+  String payAmountCta(String amount) {
+    return '$amount ދައްކަވާ';
+  }
+
+  @override
+  String get confirmNothingDueCta => 'ސެޓްލްމަންޓް ކަށަވަރުކުރައްވާ';
+
+  @override
+  String get nothingDueTitle => 'ތިޔަބޭފުޅާގެ ކްރެޑިޓުން މުޅިން ފުދިއްޖެ';
+
+  @override
+  String get nothingDueBody =>
+      'ޓްރާންސްފަރކުރަންޖެހޭ އެއްޗެއް ނެތް. ކަށަވަރުކުރެއްވުމުން މި މުޢާމަލާތްތައް ކްރެޑިޓާ ދެކޮޅަށް ބަންދުވާނެއެވެ.';
+
+  @override
+  String get presetOlder5 => '5 ދުވަހަށްވުރެ ދުވަސްވީ';
+
+  @override
+  String get presetOlder10 => '10 ދުވަހަށްވުރެ ދުވަސްވީ';
+
+  @override
+  String get settleEverythingCta =>
+      'ދައްކަންޖެހޭ ހުރިހާ އެއްޗެއް ސެޓްލްކުރައްވާ';
+
+  @override
+  String get emptySettleTitle => 'މިވަގުތު ސެޓްލްކުރާނެ އެއްޗެއް ނެތް';
+
+  @override
+  String get emptySettleBody =>
+      'ވެލިޑޭޝަން މުއްދަތު ހަމަވުމުން މުޢާމަލާތްތައް މިތާ ފެންނާނެއެވެ.';
+
+  @override
+  String get noSettlementsYet => 'އަދި ސެޓްލްމަންޓެއް ނެތް.';
+
+  @override
+  String get settlePreviewFailed => 'މި ޚިޔާރުކުރެއްވުމުގެ އަގު ނުހޯދުނު.';
+
+  @override
+  String get payBankTitle => 'ސީދާ މި އަދަދު ޓްރާންސްފަރކުރައްވާ';
+
+  @override
+  String get payBankLead =>
+      'ބޭންކުން ސީދާ މި އަދަދު ޓްރާންސްފަރކުރައްވާފައި، ތިރީގައި ސްލިޕް އަޕްލޯޑްކުރައްވާ. އެހާތަނަށް އެއްވެސް ސެޓްލްމަންޓެއް ނުއުފެދޭނެ — މުޢާމަލާތްތައް ދައްކަންޖެހޭ ގޮތުގައި ދެމިހުންނާނެއެވެ.';
+
+  @override
+  String get amountToTransfer => 'ޓްރާންސްފަރކުރައްވަންވީ އަދަދު';
+
+  @override
+  String get referenceLabel => 'ޕޭމަންޓް ރެފަރެންސް';
+
+  @override
+  String get referencePreviewNote =>
+      'މި ރެފަރެންސް ކަނޑައެޅޭނީ ސްލިޕް ފޮނުއްވުމުންނެވެ. ސެޓްލްމަންޓްގައި އެހެން ރެފަރެންސެއް ދައްކާނަމަ، ރަސްމީ ރެފަރެންސަކީ އެއެވެ.';
+
+  @override
+  String get referenceFinalNote =>
+      'ޓްރާންސްފަރގައި މި ރެފަރެންސް ލިޔުއްވާ — ފައިސާ ދެނެގަންނާނީ މިއިންނެވެ.';
+
+  @override
+  String get transferToLabel => 'ފައިސާ ފޮނުއްވަންވީ';
+
+  @override
+  String get bankNameLabel => 'ބޭންކް';
+
+  @override
+  String get accountNoLabel => 'އެކައުންޓް ނަންބަރު';
+
+  @override
+  String get accountNameLabel => 'އެކައުންޓް ނަން';
+
+  @override
+  String get copyTooltip => 'ކޮޕީ';
+
+  @override
+  String get copiedToast => 'ކޮޕީވެއްޖެ';
+
+  @override
+  String get chooseBankLabel => 'ފައިސާ ފޮނުވާނެ ބޭންކެއް ހޮއްވަވާ';
+
+  @override
+  String get chooseBankFirst =>
+      'ފައިސާ ފޮނުވާނެ ތަން ބެއްލެވުމަށް މަތިން ބޭންކެއް ހޮއްވަވާ.';
+
+  @override
+  String get noAccountTitle =>
+      'ޓްރާންސްފަރ ތަފްޞީލު އަދި އާންމުކޮށްފައެއް ނުވޭ';
+
+  @override
+  String get noAccountBody =>
+      'ފައިސާ ފޮނުއްވަންވީ އެކައުންޓަށް މަންފާއާ ގުޅުއްވާ. އެއްވެސް އެއްޗެއް ގެއްލިގެންނުދާނެ — ޓްރާންސްފަރކުރެއްވުމަށްފަހު އެނބުރި ވަޑައިގެން ސްލިޕް ފޮނުއްވާ.';
+
+  @override
+  String get uploadSlipTitle => 'ޓްރާންސްފަރ ސްލިޕް އަޕްލޯޑްކުރައްވާ';
+
+  @override
+  String get uploadSlipLead =>
+      'ސެޓްލްމަންޓް އުފެދެނީ ސްލިޕުންނެވެ — ކަސްޓަމަރުންގެ ކޭޝްބެކް ކަށަވަރުވުމުގެ ކުރިން މަންފާއިން ސްލިޕް ޓްރާންސްފަރއާ ދިމާކުރާނެއެވެ.';
+
+  @override
+  String get slipTakePhoto => 'ފޮޓޯ ނަންގަވާ';
+
+  @override
+  String get slipChooseFile => 'ފައިލް ޚިޔާރުކުރައްވާ';
+
+  @override
+  String get slipHint => 'JPEG، PNG، WebP ނުވަތަ PDF — ގިނަވެގެން 5 MB';
+
+  @override
+  String get slipTooLarge =>
+      'އެ ފައިލް 5 MB އަށްވުރެ ބޮޑު. ސްލިޕް ކުޑަކޮށް ފޮޓޯނަންގަވާ، ނުވަތަ ބޭންކްގެ PDF އަޕްލޯޑްކުރައްވާ.';
+
+  @override
+  String get slipUnsupported =>
+      'ސްލިޕަކީ JPEG، PNG، WebP ނުވަތަ PDF ފައިލަކަށް ވާންޖެހޭނެއެވެ.';
+
+  @override
+  String get slipRequired => 'ޓްރާންސްފަރ ސްލިޕް ހިމަނުއްވާ.';
+
+  @override
+  String get slipReplace => 'އެހެން ފައިލެއް ޚިޔާރުކުރައްވާ';
+
+  @override
+  String get slipRemove => 'ނަގާލައްވާ';
+
+  @override
+  String get transferredAmountLabel => 'ޓްރާންސްފަރކުރެއްވި އަދަދު';
+
+  @override
+  String get transferredAmountHint =>
+      'އެކައުންޓުން ދިޔަ ސީދާ އަދަދު — އެހެން އަދަދެއް ފޮނުއްވިނަމަ އެކަނި ބަދަލުކުރައްވާ.';
+
+  @override
+  String get transferredAmountInvalid =>
+      'ޓްރާންސްފަރކުރެއްވި އަދަދު ލިޔުއްވާ، މިސާލަކަށް 1,250.00.';
+
+  @override
+  String get amountUnderNote =>
+      'ދައްކަންޖެހޭ އަދަދަށްވުރެ ކުޑަ. ފައިސާ ބަހާނީ ދުވަސްވީ ތަރުތީބުން: ނުފުދޭ މުޢާމަލާތްތައް މި ސެޓްލްމަންޓްގައި ދައްކަންޖެހޭ ގޮތުގައި ދެމިހުންނާނެއެވެ.';
+
+  @override
+  String get amountOverNote =>
+      'ދައްކަންޖެހޭ އަދަދަށްވުރެ ބޮޑު. އިތުރުވާ ބައި ދެން އަންނަ ސެޓްލްމަންޓަށް ވޮލެޓް ކްރެޑިޓަކަށް ވާނެއެވެ.';
+
+  @override
+  String get submitSlipCta => 'ސްލިޕް ފޮނުއްވާ';
+
+  @override
+  String get duplicateBankRefMsg =>
+      'މި ބޭންކް ރެފަރެންސްއާއެކު ސްލިޕެއް ކުރިން ފޮނުއްވާފައިވެއެވެ. ސްލިޕްގެ ރެފަރެންސް ބައްލަވާ، ނުވަތަ އެ ސެޓްލްމަންޓް ހުޅުއްވާ.';
+
+  @override
+  String get selectionNotEligibleMsg =>
+      'މީގެ ބައެއް މުޢާމަލާތްތައް މިހާރު ދައްކަންޖެހޭ ގޮތުގައެއް ނެތް. އަނބުރާ ވަޑައިގެން އަލުން ޚިޔާރުކުރައްވާ.';
+
+  @override
+  String get submitSlipFailed => 'ސްލިޕް ފޮނުވުމުގައި މައްސަލައެއް.';
+
+  @override
+  String get successVerifyingTitle =>
+      'މަންފާއިން ދަނީ ތިޔަ ޓްރާންސްފަރ ބަލަމުން';
+
+  @override
+  String successVerifyingBody(String reference) {
+    return 'ސެޓްލްމަންޓް $reference އަޅުގަނޑުމެންގެ ޓީމަށް ލިބިއްޖެ. ސްލިޕް ޓްރާންސްފަރއާ ދިމާކުރުމަށްފަހު ކަސްޓަމަރުންގެ ކޭޝްބެކް ކަށަވަރުވާނެއެވެ. ތިޔަބޭފުޅާ އިތުރު ކަމެއް ކުރައްވާކަށް ނުޖެހޭނެއެވެ.';
+  }
+
+  @override
+  String get settledOutrightTitle =>
+      'ސެޓްލްވެއްޖެ — މި ބެޗްގެ ރިވޯޑްތައް ކަށަވަރުވެއްޖެ';
+
+  @override
+  String settledOutrightBody(String reference) {
+    return 'ސެޓްލްމަންޓް $reference ބަންދުވެ، ވޮލެޓުން ފައިސާ ދެއްކިއްޖެ. ތިޔަބޭފުޅާ އިތުރު ކަމެއް ކުރައްވާކަށް ނުޖެހޭނެއެވެ.';
+  }
+
+  @override
+  String discountSavedNote(String amount) {
+    return 'ސަލާމަތްކުރެއްވީ $amount';
+  }
+
+  @override
+  String get viewSettlementCta => 'ސެޓްލްމަންޓް ބައްލަވާ';
+
+  @override
+  String get doneCta => 'ނިމުނީ';
+
+  @override
+  String get walletSettleConfirmTitle => 'ވޮލެޓުން ސެޓްލްކުރައްވަންތޯ؟';
+
+  @override
+  String walletSettleConfirmBody(String amount) {
+    return 'ވޮލެޓް ބެލެންސުން $amount ކެނޑި މި ބެޗް ވަގުތުން ސެޓްލްވާނެއެވެ. ޓްރާންސްފަރއެއް، ސްލިޕެއް ބޭނުމެއް ނުވާނެ.';
+  }
+
+  @override
+  String get walletSettleCta => 'ވޮލެޓުން ސެޓްލްކުރައްވާ';
+
+  @override
+  String get walletSettleFailed => 'ވޮލެޓުން ސެޓްލެއް ނުކުރެވުނު.';
+
+  @override
+  String detailCreated(String date) {
+    return 'އުފެއްދީ $date';
+  }
+
+  @override
+  String get setlStateDraft => 'ޑްރާފްޓް';
+
+  @override
+  String get setlStateAwaitingPayment =>
+      'ތިޔަބޭފުޅާގެ ޓްރާންސްފަރގެ އިންތިޒާރުގައި';
+
+  @override
+  String get setlStatePaymentReview => 'ސްލިޕް ބަލަމުންދަނީ';
+
+  @override
+  String get setlStateSettled => 'ސެޓްލްވެއްޖެ';
+
+  @override
+  String get setlStatePartiallySettled => 'ބައެއް ސެޓްލްވެފައި';
+
+  @override
+  String get setlStateCancelled => 'ކެންސަލްކުރެވިފައި';
+
+  @override
+  String get statusVerifyingBody =>
+      'ސްލިޕް ޓްރާންސްފަރއާ ދިމާކުރަމުން ދަނީ. ދިމާވުމާއެކު ކަސްޓަމަރުންގެ ކޭޝްބެކް ކަށަވަރުވާނެއެވެ.';
+
+  @override
+  String get statusSettledTitle =>
+      'ސެޓްލްވެއްޖެ — މި ބެޗްގެ ރިވޯޑްތައް ކަށަވަރުވެއްޖެ.';
+
+  @override
+  String get statusPartialTitle =>
+      'މި ބެޗްގެ ބައެއް ސެޓްލްވެއްޖެ؛ ބާކީ އަދިވެސް ދައްކަންޖެހެއެވެ.';
+
+  @override
+  String get statusAwaitingTitle =>
+      'ތިޔަބޭފުޅާގެ ޓްރާންސްފަރއަށް އިންތިޒާރުކުރެވެނީ';
+
+  @override
+  String get statusAwaitingBody =>
+      'މި ބެޗް ތައްޔާރުކުރީ މަންފާއިންނެވެ. ދައްކަންޖެހޭ އަދަދު ޓްރާންސްފަރކުރައްވާފައި ސްލިޕް މިތާ އަޕްލޯޑްކުރައްވާ.';
+
+  @override
+  String get statusRejectedTitle =>
+      'މަންފާއަށް ތިޔަ ޓްރާންސްފަރ ކަށަވަރެއް ނުކުރެވުނު';
+
+  @override
+  String get statusRejectedBody =>
+      'މި ސެޓްލްމަންޓް ކެންސަލްވެފައި، މުޢާމަލާތްތައް އަލުން ދައްކަންޖެހޭ ގޮތުގައި ހުރީއެވެ. ރަނގަޅު ސްލިޕާއެކު އައު ސެޓްލްމަންޓެއް ހައްދަވާ.';
+
+  @override
+  String get statusRejectedReason => 'މަންފާގެ ސަބަބު';
+
+  @override
+  String get statusRejectedNoReason => 'ސަބަބެއް ރެކޯޑްކޮށްފައެއް ނުވޭ.';
+
+  @override
+  String get statusCancelledTitle =>
+      'މި ސެޓްލްމަންޓް ކެންސަލްވެއްޖެ؛ މުޢާމަލާތްތައް އަލުން ދައްކަންޖެހޭ ގޮތުގައި ހުރީއެވެ.';
+
+  @override
+  String get statusDraftTitle => 'ޑްރާފްޓް — އަދި ފޮނުވާފައެއް ނުވޭ.';
+
+  @override
+  String get remainderTitle => 'ބާކީ ބައި ދައްކަވާ';
+
+  @override
+  String remainderBody(String amount) {
+    return 'މި ބެޗުން އަދިވެސް $amount މަދު. މުޅިން ދެއްކުމާ ހަމައަށް މުޢާމަލާތްތައް މިތާ ހިފެހެއްޓޭނެއެވެ — ބާކީ ޓްރާންސްފަރކުރައްވާފައި އެ ސްލިޕް އަޕްލޯޑްކުރައްވާ.';
+  }
+
+  @override
+  String get uploadReceiptCta => 'ސްލިޕް އަޕްލޯޑްކުރައްވާ';
+
+  @override
+  String get receiptAddedToast =>
+      'ސްލިޕް ފޮނުވިއްޖެ — މަންފާއިން ދަނީ ބަލަމުން.';
+
+  @override
+  String linesTitle(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count ލައިން',
+      one: '1 ލައިން',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get totalsLabel => 'ޖުމްލަ';
+
+  @override
+  String get summaryTitle => 'ޚުލާޞާ';
+
+  @override
+  String get summaryDue => 'ދައްކަންޖެހޭ އަދަދު';
+
+  @override
+  String get summaryReceived => 'މިހާތަނަށް ލިބުނު';
+
+  @override
+  String get summaryMethod => 'ފައިސާ ދެއްކި ގޮތް';
+
+  @override
+  String get methodBank => 'ބޭންކް ޓްރާންސްފަރ';
+
+  @override
+  String get methodWallet => 'ވޮލެޓް';
+
+  @override
+  String get discountAppliedHint =>
+      'ދައްކަންޖެހޭ އަދަދުން މިހާރު ކެނޑިފައި. ކަސްޓަމަރުންގެ ކޭޝްބެކުން އެއްވެސް އެއްޗެއް ނުކެނޑެއެވެ.';
+
+  @override
+  String get paymentsTitle => 'ޕޭމަންޓްތައް';
+
+  @override
+  String get paymentSlipAttached => 'ސްލިޕް ހިމެނިފައި';
+
+  @override
+  String get paymentNoSlip => 'ސްލިޕެއް ނެތް';
+
+  @override
+  String get paymentPending => 'ބެލުމަށް އިންތިޒާރުގައި';
+
+  @override
+  String get paymentMatched => 'ކަށަވަރުވެފައި';
+
+  @override
+  String get paymentRejected => 'ބަލައިނުގަނެވުނު';
+
+  @override
+  String get settlementNotFound => 'ސެޓްލްމަންޓް ނުފެނުނު.';
+
+  @override
+  String get startNewSettlement => 'އައު ސެޓްލްމަންޓް ހައްދަވާ';
+
+  @override
+  String get walletScreenTitle => 'ވޮލެޓް';
+
+  @override
+  String get walletBalanceLabel => 'ބެލެންސް';
+
+  @override
+  String get walletTopUpHint =>
+      'ޓޮޕް-އަޕް ރެކޯޑްކުރާނީ ޓްރާންސްފަރ ލިބުމުން އަޅުގަނޑުމެންގެ ޓީމުންނެވެ.';
+
+  @override
+  String get movementsTitle => 'މޫވްމަންޓްތައް';
+
+  @override
+  String get movementsEmpty => 'އަދި ވޮލެޓް މޫވްމަންޓެއް ނެތް.';
+
+  @override
+  String get movementTopUp => 'ޓޮޕް-އަޕް';
+
+  @override
+  String get movementSettlement => 'ސެޓްލްމަންޓަކަށް ހޭދަކުރެވުނު';
+
+  @override
+  String get movementSettlementCredit => 'ސެޓްލްމަންޓަކުން ލިބުނު ކްރެޑިޓް';
+
+  @override
+  String get movementOther => 'އެޑްޖަސްޓްމަންޓް';
+
+  @override
+  String balanceAfterLabel(String amount) {
+    return 'ފަހުގެ ބެލެންސް: $amount';
+  }
+
+  @override
+  String get presetAllLabel => 'ހުރިހާ';
 }

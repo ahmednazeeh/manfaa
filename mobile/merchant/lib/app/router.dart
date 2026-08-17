@@ -5,11 +5,15 @@ import 'package:manfaa_core/manfaa_core.dart';
 import '../features/auth/login_screen.dart';
 import '../features/boot/boot_screen.dart';
 import '../features/credit/credit_screen.dart';
+import '../features/dashboard/dashboard_screen.dart';
+import '../features/settlements/settlement_detail_screen.dart';
+import '../features/settlements/settlements_screen.dart';
 import '../features/setup/setup_screen.dart';
 import '../features/signup/signup_screen.dart';
 import '../features/status/setup_pending_screen.dart';
 import '../features/tabs/tab_screens.dart';
 import '../features/transactions/transactions_screen.dart';
+import '../features/wallet/wallet_screen.dart';
 import 'providers.dart';
 import 'shell.dart';
 
@@ -99,10 +103,18 @@ final routerProvider = Provider<GoRouter>((ref) {
         return session.merchantStatus == null ? null : homeLocationFor(session);
       }
 
+      // The wallet screen stands on its own read grant, exactly as the API
+      // gates GET /merchant/wallet.
+      if (location == '/wallet' && !session.can('wallet.view')) {
+        return homeLocationFor(session);
+      }
+
       // A tab this account may not see (role narrowed, or a deep link).
+      // Prefix-matched so a tab's sub-routes (/settlements/44) answer to
+      // the same permission as the tab itself.
       for (final tab in kTabs) {
         final permission = tab.permission;
-        if (location == tab.path &&
+        if ((location == tab.path || location.startsWith('${tab.path}/')) &&
             permission != null &&
             !session.can(permission)) {
           return homeLocationFor(session);
@@ -131,6 +143,9 @@ final routerProvider = Provider<GoRouter>((ref) {
           StatefulShellBranch(routes: [
             GoRoute(
                 path: '/dashboard', builder: (_, _) => const DashboardScreen()),
+            // Pushed from the dashboard's wallet card; lives in this branch
+            // so back lands on the dashboard.
+            GoRoute(path: '/wallet', builder: (_, _) => const WalletScreen()),
           ]),
           StatefulShellBranch(routes: [
             GoRoute(path: '/credit', builder: (_, _) => const CreditScreen()),
@@ -142,8 +157,17 @@ final routerProvider = Provider<GoRouter>((ref) {
           ]),
           StatefulShellBranch(routes: [
             GoRoute(
-                path: '/settlements',
-                builder: (_, _) => const SettlementsScreen()),
+              path: '/settlements',
+              builder: (_, _) => const SettlementsScreen(),
+              routes: [
+                GoRoute(
+                  path: ':id',
+                  builder: (_, state) => SettlementDetailScreen(
+                    id: int.tryParse(state.pathParameters['id'] ?? '') ?? 0,
+                  ),
+                ),
+              ],
+            ),
           ]),
           StatefulShellBranch(routes: [
             GoRoute(path: '/more', builder: (_, _) => const MoreScreen()),

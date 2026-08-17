@@ -80,6 +80,93 @@ String formatDateTimeDisplay(DateTime dt) {
       '${hour12.toString().padLeft(2, '0')}:$minute $period';
 }
 
+/// SettlementResource.state → localized label (§6 settlement vocabulary,
+/// mirroring the web panel's labels.settlementState). Unknown states fall
+/// back to neutral prose, never the raw code.
+String settlementStateLabel(AppLocalizations l10n, String state) =>
+    switch (state) {
+      'draft' => l10n.setlStateDraft,
+      'awaiting_payment' => l10n.setlStateAwaitingPayment,
+      'payment_review' => l10n.setlStatePaymentReview,
+      'settled' => l10n.setlStateSettled,
+      'partially_settled' => l10n.setlStatePartiallySettled,
+      'cancelled' => l10n.setlStateCancelled,
+      _ => l10n.stateOther,
+    };
+
+/// Settlement state → chip tone, by the same money semantics as
+/// transactions: amber while the money is in flight, green once settled.
+StatusTone settlementStateTone(String state) => switch (state) {
+  'awaiting_payment' || 'payment_review' => StatusTone.pending,
+  'settled' => StatusTone.confirmed,
+  'partially_settled' => StatusTone.pending,
+  'cancelled' => StatusTone.closed,
+  _ => StatusTone.closed,
+};
+
+/// WalletTransaction.type → localized label (labels.walletMovement).
+String walletMovementLabel(AppLocalizations l10n, String type) =>
+    switch (type) {
+      'top_up' => l10n.movementTopUp,
+      'settlement' => l10n.movementSettlement,
+      'settlement_credit' => l10n.movementSettlementCredit,
+      _ => l10n.movementOther,
+    };
+
+/// The two platform bank slugs, resolved the way the web's bankLabel does:
+/// a known slug prints the bank's name, anything else prints verbatim
+/// (never asserting a bank nobody chose).
+String bankDisplayName(String bankName) =>
+    switch (bankName.trim().toLowerCase()) {
+      'bml' => 'Bank of Maldives',
+      'mib' => 'Maldives Islamic Bank',
+      _ => bankName,
+    };
+
+/// "5%" from the wire's exact "5.00" — display trim only, the string on the
+/// wire is never recomputed. "2.50" → "2.5%".
+String trimRatePercent(String ratePercent) {
+  var trimmed = ratePercent;
+  if (trimmed.contains('.')) {
+    trimmed = trimmed.replaceAll(RegExp(r'0+$'), '');
+    trimmed = trimmed.replaceAll(RegExp(r'\.$'), '');
+  }
+  return '${trimmed.isEmpty ? '0' : trimmed}%';
+}
+
+/// "25 Aug 2026" — date only, same manual month table as the time shape.
+String formatDateDisplay(DateTime dt) =>
+    '${dt.day} ${_months[dt.month - 1]} ${dt.year}';
+
+/// A wire instant → the BUSINESS-day date (+05:00, Indian/Maldives — no
+/// DST). Used for due dates and the discount deadline, where "which day"
+/// must be Malé's answer, not UTC's.
+String formatBusinessDate(String iso) {
+  final parsed = DateTime.tryParse(iso);
+  if (parsed == null) return iso;
+  return formatDateDisplay(parsed.toUtc().add(const Duration(hours: 5)));
+}
+
+/// The PLAN §1 discount deadline: the day the OLDEST clock-started line
+/// stops qualifying — its clock_start_at plus the window the API reported,
+/// printed as a business date. The one piece of date arithmetic the app
+/// does on a rule (web parity: PromptDiscountDeadline); whether a line
+/// still qualifies stays entirely the server's answer.
+String? discountDeadlineDate(List<String?> clockStarts, int maxAgeDays) {
+  DateTime? oldest;
+  for (final iso in clockStarts) {
+    if (iso == null) continue;
+    final parsed = DateTime.tryParse(iso);
+    if (parsed == null) continue;
+    final utc = parsed.toUtc();
+    if (oldest == null || utc.isBefore(oldest)) oldest = utc;
+  }
+  if (oldest == null) return null;
+  return formatDateDisplay(
+    oldest.add(Duration(days: maxAgeDays, hours: 5)),
+  );
+}
+
 /// The same shape from a wire ISO string (occurred_at carries +05:00; the
 /// wall-clock digits in the string ARE the business time, so no conversion).
 String formatIsoDisplay(String iso) {

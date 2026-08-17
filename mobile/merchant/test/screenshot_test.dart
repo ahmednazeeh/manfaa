@@ -31,6 +31,10 @@ Future<void> _loadFonts() async {
 const _permissions = [
   'settlements.view',
   'settlements.create',
+  'settlements.preview',
+  'settlements.receipt_add',
+  'wallet.view',
+  'wallet.settle',
   'credits.create',
   'credits.custom_rate',
   'transactions.view',
@@ -42,6 +46,192 @@ const _permissions = [
   'setup.submit',
   'branding.update',
 ];
+
+// ---- MR3 fixtures: the ref's own numbers, server-shaped ---------------------
+//
+// Dashboard.png / Settlements.png: one outstanding sale of MVR 1,000 —
+// cashback 20.00, fee 7.50, GST 0 → payable 27.50, in the 0–5 bucket, with
+// the 5% prompt-payment discount worth 0.38 (ceiling of 5% × 7.50) and the
+// oldest clock starting 10 Aug → deadline 25 Aug 2026. All instants are
+// FIXED so the goldens render the same bytes on every run.
+
+const _shotOutstanding = {
+  'as_of': '2026-08-16T14:07:00+05:00',
+  'total': {
+    'count': 1,
+    'cashback_laari': 2000,
+    'fee_laari': 750,
+    'fee_gst_laari': 0,
+    'payable_laari': 2750,
+  },
+  'buckets': {
+    '0_5': {
+      'count': 1,
+      'cashback_laari': 2000,
+      'fee_laari': 750,
+      'fee_gst_laari': 0,
+      'payable_laari': 2750,
+    },
+    '6_10': {
+      'count': 0,
+      'cashback_laari': 0,
+      'fee_laari': 0,
+      'fee_gst_laari': 0,
+      'payable_laari': 0,
+    },
+    '11_15': {
+      'count': 0,
+      'cashback_laari': 0,
+      'fee_laari': 0,
+      'fee_gst_laari': 0,
+      'payable_laari': 0,
+    },
+    'overdue': {
+      'count': 0,
+      'cashback_laari': 0,
+      'fee_laari': 0,
+      'fee_gst_laari': 0,
+      'payable_laari': 0,
+    },
+  },
+  'pending_adjustments': {'count': 0, 'credit_laari': 0},
+};
+
+const _shotPreview = {
+  'as_of': '2026-08-16T09:07:00+00:00',
+  'transaction_ids': [61],
+  'transaction_count': 1,
+  'sale_total_laari': 100000,
+  'cashback_total_laari': 2000,
+  'fee_total_laari': 750,
+  'fee_gst_total_laari': 0,
+  'line_total_laari': 2750,
+  'credit_applied_laari': 0,
+  'discount_laari': 38,
+  'amount_due_before_discount_laari': 2750,
+  'amount_due_laari': 2712,
+  'due_at': '2026-08-25T00:00:00+00:00',
+  'discount': {
+    'eligible': true,
+    'reason_code': 'eligible',
+    'rate_percent': '5.00',
+    'max_age_days': 15,
+    'discount_laari': 38,
+    'fee_discount_laari': 38,
+    'gst_relief_laari': 0,
+  },
+  'transactions': [
+    {
+      'id': 61,
+      'invoice_no': 'INV-2107',
+      'occurred_at': '2026-08-15T10:00:00+05:00',
+      'clock_start_at': '2026-08-10T00:00:00+00:00',
+      'due_at': '2026-08-25T00:00:00+00:00',
+      'age_days': 6,
+      'overdue': false,
+      'cashback_laari': 2000,
+      'fee_laari': 750,
+      'fee_gst_laari': 0,
+      'due_laari': 2750,
+      'selected': true,
+    },
+  ],
+  'buckets': {
+    'all': {
+      'count': 1,
+      'cashback_laari': 2000,
+      'fee_laari': 750,
+      'fee_gst_laari': 0,
+      'due_laari': 2750,
+      'transaction_ids': [61],
+    },
+    'older_than_5': {
+      'count': 1,
+      'cashback_laari': 2000,
+      'fee_laari': 750,
+      'fee_gst_laari': 0,
+      'due_laari': 2750,
+      'transaction_ids': [61],
+    },
+    'older_than_10': {
+      'count': 0,
+      'cashback_laari': 0,
+      'fee_laari': 0,
+      'fee_gst_laari': 0,
+      'due_laari': 0,
+      'transaction_ids': <int>[],
+    },
+    'overdue': {
+      'count': 0,
+      'cashback_laari': 0,
+      'fee_laari': 0,
+      'fee_gst_laari': 0,
+      'due_laari': 0,
+      'transaction_ids': <int>[],
+    },
+  },
+  'payment_instructions': {
+    'reference_preview': 'ST-2026-00042',
+    'reference_is_final': false,
+    'amount_due_laari': 2712,
+    'bank_account': {
+      'bank_name': 'bml',
+      'account_no': '7730000123456',
+      'account_name': 'Manfaa Pvt Ltd',
+    },
+    'bank_accounts': [
+      {
+        'id': 1,
+        'bank_name': 'bml',
+        'account_no': '7730000123456',
+        'account_name': 'Manfaa Pvt Ltd',
+        'currency': 'MVR',
+        'is_primary': true,
+      },
+    ],
+    'needs_configuration': false,
+  },
+};
+
+Map<String, dynamic> _shotSettlement(
+  int id,
+  String reference,
+  int dueLaari,
+  String createdAt,
+) => {
+  'id': id,
+  'reference': reference,
+  'state': 'settled',
+  'funding_method': 'bank',
+  'currency': 'MVR',
+  'sale_total_laari': 100000,
+  'cashback_total_laari': 2000,
+  'fee_total_laari': 750,
+  'fee_gst_total_laari': 0,
+  'discount_laari': 0,
+  'discount_rate_percent': null,
+  'discount_reason': null,
+  'amount_due_laari': dueLaari,
+  'amount_received_laari': dueLaari,
+  'due_at': null,
+  'created_at': createdAt,
+  'payment_instructions': {
+    'reference': reference,
+    'amount_due_laari': dueLaari,
+    'bank_account': {
+      'bank_name': 'bml',
+      'account_no': '7730000123456',
+      'account_name': 'Manfaa Pvt Ltd',
+    },
+    'bank_accounts': <Object>[],
+    'needs_configuration': false,
+  },
+  'merchant_status': {
+    'code': 'settled',
+    'message': 'Settled — the rewards on this batch are confirmed.',
+    'rejection': null,
+  },
+};
 
 /// A believable wizard state per shot: fresh (the profile step), complete
 /// (the review step), pending (the waiting screen).
@@ -99,10 +289,58 @@ Map<String, dynamic> _setupFixture({
 };
 
 class _ShotApi extends MerchantApi {
-  _ShotApi({required super.session, this.status = 'active', this.setup});
+  _ShotApi({
+    required super.session,
+    this.status = 'active',
+    this.setup,
+    this.walletJson,
+  });
 
   final String status;
   final Map<String, dynamic>? setup;
+
+  /// The wallet fixture per shot: the money shots want the ref's MVR 0.00
+  /// (which is also what draws the Insufficient state), the wallet shot a
+  /// balance with movements.
+  final Map<String, dynamic>? walletJson;
+
+  // ---- MR3: money ---------------------------------------------------------
+
+  @override
+  Future<MerchantOutstanding> outstanding() async =>
+      MerchantOutstanding.fromJson(_shotOutstanding);
+
+  @override
+  Future<MerchantWalletState> wallet() async => MerchantWalletState.fromJson(
+    walletJson ??
+        const {
+          'balance_laari': 0,
+          'currency': 'MVR',
+          'transactions': <Object>[],
+        },
+  );
+
+  @override
+  Future<SettlementPreviewData> settlementPreview({
+    bool settleAll = false,
+    List<int>? transactionIds,
+  }) async => SettlementPreviewData.fromJson(_shotPreview);
+
+  @override
+  Future<SettlementPage> settlements({int page = 1}) async =>
+      SettlementPage.fromJson({
+        'data': [
+          _shotSettlement(41, 'ST-2026-00041', 2750, '2026-08-01T09:00:00+00:00'),
+          _shotSettlement(38, 'ST-2026-00038', 3210, '2026-07-18T09:00:00+00:00'),
+        ],
+        'meta': const {'current_page': 1, 'last_page': 1, 'total': 2},
+      });
+
+  @override
+  Future<MerchantSettlement> settlement(int id) async =>
+      MerchantSettlement.fromJson(
+        _shotSettlement(id, 'ST-2026-000$id', 2750, '2026-08-01T09:00:00+00:00'),
+      );
 
   @override
   Future<MerchantMe> me() async {
@@ -318,6 +556,7 @@ void main() {
     bool signedOut = false,
     String status = 'active',
     Map<String, dynamic>? setup,
+    Map<String, dynamic>? walletJson,
     Future<void> Function(WidgetTester tester)? drive,
   }) async {
     await tester.binding.setSurfaceSize(const Size(390, 844));
@@ -350,7 +589,12 @@ void main() {
           secretStoreProvider.overrideWithValue(store),
           sessionProvider.overrideWithValue(session),
           apiProvider.overrideWith(
-            (ref) => _ShotApi(session: session, status: status, setup: setup),
+            (ref) => _ShotApi(
+              session: session,
+              status: status,
+              setup: setup,
+              walletJson: walletJson,
+            ),
           ),
           configProvider.overrideWith(
             (ref) async => MobileConfig.fromJson(const {
@@ -412,8 +656,90 @@ void main() {
     'login dark',
     (t) => shot(t, 'login_dark', Brightness.dark, signedOut: true),
   );
-  testWidgets('shell light', (t) => shot(t, 'shell_light', Brightness.light));
-  testWidgets('shell dark', (t) => shot(t, 'shell_dark', Brightness.dark));
+  // ---- MR3: the money screens ---------------------------------------------
+  // (These supersede the MR0 shell placeholders — the Dashboard IS the
+  // shell's landing screen now.)
+
+  Future<void> driveSettlements(WidgetTester tester) async {
+    await tester.tap(find.text('Settlements'));
+    await tester.pumpAndSettle();
+  }
+
+  Future<void> drivePayScreen(WidgetTester tester) async {
+    await driveSettlements(tester);
+    await tester.tap(find.text('Pay now'));
+    await tester.pumpAndSettle();
+  }
+
+  Future<void> driveWallet(WidgetTester tester) async {
+    await tester.scrollUntilVisible(
+      find.text('View movements'),
+      160,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('View movements'));
+    await tester.pumpAndSettle();
+  }
+
+  testWidgets(
+    'dashboard light',
+    (t) => shot(t, 'dashboard_light', Brightness.light),
+  );
+  testWidgets(
+    'dashboard dark',
+    (t) => shot(t, 'dashboard_dark', Brightness.dark),
+  );
+  testWidgets(
+    'settlements light',
+    (t) => shot(t, 'settlements_light', Brightness.light,
+        drive: driveSettlements),
+  );
+  testWidgets(
+    'settlements dark',
+    (t) =>
+        shot(t, 'settlements_dark', Brightness.dark, drive: driveSettlements),
+  );
+  testWidgets(
+    'settlement preview light',
+    (t) => shot(t, 'settlement_preview_light', Brightness.light,
+        drive: drivePayScreen),
+  );
+  testWidgets(
+    'wallet light',
+    (t) => shot(
+      t,
+      'wallet_light',
+      Brightness.light,
+      walletJson: const {
+        'balance_laari': 8175,
+        'currency': 'MVR',
+        'transactions': [
+          {
+            'id': 9,
+            'amount_laari': -11825,
+            'balance_after_laari': 8175,
+            'type': 'settlement',
+            'reference_type': 'settlement',
+            'reference_id': 41,
+            'description': 'Settlement ST-2026-00041',
+            'created_at': '2026-08-15T14:12:00+05:00',
+          },
+          {
+            'id': 8,
+            'amount_laari': 20000,
+            'balance_after_laari': 20000,
+            'type': 'top_up',
+            'reference_type': null,
+            'reference_id': null,
+            'description': 'Bank top-up (FT99231)',
+            'created_at': '2026-08-10T10:00:00+05:00',
+          },
+        ],
+      },
+      drive: driveWallet,
+    ),
+  );
 
   // ---- MR1: signup + wizard + status --------------------------------------
   testWidgets(
