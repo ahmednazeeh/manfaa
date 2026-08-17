@@ -7,11 +7,18 @@ use App\Http\Controllers\Devices\CustomerDevicesController;
 use App\Http\Controllers\Devices\CustomerPushTokenController;
 use App\Http\Controllers\Devices\MerchantDevicesController;
 use App\Http\Controllers\Devices\MerchantPushTokenController;
+use App\Http\Controllers\Merchant\BankAccountController;
+use App\Http\Controllers\Merchant\BranchesController;
 use App\Http\Controllers\Merchant\CustomerLookupController;
+use App\Http\Controllers\Merchant\PreferencesController;
 use App\Http\Controllers\Merchant\ProductCategoriesController;
+use App\Http\Controllers\Merchant\ProfileController;
+use App\Http\Controllers\Merchant\PromotionController;
 use App\Http\Controllers\Merchant\RateController;
+use App\Http\Controllers\Merchant\RolesController;
 use App\Http\Controllers\Merchant\SettlementController;
 use App\Http\Controllers\Merchant\SetupController;
+use App\Http\Controllers\Merchant\StaffController;
 use App\Http\Controllers\Merchant\TransactionCorrectionController;
 use App\Http\Controllers\Mobile\ConfigController;
 use App\Http\Controllers\Mobile\CreditController;
@@ -378,5 +385,164 @@ Route::prefix('mobile/v1')
 
                 Route::post('setup/submit', [SetupController::class, 'submit'])
                     ->middleware(['merchant.can:setup.submit', 'throttle:mobile-setup-writes']);
+
+                /*
+                 * The settings estate (merchant app MR5) — the web settings
+                 * module (routes/api/merchant-settings.php), the
+                 * product-category writes (routes/api/product-categories.php),
+                 * the promotion lifecycle (routes/api/promotions.php) and the
+                 * standing-rate change (routes/api/webhooks.php), all on the
+                 * mobile surface: same controllers, same permission slugs, and
+                 * the permission gate FIRST on every route, as everywhere on
+                 * this tree — an account that may not act must be refused
+                 * before the response can reveal the store's standing.
+                 *
+                 * The approval gates copy the web mounts exactly, because
+                 * their DIFFERENCES are deliberate, in three strengths:
+                 *
+                 *  - the profile PATCH, the branch writes and the staff invite
+                 *    take the DEFAULT EnsureMerchantApproved: pre-approval the
+                 *    setup wizard is the sole write path, and a pending_review
+                 *    store must not rewrite the fields — or grow the estate —
+                 *    the superadmin queue is reviewing. Suspended stores pass:
+                 *    suspension is credit control, not a locked panel.
+                 *  - the bank account, staff edits, role writes and
+                 *    preferences carry NO approval gate at all: a role mints
+                 *    no account and shows the queue nothing, and deactivating
+                 *    the cashier whose phone was taken is exactly what a
+                 *    suspended — or still-waiting — store must stay able to do.
+                 *  - the COMMERCIAL OFFER — the rate change, the per-category
+                 *    rate card, promotion create/publish — takes the stricter
+                 *    `:trading`: a suspended store creates no cashback, so an
+                 *    offer set now would only spring live on reinstatement
+                 *    (§7; see EnsureMerchantApproved's docblock). Cancel stays
+                 *    open so no store is ever stranded with a draft.
+                 *
+                 * The logo upload is deliberately NOT re-mounted: the MR1
+                 * setup route above (POST setup/logo) already serves the
+                 * post-approval case — OnboardingService::LOGO_STATUSES
+                 * admits draft, rejected AND active stores, which is exactly
+                 * how the web panel changes a live store's logo too.
+                 */
+                Route::get('profile', [ProfileController::class, 'show'])
+                    ->middleware('merchant.can:profile.view');
+
+                // profile.edit seeds to the Owner alone — the store's public
+                // identity. The owner support-phone convention (Merchant::
+                // booted()) rides with the model, not this surface: a blank
+                // support_phone materialises as the contact number, and "same
+                // as contact" is a COMPARISON the app makes, sending the
+                // contact value itself.
+                Route::patch('profile', [ProfileController::class, 'update'])
+                    ->middleware(['merchant.can:profile.edit', EnsureMerchantApproved::class]);
+
+                Route::get('branches', [BranchesController::class, 'index'])
+                    ->middleware('merchant.can:branches.view');
+
+                Route::post('branches', [BranchesController::class, 'store'])
+                    ->middleware(['merchant.can:branches.create', EnsureMerchantApproved::class]);
+
+                Route::patch('branches/{id}', [BranchesController::class, 'update'])
+                    ->whereNumber('id')
+                    ->middleware(['merchant.can:branches.edit', EnsureMerchantApproved::class]);
+
+                // DELETE is hard only while nothing references the branch —
+                // a branch with history answers 409 branch_referenced, in the
+                // envelope, and the app's soft alternative is to stop using it.
+                Route::delete('branches/{id}', [BranchesController::class, 'destroy'])
+                    ->whereNumber('id')
+                    ->middleware(['merchant.can:branches.delete', EnsureMerchantApproved::class]);
+
+                // Seeing the payout destination and repointing it are
+                // different permissions (D6): repointing is the single most
+                // consequential change on this screen.
+                Route::get('bank-account', [BankAccountController::class, 'show'])
+                    ->middleware('merchant.can:bank_account.view');
+
+                Route::patch('bank-account', [BankAccountController::class, 'update'])
+                    ->middleware('merchant.can:bank_account.update');
+
+                Route::get('staff', [StaffController::class, 'index'])
+                    ->middleware('merchant.can:staff.view');
+
+                // The temp password is in THIS response and never again —
+                // the app's one-time reveal sheet is not a nicety, it is the
+                // only copy that will ever exist.
+                Route::post('staff', [StaffController::class, 'store'])
+                    ->middleware(['merchant.can:staff.invite', EnsureMerchantApproved::class]);
+
+                Route::patch('staff/{id}', [StaffController::class, 'update'])
+                    ->whereNumber('id')
+                    ->middleware('merchant.can:staff.edit');
+
+                // The permission CATALOGUE, published so the roles screen
+                // renders groups and wording from the server (D8) — an app
+                // build predating a permission still shows its checkbox.
+                // Gated with the roles list itself: it is that screen's
+                // other half.
+                Route::get('permissions', [RolesController::class, 'permissions'])
+                    ->middleware('merchant.can:roles.view');
+
+                Route::get('roles', [RolesController::class, 'index'])
+                    ->middleware('merchant.can:roles.view');
+
+                // The delegation rules (D5: only what you hold, owner role
+                // frozen, in-use delete refused) live in RoleService and
+                // leave as coded refusals through the envelope — the app
+                // points at the checkbox, never re-derives the rule.
+                Route::post('roles', [RolesController::class, 'store'])
+                    ->middleware('merchant.can:roles.manage');
+
+                Route::patch('roles/{id}', [RolesController::class, 'update'])
+                    ->whereNumber('id')
+                    ->middleware('merchant.can:roles.manage');
+
+                Route::delete('roles/{id}', [RolesController::class, 'destroy'])
+                    ->whereNumber('id')
+                    ->middleware('merchant.can:roles.manage');
+
+                // Both knobs bound server-side (min eligible sale 0–100000
+                // laari; the validation window capped at the ADMIN-governed
+                // platform ceiling) and both apply to FUTURE credits only —
+                // terms freeze onto each transaction at occurred_at (§4).
+                Route::patch('preferences', [PreferencesController::class, 'update'])
+                    ->middleware('merchant.can:preferences.update');
+
+                // The writes behind the GET the till already has (MR2 above):
+                // creating and repricing categories reprices future sales, so
+                // they join the rate and promotions behind `:trading`.
+                Route::post('product-categories', [ProductCategoriesController::class, 'store'])
+                    ->middleware(['merchant.can:product_categories.create', EnsureMerchantApproved::class.':trading']);
+
+                Route::patch('product-categories/{id}', [ProductCategoriesController::class, 'update'])
+                    ->whereNumber('id')
+                    ->middleware(['merchant.can:product_categories.edit', EnsureMerchantApproved::class.':trading']);
+
+                // Only what the domain offers: list, draft, publish, cancel
+                // DRAFT. No update and no early end — a published promotion
+                // is immutable for its stated duration (§7), and publish is
+                // its own permission because a draft costs nothing while
+                // publishing is the irreversible act.
+                Route::get('promotions', [PromotionController::class, 'index'])
+                    ->middleware('merchant.can:promotions.view');
+
+                Route::post('promotions', [PromotionController::class, 'store'])
+                    ->middleware(['merchant.can:promotions.create', EnsureMerchantApproved::class.':trading']);
+
+                Route::post('promotions/{id}/publish', [PromotionController::class, 'publish'])
+                    ->whereNumber('id')
+                    ->middleware(['merchant.can:promotions.publish', EnsureMerchantApproved::class.':trading']);
+
+                Route::post('promotions/{id}/cancel', [PromotionController::class, 'cancel'])
+                    ->whereNumber('id')
+                    ->middleware('merchant.can:promotions.cancel');
+
+                // The other half of the MR2 rate GET above: the §7 change
+                // semantics live in the controller (increase now, decrease at
+                // next business midnight, a new change replacing any pending
+                // one) and the response carries the §4 tier-cliff data the
+                // app must warn with.
+                Route::post('rate', [RateController::class, 'store'])
+                    ->middleware(['merchant.can:rate.update', EnsureMerchantApproved::class.':trading']);
             });
     });

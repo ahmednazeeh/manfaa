@@ -6,12 +6,18 @@ import '../features/auth/login_screen.dart';
 import '../features/boot/boot_screen.dart';
 import '../features/credit/credit_screen.dart';
 import '../features/dashboard/dashboard_screen.dart';
+import '../features/more/branches_screen.dart';
+import '../features/more/cashback_screen.dart';
+import '../features/more/employees_screen.dart';
+import '../features/more/more_screen.dart';
+import '../features/more/profile_screen.dart';
+import '../features/more/promotions_screen.dart';
+import '../features/more/roles_screen.dart';
 import '../features/settlements/settlement_detail_screen.dart';
 import '../features/settlements/settlements_screen.dart';
 import '../features/setup/setup_screen.dart';
 import '../features/signup/signup_screen.dart';
 import '../features/status/setup_pending_screen.dart';
-import '../features/tabs/tab_screens.dart';
 import '../features/transactions/transactions_screen.dart';
 import '../features/wallet/wallet_screen.dart';
 import 'providers.dart';
@@ -28,6 +34,24 @@ const kTabs = <({String path, String? permission})>[
   (path: '/settlements', permission: 'settlements.view'),
   (path: '/more', permission: null),
 ];
+
+/// The More estate's sub-screens and the permission that opens each (MR5).
+/// ANY of the listed slugs admits — one entry (cashback) is the web's
+/// merged screen, whose three sections each stand on their own permission,
+/// so holding any one of them earns the route (the screen then draws only
+/// the permitted sections).
+const kMoreGuards = <String, List<String>>{
+  '/more/profile': ['profile.view'],
+  '/more/employees': ['staff.view'],
+  '/more/roles': ['roles.view'],
+  '/more/branches': ['branches.view'],
+  '/more/cashback': [
+    'rate.view',
+    'product_categories.view',
+    'preferences.update',
+  ],
+  '/more/promotions': ['promotions.view'],
+};
 
 /// Statuses that keep a merchant OUT of the shell: the store is not trading
 /// yet, and the till must say so instead of letting a cashier find out on a
@@ -109,6 +133,16 @@ final routerProvider = Provider<GoRouter>((ref) {
         return homeLocationFor(session);
       }
 
+      // The More estate's sub-screens each stand on their own read
+      // permission (the server refuses regardless — this only spares the
+      // user a broken screen on a deep link or a narrowed role).
+      for (final MapEntry(key: path, value: slugs) in kMoreGuards.entries) {
+        if ((location == path || location.startsWith('$path/')) &&
+            !slugs.any(session.can)) {
+          return homeLocationFor(session);
+        }
+      }
+
       // A tab this account may not see (role narrowed, or a deep link).
       // Prefix-matched so a tab's sub-routes (/settlements/44) answer to
       // the same permission as the tab itself.
@@ -170,7 +204,36 @@ final routerProvider = Provider<GoRouter>((ref) {
             ),
           ]),
           StatefulShellBranch(routes: [
-            GoRoute(path: '/more', builder: (_, _) => const MoreScreen()),
+            GoRoute(
+              path: '/more',
+              builder: (_, _) => const MoreScreen(),
+              routes: [
+                GoRoute(
+                  path: 'profile',
+                  builder: (_, _) => const ProfileScreen(),
+                ),
+                GoRoute(
+                  path: 'cashback',
+                  builder: (_, _) => const CashbackSettingsScreen(),
+                ),
+                GoRoute(
+                  path: 'employees',
+                  builder: (_, _) => const EmployeesScreen(),
+                ),
+                GoRoute(
+                  path: 'roles',
+                  builder: (_, _) => const RolesScreen(),
+                ),
+                GoRoute(
+                  path: 'branches',
+                  builder: (_, _) => const BranchesScreen(),
+                ),
+                GoRoute(
+                  path: 'promotions',
+                  builder: (_, _) => const PromotionsScreen(),
+                ),
+              ],
+            ),
           ]),
         ],
       ),

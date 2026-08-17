@@ -2899,6 +2899,1320 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'View'**
   String get pushOpen;
+
+  /// No description provided for @moreTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'More'**
+  String get moreTitle;
+
+  /// No description provided for @moreSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Manage your business and account settings.'**
+  String get moreSubtitle;
+
+  /// No description provided for @merchantAccount.
+  ///
+  /// In en, this message translates to:
+  /// **'Merchant account'**
+  String get merchantAccount;
+
+  /// No description provided for @verifiedChip.
+  ///
+  /// In en, this message translates to:
+  /// **'Verified'**
+  String get verifiedChip;
+
+  /// No description provided for @viewProfile.
+  ///
+  /// In en, this message translates to:
+  /// **'View profile'**
+  String get viewProfile;
+
+  /// No description provided for @menuProfile.
+  ///
+  /// In en, this message translates to:
+  /// **'Profile'**
+  String get menuProfile;
+
+  /// No description provided for @menuEmployees.
+  ///
+  /// In en, this message translates to:
+  /// **'Manage Employees'**
+  String get menuEmployees;
+
+  /// No description provided for @menuRoles.
+  ///
+  /// In en, this message translates to:
+  /// **'Roles'**
+  String get menuRoles;
+
+  /// No description provided for @menuBranches.
+  ///
+  /// In en, this message translates to:
+  /// **'Manage Branches'**
+  String get menuBranches;
+
+  /// No description provided for @menuCashback.
+  ///
+  /// In en, this message translates to:
+  /// **'Cashback Settings'**
+  String get menuCashback;
+
+  /// No description provided for @menuPromotions.
+  ///
+  /// In en, this message translates to:
+  /// **'Promotions'**
+  String get menuPromotions;
+
+  /// No description provided for @logOut.
+  ///
+  /// In en, this message translates to:
+  /// **'Log out'**
+  String get logOut;
+
+  /// No description provided for @logOutConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Log out?'**
+  String get logOutConfirmTitle;
+
+  /// No description provided for @logOutConfirmBody.
+  ///
+  /// In en, this message translates to:
+  /// **'You can log back in any time.'**
+  String get logOutConfirmBody;
+
+  /// No description provided for @comingSoonBody.
+  ///
+  /// In en, this message translates to:
+  /// **'This screen is on its way.'**
+  String get comingSoonBody;
+
+  /// No description provided for @profileScreenTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Profile'**
+  String get profileScreenTitle;
+
+  /// No description provided for @profileScreenSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'View and manage your merchant profile.'**
+  String get profileScreenSubtitle;
+
+  /// No description provided for @storeLogoLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Store logo'**
+  String get storeLogoLabel;
+
+  /// No description provided for @storeNameLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Store name'**
+  String get storeNameLabel;
+
+  /// No description provided for @storeNameDvLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Store name in Dhivehi'**
+  String get storeNameDvLabel;
+
+  /// No description provided for @storeNameHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Your public name. Your store link never changes with it, so anything already shared keeps working.'**
+  String get storeNameHint;
+
+  /// No description provided for @storeNameRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the store name.'**
+  String get storeNameRequired;
+
+  /// No description provided for @channelRowLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Channel'**
+  String get channelRowLabel;
+
+  /// No description provided for @channelBothDisplay.
+  ///
+  /// In en, this message translates to:
+  /// **'In Store & Online'**
+  String get channelBothDisplay;
+
+  /// No description provided for @categoryRetiredHint.
+  ///
+  /// In en, this message translates to:
+  /// **'This category was retired — please choose a new one. Your other changes still save.'**
+  String get categoryRetiredHint;
+
+  /// No description provided for @editProfileTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit profile'**
+  String get editProfileTitle;
+
+  /// No description provided for @saveProfile.
+  ///
+  /// In en, this message translates to:
+  /// **'Save profile'**
+  String get saveProfile;
+
+  /// No description provided for @profileSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'Profile saved'**
+  String get profileSaved;
+
+  /// No description provided for @profileSaveFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not save the profile.'**
+  String get profileSaveFailed;
+
+  /// No description provided for @cashbackTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Cashback Settings'**
+  String get cashbackTitle;
+
+  /// No description provided for @cashbackSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Configure how customers earn cashback and how settlements work.'**
+  String get cashbackSubtitle;
+
+  /// No description provided for @generalRateTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'General cashback rate'**
+  String get generalRateTitle;
+
+  /// No description provided for @generalRateHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Applies to all eligible sales unless category rules override it.'**
+  String get generalRateHint;
+
+  /// No description provided for @noRateYet.
+  ///
+  /// In en, this message translates to:
+  /// **'No standing rate yet — set one to start offering cashback.'**
+  String get noRateYet;
+
+  /// No description provided for @scheduledChangeTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Scheduled change: {rate} cashback'**
+  String scheduledChangeTitle(String rate);
+
+  /// No description provided for @scheduledChangeBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Takes effect {date}. Submitting a new change replaces it.'**
+  String scheduledChangeBody(String date);
+
+  /// No description provided for @editRateTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Change the rate'**
+  String get editRateTitle;
+
+  /// No description provided for @newRateLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'New customer cashback rate'**
+  String get newRateLabel;
+
+  /// No description provided for @rateBoundsHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Percent of the eligible amount, up to two decimal places. Allowed range {min} to {max}.'**
+  String rateBoundsHint(String min, String max);
+
+  /// No description provided for @rateSameAsCurrent.
+  ///
+  /// In en, this message translates to:
+  /// **'This is already your current rate.'**
+  String get rateSameAsCurrent;
+
+  /// No description provided for @rateCancelsPending.
+  ///
+  /// In en, this message translates to:
+  /// **'This matches your current rate — submitting cancels the scheduled change and keeps the rate as it is.'**
+  String get rateCancelsPending;
+
+  /// No description provided for @rateIncreaseNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Increases apply immediately — the higher rate starts with the next recorded sale.'**
+  String get rateIncreaseNote;
+
+  /// No description provided for @rateDecreaseNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Decreases apply at 00:00 tonight (Maldives time) — an advertised rate is never cut mid-day.'**
+  String get rateDecreaseNote;
+
+  /// No description provided for @changeRateCta.
+  ///
+  /// In en, this message translates to:
+  /// **'Change rate'**
+  String get changeRateCta;
+
+  /// No description provided for @setRateCta.
+  ///
+  /// In en, this message translates to:
+  /// **'Set rate'**
+  String get setRateCta;
+
+  /// No description provided for @cancelPendingCta.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel scheduled change'**
+  String get cancelPendingCta;
+
+  /// No description provided for @rateUpdatedToast.
+  ///
+  /// In en, this message translates to:
+  /// **'Cashback rate updated'**
+  String get rateUpdatedToast;
+
+  /// No description provided for @rateChangedNowTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Cashback rate is now {rate}'**
+  String rateChangedNowTitle(String rate);
+
+  /// No description provided for @rateChangedLaterTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Cashback rate will be {rate}'**
+  String rateChangedLaterTitle(String rate);
+
+  /// No description provided for @rateChangedNowBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Applied immediately. Platform fee {fee} — all-in cost {allIn}.'**
+  String rateChangedNowBody(String fee, String allIn);
+
+  /// No description provided for @rateChangedLaterBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Takes effect {date} — the advertised rate is honoured until then.'**
+  String rateChangedLaterBody(String date);
+
+  /// No description provided for @categoryRulesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Cashback by category'**
+  String get categoryRulesTitle;
+
+  /// No description provided for @categoryRulesHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Override the general rate for selected product categories.'**
+  String get categoryRulesHint;
+
+  /// No description provided for @optionalBadge.
+  ///
+  /// In en, this message translates to:
+  /// **'Optional'**
+  String get optionalBadge;
+
+  /// No description provided for @excludedBadge.
+  ///
+  /// In en, this message translates to:
+  /// **'Excluded'**
+  String get excludedBadge;
+
+  /// No description provided for @inactiveBadge.
+  ///
+  /// In en, this message translates to:
+  /// **'Inactive'**
+  String get inactiveBadge;
+
+  /// No description provided for @addCategoryRule.
+  ///
+  /// In en, this message translates to:
+  /// **'Add category rule'**
+  String get addCategoryRule;
+
+  /// No description provided for @editRuleTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit category rule'**
+  String get editRuleTitle;
+
+  /// No description provided for @ruleNameEnLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Name (English)'**
+  String get ruleNameEnLabel;
+
+  /// No description provided for @ruleNameDvLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Name (Dhivehi)'**
+  String get ruleNameDvLabel;
+
+  /// No description provided for @ruleNameDvHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Required — this is what a Dhivehi customer sees on their receipt.'**
+  String get ruleNameDvHint;
+
+  /// No description provided for @ruleNamesRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter both names — the Dhivehi name is what customers read on their receipt.'**
+  String get ruleNamesRequired;
+
+  /// No description provided for @ruleModeLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'How does this category earn?'**
+  String get ruleModeLabel;
+
+  /// No description provided for @modeRateOption.
+  ///
+  /// In en, this message translates to:
+  /// **'Custom rate'**
+  String get modeRateOption;
+
+  /// No description provided for @modeRateOptionHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Sales in this category earn their own cashback percent.'**
+  String get modeRateOptionHint;
+
+  /// No description provided for @modeExcludedOption.
+  ///
+  /// In en, this message translates to:
+  /// **'Excluded'**
+  String get modeExcludedOption;
+
+  /// No description provided for @modeExcludedOptionHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Sales in this category never earn cashback — even during promotions.'**
+  String get modeExcludedOptionHint;
+
+  /// No description provided for @ruleRateLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Category cashback rate'**
+  String get ruleRateLabel;
+
+  /// No description provided for @ruleActiveLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Active'**
+  String get ruleActiveLabel;
+
+  /// No description provided for @categorySaved.
+  ///
+  /// In en, this message translates to:
+  /// **'Category saved'**
+  String get categorySaved;
+
+  /// No description provided for @categorySaveFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not save the category.'**
+  String get categorySaveFailed;
+
+  /// No description provided for @earningTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Earning & settlement'**
+  String get earningTitle;
+
+  /// No description provided for @minEligibleTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Minimum eligible sale'**
+  String get minEligibleTitle;
+
+  /// No description provided for @minEligibleHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Sales below this amount do not earn cashback.'**
+  String get minEligibleHint;
+
+  /// No description provided for @minEligibleInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter an amount between MVR 0 and MVR 1,000.'**
+  String get minEligibleInvalid;
+
+  /// No description provided for @validationWindowTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Validation window'**
+  String get validationWindowTitle;
+
+  /// No description provided for @validationWindowHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Cashback remains pending until the validation period ends or the sale is confirmed.'**
+  String get validationWindowHint;
+
+  /// No description provided for @validationWindowInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a whole number of days between 0 and {max}.'**
+  String validationWindowInvalid(int max);
+
+  /// No description provided for @daysSuffix.
+  ///
+  /// In en, this message translates to:
+  /// **'days'**
+  String get daysSuffix;
+
+  /// No description provided for @visibilityTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Customer visibility'**
+  String get visibilityTitle;
+
+  /// No description provided for @visibilityValue.
+  ///
+  /// In en, this message translates to:
+  /// **'Pending'**
+  String get visibilityValue;
+
+  /// No description provided for @visibilityHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Shown to customers as pending until validated.'**
+  String get visibilityHint;
+
+  /// No description provided for @saveChanges.
+  ///
+  /// In en, this message translates to:
+  /// **'Save changes'**
+  String get saveChanges;
+
+  /// No description provided for @preferencesSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'Preferences saved'**
+  String get preferencesSaved;
+
+  /// No description provided for @preferencesSaveFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not save the preferences.'**
+  String get preferencesSaveFailed;
+
+  /// No description provided for @employeesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Manage Employees'**
+  String get employeesTitle;
+
+  /// No description provided for @employeesSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Add, view and control staff access to your store.'**
+  String get employeesSubtitle;
+
+  /// No description provided for @totalEmployeesLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Total employees'**
+  String get totalEmployeesLabel;
+
+  /// No description provided for @activeEmployeesLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Active'**
+  String get activeEmployeesLabel;
+
+  /// No description provided for @addEmployeeCta.
+  ///
+  /// In en, this message translates to:
+  /// **'Add employee'**
+  String get addEmployeeCta;
+
+  /// No description provided for @rolesCta.
+  ///
+  /// In en, this message translates to:
+  /// **'Roles'**
+  String get rolesCta;
+
+  /// No description provided for @searchEmployeesHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Search employees'**
+  String get searchEmployeesHint;
+
+  /// No description provided for @employeesEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No staff accounts yet.'**
+  String get employeesEmpty;
+
+  /// No description provided for @noRoleLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'No role'**
+  String get noRoleLabel;
+
+  /// No description provided for @statusActive.
+  ///
+  /// In en, this message translates to:
+  /// **'Active'**
+  String get statusActive;
+
+  /// No description provided for @statusSuspended.
+  ///
+  /// In en, this message translates to:
+  /// **'Suspended'**
+  String get statusSuspended;
+
+  /// No description provided for @youMarker.
+  ///
+  /// In en, this message translates to:
+  /// **'(you)'**
+  String get youMarker;
+
+  /// No description provided for @permissionsOverviewTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Permissions overview'**
+  String get permissionsOverviewTitle;
+
+  /// No description provided for @manageRolesLink.
+  ///
+  /// In en, this message translates to:
+  /// **'Manage roles'**
+  String get manageRolesLink;
+
+  /// No description provided for @inviteTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Add employee'**
+  String get inviteTitle;
+
+  /// No description provided for @inviteNameLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Name'**
+  String get inviteNameLabel;
+
+  /// No description provided for @inviteEmailLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Email'**
+  String get inviteEmailLabel;
+
+  /// No description provided for @inviteEmailHint.
+  ///
+  /// In en, this message translates to:
+  /// **'They sign in with this email.'**
+  String get inviteEmailHint;
+
+  /// No description provided for @invitePickRoleLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Role'**
+  String get invitePickRoleLabel;
+
+  /// No description provided for @inviteCta.
+  ///
+  /// In en, this message translates to:
+  /// **'Create account'**
+  String get inviteCta;
+
+  /// No description provided for @inviteFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not create the account.'**
+  String get inviteFailed;
+
+  /// No description provided for @staffNeedsRolesView.
+  ///
+  /// In en, this message translates to:
+  /// **'Picking a role needs the view-roles permission, which your role does not hold. Ask an owner for it.'**
+  String get staffNeedsRolesView;
+
+  /// No description provided for @roleNotAssignableHint.
+  ///
+  /// In en, this message translates to:
+  /// **'A role holding a permission you do not hold yourself cannot be handed out.'**
+  String get roleNotAssignableHint;
+
+  /// No description provided for @tempPasswordTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'One-time password for {name}'**
+  String tempPasswordTitle(String name);
+
+  /// No description provided for @tempPasswordOnceTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Shown only once.'**
+  String get tempPasswordOnceTitle;
+
+  /// No description provided for @tempPasswordOnceBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Only a hashed copy is kept, so this password can never be shown again. Hand it to {name} now and ask them to change it after their first sign-in.'**
+  String tempPasswordOnceBody(String name);
+
+  /// No description provided for @tempPasswordLoginEmail.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign-in email'**
+  String get tempPasswordLoginEmail;
+
+  /// No description provided for @copyPassword.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy password'**
+  String get copyPassword;
+
+  /// No description provided for @passwordCopied.
+  ///
+  /// In en, this message translates to:
+  /// **'Password copied'**
+  String get passwordCopied;
+
+  /// No description provided for @tempPasswordAck.
+  ///
+  /// In en, this message translates to:
+  /// **'I have passed this password on securely and understand it cannot be shown again.'**
+  String get tempPasswordAck;
+
+  /// No description provided for @doneLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Done'**
+  String get doneLabel;
+
+  /// No description provided for @employeeRoleLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Role'**
+  String get employeeRoleLabel;
+
+  /// No description provided for @employeeActiveLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Active account'**
+  String get employeeActiveLabel;
+
+  /// No description provided for @employeeActiveHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Switching off is the only removal — history keeps its names, and the account can be switched back on.'**
+  String get employeeActiveHint;
+
+  /// No description provided for @staffLastOwnerLocked.
+  ///
+  /// In en, this message translates to:
+  /// **'This is the store\'s last active owner. Hand the owner role to another account first — otherwise nobody could reach the bank account or manage staff.'**
+  String get staffLastOwnerLocked;
+
+  /// No description provided for @staffSelfDemoteLocked.
+  ///
+  /// In en, this message translates to:
+  /// **'You cannot move your own account off the owner role — another owner has to.'**
+  String get staffSelfDemoteLocked;
+
+  /// No description provided for @staffSelfActiveLocked.
+  ///
+  /// In en, this message translates to:
+  /// **'You cannot deactivate your own account.'**
+  String get staffSelfActiveLocked;
+
+  /// No description provided for @staffSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'Employee updated'**
+  String get staffSaved;
+
+  /// No description provided for @staffSaveFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not update the account.'**
+  String get staffSaveFailed;
+
+  /// No description provided for @rolesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Roles'**
+  String get rolesTitle;
+
+  /// No description provided for @rolesSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Create roles and set permissions to control what employees can access and do.'**
+  String get rolesSubtitle;
+
+  /// No description provided for @addRoleCta.
+  ///
+  /// In en, this message translates to:
+  /// **'Add role'**
+  String get addRoleCta;
+
+  /// No description provided for @rolesReadOnlyHint.
+  ///
+  /// In en, this message translates to:
+  /// **'You can view roles. Changing them needs the manage-roles permission.'**
+  String get rolesReadOnlyHint;
+
+  /// No description provided for @fullAccessBadge.
+  ///
+  /// In en, this message translates to:
+  /// **'Full Access'**
+  String get fullAccessBadge;
+
+  /// No description provided for @ownerFrozenHint.
+  ///
+  /// In en, this message translates to:
+  /// **'The owner role always holds every permission, so it cannot be edited or deleted.'**
+  String get ownerFrozenHint;
+
+  /// No description provided for @employeeCountLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 employee} other{{count} employees}}'**
+  String employeeCountLabel(int count);
+
+  /// No description provided for @permissionCountChip.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 permission} other{{count} permissions}}'**
+  String permissionCountChip(int count);
+
+  /// No description provided for @roleEditorCreateTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'New role'**
+  String get roleEditorCreateTitle;
+
+  /// No description provided for @roleEditorEditTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit role'**
+  String get roleEditorEditTitle;
+
+  /// No description provided for @roleNameLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Name'**
+  String get roleNameLabel;
+
+  /// No description provided for @roleNameRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a role name.'**
+  String get roleNameRequired;
+
+  /// No description provided for @roleNameDvLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Name (Dhivehi, optional)'**
+  String get roleNameDvLabel;
+
+  /// No description provided for @roleNameDvHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Shown when the app is in Dhivehi. Leave empty to use the name above.'**
+  String get roleNameDvHint;
+
+  /// No description provided for @rolePermissionsLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Permissions'**
+  String get rolePermissionsLabel;
+
+  /// No description provided for @delegationHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Greyed permissions are ones you do not hold yourself — a role can only be given what you hold.'**
+  String get delegationHint;
+
+  /// No description provided for @createRoleCta.
+  ///
+  /// In en, this message translates to:
+  /// **'Create role'**
+  String get createRoleCta;
+
+  /// No description provided for @saveRoleCta.
+  ///
+  /// In en, this message translates to:
+  /// **'Save role'**
+  String get saveRoleCta;
+
+  /// No description provided for @deleteRoleCta.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete role'**
+  String get deleteRoleCta;
+
+  /// No description provided for @roleInUseHint.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 account stands on this role — move it to another role first.} other{{count} accounts stand on this role — move them to another role first.}}'**
+  String roleInUseHint(int count);
+
+  /// No description provided for @roleDeleteConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete {name}?'**
+  String roleDeleteConfirmTitle(String name);
+
+  /// No description provided for @roleDeleteConfirmBody.
+  ///
+  /// In en, this message translates to:
+  /// **'The role is removed for good. Nobody stands on it, so nobody loses access.'**
+  String get roleDeleteConfirmBody;
+
+  /// No description provided for @deleteLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete'**
+  String get deleteLabel;
+
+  /// No description provided for @roleSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'Role saved'**
+  String get roleSaved;
+
+  /// No description provided for @roleDeleted.
+  ///
+  /// In en, this message translates to:
+  /// **'Role deleted'**
+  String get roleDeleted;
+
+  /// No description provided for @roleSaveFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not save the role.'**
+  String get roleSaveFailed;
+
+  /// No description provided for @roleDeleteFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not delete the role.'**
+  String get roleDeleteFailed;
+
+  /// No description provided for @branchesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Manage Branches'**
+  String get branchesTitle;
+
+  /// No description provided for @branchesSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Your locations — a pinned branch appears in the customer app\'s Nearby.'**
+  String get branchesSubtitle;
+
+  /// No description provided for @totalBranchesLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Total'**
+  String get totalBranchesLabel;
+
+  /// No description provided for @pinnedBranchesLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Pinned'**
+  String get pinnedBranchesLabel;
+
+  /// No description provided for @unpinnedBranchesLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'No pin'**
+  String get unpinnedBranchesLabel;
+
+  /// No description provided for @addBranchCta.
+  ///
+  /// In en, this message translates to:
+  /// **'Add branch'**
+  String get addBranchCta;
+
+  /// No description provided for @searchBranchesHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Search branches'**
+  String get searchBranchesHint;
+
+  /// No description provided for @branchesEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No branches yet — add your first location to appear in Nearby.'**
+  String get branchesEmpty;
+
+  /// No description provided for @branchNotPinned.
+  ///
+  /// In en, this message translates to:
+  /// **'Not on the map'**
+  String get branchNotPinned;
+
+  /// No description provided for @editBranchTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit {name}'**
+  String editBranchTitle(String name);
+
+  /// No description provided for @branchNameLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Name'**
+  String get branchNameLabel;
+
+  /// No description provided for @branchNameRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a branch name.'**
+  String get branchNameRequired;
+
+  /// No description provided for @branchAddressLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Address (optional)'**
+  String get branchAddressLabel;
+
+  /// No description provided for @branchPinLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Map pin (optional)'**
+  String get branchPinLabel;
+
+  /// No description provided for @branchPinHint.
+  ///
+  /// In en, this message translates to:
+  /// **'With a pin, customers near this location find you first in the Nearby tab. Without one, this branch is not shown there.'**
+  String get branchPinHint;
+
+  /// No description provided for @clearPinCta.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove pin'**
+  String get clearPinCta;
+
+  /// No description provided for @setPinCta.
+  ///
+  /// In en, this message translates to:
+  /// **'Set a map pin'**
+  String get setPinCta;
+
+  /// No description provided for @branchAdded.
+  ///
+  /// In en, this message translates to:
+  /// **'Branch added'**
+  String get branchAdded;
+
+  /// No description provided for @branchSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'Branch saved'**
+  String get branchSaved;
+
+  /// No description provided for @branchDeleted.
+  ///
+  /// In en, this message translates to:
+  /// **'Branch deleted'**
+  String get branchDeleted;
+
+  /// No description provided for @branchSaveFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not save the branch.'**
+  String get branchSaveFailed;
+
+  /// No description provided for @branchDeleteFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not delete the branch.'**
+  String get branchDeleteFailed;
+
+  /// No description provided for @branchDeleteConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete {name}?'**
+  String branchDeleteConfirmTitle(String name);
+
+  /// No description provided for @branchDeleteConfirmBody.
+  ///
+  /// In en, this message translates to:
+  /// **'The branch disappears from discovery and new sales. A branch with recorded sales or promotions cannot be deleted — history must keep resolving.'**
+  String get branchDeleteConfirmBody;
+
+  /// No description provided for @branchReferencedError.
+  ///
+  /// In en, this message translates to:
+  /// **'This branch has recorded sales or promotions, so it stays on file. Stop using it instead.'**
+  String get branchReferencedError;
+
+  /// No description provided for @promotionsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Promotions'**
+  String get promotionsTitle;
+
+  /// No description provided for @promotionsSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Time-boxed cashback boosts above your standing rate.'**
+  String get promotionsSubtitle;
+
+  /// No description provided for @newPromotionCta.
+  ///
+  /// In en, this message translates to:
+  /// **'New promotion'**
+  String get newPromotionCta;
+
+  /// No description provided for @promotionsEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No promotions yet. Create one to boost your cashback for a while.'**
+  String get promotionsEmpty;
+
+  /// No description provided for @promoStatusDraft.
+  ///
+  /// In en, this message translates to:
+  /// **'Draft'**
+  String get promoStatusDraft;
+
+  /// No description provided for @promoStatusLive.
+  ///
+  /// In en, this message translates to:
+  /// **'Live'**
+  String get promoStatusLive;
+
+  /// No description provided for @promoStatusPublished.
+  ///
+  /// In en, this message translates to:
+  /// **'Published'**
+  String get promoStatusPublished;
+
+  /// No description provided for @promoStatusEnded.
+  ///
+  /// In en, this message translates to:
+  /// **'Ended'**
+  String get promoStatusEnded;
+
+  /// No description provided for @promoStatusCancelled.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancelled'**
+  String get promoStatusCancelled;
+
+  /// No description provided for @promoRateTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'{rate} cashback'**
+  String promoRateTitle(String rate);
+
+  /// No description provided for @promoYouPay.
+  ///
+  /// In en, this message translates to:
+  /// **'You pay {allIn} (fee {fee})'**
+  String promoYouPay(String allIn, String fee);
+
+  /// No description provided for @promoYouPayDash.
+  ///
+  /// In en, this message translates to:
+  /// **'Fee not priced right now'**
+  String get promoYouPayDash;
+
+  /// No description provided for @promoMinPurchase.
+  ///
+  /// In en, this message translates to:
+  /// **'Min purchase {amount}'**
+  String promoMinPurchase(String amount);
+
+  /// No description provided for @promoPerCustomerCap.
+  ///
+  /// In en, this message translates to:
+  /// **'Per-customer cap {amount}'**
+  String promoPerCustomerCap(String amount);
+
+  /// No description provided for @promoAllBranches.
+  ///
+  /// In en, this message translates to:
+  /// **'All branches'**
+  String get promoAllBranches;
+
+  /// No description provided for @promoBranchFallback.
+  ///
+  /// In en, this message translates to:
+  /// **'Branch #{id}'**
+  String promoBranchFallback(int id);
+
+  /// No description provided for @publishCta.
+  ///
+  /// In en, this message translates to:
+  /// **'Publish'**
+  String get publishCta;
+
+  /// No description provided for @cancelDraftCta.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel draft'**
+  String get cancelDraftCta;
+
+  /// No description provided for @keepDraftCta.
+  ///
+  /// In en, this message translates to:
+  /// **'Keep as draft'**
+  String get keepDraftCta;
+
+  /// No description provided for @publishConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Publish the {rate} promotion?'**
+  String publishConfirmTitle(String rate);
+
+  /// No description provided for @publishConfirmBody.
+  ///
+  /// In en, this message translates to:
+  /// **'It runs {start} to {end}. Once published it cannot be changed or ended early — customers can rely on the advertised boost for the whole window.'**
+  String publishConfirmBody(String start, String end);
+
+  /// No description provided for @promotionPublished.
+  ///
+  /// In en, this message translates to:
+  /// **'Promotion published'**
+  String get promotionPublished;
+
+  /// No description provided for @draftCancelled.
+  ///
+  /// In en, this message translates to:
+  /// **'Draft cancelled'**
+  String get draftCancelled;
+
+  /// No description provided for @publishFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not publish the promotion.'**
+  String get publishFailed;
+
+  /// No description provided for @cancelDraftFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not cancel the draft.'**
+  String get cancelDraftFailed;
+
+  /// No description provided for @promoRateLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Boosted cashback rate'**
+  String get promoRateLabel;
+
+  /// No description provided for @promoRateHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Percent of the eligible amount, up to two decimal places. A higher rate can land on a higher platform fee tier — you see the exact cost before publishing.'**
+  String get promoRateHint;
+
+  /// No description provided for @promoMustBoost.
+  ///
+  /// In en, this message translates to:
+  /// **'A promotion must boost above your standing rate of {rate}.'**
+  String promoMustBoost(String rate);
+
+  /// No description provided for @promoStartsLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Starts'**
+  String get promoStartsLabel;
+
+  /// No description provided for @promoEndsLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Ends'**
+  String get promoEndsLabel;
+
+  /// No description provided for @promoWindowHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Maldives time. Once published, the promotion runs for exactly this window — it cannot be edited or ended early.'**
+  String get promoWindowHint;
+
+  /// No description provided for @promoWindowOrderError.
+  ///
+  /// In en, this message translates to:
+  /// **'The promotion must end after it starts.'**
+  String get promoWindowOrderError;
+
+  /// No description provided for @promoMinLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Minimum purchase (optional)'**
+  String get promoMinLabel;
+
+  /// No description provided for @promoCapLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Per-customer cashback cap (optional)'**
+  String get promoCapLabel;
+
+  /// No description provided for @promoAmountInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter an MVR amount, e.g. 100.00, or leave empty.'**
+  String get promoAmountInvalid;
+
+  /// No description provided for @promoBranchLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Branch'**
+  String get promoBranchLabel;
+
+  /// No description provided for @createDraftCta.
+  ///
+  /// In en, this message translates to:
+  /// **'Create draft'**
+  String get createDraftCta;
+
+  /// No description provided for @draftCreated.
+  ///
+  /// In en, this message translates to:
+  /// **'Draft promotion created'**
+  String get draftCreated;
+
+  /// No description provided for @createDraftFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not create the promotion.'**
+  String get createDraftFailed;
+
+  /// No description provided for @promoCostTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'During the promotion you pay {allIn} of each eligible sale'**
+  String promoCostTitle(String allIn);
+
+  /// No description provided for @promoCostBody.
+  ///
+  /// In en, this message translates to:
+  /// **'{rate} cashback + {fee} platform fee.'**
+  String promoCostBody(Object fee, Object rate);
+
+  /// No description provided for @promoCostDelta.
+  ///
+  /// In en, this message translates to:
+  /// **'That is {delta} versus your standing all-in cost of {standing}.'**
+  String promoCostDelta(String delta, String standing);
+
+  /// No description provided for @promoCostTier.
+  ///
+  /// In en, this message translates to:
+  /// **'Boosting from {from} to {to} moves your fee tier from {feeFrom} to {feeTo}.'**
+  String promoCostTier(String from, String to, String feeFrom, String feeTo);
 }
 
 class _AppLocalizationsDelegate

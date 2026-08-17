@@ -777,5 +777,447 @@
     }
   },
   "presetAllLabel": "All",
-  "pushOpen": "View"
+  "pushOpen": "View",
+  "moreTitle": "More",
+  "moreSubtitle": "Manage your business and account settings.",
+  "merchantAccount": "Merchant account",
+  "verifiedChip": "Verified",
+  "viewProfile": "View profile",
+  "menuProfile": "Profile",
+  "menuEmployees": "Manage Employees",
+  "menuRoles": "Roles",
+  "menuBranches": "Manage Branches",
+  "menuCashback": "Cashback Settings",
+  "menuPromotions": "Promotions",
+  "logOut": "Log out",
+  "logOutConfirmTitle": "Log out?",
+  "logOutConfirmBody": "You can log back in any time.",
+  "comingSoonBody": "This screen is on its way.",
+  "profileScreenTitle": "Profile",
+  "profileScreenSubtitle": "View and manage your merchant profile.",
+  "storeLogoLabel": "Store logo",
+  "storeNameLabel": "Store name",
+  "storeNameDvLabel": "Store name in Dhivehi",
+  "storeNameHint": "Your public name. Your store link never changes with it, so anything already shared keeps working.",
+  "storeNameRequired": "Enter the store name.",
+  "channelRowLabel": "Channel",
+  "channelBothDisplay": "In Store & Online",
+  "categoryRetiredHint": "This category was retired — please choose a new one. Your other changes still save.",
+  "editProfileTitle": "Edit profile",
+  "saveProfile": "Save profile",
+  "profileSaved": "Profile saved",
+  "profileSaveFailed": "Could not save the profile.",
+  "cashbackTitle": "Cashback Settings",
+  "cashbackSubtitle": "Configure how customers earn cashback and how settlements work.",
+  "generalRateTitle": "General cashback rate",
+  "generalRateHint": "Applies to all eligible sales unless category rules override it.",
+  "noRateYet": "No standing rate yet — set one to start offering cashback.",
+  "scheduledChangeTitle": "Scheduled change: {rate} cashback",
+  "@scheduledChangeTitle": {
+    "placeholders": {
+      "rate": {
+        "type": "String"
+      }
+    }
+  },
+  "scheduledChangeBody": "Takes effect {date}. Submitting a new change replaces it.",
+  "@scheduledChangeBody": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "editRateTitle": "Change the rate",
+  "newRateLabel": "New customer cashback rate",
+  "rateBoundsHint": "Percent of the eligible amount, up to two decimal places. Allowed range {min} to {max}.",
+  "@rateBoundsHint": {
+    "placeholders": {
+      "min": {
+        "type": "String"
+      },
+      "max": {
+        "type": "String"
+      }
+    }
+  },
+  "rateSameAsCurrent": "This is already your current rate.",
+  "rateCancelsPending": "This matches your current rate — submitting cancels the scheduled change and keeps the rate as it is.",
+  "rateIncreaseNote": "Increases apply immediately — the higher rate starts with the next recorded sale.",
+  "rateDecreaseNote": "Decreases apply at 00:00 tonight (Maldives time) — an advertised rate is never cut mid-day.",
+  "changeRateCta": "Change rate",
+  "setRateCta": "Set rate",
+  "cancelPendingCta": "Cancel scheduled change",
+  "rateUpdatedToast": "Cashback rate updated",
+  "rateChangedNowTitle": "Cashback rate is now {rate}",
+  "@rateChangedNowTitle": {
+    "placeholders": {
+      "rate": {
+        "type": "String"
+      }
+    }
+  },
+  "rateChangedLaterTitle": "Cashback rate will be {rate}",
+  "@rateChangedLaterTitle": {
+    "placeholders": {
+      "rate": {
+        "type": "String"
+      }
+    }
+  },
+  "rateChangedNowBody": "Applied immediately. Platform fee {fee} — all-in cost {allIn}.",
+  "@rateChangedNowBody": {
+    "placeholders": {
+      "fee": {
+        "type": "String"
+      },
+      "allIn": {
+        "type": "String"
+      }
+    }
+  },
+  "rateChangedLaterBody": "Takes effect {date} — the advertised rate is honoured until then.",
+  "@rateChangedLaterBody": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "categoryRulesTitle": "Cashback by category",
+  "categoryRulesHint": "Override the general rate for selected product categories.",
+  "optionalBadge": "Optional",
+  "excludedBadge": "Excluded",
+  "inactiveBadge": "Inactive",
+  "addCategoryRule": "Add category rule",
+  "editRuleTitle": "Edit category rule",
+  "ruleNameEnLabel": "Name (English)",
+  "ruleNameDvLabel": "Name (Dhivehi)",
+  "ruleNameDvHint": "Required — this is what a Dhivehi customer sees on their receipt.",
+  "ruleNamesRequired": "Enter both names — the Dhivehi name is what customers read on their receipt.",
+  "ruleModeLabel": "How does this category earn?",
+  "modeRateOption": "Custom rate",
+  "modeRateOptionHint": "Sales in this category earn their own cashback percent.",
+  "modeExcludedOption": "Excluded",
+  "modeExcludedOptionHint": "Sales in this category never earn cashback — even during promotions.",
+  "ruleRateLabel": "Category cashback rate",
+  "ruleActiveLabel": "Active",
+  "categorySaved": "Category saved",
+  "categorySaveFailed": "Could not save the category.",
+  "earningTitle": "Earning & settlement",
+  "minEligibleTitle": "Minimum eligible sale",
+  "minEligibleHint": "Sales below this amount do not earn cashback.",
+  "minEligibleInvalid": "Enter an amount between MVR 0 and MVR 1,000.",
+  "validationWindowTitle": "Validation window",
+  "validationWindowHint": "Cashback remains pending until the validation period ends or the sale is confirmed.",
+  "validationWindowInvalid": "Enter a whole number of days between 0 and {max}.",
+  "@validationWindowInvalid": {
+    "placeholders": {
+      "max": {
+        "type": "int"
+      }
+    }
+  },
+  "daysSuffix": "days",
+  "visibilityTitle": "Customer visibility",
+  "visibilityValue": "Pending",
+  "visibilityHint": "Shown to customers as pending until validated.",
+  "saveChanges": "Save changes",
+  "preferencesSaved": "Preferences saved",
+  "preferencesSaveFailed": "Could not save the preferences.",
+  "employeesTitle": "Manage Employees",
+  "employeesSubtitle": "Add, view and control staff access to your store.",
+  "totalEmployeesLabel": "Total employees",
+  "activeEmployeesLabel": "Active",
+  "addEmployeeCta": "Add employee",
+  "rolesCta": "Roles",
+  "searchEmployeesHint": "Search employees",
+  "employeesEmpty": "No staff accounts yet.",
+  "noRoleLabel": "No role",
+  "statusActive": "Active",
+  "statusSuspended": "Suspended",
+  "youMarker": "(you)",
+  "permissionsOverviewTitle": "Permissions overview",
+  "manageRolesLink": "Manage roles",
+  "inviteTitle": "Add employee",
+  "inviteNameLabel": "Name",
+  "inviteEmailLabel": "Email",
+  "inviteEmailHint": "They sign in with this email.",
+  "invitePickRoleLabel": "Role",
+  "inviteCta": "Create account",
+  "inviteFailed": "Could not create the account.",
+  "staffNeedsRolesView": "Picking a role needs the view-roles permission, which your role does not hold. Ask an owner for it.",
+  "roleNotAssignableHint": "A role holding a permission you do not hold yourself cannot be handed out.",
+  "tempPasswordTitle": "One-time password for {name}",
+  "@tempPasswordTitle": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "tempPasswordOnceTitle": "Shown only once.",
+  "tempPasswordOnceBody": "Only a hashed copy is kept, so this password can never be shown again. Hand it to {name} now and ask them to change it after their first sign-in.",
+  "@tempPasswordOnceBody": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "tempPasswordLoginEmail": "Sign-in email",
+  "copyPassword": "Copy password",
+  "passwordCopied": "Password copied",
+  "tempPasswordAck": "I have passed this password on securely and understand it cannot be shown again.",
+  "doneLabel": "Done",
+  "employeeRoleLabel": "Role",
+  "employeeActiveLabel": "Active account",
+  "employeeActiveHint": "Switching off is the only removal — history keeps its names, and the account can be switched back on.",
+  "staffLastOwnerLocked": "This is the store's last active owner. Hand the owner role to another account first — otherwise nobody could reach the bank account or manage staff.",
+  "staffSelfDemoteLocked": "You cannot move your own account off the owner role — another owner has to.",
+  "staffSelfActiveLocked": "You cannot deactivate your own account.",
+  "staffSaved": "Employee updated",
+  "staffSaveFailed": "Could not update the account.",
+  "rolesTitle": "Roles",
+  "rolesSubtitle": "Create roles and set permissions to control what employees can access and do.",
+  "addRoleCta": "Add role",
+  "rolesReadOnlyHint": "You can view roles. Changing them needs the manage-roles permission.",
+  "fullAccessBadge": "Full Access",
+  "ownerFrozenHint": "The owner role always holds every permission, so it cannot be edited or deleted.",
+  "employeeCountLabel": "{count, plural, =1{1 employee} other{{count} employees}}",
+  "@employeeCountLabel": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "permissionCountChip": "{count, plural, =1{1 permission} other{{count} permissions}}",
+  "@permissionCountChip": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "roleEditorCreateTitle": "New role",
+  "roleEditorEditTitle": "Edit role",
+  "roleNameLabel": "Name",
+  "roleNameRequired": "Enter a role name.",
+  "roleNameDvLabel": "Name (Dhivehi, optional)",
+  "roleNameDvHint": "Shown when the app is in Dhivehi. Leave empty to use the name above.",
+  "rolePermissionsLabel": "Permissions",
+  "delegationHint": "Greyed permissions are ones you do not hold yourself — a role can only be given what you hold.",
+  "createRoleCta": "Create role",
+  "saveRoleCta": "Save role",
+  "deleteRoleCta": "Delete role",
+  "roleInUseHint": "{count, plural, =1{1 account stands on this role — move it to another role first.} other{{count} accounts stand on this role — move them to another role first.}}",
+  "@roleInUseHint": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "roleDeleteConfirmTitle": "Delete {name}?",
+  "@roleDeleteConfirmTitle": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "roleDeleteConfirmBody": "The role is removed for good. Nobody stands on it, so nobody loses access.",
+  "deleteLabel": "Delete",
+  "roleSaved": "Role saved",
+  "roleDeleted": "Role deleted",
+  "roleSaveFailed": "Could not save the role.",
+  "roleDeleteFailed": "Could not delete the role.",
+  "branchesTitle": "Manage Branches",
+  "branchesSubtitle": "Your locations — a pinned branch appears in the customer app's Nearby.",
+  "totalBranchesLabel": "Total",
+  "pinnedBranchesLabel": "Pinned",
+  "unpinnedBranchesLabel": "No pin",
+  "addBranchCta": "Add branch",
+  "searchBranchesHint": "Search branches",
+  "branchesEmpty": "No branches yet — add your first location to appear in Nearby.",
+  "branchNotPinned": "Not on the map",
+  "editBranchTitle": "Edit {name}",
+  "@editBranchTitle": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "branchNameLabel": "Name",
+  "branchNameRequired": "Enter a branch name.",
+  "branchAddressLabel": "Address (optional)",
+  "branchPinLabel": "Map pin (optional)",
+  "branchPinHint": "With a pin, customers near this location find you first in the Nearby tab. Without one, this branch is not shown there.",
+  "clearPinCta": "Remove pin",
+  "setPinCta": "Set a map pin",
+  "branchAdded": "Branch added",
+  "branchSaved": "Branch saved",
+  "branchDeleted": "Branch deleted",
+  "branchSaveFailed": "Could not save the branch.",
+  "branchDeleteFailed": "Could not delete the branch.",
+  "branchDeleteConfirmTitle": "Delete {name}?",
+  "@branchDeleteConfirmTitle": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "branchDeleteConfirmBody": "The branch disappears from discovery and new sales. A branch with recorded sales or promotions cannot be deleted — history must keep resolving.",
+  "branchReferencedError": "This branch has recorded sales or promotions, so it stays on file. Stop using it instead.",
+  "promotionsTitle": "Promotions",
+  "promotionsSubtitle": "Time-boxed cashback boosts above your standing rate.",
+  "newPromotionCta": "New promotion",
+  "promotionsEmpty": "No promotions yet. Create one to boost your cashback for a while.",
+  "promoStatusDraft": "Draft",
+  "promoStatusLive": "Live",
+  "promoStatusPublished": "Published",
+  "promoStatusEnded": "Ended",
+  "promoStatusCancelled": "Cancelled",
+  "promoRateTitle": "{rate} cashback",
+  "@promoRateTitle": {
+    "placeholders": {
+      "rate": {
+        "type": "String"
+      }
+    }
+  },
+  "promoYouPay": "You pay {allIn} (fee {fee})",
+  "@promoYouPay": {
+    "placeholders": {
+      "allIn": {
+        "type": "String"
+      },
+      "fee": {
+        "type": "String"
+      }
+    }
+  },
+  "promoYouPayDash": "Fee not priced right now",
+  "promoMinPurchase": "Min purchase {amount}",
+  "@promoMinPurchase": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "promoPerCustomerCap": "Per-customer cap {amount}",
+  "@promoPerCustomerCap": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "promoAllBranches": "All branches",
+  "promoBranchFallback": "Branch #{id}",
+  "@promoBranchFallback": {
+    "placeholders": {
+      "id": {
+        "type": "int"
+      }
+    }
+  },
+  "publishCta": "Publish",
+  "cancelDraftCta": "Cancel draft",
+  "keepDraftCta": "Keep as draft",
+  "publishConfirmTitle": "Publish the {rate} promotion?",
+  "@publishConfirmTitle": {
+    "placeholders": {
+      "rate": {
+        "type": "String"
+      }
+    }
+  },
+  "publishConfirmBody": "It runs {start} to {end}. Once published it cannot be changed or ended early — customers can rely on the advertised boost for the whole window.",
+  "@publishConfirmBody": {
+    "placeholders": {
+      "start": {
+        "type": "String"
+      },
+      "end": {
+        "type": "String"
+      }
+    }
+  },
+  "promotionPublished": "Promotion published",
+  "draftCancelled": "Draft cancelled",
+  "publishFailed": "Could not publish the promotion.",
+  "cancelDraftFailed": "Could not cancel the draft.",
+  "promoRateLabel": "Boosted cashback rate",
+  "promoRateHint": "Percent of the eligible amount, up to two decimal places. A higher rate can land on a higher platform fee tier — you see the exact cost before publishing.",
+  "promoMustBoost": "A promotion must boost above your standing rate of {rate}.",
+  "@promoMustBoost": {
+    "placeholders": {
+      "rate": {
+        "type": "String"
+      }
+    }
+  },
+  "promoStartsLabel": "Starts",
+  "promoEndsLabel": "Ends",
+  "promoWindowHint": "Maldives time. Once published, the promotion runs for exactly this window — it cannot be edited or ended early.",
+  "promoWindowOrderError": "The promotion must end after it starts.",
+  "promoMinLabel": "Minimum purchase (optional)",
+  "promoCapLabel": "Per-customer cashback cap (optional)",
+  "promoAmountInvalid": "Enter an MVR amount, e.g. 100.00, or leave empty.",
+  "promoBranchLabel": "Branch",
+  "createDraftCta": "Create draft",
+  "draftCreated": "Draft promotion created",
+  "createDraftFailed": "Could not create the promotion.",
+  "promoCostTitle": "During the promotion you pay {allIn} of each eligible sale",
+  "@promoCostTitle": {
+    "placeholders": {
+      "allIn": {
+        "type": "String"
+      }
+    }
+  },
+  "promoCostBody": "{rate} cashback + {fee} platform fee.",
+  "@costPreviewBody": {
+    "placeholders": {
+      "rate": {
+        "type": "String"
+      },
+      "fee": {
+        "type": "String"
+      }
+    }
+  },
+  "promoCostDelta": "That is {delta} versus your standing all-in cost of {standing}.",
+  "@promoCostDelta": {
+    "placeholders": {
+      "delta": {
+        "type": "String"
+      },
+      "standing": {
+        "type": "String"
+      }
+    }
+  },
+  "promoCostTier": "Boosting from {from} to {to} moves your fee tier from {feeFrom} to {feeTo}.",
+  "@promoCostTier": {
+    "placeholders": {
+      "from": {
+        "type": "String"
+      },
+      "to": {
+        "type": "String"
+      },
+      "feeFrom": {
+        "type": "String"
+      },
+      "feeTo": {
+        "type": "String"
+      }
+    }
+  }
 }

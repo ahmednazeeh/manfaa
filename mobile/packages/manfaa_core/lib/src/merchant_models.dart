@@ -750,3 +750,524 @@ class MerchantCreditResult {
   /// was already committed by an earlier attempt whose response was lost.
   final bool replayed;
 }
+
+/// GET/PATCH /merchant/profile — the store's public identity
+/// (MerchantProfileResource, verbatim). The slug never moves with a rename:
+/// it is the address on every shared link and printed card.
+class MerchantProfile {
+  MerchantProfile({
+    required this.id,
+    required this.name,
+    this.nameDv,
+    required this.slug,
+    required this.status,
+    this.category,
+    required this.categoryRetired,
+    required this.channel,
+    this.eligibilityBasis,
+    this.contactEmail,
+    this.contactPhone,
+    this.supportPhone,
+    this.websiteUrl,
+  });
+
+  factory MerchantProfile.fromJson(Map<String, dynamic> json) =>
+      MerchantProfile(
+        id: json['id'] as int? ?? 0,
+        name: _s(json['name']),
+        nameDv: json['name_dv'] as String?,
+        slug: _s(json['slug']),
+        status: _s(json['status']),
+        category: json['category'] as String?,
+        categoryRetired: json['category_retired'] as bool? ?? false,
+        channel: _s(json['channel']),
+        eligibilityBasis: json['eligibility_basis'] as String?,
+        contactEmail: json['contact_email'] as String?,
+        contactPhone: json['contact_phone'] as String?,
+        supportPhone: json['support_phone'] as String?,
+        websiteUrl: json['website_url'] as String?,
+      );
+
+  final int id;
+  final String name;
+  final String? nameDv;
+  final String slug;
+
+  /// draft | pending_review | rejected | active | suspended | closed.
+  final String status;
+
+  /// A curated category slug, or null while unpicked.
+  final String? category;
+
+  /// The store still holds a curated category the superadmin has since
+  /// retired: the save path tolerates the unchanged value, and this flag is
+  /// what tells the UI to prompt for a new pick instead of a silent 422.
+  final bool categoryRetired;
+
+  /// in_store | online | both.
+  final String channel;
+
+  /// The §11 free-text mirror of the agreement — ONE string, displayed to
+  /// customers, never used in computation.
+  final String? eligibilityBasis;
+  final String? contactEmail;
+  final String? contactPhone;
+
+  /// Always materialised server-side (Merchant::booted()): a blank support
+  /// phone stores the contact number itself. "Same as contact" is therefore
+  /// a COMPARISON the app makes, never a separate stored flag.
+  final String? supportPhone;
+  final String? websiteUrl;
+}
+
+/// PATCH /merchant/preferences — the owner-editable earning knobs
+/// (MerchantPreferencesResource). There is no GET: an EMPTY PATCH validates
+/// cleanly, changes nothing and answers the current values — the read model
+/// the web panel uses too.
+class MerchantPreferences {
+  MerchantPreferences({
+    required this.settlementMethod,
+    required this.minEligibleLaari,
+    required this.validationWindowDays,
+    required this.validationWindowMaxDays,
+  });
+
+  factory MerchantPreferences.fromJson(Map<String, dynamic> json) =>
+      MerchantPreferences(
+        settlementMethod: _s(json['settlement_method']),
+        minEligibleLaari: _laari(json['min_eligible_laari']),
+        validationWindowDays: _count(json['validation_window_days']),
+        validationWindowMaxDays: _count(json['validation_window_max_days']),
+      );
+
+  /// bank | wallet — how settlements are funded by default (§7).
+  final String settlementMethod;
+
+  /// Sales below this earn no cashback (integer laari; platform bound
+  /// 0–100000).
+  final int minEligibleLaari;
+
+  /// Days a sale stays refundable before its cashback becomes payable.
+  final int validationWindowDays;
+
+  /// The ADMIN-governed ceiling the PATCH validates against — served so the
+  /// form renders the real bound instead of hard-coding one.
+  final int validationWindowMaxDays;
+}
+
+/// The §4 cost picture of one rate inside a change summary: the exact
+/// percent strings, fee fields null only for a legacy unpriced rate.
+class RateCost {
+  RateCost({
+    required this.cashbackRatePercent,
+    this.platformFeePercent,
+    this.allInPercent,
+  });
+
+  factory RateCost.fromJson(Map<String, dynamic> json) => RateCost(
+        cashbackRatePercent: _s(json['cashback_rate_percent']),
+        platformFeePercent: json['platform_fee_percent'] as String?,
+        allInPercent: json['all_in_percent'] as String?,
+      );
+
+  final String cashbackRatePercent;
+  final String? platformFeePercent;
+  final String? allInPercent;
+}
+
+/// The `change` half of POST /merchant/rate — the SERVER's own answer on
+/// when the new rate takes hold (§7: increases now, decreases at the next
+/// business midnight). The app renders this verbatim and never re-derives
+/// the timing.
+class RateChangeSummary {
+  RateChangeSummary({
+    this.previous,
+    required this.next,
+    required this.effectiveAt,
+    required this.applies,
+    required this.tierChanged,
+  });
+
+  factory RateChangeSummary.fromJson(Map<String, dynamic> json) =>
+      RateChangeSummary(
+        previous: json['previous'] is Map
+            ? RateCost.fromJson((json['previous'] as Map).cast<String, dynamic>())
+            : null,
+        next: RateCost.fromJson(
+          (json['new'] as Map?)?.cast<String, dynamic>() ?? {},
+        ),
+        effectiveAt: _s(json['effective_at']),
+        applies: _s(json['applies']),
+        tierChanged: json['tier_changed'] as bool? ?? false,
+      );
+
+  /// Null when the store had no standing rate at all before this change.
+  final RateCost? previous;
+
+  /// `new` on the wire — Dart keyword, so `next` here.
+  final RateCost next;
+
+  /// ISO 8601 in the business timezone.
+  final String effectiveAt;
+
+  /// immediately | next_business_midnight.
+  final String applies;
+  final bool tierChanged;
+}
+
+/// The whole POST /merchant/rate answer: the fresh current/pending windows
+/// (same shape as GET /merchant/rate) plus the change summary.
+class RateChangeResult {
+  RateChangeResult({required this.rate, this.change});
+
+  final MerchantRate rate;
+
+  /// Null only if the server chose not to describe the change (defensive —
+  /// today it always does).
+  final RateChangeSummary? change;
+}
+
+/// A role AS IT APPEARS NEXT TO A PERSON (MerchantRoleResource::summary) —
+/// on each staff row and nowhere else. Just enough to print it and to know
+/// it is the frozen one; the permission set belongs to [MerchantRole].
+class MerchantRoleSummary {
+  MerchantRoleSummary({
+    required this.id,
+    required this.name,
+    this.nameDv,
+    required this.isOwner,
+  });
+
+  factory MerchantRoleSummary.fromJson(Map<String, dynamic> json) =>
+      MerchantRoleSummary(
+        id: json['id'] as int? ?? 0,
+        name: _s(json['name']),
+        nameDv: json['name_dv'] as String?,
+        isOwner: json['is_owner'] as bool? ?? false,
+      );
+
+  final int id;
+  final String name;
+  final String? nameDv;
+
+  /// The immutable flag the last-owner guard keys on (D4) — never any
+  /// permission, however wide.
+  final bool isOwner;
+
+  String label({required bool dhivehi}) =>
+      dhivehi && (nameDv ?? '').isNotEmpty ? nameDv! : name;
+}
+
+/// One merchant panel account on GET /merchant/staff
+/// (MerchantStaffResource). No password material ever appears here — the
+/// generated temporary password is returned exactly once, on creation,
+/// NEXT TO (not inside) this resource.
+class MerchantStaff {
+  MerchantStaff({
+    required this.id,
+    required this.name,
+    required this.email,
+    this.role,
+    required this.isActive,
+    this.createdAt,
+  });
+
+  factory MerchantStaff.fromJson(Map<String, dynamic> json) => MerchantStaff(
+        id: json['id'] as int? ?? 0,
+        name: _s(json['name']),
+        email: _s(json['email']),
+        role: json['role'] is Map
+            ? MerchantRoleSummary.fromJson(
+                (json['role'] as Map).cast<String, dynamic>(),
+              )
+            : null,
+        isActive: json['is_active'] as bool? ?? true,
+        createdAt: json['created_at'] as String?,
+      );
+
+  final int id;
+  final String name;
+  final String email;
+
+  /// Null where a role somehow is not set — the UI renders the gap rather
+  /// than inventing a name.
+  final MerchantRoleSummary? role;
+
+  /// False is the ONLY removal — there is no staff DELETE, so audit trails
+  /// keep resolving.
+  final bool isActive;
+  final String? createdAt;
+}
+
+/// POST /merchant/staff — the created account plus the ONE-TIME temporary
+/// password, which exists only in this response (only its hash survives
+/// server-side) and is never retrievable again.
+class StaffInviteResult {
+  StaffInviteResult({required this.staff, required this.tempPassword});
+
+  final MerchantStaff staff;
+  final String tempPassword;
+}
+
+/// One of the merchant's OWN roles (MerchantRoleResource) — the roles
+/// screen's shape. `permissions` is the RESOLVED set: the owner role's
+/// stored column is empty because its authority is the flag (§2.3), so the
+/// server resolves it to the whole catalogue before it travels.
+class MerchantRole {
+  MerchantRole({
+    required this.id,
+    required this.name,
+    this.nameDv,
+    required this.slug,
+    required this.isOwner,
+    required this.isSystem,
+    required this.permissions,
+    required this.staffCount,
+    this.createdAt,
+    this.updatedAt,
+  });
+
+  factory MerchantRole.fromJson(Map<String, dynamic> json) => MerchantRole(
+        id: json['id'] as int? ?? 0,
+        name: _s(json['name']),
+        nameDv: json['name_dv'] as String?,
+        slug: _s(json['slug']),
+        isOwner: json['is_owner'] as bool? ?? false,
+        isSystem: json['is_system'] as bool? ?? false,
+        permissions: [
+          for (final slug in (json['permissions'] as List? ?? const []))
+            slug.toString(),
+        ],
+        staffCount: _count(json['staff_count']),
+        createdAt: json['created_at'] as String?,
+        updatedAt: json['updated_at'] as String?,
+      );
+
+  final int id;
+  final String name;
+  final String? nameDv;
+
+  /// Stable per merchant and never rewritten by a rename — the seeded
+  /// presets are recognised by it.
+  final String slug;
+
+  /// Frozen apart from its name: permissions un-editable, un-deletable,
+  /// and only an owner may hand it out.
+  final bool isOwner;
+  final bool isSystem;
+
+  /// The resolved permission slugs this role holds.
+  final List<String> permissions;
+
+  /// How many accounts stand on this role — shown on the list, and the
+  /// reason a delete is refused. Deactivated accounts count.
+  final int staffCount;
+  final String? createdAt;
+  final String? updatedAt;
+
+  String label({required bool dhivehi}) =>
+      dhivehi && (nameDv ?? '').isNotEmpty ? nameDv! : name;
+}
+
+/// One permission as the SERVED catalogue names it (RolesController
+/// ::permissions). Published rather than hardcoded (D8) so a permission
+/// added by a later deploy renders — with its own wording, under the right
+/// heading — in an app build that predates it.
+class PermissionInfo {
+  PermissionInfo({required this.slug, required this.label, required this.group});
+
+  factory PermissionInfo.fromJson(Map<String, dynamic> json) => PermissionInfo(
+        slug: _s(json['slug']),
+        label: _s(json['label']),
+        group: _s(json['group']),
+      );
+
+  final String slug;
+
+  /// The server's own English wording — displayed verbatim; the app never
+  /// invents a label for a slug it does not know.
+  final String label;
+  final String group;
+}
+
+/// One heading of the catalogue, in the server's stacking order.
+class PermissionGroupInfo {
+  PermissionGroupInfo({
+    required this.slug,
+    required this.label,
+    required this.permissions,
+  });
+
+  factory PermissionGroupInfo.fromJson(Map<String, dynamic> json) =>
+      PermissionGroupInfo(
+        slug: _s(json['slug']),
+        label: _s(json['label']),
+        permissions: [
+          for (final item in (json['permissions'] as List? ?? const []))
+            PermissionInfo.fromJson((item as Map).cast<String, dynamic>()),
+        ],
+      );
+
+  final String slug;
+  final String label;
+  final List<PermissionInfo> permissions;
+}
+
+/// GET /merchant/permissions — the whole grouped catalogue the roles
+/// editor renders its checkbox grid from.
+class PermissionCatalogue {
+  PermissionCatalogue({required this.groups});
+
+  factory PermissionCatalogue.fromJson(Map<String, dynamic> json) =>
+      PermissionCatalogue(
+        groups: [
+          for (final item in (json['groups'] as List? ?? const []))
+            PermissionGroupInfo.fromJson((item as Map).cast<String, dynamic>()),
+        ],
+      );
+
+  final List<PermissionGroupInfo> groups;
+}
+
+/// One branch on GET /merchant/branches (MerchantBranchResource). The pin
+/// is a nullable PAIR — both halves or neither, never one (the server
+/// refuses a lone coordinate).
+class MerchantBranch {
+  MerchantBranch({
+    required this.id,
+    required this.name,
+    this.address,
+    this.lat,
+    this.lng,
+  });
+
+  factory MerchantBranch.fromJson(Map<String, dynamic> json) => MerchantBranch(
+        id: json['id'] as int? ?? 0,
+        name: _s(json['name']),
+        address: json['address'] as String?,
+        lat: (json['lat'] as num?)?.toDouble(),
+        lng: (json['lng'] as num?)?.toDouble(),
+      );
+
+  final int id;
+  final String name;
+  final String? address;
+
+  /// Geometry, not money — the one place doubles are correct.
+  final double? lat;
+  final double? lng;
+
+  bool get pinned => lat != null && lng != null;
+}
+
+/// One promotion (PromotionResource): a time-boxed cashback BOOST above the
+/// standing rate. Rates are 2-decimal percent STRINGS off the wire; the fee
+/// pair is null only for a stale draft whose rate the current fee schedule
+/// no longer prices — still listed so it can be cancelled, refused on
+/// publish. Amounts are integer laari; timestamps are ISO 8601 in the
+/// business timezone.
+class Promotion {
+  Promotion({
+    required this.id,
+    required this.merchantId,
+    this.branchId,
+    required this.status,
+    required this.isLive,
+    required this.cashbackRatePercent,
+    this.platformFeePercent,
+    this.allInPercent,
+    required this.startsAt,
+    required this.endsAt,
+    this.minPurchaseLaari,
+    this.maxCashbackPerCustomerLaari,
+    this.publishedAt,
+    this.cancelledAt,
+  });
+
+  factory Promotion.fromJson(Map<String, dynamic> json) => Promotion(
+        id: json['id'] as int? ?? 0,
+        merchantId: json['merchant_id'] as int? ?? 0,
+        branchId: json['branch_id'] as int?,
+        status: _s(json['status']),
+        isLive: json['is_live'] as bool? ?? false,
+        cashbackRatePercent: _s(json['cashback_rate_percent']),
+        platformFeePercent: json['platform_fee_percent'] as String?,
+        allInPercent: json['all_in_percent'] as String?,
+        startsAt: _s(json['starts_at']),
+        endsAt: _s(json['ends_at']),
+        minPurchaseLaari: json['min_purchase_laari'] as int?,
+        maxCashbackPerCustomerLaari:
+            json['max_cashback_per_customer_laari'] as int?,
+        publishedAt: json['published_at'] as String?,
+        cancelledAt: json['cancelled_at'] as String?,
+      );
+
+  final int id;
+  final int merchantId;
+
+  /// Null means the whole store; an id scopes the boost to one branch.
+  final int? branchId;
+
+  /// draft | published | ended | cancelled.
+  final String status;
+
+  /// Published AND inside its window right now — the server's own answer,
+  /// never re-derived from the timestamps client-side.
+  final bool isLive;
+  final String cashbackRatePercent;
+  final String? platformFeePercent;
+  final String? allInPercent;
+  final String startsAt;
+  final String endsAt;
+  final int? minPurchaseLaari;
+  final int? maxCashbackPerCustomerLaari;
+  final String? publishedAt;
+  final String? cancelledAt;
+}
+
+/// The §4 cost picture the server sends BESIDE a created/published
+/// promotion (`cost_preview` at the root, next to `data`): what the
+/// merchant pays during the boost versus their standing terms, with the
+/// tier-cliff warning data. Rendered verbatim — never derived client-side.
+class PromotionCostPreview {
+  PromotionCostPreview({
+    required this.promo,
+    this.standing,
+    this.allInDeltaPercent,
+    required this.tierChanged,
+  });
+
+  factory PromotionCostPreview.fromJson(Map<String, dynamic> json) =>
+      PromotionCostPreview(
+        promo: RateCost.fromJson(
+          (json['promo'] as Map?)?.cast<String, dynamic>() ?? {},
+        ),
+        standing: json['standing'] is Map
+            ? RateCost.fromJson(
+                (json['standing'] as Map).cast<String, dynamic>(),
+              )
+            : null,
+        allInDeltaPercent: json['all_in_delta_percent'] as String?,
+        tierChanged: json['tier_changed'] as bool? ?? false,
+      );
+
+  final RateCost promo;
+
+  /// Null when the store has no standing rate at the window start.
+  final RateCost? standing;
+
+  /// The server's signed 2-decimal delta in percentage points ("0.26",
+  /// "-0.26"), or null without a standing comparison.
+  final String? allInDeltaPercent;
+  final bool tierChanged;
+}
+
+/// A promotion write's whole answer: the promotion plus the cost preview
+/// the server served beside it (create and publish carry one; cancel does
+/// not).
+class PromotionWriteResult {
+  PromotionWriteResult({required this.promotion, this.costPreview});
+
+  final Promotion promotion;
+  final PromotionCostPreview? costPreview;
+}

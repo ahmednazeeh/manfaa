@@ -1632,4 +1632,781 @@ class AppLocalizationsDv extends AppLocalizations {
 
   @override
   String get pushOpen => 'ބައްލަވާ';
+
+  @override
+  String get moreTitle => 'އިތުރު';
+
+  @override
+  String get moreSubtitle =>
+      'ވިޔަފާރިއާއި އެކައުންޓްގެ ސެޓިންތައް ބަލަހައްޓަވާ.';
+
+  @override
+  String get merchantAccount => 'ވިޔަފާރި އެކައުންޓް';
+
+  @override
+  String get verifiedChip => 'ކަށަވަރުކުރެވިފައި';
+
+  @override
+  String get viewProfile => 'ޕްރޮފައިލް ބައްލަވާ';
+
+  @override
+  String get menuProfile => 'ޕްރޮފައިލް';
+
+  @override
+  String get menuEmployees => 'މުވައްޒަފުން ބެލެހެއްޓުން';
+
+  @override
+  String get menuRoles => 'ދައުރުތައް';
+
+  @override
+  String get menuBranches => 'ބްރާންޗްތައް ބެލެހެއްޓުން';
+
+  @override
+  String get menuCashback => 'ކޭޝްބެކް ސެޓިންތައް';
+
+  @override
+  String get menuPromotions => 'ޕްރޮމޯޝަންތައް';
+
+  @override
+  String get logOut => 'ލޮގްއައުޓް';
+
+  @override
+  String get logOutConfirmTitle => 'ލޮގްއައުޓް ކުރައްވަންވީތޯ؟';
+
+  @override
+  String get logOutConfirmBody => 'ބޭނުން ވަގުތަކު އަލުން ލޮގިން ވެވޭނެއެވެ.';
+
+  @override
+  String get comingSoonBody => 'މި ޞަފްޙާ ދަނީ ތައްޔާރުވަމުންނެވެ.';
+
+  @override
+  String get profileScreenTitle => 'ޕްރޮފައިލް';
+
+  @override
+  String get profileScreenSubtitle =>
+      'ފިހާރައިގެ ޕްރޮފައިލް ބައްލަވައި ބަލަހައްޓަވާ.';
+
+  @override
+  String get storeLogoLabel => 'ފިހާރައިގެ ލޯގޯ';
+
+  @override
+  String get storeNameLabel => 'ފިހާރައިގެ ނަން';
+
+  @override
+  String get storeNameDvLabel => 'ފިހާރައިގެ ނަން ދިވެހިން';
+
+  @override
+  String get storeNameHint =>
+      'އާންމުކޮށް ފެންނަ ނަން. ފިހާރައިގެ ލިންކް މީގެ ސަބަބުން ބަދަލެއް ނުވާނެ، އެހެންކަމުން މިހާރު ޙިއްޞާކޮށްފައިވާ ލިންކްތައް މަސައްކަތްކުރާނެ.';
+
+  @override
+  String get storeNameRequired => 'ފިހާރައިގެ ނަން ލިޔުއްވާ.';
+
+  @override
+  String get channelRowLabel => 'ޗެނަލް';
+
+  @override
+  String get channelBothDisplay => 'ފިހާރައިގައި އަދި އޮންލައިން';
+
+  @override
+  String get categoryRetiredHint =>
+      'މި ބައި ދެން ބޭނުމެއް ނުކުރެވޭނެ — އައު ބައެއް އިޚްތިޔާރުކުރައްވާ. އެހެން ބަދަލުތައް ސޭވްވާނެއެވެ.';
+
+  @override
+  String get editProfileTitle => 'ޕްރޮފައިލް ބަދަލުކުރައްވާ';
+
+  @override
+  String get saveProfile => 'ޕްރޮފައިލް ސޭވްކުރައްވާ';
+
+  @override
+  String get profileSaved => 'ޕްރޮފައިލް ސޭވްވެއްޖެ';
+
+  @override
+  String get profileSaveFailed => 'ޕްރޮފައިލް ސޭވެއް ނުކުރެވުނު.';
+
+  @override
+  String get cashbackTitle => 'ކޭޝްބެކް ސެޓިންތައް';
+
+  @override
+  String get cashbackSubtitle =>
+      'ކަސްޓަމަރުންނަށް ކޭޝްބެކް ލިބޭ ގޮތާއި ސެޓްލްމަންޓް ހިނގާ ގޮތް ކަނޑައަޅުއްވާ.';
+
+  @override
+  String get generalRateTitle => 'އާންމު ކޭޝްބެކް ރޭޓް';
+
+  @override
+  String get generalRateHint =>
+      'ބައިތަކުގެ ޤަވާޢިދަކުން ބަދަލުނުކުރާހާ ހިނދަކު ހުރިހާ އެލިޖިބަލް ވިޔަފާރިއަކަށް ހިނގާނެއެވެ.';
+
+  @override
+  String get noRateYet =>
+      'އަދި އާންމު ރޭޓެއް ނެތް — ކޭޝްބެކް ދޭން ފެށުމަށް ރޭޓެއް ކަނޑައަޅުއްވާ.';
+
+  @override
+  String scheduledChangeTitle(String rate) {
+    return 'ތާވަލުކުރެވިފައިވާ ބަދަލު: ކޭޝްބެކް $rate';
+  }
+
+  @override
+  String scheduledChangeBody(String date) {
+    return '$date ގައި ހިނގަން ފަށާނެއެވެ. އައު ބަދަލެއް ހުށަހެޅުއްވުމުން މި ބަދަލު އުވޭނެއެވެ.';
+  }
+
+  @override
+  String get editRateTitle => 'ރޭޓް ބަދަލުކުރައްވާ';
+
+  @override
+  String get newRateLabel => 'ކަސްޓަމަރަށް ދޭ އައު ކޭޝްބެކް ރޭޓް';
+
+  @override
+  String rateBoundsHint(String min, String max) {
+    return 'އެލިޖިބަލް އަދަދުގެ ޕަސެންޓް، ގިނަވެގެން ދެ ޑެސިމަލް. ހުއްދަ ދާއިރާ $min އިން $max އަށް.';
+  }
+
+  @override
+  String get rateSameAsCurrent => 'މިއީ މިހާރުވެސް ތިޔަ ފިހާރައިގެ ރޭޓެވެ.';
+
+  @override
+  String get rateCancelsPending =>
+      'މިއީ މިހާރުގެ ރޭޓާ އެއްވަރު — ހުށަހެޅުއްވުމުން ތާވަލުކުރެވިފައިވާ ބަދަލު ކެންސަލްވެ ރޭޓް ހުރި ގޮތުގައި ދެމިއޮންނާނެއެވެ.';
+
+  @override
+  String get rateIncreaseNote =>
+      'މަތިކުރުން ވަގުތުން ހިނގާނެ — މަތި ރޭޓް ފެށޭނީ ދެން ރެކޯޑްކުރާ ވިޔަފާރިންނެވެ.';
+
+  @override
+  String get rateDecreaseNote =>
+      'ދަށްކުރުން ހިނގާނީ މިރޭ 00:00 ގައި (ރާއްޖޭގެ ގަޑިން) — އިޢުލާނުކޮށްފައިވާ ރޭޓް ދުވާލުގެ މެދުތެރެއިން ދަށެއް ނުކުރެވޭނެއެވެ.';
+
+  @override
+  String get changeRateCta => 'ރޭޓް ބަދަލުކުރައްވާ';
+
+  @override
+  String get setRateCta => 'ރޭޓް ކަނޑައަޅުއްވާ';
+
+  @override
+  String get cancelPendingCta => 'ތާވަލުކުރެވިފައިވާ ބަދަލު ކެންސަލްކުރައްވާ';
+
+  @override
+  String get rateUpdatedToast => 'ކޭޝްބެކް ރޭޓް ބަދަލުވެއްޖެ';
+
+  @override
+  String rateChangedNowTitle(String rate) {
+    return 'ކޭޝްބެކް ރޭޓް މިހާރު $rate';
+  }
+
+  @override
+  String rateChangedLaterTitle(String rate) {
+    return 'ކޭޝްބެކް ރޭޓް ވާނީ $rate އަށް';
+  }
+
+  @override
+  String rateChangedNowBody(String fee, String allIn) {
+    return 'ވަގުތުން ހިނގައިފި. ޕްލެޓްފޯމް ފީ $fee — ޖުމްލަ ޚަރަދު $allIn.';
+  }
+
+  @override
+  String rateChangedLaterBody(String date) {
+    return '$date ގައި ހިނގަން ފަށާނެއެވެ — އެހާތަނަށް އިޢުލާނުކޮށްފައިވާ ރޭޓް ދެމިއޮންނާނެއެވެ.';
+  }
+
+  @override
+  String get categoryRulesTitle => 'ބައިތަކަށް ކޭޝްބެކް';
+
+  @override
+  String get categoryRulesHint =>
+      'ހޮއްވަވާ ޕްރޮޑަކްޓް ބައިތަކަށް އާންމު ރޭޓްގެ ބަދަލުގައި ވަކި ރޭޓެއް ކަނޑައަޅުއްވާ.';
+
+  @override
+  String get optionalBadge => 'އިޚްތިޔާރީ';
+
+  @override
+  String get excludedBadge => 'އިސްތިސްނާ';
+
+  @override
+  String get inactiveBadge => 'ނިއްވާލެވިފައި';
+
+  @override
+  String get addCategoryRule => 'ބައެއް އިތުރުކުރައްވާ';
+
+  @override
+  String get editRuleTitle => 'ބައިގެ ޤަވާޢިދު ބަދަލުކުރައްވާ';
+
+  @override
+  String get ruleNameEnLabel => 'ނަން (އިނގިރޭސި)';
+
+  @override
+  String get ruleNameDvLabel => 'ނަން (ދިވެހި)';
+
+  @override
+  String get ruleNameDvHint =>
+      'ކޮންމެހެން ބޭނުންވާ — ދިވެހި ކަސްޓަމަރަށް ރަސީދުގައި ފެންނާނީ މިއެވެ.';
+
+  @override
+  String get ruleNamesRequired =>
+      'ދެ ނަން ވެސް ލިޔުއްވާ — ދިވެހި ނަމަކީ ކަސްޓަމަރުންނަށް ރަސީދުގައި ފެންނަ ނަމެވެ.';
+
+  @override
+  String get ruleModeLabel => 'މި ބަޔަށް ކޭޝްބެކް ލިބެނީ ކިހިނެއް؟';
+
+  @override
+  String get modeRateOption => 'ވަކި ރޭޓެއް';
+
+  @override
+  String get modeRateOptionHint =>
+      'މި ބައިގެ ވިޔަފާރިތަކަށް ލިބޭނީ މި ބައިގެ އަމިއްލަ ކޭޝްބެކް ޕަސެންޓެވެ.';
+
+  @override
+  String get modeExcludedOption => 'އިސްތިސްނާ';
+
+  @override
+  String get modeExcludedOptionHint =>
+      'މި ބައިގެ ވިޔަފާރިތަކަށް ކޭޝްބެކެއް ނުލިބޭނެ — ޕްރޮމޯޝަނެއްގެ ތެރޭގައި ވެސް.';
+
+  @override
+  String get ruleRateLabel => 'ބައިގެ ކޭޝްބެކް ރޭޓް';
+
+  @override
+  String get ruleActiveLabel => 'އެކްޓިވް';
+
+  @override
+  String get categorySaved => 'ބައި ސޭވްވެއްޖެ';
+
+  @override
+  String get categorySaveFailed => 'ބައި ސޭވެއް ނުކުރެވުނު.';
+
+  @override
+  String get earningTitle => 'ކޭޝްބެކް ލިބުމާއި ސެޓްލްމަންޓް';
+
+  @override
+  String get minEligibleTitle => 'އެންމެ ކުޑަ އެލިޖިބަލް ވިޔަފާރި';
+
+  @override
+  String get minEligibleHint =>
+      'މި އަދަދަށްވުރެ ކުޑަ ވިޔަފާރިތަކަށް ކޭޝްބެކެއް ނުލިބޭނެއެވެ.';
+
+  @override
+  String get minEligibleInvalid =>
+      '0 ރުފިޔާއާއި 1,000 ރުފިޔާއާ ދެމެދުގެ އަދަދެއް ލިޔުއްވާ.';
+
+  @override
+  String get validationWindowTitle => 'ވެލިޑޭޝަން މުއްދަތު';
+
+  @override
+  String get validationWindowHint =>
+      'ވެލިޑޭޝަން މުއްދަތު ނިމެންދެން ނުވަތަ ވިޔަފާރި ކަށަވަރުވަންދެން ކޭޝްބެކް ހުންނާނީ ޕެންޑިން ގޮތުގައެވެ.';
+
+  @override
+  String validationWindowInvalid(int max) {
+    return '0 އާއި $max އާ ދެމެދުގެ ދުވަހުގެ އަދަދެއް ލިޔުއްވާ.';
+  }
+
+  @override
+  String get daysSuffix => 'ދުވަސް';
+
+  @override
+  String get visibilityTitle => 'ކަސްޓަމަރަށް ފެންނަ ގޮތް';
+
+  @override
+  String get visibilityValue => 'ޕެންޑިން';
+
+  @override
+  String get visibilityHint =>
+      'ވެލިޑޭޓްވަންދެން ކަސްޓަމަރުންނަށް ފެންނާނީ ޕެންޑިން ގޮތުގައެވެ.';
+
+  @override
+  String get saveChanges => 'ބަދަލުތައް ސޭވްކުރައްވާ';
+
+  @override
+  String get preferencesSaved => 'ސެޓިންތައް ސޭވްވެއްޖެ';
+
+  @override
+  String get preferencesSaveFailed => 'ސެޓިންތައް ސޭވެއް ނުކުރެވުނު.';
+
+  @override
+  String get employeesTitle => 'މުވައްޒަފުން ބެލެހެއްޓުން';
+
+  @override
+  String get employeesSubtitle =>
+      'މުވައްޒަފުން އިތުރުކުރައްވައި، ބައްލަވައި، އެކްސެސް ކޮންޓްރޯލްކުރައްވާ.';
+
+  @override
+  String get totalEmployeesLabel => 'ޖުމްލަ މުވައްޒަފުން';
+
+  @override
+  String get activeEmployeesLabel => 'ހިނގަނީ';
+
+  @override
+  String get addEmployeeCta => 'މުވައްޒަފެއް އިތުރުކުރައްވާ';
+
+  @override
+  String get rolesCta => 'ދައުރުތައް';
+
+  @override
+  String get searchEmployeesHint => 'މުވައްޒަފުން ހޯއްދަވާ';
+
+  @override
+  String get employeesEmpty => 'އަދި އެކައުންޓެއް ނެތް.';
+
+  @override
+  String get noRoleLabel => 'ދައުރެއް ނެތް';
+
+  @override
+  String get statusActive => 'ހިނގަނީ';
+
+  @override
+  String get statusSuspended => 'ހުއްޓިފައި';
+
+  @override
+  String get youMarker => '(ތިޔަ ބޭފުޅާ)';
+
+  @override
+  String get permissionsOverviewTitle => 'ހުއްދަތަކުގެ ޚުލާޞާ';
+
+  @override
+  String get manageRolesLink => 'ދައުރުތައް ބަލަހައްޓަވާ';
+
+  @override
+  String get inviteTitle => 'މުވައްޒަފެއް އިތުރުކުރައްވާ';
+
+  @override
+  String get inviteNameLabel => 'ނަން';
+
+  @override
+  String get inviteEmailLabel => 'އީމެއިލް';
+
+  @override
+  String get inviteEmailHint => 'ލޮގިންވާނީ މި އީމެއިލުންނެވެ.';
+
+  @override
+  String get invitePickRoleLabel => 'ދައުރު';
+
+  @override
+  String get inviteCta => 'އެކައުންޓް ހައްދަވާ';
+
+  @override
+  String get inviteFailed => 'އެކައުންޓް ނުހެދުނު.';
+
+  @override
+  String get staffNeedsRolesView =>
+      'ދައުރެއް ހިޔާރުކުރެއްވުމަށް ފިހާރައިގެ ދައުރުތައް ބެއްލެވުމުގެ ހުއްދަ ބޭނުންވެއެވެ، އެ ހުއްދަ ތިޔަ ބޭފުޅާގެ ދައުރުގައި ނެތެވެ. ވެރިފަރާތުގެ އަރިހުން އެ ހުއްދައަށް އެދިވަޑައިގަންނަވާ.';
+
+  @override
+  String get roleNotAssignableHint =>
+      'ތިޔަ ބޭފުޅާއަށް ލިބިވަޑައިގެންފައި ނުވާ ހުއްދައެއް ހިމެނޭ ދައުރެއް ހިޔާރެއް ނުކުރެއްވޭނެއެވެ.';
+
+  @override
+  String tempPasswordTitle(String name) {
+    return '$name ގެ އެއްފަހަރު ބޭނުންކުރެވޭ ޕާސްވޯޑް';
+  }
+
+  @override
+  String get tempPasswordOnceTitle => 'ދައްކާނީ އެންމެ ފަހަރަކުއެވެ.';
+
+  @override
+  String tempPasswordOnceBody(String name) {
+    return 'އަޅުގަނޑުމެންގެ އަތުގައި ހުންނާނީ ފޮރުވިފައިވާ ކޮޕީއެއް ކަމުން، މި ޕާސްވޯޑް އަލުން ނުދެއްކޭނެއެވެ. މިހާރު $name އަށް ދެއްވާ؛ ފުރަތަމަ ފަހަރު ލޮގިންވުމަށްފަހު ބަދަލުކުރެއްވުން އެދެމެވެ.';
+  }
+
+  @override
+  String get tempPasswordLoginEmail => 'ލޮގިން އީމެއިލް';
+
+  @override
+  String get copyPassword => 'ޕާސްވޯޑް ކޮޕީކުރައްވާ';
+
+  @override
+  String get passwordCopied => 'ޕާސްވޯޑް ކޮޕީވެއްޖެ';
+
+  @override
+  String get tempPasswordAck =>
+      'މި ޕާސްވޯޑް ރައްކާތެރިކަމާއެކު ދީފީމެވެ، އަދި އަލުން ނުދެއްކޭނެކަން އެނގެއެވެ.';
+
+  @override
+  String get doneLabel => 'ނިމިއްޖެ';
+
+  @override
+  String get employeeRoleLabel => 'ދައުރު';
+
+  @override
+  String get employeeActiveLabel => 'އެކައުންޓް ހިނގަނީ';
+
+  @override
+  String get employeeActiveHint =>
+      'ނިއްވާލެއްވުމަކީ ހަމައެކަނި ވަކިކުރެވޭ ގޮތެވެ — ތާރީޚުގައި ނަންތައް ދެމިހުންނާނެ، އަދި އަލުން ހިންގޭނެއެވެ.';
+
+  @override
+  String get staffLastOwnerLocked =>
+      'މިއީ ފިހާރައިގައި ހުރި ފަހު ވެރިފަރާތެވެ. ފުރަތަމަ އެހެން އެކައުންޓަކަށް ވެރިފަރާތުގެ ދައުރު ދެއްވާ — ނޫންނަމަ ބޭންކް އެކައުންޓަށް ވަދެ، މުވައްޒަފުން އިތުރުކުރެވޭނެ ބޭފުޅަކު ނުހުންނާނެއެވެ.';
+
+  @override
+  String get staffSelfDemoteLocked =>
+      'ތިޔަ ބޭފުޅާގެ އަމިއްލަ އެކައުންޓް ވެރިފަރާތުގެ ދައުރުން ބާލައެއް ނުލެއްވޭނެއެވެ — އެކަން ކުރެއްވޭނީ އެހެން ވެރިފަރާތަކަށެވެ.';
+
+  @override
+  String get staffSelfActiveLocked =>
+      'އަމިއްލަ އެކައުންޓް ހުއްޓައެއް ނުލެއްވޭނެއެވެ.';
+
+  @override
+  String get staffSaved => 'އެކައުންޓް ބަދަލުކުރެވިއްޖެ';
+
+  @override
+  String get staffSaveFailed => 'އެކައުންޓް ބަދަލެއް ނުކުރެވުނު.';
+
+  @override
+  String get rolesTitle => 'ދައުރުތައް';
+
+  @override
+  String get rolesSubtitle =>
+      'މުވައްޒަފުންނަށް ކުރެވޭނެ ކަންކަން ކަނޑައެޅުއްވުމަށް ދައުރުތައް ހައްދަވައި ހުއްދަތައް ކަނޑައަޅުއްވާ.';
+
+  @override
+  String get addRoleCta => 'އައު ދައުރެއް';
+
+  @override
+  String get rolesReadOnlyHint =>
+      'ދައުރުތައް ބެއްލެވިދާނެއެވެ. ބަދަލުކުރެއްވުމަށް ދައުރުތައް ބެލެހެއްޓުމުގެ ހުއްދަ ބޭނުންވެއެވެ.';
+
+  @override
+  String get fullAccessBadge => 'ހުރިހާ ހުއްދައެއް';
+
+  @override
+  String get ownerFrozenHint =>
+      'ވެރިފަރާތުގެ ދައުރުގައި އަބަދުވެސް ހުރިހާ ހުއްދައެއް ހުންނާނެއެވެ — ބަދަލެއް އަދި ޑިލީޓެއް ނުކުރެވޭނެއެވެ.';
+
+  @override
+  String employeeCountLabel(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count މުވައްޒަފުން',
+      one: '1 މުވައްޒަފް',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String permissionCountChip(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count ހުއްދަ',
+      one: '1 ހުއްދަ',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get roleEditorCreateTitle => 'އައު ދައުރެއް';
+
+  @override
+  String get roleEditorEditTitle => 'ދައުރު ބަދަލުކުރައްވާ';
+
+  @override
+  String get roleNameLabel => 'ނަން';
+
+  @override
+  String get roleNameRequired => 'ދައުރުގެ ނަން ލިޔުއްވާ.';
+
+  @override
+  String get roleNameDvLabel => 'ދިވެހި ނަން (އިޚްތިޔާރީ)';
+
+  @override
+  String get roleNameDvHint =>
+      'އެޕް ދިވެހި ބަހުން ހުންނައިރު ފެންނާނެއެވެ. ހުސްކޮށް ބެހެއްޓެވުމުން މަތީގައިވާ ނަން ބޭނުންކުރެވޭނެއެވެ.';
+
+  @override
+  String get rolePermissionsLabel => 'ހުއްދަތައް';
+
+  @override
+  String get delegationHint =>
+      'ފަނޑުކޮށް ފެންނަ ހުއްދަތަކަކީ ތިޔަ ބޭފުޅާއަށް ލިބިވަޑައިގެންފައި ނުވާ ހުއްދަތަކެވެ — ދައުރަކަށް ދެއްވޭނީ ތިޔަ ބޭފުޅާއަށް ލިބިވަޑައިގެންވާ ހުއްދަތަކެވެ.';
+
+  @override
+  String get createRoleCta => 'ދައުރު ހައްދަވާ';
+
+  @override
+  String get saveRoleCta => 'ދައުރު ސޭވްކުރައްވާ';
+
+  @override
+  String get deleteRoleCta => 'ދައުރު ޑިލީޓްކުރައްވާ';
+
+  @override
+  String roleInUseHint(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other:
+          'މި ދައުރުގައި $count އެކައުންޓް އެބަހުއްޓެވެ — ފުރަތަމަ އެހެން ދައުރަކަށް ބަދަލުކުރައްވާ.',
+      one:
+          'މި ދައުރުގައި 1 އެކައުންޓް އެބައޮތެވެ — ފުރަތަމަ އެހެން ދައުރަކަށް ބަދަލުކުރައްވާ.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String roleDeleteConfirmTitle(String name) {
+    return '$name ޑިލީޓްކުރައްވަންތޯ؟';
+  }
+
+  @override
+  String get roleDeleteConfirmBody =>
+      'މި ދައުރު ދާއިމަށް ފޮހެވޭނެއެވެ. މި ދައުރުގައި އެއްވެސް އެކައުންޓެއް ނެތުމުން، އެއްވެސް ބޭފުޅަކަށް ގެއްލުމެއް ނުވާނެއެވެ.';
+
+  @override
+  String get deleteLabel => 'ޑިލީޓްކުރައްވާ';
+
+  @override
+  String get roleSaved => 'ދައުރު ސޭވްވެއްޖެ';
+
+  @override
+  String get roleDeleted => 'ދައުރު ޑިލީޓްކުރެވިއްޖެ';
+
+  @override
+  String get roleSaveFailed => 'ދައުރު ސޭވެއް ނުކުރެވުނު.';
+
+  @override
+  String get roleDeleteFailed => 'ދައުރު ޑިލީޓެއް ނުކުރެވުނު.';
+
+  @override
+  String get branchesTitle => 'ބްރާންޗްތައް ބެލެހެއްޓުން';
+
+  @override
+  String get branchesSubtitle =>
+      'ތިޔަބޭފުޅުންގެ ތަންތަން — ޕިން ޖެއްސެވުމުން ކަސްޓަމަރު އެޕްގެ \"ކައިރީގައި\" ބައިގައި ބްރާންޗް ފެންނާނެއެވެ.';
+
+  @override
+  String get totalBranchesLabel => 'ޖުމްލަ';
+
+  @override
+  String get pinnedBranchesLabel => 'ޕިން ޖެހި';
+
+  @override
+  String get unpinnedBranchesLabel => 'ޕިން ނެތް';
+
+  @override
+  String get addBranchCta => 'ބްރާންޗެއް އިތުރުކުރައްވާ';
+
+  @override
+  String get searchBranchesHint => 'ބްރާންޗްތައް ހޯއްދަވާ';
+
+  @override
+  String get branchesEmpty =>
+      'އަދި ބްރާންޗެއް ނެތް — \"ކައިރީގައި\" ބައިން ފެންނަން ފުރަތަމަ ތަން އިތުރުކުރައްވާ.';
+
+  @override
+  String get branchNotPinned => 'މެޕްގައި ނެތް';
+
+  @override
+  String editBranchTitle(String name) {
+    return '$name ބަދަލުކުރައްވާ';
+  }
+
+  @override
+  String get branchNameLabel => 'ނަން';
+
+  @override
+  String get branchNameRequired => 'ބްރާންޗްގެ ނަން ލިޔުއްވާ.';
+
+  @override
+  String get branchAddressLabel => 'އެޑްރެސް (އިޚްތިޔާރީ)';
+
+  @override
+  String get branchPinLabel => 'މެޕް ޕިން (އިޚްތިޔާރީ)';
+
+  @override
+  String get branchPinHint =>
+      'ޕިން ޖެއްސެވުމުން، މި ތަނުގެ ކައިރީގައި ތިބި ކަސްޓަމަރުންނަށް \"ކައިރީގައި\" ބައިން އެންމެ ފުރަތަމަ ފެންނާނީ ތިޔަ ފިހާރައެވެ. ޕިން ނުޖައްސަވާނަމަ މި ބްރާންޗް އެ ބައިގައި ނުދައްކާނެއެވެ.';
+
+  @override
+  String get clearPinCta => 'ޕިން ނަގާ';
+
+  @override
+  String get setPinCta => 'މެޕް ޕިން ޖައްސަވާ';
+
+  @override
+  String get branchAdded => 'ބްރާންޗް އިތުރުކުރެވިއްޖެ';
+
+  @override
+  String get branchSaved => 'ބްރާންޗް ސޭވްވެއްޖެ';
+
+  @override
+  String get branchDeleted => 'ބްރާންޗް ޑިލީޓްކުރެވިއްޖެ';
+
+  @override
+  String get branchSaveFailed => 'ބްރާންޗް ސޭވެއް ނުކުރެވުނު.';
+
+  @override
+  String get branchDeleteFailed => 'ބްރާންޗް ޑިލީޓެއް ނުކުރެވުނު.';
+
+  @override
+  String branchDeleteConfirmTitle(String name) {
+    return '$name ޑިލީޓްކުރައްވަންތޯ؟';
+  }
+
+  @override
+  String get branchDeleteConfirmBody =>
+      'ބްރާންޗް ޑިސްކަވަރީންނާއި އައު ވިޔަފާރިތަކުން ގެއްލޭނެއެވެ. ވިޔަފާރިތަކެއް ނުވަތަ ޕްރޮމޯޝަންތަކެއް ރެކޯޑްވެފައިވާ ބްރާންޗެއް ޑިލީޓެއް ނުކުރެވޭނެއެވެ — ތާރީޚު ދެމިއޮންނަން ޖެހެއެވެ.';
+
+  @override
+  String get branchReferencedError =>
+      'މި ބްރާންޗްގައި ވިޔަފާރިތަކެއް ނުވަތަ ޕްރޮމޯޝަންތަކެއް ރެކޯޑްވެފައިވާތީ ފައިލްގައި ބަހައްޓަންޖެހެއެވެ. ބަދަލުގައި ބޭނުންކުރެއްވުން ހުއްޓަވާލައްވާ.';
+
+  @override
+  String get promotionsTitle => 'ޕްރޮމޯޝަންތައް';
+
+  @override
+  String get promotionsSubtitle =>
+      'އާންމު ރޭޓަށްވުރެ މަތި، ވަގުތު ކަނޑައެޅިފައިވާ ކޭޝްބެކް ބޫސްޓްތައް.';
+
+  @override
+  String get newPromotionCta => 'އައު ޕްރޮމޯޝަނެއް';
+
+  @override
+  String get promotionsEmpty =>
+      'އަދި ޕްރޮމޯޝަނެއް ނެތް. ވަގުތުކޮޅަކަށް ކޭޝްބެކް މަތިކުރެއްވުމަށް އެކައްޗެއް ހައްދަވާ.';
+
+  @override
+  String get promoStatusDraft => 'ޑްރާފްޓް';
+
+  @override
+  String get promoStatusLive => 'ލައިވް';
+
+  @override
+  String get promoStatusPublished => 'ޝާއިޢުކުރެވިފައި';
+
+  @override
+  String get promoStatusEnded => 'ނިމިފައި';
+
+  @override
+  String get promoStatusCancelled => 'ކެންސަލްވެފައި';
+
+  @override
+  String promoRateTitle(String rate) {
+    return 'ކޭޝްބެކް $rate';
+  }
+
+  @override
+  String promoYouPay(String allIn, String fee) {
+    return 'ދައްކަވާނީ $allIn (ފީ $fee)';
+  }
+
+  @override
+  String get promoYouPayDash => 'މިވަގުތު ފީ އަގެއް ނުކުރެވޭ';
+
+  @override
+  String promoMinPurchase(String amount) {
+    return 'އެންމެ ކުޑަ ވިޔަފާރި $amount';
+  }
+
+  @override
+  String promoPerCustomerCap(String amount) {
+    return 'ކަސްޓަމަރަކަށް ގިނަވެގެން $amount';
+  }
+
+  @override
+  String get promoAllBranches => 'ހުރިހާ ބްރާންޗެއް';
+
+  @override
+  String promoBranchFallback(int id) {
+    return 'ބްރާންޗް #$id';
+  }
+
+  @override
+  String get publishCta => 'ޝާއިޢުކުރައްވާ';
+
+  @override
+  String get cancelDraftCta => 'ޑްރާފްޓް ކެންސަލްކުރައްވާ';
+
+  @override
+  String get keepDraftCta => 'ޑްރާފްޓްގައި ބާއްވަވާ';
+
+  @override
+  String publishConfirmTitle(String rate) {
+    return '$rate ޕްރޮމޯޝަން ޝާއިޢުކުރައްވަންތޯ؟';
+  }
+
+  @override
+  String publishConfirmBody(String start, String end) {
+    return 'ހިނގާނީ $start އިން $end އަށެވެ. ޝާއިޢުކުރެއްވުމަށްފަހު ބަދަލެއް އަދި އަވަހަށް ނިންމުމެއް ނުކުރެވޭނެއެވެ — މުޅި މުއްދަތުގައި އިޢުލާނުކުރި ބޫސްޓަށް ކަސްޓަމަރުންނަށް އިތުބާރުކުރެވޭނެއެވެ.';
+  }
+
+  @override
+  String get promotionPublished => 'ޕްރޮމޯޝަން ޝާއިޢުކުރެވިއްޖެ';
+
+  @override
+  String get draftCancelled => 'ޑްރާފްޓް ކެންސަލްކުރެވިއްޖެ';
+
+  @override
+  String get publishFailed => 'ޕްރޮމޯޝަން ޝާއިޢެއް ނުކުރެވުނު.';
+
+  @override
+  String get cancelDraftFailed => 'ޑްރާފްޓް ކެންސަލެއް ނުކުރެވުނު.';
+
+  @override
+  String get promoRateLabel => 'ބޫސްޓް ކޭޝްބެކް ރޭޓް';
+
+  @override
+  String get promoRateHint =>
+      'އެލިޖިބަލް އަދަދުގެ ޕަސެންޓް، ގިނަވެގެން ދެ ޑެސިމަލް. މަތި ރޭޓެއް މަތި ޕްލެޓްފޯމް ފީ ޓިއަރއަކަށް ދިޔުން އެކަށީގެންވޭ — ޝާއިޢުކުރެއްވުމުގެ ކުރިން ސީދާ ޚަރަދު ފެންނާނެއެވެ.';
+
+  @override
+  String promoMustBoost(String rate) {
+    return 'ޕްރޮމޯޝަނެއް ވާންޖެހޭނީ އާންމު ރޭޓް $rate އަށްވުރެ މަތި އަދަދަކަށެވެ.';
+  }
+
+  @override
+  String get promoStartsLabel => 'ފެށޭ ވަގުތު';
+
+  @override
+  String get promoEndsLabel => 'ނިމޭ ވަގުތު';
+
+  @override
+  String get promoWindowHint =>
+      'ރާއްޖޭގެ ގަޑިން. ޝާއިޢުކުރެއްވުމަށްފަހު ޕްރޮމޯޝަން ހިނގާނީ ސީދާ މި މުއްދަތުގައެވެ — ބަދަލެއް އަދި އަވަހަށް ނިންމުމެއް ނުކުރެވޭނެއެވެ.';
+
+  @override
+  String get promoWindowOrderError =>
+      'ޕްރޮމޯޝަން ނިމެންޖެހޭނީ ފެށުމަށްފަހުއެވެ.';
+
+  @override
+  String get promoMinLabel => 'އެންމެ ކުޑަ ވިޔަފާރި (އިޚްތިޔާރީ)';
+
+  @override
+  String get promoCapLabel => 'ކަސްޓަމަރަކަށް ކޭޝްބެކްގެ ހައްދު (އިޚްތިޔާރީ)';
+
+  @override
+  String get promoAmountInvalid =>
+      'ރުފިޔާގެ އަދަދެއް ލިޔުއްވާ (މިސާލު 100.00)، ނުވަތަ ހުސްކޮށް ބާއްވަވާ.';
+
+  @override
+  String get promoBranchLabel => 'ބްރާންޗް';
+
+  @override
+  String get createDraftCta => 'ޑްރާފްޓް ހައްދަވާ';
+
+  @override
+  String get draftCreated => 'ޑްރާފްޓް ޕްރޮމޯޝަން ހެދިއްޖެ';
+
+  @override
+  String get createDraftFailed => 'ޕްރޮމޯޝަން ނުހެދުނު.';
+
+  @override
+  String promoCostTitle(String allIn) {
+    return 'ޕްރޮމޯޝަންގެ ތެރޭގައި ކޮންމެ އެލިޖިބަލް ވިޔަފާރިއަކުން ދައްކަވާނީ $allIn';
+  }
+
+  @override
+  String promoCostBody(Object fee, Object rate) {
+    return '$rate ކޭޝްބެކް + $fee ޕްލެޓްފޯމް ފީ.';
+  }
+
+  @override
+  String promoCostDelta(String delta, String standing) {
+    return 'އެއީ އާންމު ޖުމްލަ ޚަރަދު $standing އާ އަޅާބަލާއިރު $delta އެވެ.';
+  }
+
+  @override
+  String promoCostTier(String from, String to, String feeFrom, String feeTo) {
+    return '$from އިން $to އަށް މަތިކުރެއްވުމުން ފީ ޓިއަރ $feeFrom އިން $feeTo އަށް ބަދަލުވެއެވެ.';
+  }
 }

@@ -1611,4 +1611,774 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get pushOpen => 'View';
+
+  @override
+  String get moreTitle => 'More';
+
+  @override
+  String get moreSubtitle => 'Manage your business and account settings.';
+
+  @override
+  String get merchantAccount => 'Merchant account';
+
+  @override
+  String get verifiedChip => 'Verified';
+
+  @override
+  String get viewProfile => 'View profile';
+
+  @override
+  String get menuProfile => 'Profile';
+
+  @override
+  String get menuEmployees => 'Manage Employees';
+
+  @override
+  String get menuRoles => 'Roles';
+
+  @override
+  String get menuBranches => 'Manage Branches';
+
+  @override
+  String get menuCashback => 'Cashback Settings';
+
+  @override
+  String get menuPromotions => 'Promotions';
+
+  @override
+  String get logOut => 'Log out';
+
+  @override
+  String get logOutConfirmTitle => 'Log out?';
+
+  @override
+  String get logOutConfirmBody => 'You can log back in any time.';
+
+  @override
+  String get comingSoonBody => 'This screen is on its way.';
+
+  @override
+  String get profileScreenTitle => 'Profile';
+
+  @override
+  String get profileScreenSubtitle => 'View and manage your merchant profile.';
+
+  @override
+  String get storeLogoLabel => 'Store logo';
+
+  @override
+  String get storeNameLabel => 'Store name';
+
+  @override
+  String get storeNameDvLabel => 'Store name in Dhivehi';
+
+  @override
+  String get storeNameHint =>
+      'Your public name. Your store link never changes with it, so anything already shared keeps working.';
+
+  @override
+  String get storeNameRequired => 'Enter the store name.';
+
+  @override
+  String get channelRowLabel => 'Channel';
+
+  @override
+  String get channelBothDisplay => 'In Store & Online';
+
+  @override
+  String get categoryRetiredHint =>
+      'This category was retired — please choose a new one. Your other changes still save.';
+
+  @override
+  String get editProfileTitle => 'Edit profile';
+
+  @override
+  String get saveProfile => 'Save profile';
+
+  @override
+  String get profileSaved => 'Profile saved';
+
+  @override
+  String get profileSaveFailed => 'Could not save the profile.';
+
+  @override
+  String get cashbackTitle => 'Cashback Settings';
+
+  @override
+  String get cashbackSubtitle =>
+      'Configure how customers earn cashback and how settlements work.';
+
+  @override
+  String get generalRateTitle => 'General cashback rate';
+
+  @override
+  String get generalRateHint =>
+      'Applies to all eligible sales unless category rules override it.';
+
+  @override
+  String get noRateYet =>
+      'No standing rate yet — set one to start offering cashback.';
+
+  @override
+  String scheduledChangeTitle(String rate) {
+    return 'Scheduled change: $rate cashback';
+  }
+
+  @override
+  String scheduledChangeBody(String date) {
+    return 'Takes effect $date. Submitting a new change replaces it.';
+  }
+
+  @override
+  String get editRateTitle => 'Change the rate';
+
+  @override
+  String get newRateLabel => 'New customer cashback rate';
+
+  @override
+  String rateBoundsHint(String min, String max) {
+    return 'Percent of the eligible amount, up to two decimal places. Allowed range $min to $max.';
+  }
+
+  @override
+  String get rateSameAsCurrent => 'This is already your current rate.';
+
+  @override
+  String get rateCancelsPending =>
+      'This matches your current rate — submitting cancels the scheduled change and keeps the rate as it is.';
+
+  @override
+  String get rateIncreaseNote =>
+      'Increases apply immediately — the higher rate starts with the next recorded sale.';
+
+  @override
+  String get rateDecreaseNote =>
+      'Decreases apply at 00:00 tonight (Maldives time) — an advertised rate is never cut mid-day.';
+
+  @override
+  String get changeRateCta => 'Change rate';
+
+  @override
+  String get setRateCta => 'Set rate';
+
+  @override
+  String get cancelPendingCta => 'Cancel scheduled change';
+
+  @override
+  String get rateUpdatedToast => 'Cashback rate updated';
+
+  @override
+  String rateChangedNowTitle(String rate) {
+    return 'Cashback rate is now $rate';
+  }
+
+  @override
+  String rateChangedLaterTitle(String rate) {
+    return 'Cashback rate will be $rate';
+  }
+
+  @override
+  String rateChangedNowBody(String fee, String allIn) {
+    return 'Applied immediately. Platform fee $fee — all-in cost $allIn.';
+  }
+
+  @override
+  String rateChangedLaterBody(String date) {
+    return 'Takes effect $date — the advertised rate is honoured until then.';
+  }
+
+  @override
+  String get categoryRulesTitle => 'Cashback by category';
+
+  @override
+  String get categoryRulesHint =>
+      'Override the general rate for selected product categories.';
+
+  @override
+  String get optionalBadge => 'Optional';
+
+  @override
+  String get excludedBadge => 'Excluded';
+
+  @override
+  String get inactiveBadge => 'Inactive';
+
+  @override
+  String get addCategoryRule => 'Add category rule';
+
+  @override
+  String get editRuleTitle => 'Edit category rule';
+
+  @override
+  String get ruleNameEnLabel => 'Name (English)';
+
+  @override
+  String get ruleNameDvLabel => 'Name (Dhivehi)';
+
+  @override
+  String get ruleNameDvHint =>
+      'Required — this is what a Dhivehi customer sees on their receipt.';
+
+  @override
+  String get ruleNamesRequired =>
+      'Enter both names — the Dhivehi name is what customers read on their receipt.';
+
+  @override
+  String get ruleModeLabel => 'How does this category earn?';
+
+  @override
+  String get modeRateOption => 'Custom rate';
+
+  @override
+  String get modeRateOptionHint =>
+      'Sales in this category earn their own cashback percent.';
+
+  @override
+  String get modeExcludedOption => 'Excluded';
+
+  @override
+  String get modeExcludedOptionHint =>
+      'Sales in this category never earn cashback — even during promotions.';
+
+  @override
+  String get ruleRateLabel => 'Category cashback rate';
+
+  @override
+  String get ruleActiveLabel => 'Active';
+
+  @override
+  String get categorySaved => 'Category saved';
+
+  @override
+  String get categorySaveFailed => 'Could not save the category.';
+
+  @override
+  String get earningTitle => 'Earning & settlement';
+
+  @override
+  String get minEligibleTitle => 'Minimum eligible sale';
+
+  @override
+  String get minEligibleHint => 'Sales below this amount do not earn cashback.';
+
+  @override
+  String get minEligibleInvalid =>
+      'Enter an amount between MVR 0 and MVR 1,000.';
+
+  @override
+  String get validationWindowTitle => 'Validation window';
+
+  @override
+  String get validationWindowHint =>
+      'Cashback remains pending until the validation period ends or the sale is confirmed.';
+
+  @override
+  String validationWindowInvalid(int max) {
+    return 'Enter a whole number of days between 0 and $max.';
+  }
+
+  @override
+  String get daysSuffix => 'days';
+
+  @override
+  String get visibilityTitle => 'Customer visibility';
+
+  @override
+  String get visibilityValue => 'Pending';
+
+  @override
+  String get visibilityHint => 'Shown to customers as pending until validated.';
+
+  @override
+  String get saveChanges => 'Save changes';
+
+  @override
+  String get preferencesSaved => 'Preferences saved';
+
+  @override
+  String get preferencesSaveFailed => 'Could not save the preferences.';
+
+  @override
+  String get employeesTitle => 'Manage Employees';
+
+  @override
+  String get employeesSubtitle =>
+      'Add, view and control staff access to your store.';
+
+  @override
+  String get totalEmployeesLabel => 'Total employees';
+
+  @override
+  String get activeEmployeesLabel => 'Active';
+
+  @override
+  String get addEmployeeCta => 'Add employee';
+
+  @override
+  String get rolesCta => 'Roles';
+
+  @override
+  String get searchEmployeesHint => 'Search employees';
+
+  @override
+  String get employeesEmpty => 'No staff accounts yet.';
+
+  @override
+  String get noRoleLabel => 'No role';
+
+  @override
+  String get statusActive => 'Active';
+
+  @override
+  String get statusSuspended => 'Suspended';
+
+  @override
+  String get youMarker => '(you)';
+
+  @override
+  String get permissionsOverviewTitle => 'Permissions overview';
+
+  @override
+  String get manageRolesLink => 'Manage roles';
+
+  @override
+  String get inviteTitle => 'Add employee';
+
+  @override
+  String get inviteNameLabel => 'Name';
+
+  @override
+  String get inviteEmailLabel => 'Email';
+
+  @override
+  String get inviteEmailHint => 'They sign in with this email.';
+
+  @override
+  String get invitePickRoleLabel => 'Role';
+
+  @override
+  String get inviteCta => 'Create account';
+
+  @override
+  String get inviteFailed => 'Could not create the account.';
+
+  @override
+  String get staffNeedsRolesView =>
+      'Picking a role needs the view-roles permission, which your role does not hold. Ask an owner for it.';
+
+  @override
+  String get roleNotAssignableHint =>
+      'A role holding a permission you do not hold yourself cannot be handed out.';
+
+  @override
+  String tempPasswordTitle(String name) {
+    return 'One-time password for $name';
+  }
+
+  @override
+  String get tempPasswordOnceTitle => 'Shown only once.';
+
+  @override
+  String tempPasswordOnceBody(String name) {
+    return 'Only a hashed copy is kept, so this password can never be shown again. Hand it to $name now and ask them to change it after their first sign-in.';
+  }
+
+  @override
+  String get tempPasswordLoginEmail => 'Sign-in email';
+
+  @override
+  String get copyPassword => 'Copy password';
+
+  @override
+  String get passwordCopied => 'Password copied';
+
+  @override
+  String get tempPasswordAck =>
+      'I have passed this password on securely and understand it cannot be shown again.';
+
+  @override
+  String get doneLabel => 'Done';
+
+  @override
+  String get employeeRoleLabel => 'Role';
+
+  @override
+  String get employeeActiveLabel => 'Active account';
+
+  @override
+  String get employeeActiveHint =>
+      'Switching off is the only removal — history keeps its names, and the account can be switched back on.';
+
+  @override
+  String get staffLastOwnerLocked =>
+      'This is the store\'s last active owner. Hand the owner role to another account first — otherwise nobody could reach the bank account or manage staff.';
+
+  @override
+  String get staffSelfDemoteLocked =>
+      'You cannot move your own account off the owner role — another owner has to.';
+
+  @override
+  String get staffSelfActiveLocked => 'You cannot deactivate your own account.';
+
+  @override
+  String get staffSaved => 'Employee updated';
+
+  @override
+  String get staffSaveFailed => 'Could not update the account.';
+
+  @override
+  String get rolesTitle => 'Roles';
+
+  @override
+  String get rolesSubtitle =>
+      'Create roles and set permissions to control what employees can access and do.';
+
+  @override
+  String get addRoleCta => 'Add role';
+
+  @override
+  String get rolesReadOnlyHint =>
+      'You can view roles. Changing them needs the manage-roles permission.';
+
+  @override
+  String get fullAccessBadge => 'Full Access';
+
+  @override
+  String get ownerFrozenHint =>
+      'The owner role always holds every permission, so it cannot be edited or deleted.';
+
+  @override
+  String employeeCountLabel(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count employees',
+      one: '1 employee',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String permissionCountChip(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count permissions',
+      one: '1 permission',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get roleEditorCreateTitle => 'New role';
+
+  @override
+  String get roleEditorEditTitle => 'Edit role';
+
+  @override
+  String get roleNameLabel => 'Name';
+
+  @override
+  String get roleNameRequired => 'Enter a role name.';
+
+  @override
+  String get roleNameDvLabel => 'Name (Dhivehi, optional)';
+
+  @override
+  String get roleNameDvHint =>
+      'Shown when the app is in Dhivehi. Leave empty to use the name above.';
+
+  @override
+  String get rolePermissionsLabel => 'Permissions';
+
+  @override
+  String get delegationHint =>
+      'Greyed permissions are ones you do not hold yourself — a role can only be given what you hold.';
+
+  @override
+  String get createRoleCta => 'Create role';
+
+  @override
+  String get saveRoleCta => 'Save role';
+
+  @override
+  String get deleteRoleCta => 'Delete role';
+
+  @override
+  String roleInUseHint(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other:
+          '$count accounts stand on this role — move them to another role first.',
+      one: '1 account stands on this role — move it to another role first.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String roleDeleteConfirmTitle(String name) {
+    return 'Delete $name?';
+  }
+
+  @override
+  String get roleDeleteConfirmBody =>
+      'The role is removed for good. Nobody stands on it, so nobody loses access.';
+
+  @override
+  String get deleteLabel => 'Delete';
+
+  @override
+  String get roleSaved => 'Role saved';
+
+  @override
+  String get roleDeleted => 'Role deleted';
+
+  @override
+  String get roleSaveFailed => 'Could not save the role.';
+
+  @override
+  String get roleDeleteFailed => 'Could not delete the role.';
+
+  @override
+  String get branchesTitle => 'Manage Branches';
+
+  @override
+  String get branchesSubtitle =>
+      'Your locations — a pinned branch appears in the customer app\'s Nearby.';
+
+  @override
+  String get totalBranchesLabel => 'Total';
+
+  @override
+  String get pinnedBranchesLabel => 'Pinned';
+
+  @override
+  String get unpinnedBranchesLabel => 'No pin';
+
+  @override
+  String get addBranchCta => 'Add branch';
+
+  @override
+  String get searchBranchesHint => 'Search branches';
+
+  @override
+  String get branchesEmpty =>
+      'No branches yet — add your first location to appear in Nearby.';
+
+  @override
+  String get branchNotPinned => 'Not on the map';
+
+  @override
+  String editBranchTitle(String name) {
+    return 'Edit $name';
+  }
+
+  @override
+  String get branchNameLabel => 'Name';
+
+  @override
+  String get branchNameRequired => 'Enter a branch name.';
+
+  @override
+  String get branchAddressLabel => 'Address (optional)';
+
+  @override
+  String get branchPinLabel => 'Map pin (optional)';
+
+  @override
+  String get branchPinHint =>
+      'With a pin, customers near this location find you first in the Nearby tab. Without one, this branch is not shown there.';
+
+  @override
+  String get clearPinCta => 'Remove pin';
+
+  @override
+  String get setPinCta => 'Set a map pin';
+
+  @override
+  String get branchAdded => 'Branch added';
+
+  @override
+  String get branchSaved => 'Branch saved';
+
+  @override
+  String get branchDeleted => 'Branch deleted';
+
+  @override
+  String get branchSaveFailed => 'Could not save the branch.';
+
+  @override
+  String get branchDeleteFailed => 'Could not delete the branch.';
+
+  @override
+  String branchDeleteConfirmTitle(String name) {
+    return 'Delete $name?';
+  }
+
+  @override
+  String get branchDeleteConfirmBody =>
+      'The branch disappears from discovery and new sales. A branch with recorded sales or promotions cannot be deleted — history must keep resolving.';
+
+  @override
+  String get branchReferencedError =>
+      'This branch has recorded sales or promotions, so it stays on file. Stop using it instead.';
+
+  @override
+  String get promotionsTitle => 'Promotions';
+
+  @override
+  String get promotionsSubtitle =>
+      'Time-boxed cashback boosts above your standing rate.';
+
+  @override
+  String get newPromotionCta => 'New promotion';
+
+  @override
+  String get promotionsEmpty =>
+      'No promotions yet. Create one to boost your cashback for a while.';
+
+  @override
+  String get promoStatusDraft => 'Draft';
+
+  @override
+  String get promoStatusLive => 'Live';
+
+  @override
+  String get promoStatusPublished => 'Published';
+
+  @override
+  String get promoStatusEnded => 'Ended';
+
+  @override
+  String get promoStatusCancelled => 'Cancelled';
+
+  @override
+  String promoRateTitle(String rate) {
+    return '$rate cashback';
+  }
+
+  @override
+  String promoYouPay(String allIn, String fee) {
+    return 'You pay $allIn (fee $fee)';
+  }
+
+  @override
+  String get promoYouPayDash => 'Fee not priced right now';
+
+  @override
+  String promoMinPurchase(String amount) {
+    return 'Min purchase $amount';
+  }
+
+  @override
+  String promoPerCustomerCap(String amount) {
+    return 'Per-customer cap $amount';
+  }
+
+  @override
+  String get promoAllBranches => 'All branches';
+
+  @override
+  String promoBranchFallback(int id) {
+    return 'Branch #$id';
+  }
+
+  @override
+  String get publishCta => 'Publish';
+
+  @override
+  String get cancelDraftCta => 'Cancel draft';
+
+  @override
+  String get keepDraftCta => 'Keep as draft';
+
+  @override
+  String publishConfirmTitle(String rate) {
+    return 'Publish the $rate promotion?';
+  }
+
+  @override
+  String publishConfirmBody(String start, String end) {
+    return 'It runs $start to $end. Once published it cannot be changed or ended early — customers can rely on the advertised boost for the whole window.';
+  }
+
+  @override
+  String get promotionPublished => 'Promotion published';
+
+  @override
+  String get draftCancelled => 'Draft cancelled';
+
+  @override
+  String get publishFailed => 'Could not publish the promotion.';
+
+  @override
+  String get cancelDraftFailed => 'Could not cancel the draft.';
+
+  @override
+  String get promoRateLabel => 'Boosted cashback rate';
+
+  @override
+  String get promoRateHint =>
+      'Percent of the eligible amount, up to two decimal places. A higher rate can land on a higher platform fee tier — you see the exact cost before publishing.';
+
+  @override
+  String promoMustBoost(String rate) {
+    return 'A promotion must boost above your standing rate of $rate.';
+  }
+
+  @override
+  String get promoStartsLabel => 'Starts';
+
+  @override
+  String get promoEndsLabel => 'Ends';
+
+  @override
+  String get promoWindowHint =>
+      'Maldives time. Once published, the promotion runs for exactly this window — it cannot be edited or ended early.';
+
+  @override
+  String get promoWindowOrderError => 'The promotion must end after it starts.';
+
+  @override
+  String get promoMinLabel => 'Minimum purchase (optional)';
+
+  @override
+  String get promoCapLabel => 'Per-customer cashback cap (optional)';
+
+  @override
+  String get promoAmountInvalid =>
+      'Enter an MVR amount, e.g. 100.00, or leave empty.';
+
+  @override
+  String get promoBranchLabel => 'Branch';
+
+  @override
+  String get createDraftCta => 'Create draft';
+
+  @override
+  String get draftCreated => 'Draft promotion created';
+
+  @override
+  String get createDraftFailed => 'Could not create the promotion.';
+
+  @override
+  String promoCostTitle(String allIn) {
+    return 'During the promotion you pay $allIn of each eligible sale';
+  }
+
+  @override
+  String promoCostBody(Object fee, Object rate) {
+    return '$rate cashback + $fee platform fee.';
+  }
+
+  @override
+  String promoCostDelta(String delta, String standing) {
+    return 'That is $delta versus your standing all-in cost of $standing.';
+  }
+
+  @override
+  String promoCostTier(String from, String to, String feeFrom, String feeTo) {
+    return 'Boosting from $from to $to moves your fee tier from $feeFrom to $feeTo.';
+  }
 }

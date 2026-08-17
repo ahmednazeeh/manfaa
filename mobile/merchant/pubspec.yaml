@@ -32,6 +32,9 @@ dependencies:
     path: ../packages/manfaa_ui
   mobile_scanner: ^7.4.0
   connectivity_plus: ^7.3.1
+  # Profile screen (MR5): the website row opens in the browser — same
+  # version the customer app pins.
+  url_launcher: ^6.3.2
   # Push (MR4): same versions the customer app pins. Runs against PLACEHOLDER
   # Firebase config until mv.manfaa.merchant is registered in the console —
   # see lib/firebase_options.dart for the swap procedure.

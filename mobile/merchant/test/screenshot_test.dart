@@ -1,7 +1,6 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart' show debugDisableShadows;
 import 'package:flutter/services.dart' show FontLoader, rootBundle;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -46,6 +45,29 @@ const _permissions = [
   'setup.edit',
   'setup.submit',
   'branding.update',
+  // The More estate (MR5) — the owner's full hand, so every menu row and
+  // section draws in the shots.
+  'profile.view',
+  'profile.edit',
+  'rate.view',
+  'rate.update',
+  'product_categories.view',
+  'product_categories.create',
+  'product_categories.edit',
+  'preferences.update',
+  'staff.view',
+  'staff.invite',
+  'staff.edit',
+  'roles.view',
+  'roles.manage',
+  'branches.view',
+  'branches.create',
+  'branches.edit',
+  'branches.delete',
+  'promotions.view',
+  'promotions.create',
+  'promotions.publish',
+  'promotions.cancel',
 ];
 
 // ---- MR3 fixtures: the ref's own numbers, server-shaped ---------------------
@@ -295,10 +317,15 @@ class _ShotApi extends MerchantApi {
     this.status = 'active',
     this.setup,
     this.walletJson,
+    this.categoriesJson,
   });
 
   final String status;
   final Map<String, dynamic>? setup;
+
+  /// Per-shot category vocabulary — the MR5 cashback shot wants the ref's
+  /// four rules; the credit shots keep the split-editor trio.
+  final List<Map<String, dynamic>>? categoriesJson;
 
   /// The wallet fixture per shot: the money shots want the ref's MVR 0.00
   /// (which is also what draws the Insufficient state), the wallet shot a
@@ -442,22 +469,330 @@ class _ShotApi extends MerchantApi {
   });
 
   @override
-  Future<List<ProductCategory>> productCategories() async => [
-    for (final (i, spec) in const [
-      ('fruits', 'Fruits', 'rate', '2.00'),
-      ('veggies', 'Veggies', 'rate', '2.00'),
-      ('tobacco', 'Tobacco', 'excluded', null),
-    ].indexed)
-      ProductCategory.fromJson({
-        'id': i + 1,
-        'slug': spec.$1,
-        'name_en': spec.$2,
+  Future<List<ProductCategory>> productCategories() async =>
+      categoriesJson != null
+          ? [
+              for (final json in categoriesJson!)
+                ProductCategory.fromJson(json),
+            ]
+          : [
+              for (final (i, spec) in const [
+                ('fruits', 'Fruits', 'rate', '2.00'),
+                ('veggies', 'Veggies', 'rate', '2.00'),
+                ('tobacco', 'Tobacco', 'excluded', null),
+              ].indexed)
+                ProductCategory.fromJson({
+                  'id': i + 1,
+                  'slug': spec.$1,
+                  'name_en': spec.$2,
+                  'name_dv': null,
+                  'mode': spec.$3,
+                  'cashback_rate_percent': spec.$4,
+                  'active': true,
+                  'sort': i,
+                }),
+            ];
+
+  // ---- MR5: the More estate ------------------------------------------------
+
+  /// Profile.png's own values, server-shaped (MerchantProfileResource).
+  /// `eligibility_basis` is ONE free-text string — the ref's chips render
+  /// as this text.
+  @override
+  Future<MerchantProfile> profile() async => MerchantProfile.fromJson(const {
+    'id': 7,
+    'name': 'Tropical Mart',
+    'name_dv': 'ޓްރޮޕިކަލް މާޓް',
+    'slug': 'tropical-mart',
+    'status': 'active',
+    'category': 'grocery',
+    'category_retired': false,
+    'channel': 'in_store',
+    'eligibility_basis':
+        'Groceries, household essentials and selected daily items.',
+    'contact_email': 'hello@tropicalmart.mv',
+    'contact_phone': '+960 778 1234',
+    'support_phone': '+960 333 4455',
+    'website_url': 'https://www.tropicalmart.mv',
+  });
+
+  /// The preferences READ (an empty PATCH server-side) — the ref's MVR
+  /// 100.00 minimum and 15-day window.
+  @override
+  Future<MerchantPreferences> updatePreferences({
+    String? settlementMethod,
+    int? minEligibleLaari,
+    int? validationWindowDays,
+  }) async => MerchantPreferences.fromJson(const {
+    'settlement_method': 'bank',
+    'min_eligible_laari': 10000,
+    'validation_window_days': 15,
+    'validation_window_max_days': 30,
+  });
+
+  // ---- MR5: the management estate (agent B) -------------------------------
+
+  static Map<String, dynamic> _staffRow(
+    int id,
+    String name,
+    String email,
+    Map<String, dynamic> role, {
+    bool active = true,
+  }) => {
+    'id': id,
+    'name': name,
+    'email': email,
+    'role': role,
+    'is_active': active,
+    'created_at': '2026-08-01T09:00:00+00:00',
+  };
+
+  static const _ownerRoleSummary = {
+    'id': 1,
+    'name': 'Owner',
+    'name_dv': null,
+    'is_owner': true,
+  };
+  static const _managerRoleSummary = {
+    'id': 2,
+    'name': 'Manager',
+    'name_dv': null,
+    'is_owner': false,
+  };
+  static const _cashierRoleSummary = {
+    'id': 3,
+    'name': 'Cashier',
+    'name_dv': null,
+    'is_owner': false,
+  };
+  static const _supportRoleSummary = {
+    'id': 4,
+    'name': 'Customer Support',
+    'name_dv': null,
+    'is_owner': false,
+  };
+
+  /// Manage Employees.png's names, server-shaped: the subtitle is the
+  /// EMAIL (staff have no branch link), and there is no invite state — the
+  /// ref's "Pending Invite" row renders Active, its "Accountant" stands on
+  /// a real role.
+  @override
+  Future<List<MerchantStaff>> staff() async => [
+    for (final json in [
+      _staffRow(1, 'Ahmed Nazeeh', 'nazeeh@tropicalmart.mv',
+          _ownerRoleSummary),
+      _staffRow(2, 'Mariyam Shifa', 'shifa@tropicalmart.mv',
+          _cashierRoleSummary),
+      _staffRow(3, 'Ali Sameeh', 'sameeh@tropicalmart.mv',
+          _managerRoleSummary),
+      _staffRow(4, 'Fathimath Aisha', 'aisha@tropicalmart.mv',
+          _supportRoleSummary),
+      _staffRow(5, 'Hassan Rameez', 'hassan@tropicalmart.mv',
+          _cashierRoleSummary, active: false),
+    ])
+      MerchantStaff.fromJson(json),
+  ];
+
+  /// Roles.png's card list, violet-restyled: Owner = the ref's Full
+  /// Access treatment; the rest carry their permission counts.
+  @override
+  Future<List<MerchantRole>> roles() async => [
+    for (final json in [
+      {
+        'id': 1,
+        'name': 'Owner',
         'name_dv': null,
-        'mode': spec.$3,
-        'cashback_rate_percent': spec.$4,
-        'active': true,
-        'sort': i,
-      }),
+        'slug': 'owner',
+        'is_owner': true,
+        'is_system': true,
+        'permissions': <String>[],
+        'staff_count': 1,
+      },
+      {
+        'id': 2,
+        'name': 'Manager',
+        'name_dv': null,
+        'slug': 'manager',
+        'is_owner': false,
+        'is_system': true,
+        'permissions': [
+          'credits.create', 'credits.custom_rate', 'customers.lookup',
+          'transactions.view', 'transactions.amend', 'transactions.cancel',
+          'rate.view', 'promotions.view', 'product_categories.view',
+          'settlements.view', 'settlements.preview', 'settlements.create',
+          'settlements.receipt_add', 'wallet.view', 'profile.view',
+          'branches.view', 'branches.edit', 'staff.view',
+        ],
+        'staff_count': 1,
+      },
+      {
+        'id': 3,
+        'name': 'Cashier',
+        'name_dv': null,
+        'slug': 'staff',
+        'is_owner': false,
+        'is_system': true,
+        'permissions': [
+          'credits.create', 'customers.lookup', 'transactions.view',
+          'rate.view', 'promotions.view', 'product_categories.view',
+          'profile.view', 'branches.view',
+        ],
+        'staff_count': 2,
+      },
+      {
+        'id': 4,
+        'name': 'Customer Support',
+        'name_dv': null,
+        'slug': 'customer-support',
+        'is_owner': false,
+        'is_system': false,
+        'permissions': [
+          'customers.lookup', 'transactions.view', 'rate.view',
+          'promotions.view',
+        ],
+        'staff_count': 1,
+      },
+    ])
+      MerchantRole.fromJson(json),
+  ];
+
+  @override
+  Future<PermissionCatalogue> permissionCatalogue() async =>
+      PermissionCatalogue.fromJson(const {
+        'groups': [
+          {
+            'slug': 'till',
+            'label': 'Till',
+            'permissions': [
+              {'slug': 'credits.create', 'label': 'Credit a customer',
+                'group': 'till'},
+              {'slug': 'credits.custom_rate',
+                'label': 'Set a custom cashback rate on a sale',
+                'group': 'till'},
+              {'slug': 'customers.lookup', 'label': 'Look up a customer',
+                'group': 'till'},
+              {'slug': 'transactions.view', 'label': 'View transactions',
+                'group': 'till'},
+            ],
+          },
+          {
+            'slug': 'money',
+            'label': 'Money',
+            'permissions': [
+              {'slug': 'settlements.view', 'label': 'View settlements',
+                'group': 'money'},
+              {'slug': 'wallet.view', 'label': 'View the wallet',
+                'group': 'money'},
+            ],
+          },
+          {
+            'slug': 'account',
+            'label': 'Account',
+            'permissions': [
+              {'slug': 'staff.view', 'label': 'View staff accounts',
+                'group': 'account'},
+              {'slug': 'roles.manage', 'label': 'Create and edit roles',
+                'group': 'account'},
+            ],
+          },
+        ],
+      });
+
+  /// Branches.png's five locations minus the invented chrome — no photos,
+  /// hours, phone or active flag; the pin split carries the ref's 4-and-1.
+  @override
+  Future<List<MerchantBranch>> branches() async => [
+    for (final json in [
+      {
+        'id': 3,
+        'name': 'Tropical Mart — Main Branch',
+        'address': 'Boduthakurufaanu Magu, Malé',
+        'lat': 4.1755354,
+        'lng': 73.5093474,
+      },
+      {
+        'id': 4,
+        'name': 'Tropical Mart — Hulhumalé',
+        'address': 'Nirolhu Magu, Hulhumalé',
+        'lat': 4.2105091,
+        'lng': 73.5407121,
+      },
+      {
+        'id': 5,
+        'name': 'Tropical Mart — Villimalé',
+        'address': 'Ameenee Magu, Villimalé',
+        'lat': 4.1725071, 'lng': 73.4882079,
+      },
+      {
+        'id': 6,
+        'name': 'Tropical Mart — Velana Airport',
+        'address': 'Velana International Airport, Hulhulé',
+        'lat': 4.1917701, 'lng': 73.5290022,
+      },
+      {
+        'id': 7,
+        'name': 'Tropical Mart — Maamigili',
+        'address': 'Maamigili, Raa Atoll',
+        'lat': null, 'lng': null,
+      },
+    ])
+      MerchantBranch.fromJson(json),
+  ];
+
+  /// One of each lifecycle state the list distinguishes.
+  @override
+  Future<List<Promotion>> promotions({String? status}) async => [
+    for (final json in [
+      {
+        'cashback_rate_percent': '7.50',
+        'platform_fee_percent': '1.25',
+        'all_in_percent': '8.75',
+        'id': 12,
+        'merchant_id': 7,
+        'branch_id': null,
+        'status': 'draft',
+        'is_live': false,
+        'starts_at': '2026-08-20T10:00:00+05:00',
+        'ends_at': '2026-08-22T22:00:00+05:00',
+        'min_purchase_laari': 10000,
+        'max_cashback_per_customer_laari': 50000,
+        'published_at': null,
+        'cancelled_at': null,
+      },
+      {
+        'cashback_rate_percent': '5.00',
+        'platform_fee_percent': '1.00',
+        'all_in_percent': '6.00',
+        'id': 11,
+        'merchant_id': 7,
+        'branch_id': 3,
+        'status': 'published',
+        'is_live': true,
+        'starts_at': '2026-08-15T00:00:00+05:00',
+        'ends_at': '2026-08-18T23:59:00+05:00',
+        'min_purchase_laari': null,
+        'max_cashback_per_customer_laari': null,
+        'published_at': '2026-08-14T15:00:00+05:00',
+        'cancelled_at': null,
+      },
+      {
+        'cashback_rate_percent': '4.00',
+        'platform_fee_percent': '1.00',
+        'all_in_percent': '5.00',
+        'id': 9,
+        'merchant_id': 7,
+        'branch_id': null,
+        'status': 'ended',
+        'is_live': false,
+        'starts_at': '2026-07-25T00:00:00+05:00',
+        'ends_at': '2026-07-28T23:59:00+05:00',
+        'min_purchase_laari': 5000,
+        'max_cashback_per_customer_laari': null,
+        'published_at': '2026-07-24T12:00:00+05:00',
+        'cancelled_at': null,
+      },
+    ])
+      Promotion.fromJson(json),
   ];
 
   Map<String, dynamic> _tx(
@@ -558,6 +893,7 @@ void main() {
     String status = 'active',
     Map<String, dynamic>? setup,
     Map<String, dynamic>? walletJson,
+    List<Map<String, dynamic>>? categoriesJson,
     Future<void> Function(WidgetTester tester)? drive,
   }) async {
     await tester.binding.setSurfaceSize(const Size(390, 844));
@@ -595,6 +931,7 @@ void main() {
               status: status,
               setup: setup,
               walletJson: walletJson,
+              categoriesJson: categoriesJson,
             ),
           ),
           configProvider.overrideWith(
@@ -924,5 +1261,155 @@ void main() {
       Brightness.light,
       drive: driveTransactions,
     ),
+  );
+
+  // ---- MR5: the More estate (store-identity half) --------------------------
+
+  /// The ref's own four category rules (Cashback Settings.png).
+  const cashbackShotCategories = [
+    {
+      'id': 1,
+      'slug': 'groceries',
+      'name_en': 'Groceries',
+      'name_dv': null,
+      'mode': 'rate',
+      'cashback_rate_percent': '2.00',
+      'active': true,
+      'sort': 0,
+    },
+    {
+      'id': 2,
+      'slug': 'household-essentials',
+      'name_en': 'Household Essentials',
+      'name_dv': null,
+      'mode': 'rate',
+      'cashback_rate_percent': '1.50',
+      'active': true,
+      'sort': 1,
+    },
+    {
+      'id': 3,
+      'slug': 'fresh-produce',
+      'name_en': 'Fresh Produce',
+      'name_dv': null,
+      'mode': 'rate',
+      'cashback_rate_percent': '3.00',
+      'active': true,
+      'sort': 2,
+    },
+    {
+      'id': 4,
+      'slug': 'electronics',
+      'name_en': 'Electronics',
+      'name_dv': null,
+      'mode': 'rate',
+      'cashback_rate_percent': '0.50',
+      'active': true,
+      'sort': 3,
+    },
+  ];
+
+  Future<void> driveMore(WidgetTester tester) async {
+    await tester.tap(find.text('More'));
+    await tester.pumpAndSettle();
+  }
+
+  Future<void> driveProfile(WidgetTester tester) async {
+    await driveMore(tester);
+    await tester.tap(find.text('View profile'));
+    await tester.pumpAndSettle();
+  }
+
+  Future<void> driveCashback(WidgetTester tester) async {
+    await driveMore(tester);
+    await tester.tap(find.text('Cashback Settings'));
+    await tester.pumpAndSettle();
+  }
+
+  Future<void> driveEmployees(WidgetTester tester) async {
+    await driveMore(tester);
+    await tester.tap(find.text('Manage Employees'));
+    await tester.pumpAndSettle();
+  }
+
+  Future<void> driveRoles(WidgetTester tester) async {
+    await driveMore(tester);
+    await tester.tap(find.text('Roles'));
+    await tester.pumpAndSettle();
+  }
+
+  Future<void> driveBranches(WidgetTester tester) async {
+    await driveMore(tester);
+    await tester.tap(find.text('Manage Branches'));
+    await tester.pumpAndSettle();
+  }
+
+  Future<void> drivePromotions(WidgetTester tester) async {
+    await driveMore(tester);
+    await tester.tap(find.text('Promotions'));
+    await tester.pumpAndSettle();
+  }
+
+  testWidgets(
+    'more light',
+    (t) => shot(t, 'more_light', Brightness.light, drive: driveMore),
+  );
+  testWidgets(
+    'more dark',
+    (t) => shot(t, 'more_dark', Brightness.dark, drive: driveMore),
+  );
+  testWidgets(
+    'profile light',
+    (t) => shot(t, 'profile_light', Brightness.light, drive: driveProfile),
+  );
+  testWidgets(
+    'cashback settings light',
+    (t) => shot(
+      t,
+      'cashback_settings_light',
+      Brightness.light,
+      categoriesJson: cashbackShotCategories,
+      drive: driveCashback,
+    ),
+  );
+  testWidgets(
+    'cashback settings earning light',
+    (t) => shot(
+      t,
+      'cashback_settings_earning_light',
+      Brightness.light,
+      categoriesJson: cashbackShotCategories,
+      drive: (tester) async {
+        await driveCashback(tester);
+        await tester.scrollUntilVisible(
+          find.text('Save changes'),
+          160,
+          scrollable: find.byType(Scrollable).first,
+        );
+        await tester.pumpAndSettle();
+      },
+    ),
+  );
+
+  // ---- MR5: the More estate (management half, agent B) ----------------------
+  testWidgets(
+    'employees light',
+    (t) => shot(t, 'employees_light', Brightness.light, drive: driveEmployees),
+  );
+  testWidgets(
+    'employees dark',
+    (t) => shot(t, 'employees_dark', Brightness.dark, drive: driveEmployees),
+  );
+  testWidgets(
+    'roles light',
+    (t) => shot(t, 'roles_light', Brightness.light, drive: driveRoles),
+  );
+  testWidgets(
+    'branches light',
+    (t) => shot(t, 'branches_light', Brightness.light, drive: driveBranches),
+  );
+  testWidgets(
+    'promotions light',
+    (t) => shot(t, 'promotions_light', Brightness.light, drive: drivePromotions),
   );
 }

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:manfaa_ui/manfaa_ui.dart';
 
 /// The merchant lockup from the refs: the coral mark, "Manfaa" in ink, and a
@@ -60,6 +61,39 @@ class MerchantTopBar extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
+        const MerchantWordmark(),
+        const Spacer(),
+        if (initials != null && initials!.isNotEmpty)
+          ManfaaAvatar(initials!, size: 40, showDot: false),
+      ],
+    );
+  }
+}
+
+/// The detail-screen header from Profile.png / Cashback Settings.png: a
+/// back arrow leading, the wordmark beside it, the avatar trailing.
+/// [fallbackPath] is where back lands when there is nothing to pop (a
+/// deep link straight onto the detail screen).
+class MerchantDetailTopBar extends StatelessWidget {
+  const MerchantDetailTopBar({
+    super.key,
+    this.initials,
+    this.fallbackPath = '/more',
+  });
+
+  final String? initials;
+  final String fallbackPath;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        IconButton(
+          icon: const Icon(Icons.arrow_back_rounded),
+          onPressed: () =>
+              context.canPop() ? context.pop() : context.go(fallbackPath),
+        ),
+        const SizedBox(width: Gap.xs),
         const MerchantWordmark(),
         const Spacer(),
         if (initials != null && initials!.isNotEmpty)

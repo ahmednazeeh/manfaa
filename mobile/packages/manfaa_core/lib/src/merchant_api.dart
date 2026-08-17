@@ -612,6 +612,470 @@ class MerchantApi extends ManfaaApiBase<MerchantSession> {
     );
   }
 
+  // ----------------------------------------------- settings estate (MR5)
+
+  /// The store's public identity (MerchantProfileResource, verbatim).
+  /// Gate: `profile.view`.
+  Future<MerchantProfile> profile() async =>
+      MerchantProfile.fromJson(await getJson('/merchant/profile'));
+
+  /// Rewrite the public identity. Wire semantics are the web panel's
+  /// exactly: every editable key is SENT (an explicit null CLEARS — the
+  /// server's rules are `sometimes|nullable`), except `category`, which
+  /// travels only when it actually changed — a retired category the store
+  /// still holds is accepted unchanged, and an edit to a phone number
+  /// should not carry a category write at all.
+  ///
+  /// "Same as contact" is a COMPARISON: the caller sends the CONTACT number
+  /// itself as [supportPhone] — the support field is always materialised
+  /// server-side so the storefront always has a real number to show.
+  /// Gate: `profile.edit` + approved store.
+  Future<MerchantProfile> updateProfile({
+    required String name,
+    String? nameDv,
+    required String channel,
+    String? eligibilityBasis,
+    String? contactEmail,
+    String? contactPhone,
+    String? supportPhone,
+    String? websiteUrl,
+    bool categoryChanged = false,
+    String? category,
+  }) async {
+    final data = await run(
+      () => dio.patch<Map<String, dynamic>>('/merchant/profile', data: {
+        'name': name,
+        'name_dv': nameDv,
+        'channel': channel,
+        'eligibility_basis': eligibilityBasis,
+        'contact_email': contactEmail,
+        'contact_phone': contactPhone,
+        'support_phone': supportPhone,
+        'website_url': websiteUrl,
+        if (categoryChanged) 'category': category,
+      }),
+    );
+
+    return MerchantProfile.fromJson(
+      (data?['data'] as Map?)?.cast<String, dynamic>() ?? {},
+    );
+  }
+
+  /// Change the standing rate — sent as the exact percent STRING typed
+  /// (§11, never a float). The answer carries the fresh current/pending
+  /// windows AND the server's change summary: WHEN the rate takes hold is
+  /// the server's call (§7 — increases now, decreases at the next business
+  /// midnight), rendered from `change`, never re-derived.
+  ///
+  /// Refusals: `rate_not_priced` (above the live fee-schedule ceiling),
+  /// `validation_failed` (shape/bounds). Gate: `rate.update` + trading.
+  Future<RateChangeResult> changeRate(String percent) async {
+    final data = await run(
+      () => dio.post<Map<String, dynamic>>('/merchant/rate', data: {
+        'cashback_rate_percent': percent,
+      }),
+    );
+
+    return RateChangeResult(
+      rate: MerchantRate.fromJson(
+        (data?['data'] as Map?)?.cast<String, dynamic>() ?? {},
+      ),
+      change: data?['change'] is Map
+          ? RateChangeSummary.fromJson(
+              (data!['change'] as Map).cast<String, dynamic>(),
+            )
+          : null,
+    );
+  }
+
+  /// READ the preferences. The API exposes no GET: an empty PATCH validates
+  /// cleanly (`sometimes` rules), changes nothing (`fill({})` issues no
+  /// UPDATE) and answers the current values — the same read model the web
+  /// panel uses. Gate: `preferences.update`.
+  Future<MerchantPreferences> preferences() => updatePreferences();
+
+  /// Change the earning knobs. Absent keys are untouched (never cleared);
+  /// [minEligibleLaari] is INTEGER LAARI end to end. Both knobs apply to
+  /// FUTURE credits only — terms freeze onto each sale at occurred_at (§4).
+  /// Gate: `preferences.update` (no approval gate — deliberately).
+  Future<MerchantPreferences> updatePreferences({
+    String? settlementMethod,
+    int? minEligibleLaari,
+    int? validationWindowDays,
+  }) async {
+    final data = await run(
+      () => dio.patch<Map<String, dynamic>>('/merchant/preferences', data: {
+        'settlement_method': ?settlementMethod,
+        'min_eligible_laari': ?minEligibleLaari,
+        'validation_window_days': ?validationWindowDays,
+      }),
+    );
+
+    return MerchantPreferences.fromJson(
+      (data?['data'] as Map?)?.cast<String, dynamic>() ?? {},
+    );
+  }
+
+  /// Create a per-store product category rule. [mode] is `rate` (carries
+  /// [cashbackRatePercent], the exact string) or `excluded` (the percent key
+  /// must be ABSENT — the server prohibits it). The Dhivehi name is REQUIRED
+  /// by the server: it is what a Dhivehi customer reads on their receipt.
+  /// Refusals: `rate_not_priced`. Gate: `product_categories.create` +
+  /// trading.
+  Future<ProductCategory> createProductCategory({
+    required String nameEn,
+    required String nameDv,
+    required String mode,
+    String? cashbackRatePercent,
+    int? sort,
+  }) async {
+    final data = await run(
+      () => dio.post<Map<String, dynamic>>('/merchant/product-categories',
+          data: {
+            'name_en': nameEn,
+            'name_dv': nameDv,
+            'mode': mode,
+            'cashback_rate_percent': ?cashbackRatePercent,
+            'sort': ?sort,
+          }),
+    );
+
+    return ProductCategory.fromJson(
+      (data?['data'] as Map?)?.cast<String, dynamic>() ?? {},
+    );
+  }
+
+  /// Edit a rule — partial: absent keys stay as they are, and the slug NEVER
+  /// changes (it is the immutable line key). Switching to `excluded` omits
+  /// the percent (the server derives null); switching to `rate` must carry
+  /// one. Deactivation is soft ([active] false) — there is no delete.
+  /// Gate: `product_categories.edit` + trading.
+  Future<ProductCategory> updateProductCategory(
+    int id, {
+    String? nameEn,
+    String? nameDv,
+    String? mode,
+    String? cashbackRatePercent,
+    int? sort,
+    bool? active,
+  }) async {
+    final data = await run(
+      () => dio.patch<Map<String, dynamic>>('/merchant/product-categories/$id',
+          data: {
+            'name_en': ?nameEn,
+            'name_dv': ?nameDv,
+            'mode': ?mode,
+            'cashback_rate_percent': ?cashbackRatePercent,
+            'sort': ?sort,
+            'active': ?active,
+          }),
+    );
+
+    return ProductCategory.fromJson(
+      (data?['data'] as Map?)?.cast<String, dynamic>() ?? {},
+    );
+  }
+
+  // ------------------------------------- management estate (MR5, agent B)
+
+  /// The store's panel accounts, id order (MerchantStaffResource).
+  /// Gate: `staff.view`.
+  Future<List<MerchantStaff>> staff() async {
+    final data = await run(
+      () => dio.get<Map<String, dynamic>>('/merchant/staff'),
+    );
+
+    return [
+      for (final item in (data?['data'] as List? ?? const []))
+        MerchantStaff.fromJson((item as Map).cast<String, dynamic>()),
+    ];
+  }
+
+  /// Invite a staff member — creates the account with a generated temporary
+  /// password returned EXACTLY ONCE, beside (not inside) the resource; only
+  /// its hash survives server-side. The role is REQUIRED: with per-store
+  /// roles there is no tier to default to.
+  ///
+  /// Refusals: `validation_failed` (a taken email among them), and the
+  /// delegation family — `owner_role_not_delegable`, `permission_not_held`
+  /// (you cannot hand out a role holding permissions you lack).
+  /// Gate: `staff.invite` + approved store.
+  Future<StaffInviteResult> inviteStaff({
+    required String name,
+    required String email,
+    required int merchantRoleId,
+  }) async {
+    final data = await run(
+      () => dio.post<Map<String, dynamic>>('/merchant/staff', data: {
+        'name': name,
+        'email': email,
+        'merchant_role_id': merchantRoleId,
+      }),
+    );
+
+    return StaffInviteResult(
+      staff: MerchantStaff.fromJson(
+        (data?['data'] as Map?)?.cast<String, dynamic>() ?? {},
+      ),
+      tempPassword: (data?['temp_password'])?.toString() ?? '',
+    );
+  }
+
+  /// Repoint or (de)activate an account — partial: only the given keys
+  /// travel (`sometimes` server rules). Deactivation is the ONLY removal
+  /// (no staff DELETE), and it destroys the account's app tokens.
+  ///
+  /// Refusals: the delegation family above, plus the guards as 422
+  /// sentences — the last active OWNER can be neither deactivated nor
+  /// demoted, and nobody demotes or deactivates themselves.
+  /// Gate: `staff.edit`.
+  Future<MerchantStaff> updateStaff(
+    int id, {
+    int? merchantRoleId,
+    bool? isActive,
+  }) async {
+    final data = await run(
+      () => dio.patch<Map<String, dynamic>>('/merchant/staff/$id', data: {
+        'merchant_role_id': ?merchantRoleId,
+        'is_active': ?isActive,
+      }),
+    );
+
+    return MerchantStaff.fromJson(
+      (data?['data'] as Map?)?.cast<String, dynamic>() ?? {},
+    );
+  }
+
+  /// The SERVED permission catalogue, grouped as the roles screen stacks it
+  /// (D8: published so a permission added by a later deploy renders in this
+  /// build too). Gate: `roles.view` — the roles screen's own gate.
+  Future<PermissionCatalogue> permissionCatalogue() async =>
+      PermissionCatalogue.fromJson(await getJson('/merchant/permissions'));
+
+  /// The merchant's own roles, id order, each carrying its RESOLVED
+  /// permission set and staff count. Gate: `roles.view`.
+  Future<List<MerchantRole>> roles() async {
+    final data = await run(
+      () => dio.get<Map<String, dynamic>>('/merchant/roles'),
+    );
+
+    return [
+      for (final item in (data?['data'] as List? ?? const []))
+        MerchantRole.fromJson((item as Map).cast<String, dynamic>()),
+    ];
+  }
+
+  /// Create a role. `permissions` is PRESENT even when empty (a role
+  /// holding nothing yet is a legitimate start); every slug in it is a
+  /// grant, so the whole set must be held by the caller (D5).
+  ///
+  /// Refusals: `permission_not_held` (403, `meta.permissions` names the
+  /// slugs), `role_cap_reached` (422). Gate: `roles.manage`.
+  Future<MerchantRole> createRole({
+    required String name,
+    String? nameDv,
+    required List<String> permissions,
+  }) async {
+    final data = await run(
+      () => dio.post<Map<String, dynamic>>('/merchant/roles', data: {
+        'name': name,
+        'name_dv': ?nameDv,
+        'permissions': permissions,
+      }),
+    );
+
+    return MerchantRole.fromJson(
+      (data?['data'] as Map?)?.cast<String, dynamic>() ?? {},
+    );
+  }
+
+  /// Edit a role — partial: only the given keys travel. `name_dv` is
+  /// nullable AND optional, so "clear it" and "leave it alone" are
+  /// different requests: [nameDvChanged] puts the key on the wire (with
+  /// [nameDv], null clearing), exactly the categoryChanged idiom. On an
+  /// edit only the ADDED permissions are a grant — unticking hands nobody
+  /// anything.
+  ///
+  /// Refusals: `owner_role_frozen` (409 — the owner role is renameable
+  /// only), `cannot_edit_own_role` (403, non-owners), `permission_not_held`
+  /// (403). Gate: `roles.manage`.
+  Future<MerchantRole> updateRole(
+    int id, {
+    String? name,
+    bool nameDvChanged = false,
+    String? nameDv,
+    List<String>? permissions,
+  }) async {
+    final data = await run(
+      () => dio.patch<Map<String, dynamic>>('/merchant/roles/$id', data: {
+        'name': ?name,
+        if (nameDvChanged) 'name_dv': nameDv,
+        'permissions': ?permissions,
+      }),
+    );
+
+    return MerchantRole.fromJson(
+      (data?['data'] as Map?)?.cast<String, dynamic>() ?? {},
+    );
+  }
+
+  /// Delete a role nobody stands on (deactivated accounts count — they
+  /// keep resolving in audit trails). Refusals: `role_in_use` (409,
+  /// `meta.staff_count`), `owner_role_undeletable` (409).
+  /// Gate: `roles.manage`.
+  Future<void> deleteRole(int id) async =>
+      run(() => dio.delete<Map<String, dynamic>>('/merchant/roles/$id'));
+
+  /// The store's branches, id order. Gate: `branches.view`.
+  Future<List<MerchantBranch>> branches() async {
+    final data = await run(
+      () => dio.get<Map<String, dynamic>>('/merchant/branches'),
+    );
+
+    return [
+      for (final item in (data?['data'] as List? ?? const []))
+        MerchantBranch.fromJson((item as Map).cast<String, dynamic>()),
+    ];
+  }
+
+  /// Create a branch. The pin travels as a nullable PAIR — both halves or
+  /// neither (the server refuses a lone coordinate); every key is sent so
+  /// the write is explicit. Gate: `branches.create` + approved store.
+  Future<MerchantBranch> createBranch({
+    required String name,
+    String? address,
+    double? lat,
+    double? lng,
+  }) async {
+    final data = await run(
+      () => dio.post<Map<String, dynamic>>('/merchant/branches', data: {
+        'name': name,
+        'address': address,
+        'lat': lat,
+        'lng': lng,
+      }),
+    );
+
+    return MerchantBranch.fromJson(
+      (data?['data'] as Map?)?.cast<String, dynamic>() ?? {},
+    );
+  }
+
+  /// Rewrite a branch — same full-send semantics as create (the web
+  /// panel's exactly): explicit nulls clear the address and take the pin
+  /// away, which this surface is the ONLY one able to do.
+  /// Gate: `branches.edit` + approved store.
+  Future<MerchantBranch> updateBranch(
+    int id, {
+    required String name,
+    String? address,
+    double? lat,
+    double? lng,
+  }) async {
+    final data = await run(
+      () => dio.patch<Map<String, dynamic>>('/merchant/branches/$id', data: {
+        'name': name,
+        'address': address,
+        'lat': lat,
+        'lng': lng,
+      }),
+    );
+
+    return MerchantBranch.fromJson(
+      (data?['data'] as Map?)?.cast<String, dynamic>() ?? {},
+    );
+  }
+
+  /// Delete a branch nothing references. A branch with transactions or
+  /// branch-scoped promotions is history that must keep resolving — the
+  /// server answers 409 `branch_referenced` and the soft alternative is
+  /// simply to stop using it. Gate: `branches.delete` + approved store.
+  Future<void> deleteBranch(int id) async =>
+      run(() => dio.delete<Map<String, dynamic>>('/merchant/branches/$id'));
+
+  /// The store's promotions, newest first, optionally filtered by
+  /// [status] (draft|published|ended|cancelled). Gate: `promotions.view`
+  /// (seeds to every role — the till can see what is running).
+  Future<List<Promotion>> promotions({String? status}) async {
+    final data = await run(
+      () => dio.get<Map<String, dynamic>>(
+        '/merchant/promotions',
+        queryParameters: {'status': ?status},
+      ),
+    );
+
+    return [
+      for (final item in (data?['data'] as List? ?? const []))
+        Promotion.fromJson((item as Map).cast<String, dynamic>()),
+    ];
+  }
+
+  /// Draft a promotion. The rate is the EXACT 2-decimal percent string
+  /// typed (§11, never a float) and must BOOST above the standing rate;
+  /// both window ends are ISO 8601 WITH an explicit UTC offset; amounts are
+  /// integer laari. The answer carries the server's `cost_preview` at the
+  /// root beside `data` — the §4 all-in picture with the tier-cliff
+  /// warning, rendered verbatim.
+  ///
+  /// Refusals: `rate_not_priced` (422, the active fee schedule does not
+  /// price the rate), `validation_failed` with the domain's prose (window,
+  /// boost, foreign branch). Gate: `promotions.create` + trading.
+  Future<PromotionWriteResult> createPromotion({
+    required String cashbackRatePercent,
+    required String startsAt,
+    required String endsAt,
+    int? minPurchaseLaari,
+    int? maxCashbackPerCustomerLaari,
+    int? branchId,
+  }) async {
+    final data = await run(
+      () => dio.post<Map<String, dynamic>>('/merchant/promotions', data: {
+        'cashback_rate_percent': cashbackRatePercent,
+        'starts_at': startsAt,
+        'ends_at': endsAt,
+        'min_purchase_laari': ?minPurchaseLaari,
+        'max_cashback_per_customer_laari': ?maxCashbackPerCustomerLaari,
+        'branch_id': ?branchId,
+      }),
+    );
+
+    return _promotionWrite(data);
+  }
+
+  /// Publish a draft — the irreversible step: once live, a promotion is
+  /// immutable for its stated window (PLAN §7 — no edit, no early end).
+  /// Refusals: 409 `conflict` (not a draft), `rate_not_priced` (a stale
+  /// draft the schedule no longer prices). Gate: `promotions.publish` +
+  /// trading.
+  Future<PromotionWriteResult> publishPromotion(int id) async =>
+      _promotionWrite(await run(
+        () => dio.post<Map<String, dynamic>>('/merchant/promotions/$id/publish'),
+      ));
+
+  /// Cancel a DRAFT — the only cancellable state; a published promotion can
+  /// never be ended early (409). Gate: `promotions.cancel`.
+  Future<Promotion> cancelPromotion(int id) async {
+    final data = await run(
+      () => dio.post<Map<String, dynamic>>('/merchant/promotions/$id/cancel'),
+    );
+
+    return Promotion.fromJson(
+      (data?['data'] as Map?)?.cast<String, dynamic>() ?? {},
+    );
+  }
+
+  PromotionWriteResult _promotionWrite(Map<String, dynamic>? data) =>
+      PromotionWriteResult(
+        promotion: Promotion.fromJson(
+          (data?['data'] as Map?)?.cast<String, dynamic>() ?? {},
+        ),
+        costPreview: data?['cost_preview'] is Map
+            ? PromotionCostPreview.fromJson(
+                (data!['cost_preview'] as Map).cast<String, dynamic>(),
+              )
+            : null,
+      );
+
   // ------------------------------------------------------------- devices
 
   Future<List<DeviceEntry>> devices() async {
