@@ -1,0 +1,255 @@
+{
+  "@@locale": "dv",
+  "appTitle": "މަންފާ",
+  "tabHome": "ހޯމް",
+  "tabDiscover": "ހޯދާ",
+  "tabActivity": "މުއާމަލާތް",
+  "tabProfile": "ޕްރޮފައިލް",
+  "signInTitle": "ސައިން އިން",
+  "signInSubtitle": "ރާއްޖޭގެ ފިހާރަތަކުން ކޭޝްބެކް ހޯއްދަވާ.",
+  "phoneLabel": "ފޯނު ނަންބަރު",
+  "phoneHint": "7XXXXXX",
+  "continueLabel": "ކުރިއަށް",
+  "homeGreeting": "މަރުޙަބާ {name}",
+  "@homeGreeting": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "yourCode": "ތިޔަބޭފުޅާގެ މަންފާ ކޯޑު",
+  "showAtTill": "ކޭޝްބެކް ލިބުމަށް މި ކޯޑު ފިހާރައިގައި ދައްކަވާ.",
+  "tapForFullscreen": "ފުލްސްކްރީނަށް ފިއްތަވާ",
+  "availableCashback": "ލިބެން ހުރި ކޭޝްބެކް",
+  "confirmedHint": "ޔަޤީންވެ، ދެން އަންނަ ޕޭއައުޓަށް ތައްޔާރު.",
+  "pendingLine": "{amount} މަޑުކުރެވިފައި — ފިހާރައިން ޔަޤީންކުރުމުން ލިބޭނެ.",
+  "@pendingLine": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "nextPayout": "ދެން އަންނަ ޕޭއައުޓް",
+  "minimumPayoutNote": "ޕޭއައުޓް ފެށެނީ {amount} އިން. އެއަށްވުރެ މަދުނަމަ ކުރިއަށް ގެންދެވޭނެ.",
+  "@minimumPayoutNote": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "paidThisMonth": "މި މަހު ދެއްކުނު",
+  "addPayoutAccountTitle": "ބޭންކް އެކައުންޓް އިތުރުކުރައްވާ",
+  "addPayoutAccountBody": "ކޭޝްބެކް ފޮނުވާނެ ތަން ވިދާޅުވެދެއްވާ — ޕޭއައުޓަށް ބޭންކް އެކައުންޓެއް ބޭނުންވޭ.",
+  "startEarningTitle": "ހޯއްދަވަން ފައްޓަވާ",
+  "startEarningBody": "ކޮންމެ މަންފާ ފިހާރައެއްގައި ކޯޑު ދެއްކެވުމުން ކޭޝްބެކް މިތަނަށް އަންނާނެ.",
+  "offlineCodeBanner": "އޮފްލައިން — ފިހާރައިގައި ކޯޑު އަދިވެސް ބޭނުންކުރެއްވޭނެ.",
+  "qrTitle": "ތިޔަބޭފުޅާގެ ކޯޑު",
+  "qrHint": "ކޭޝިއަރަށް މި ސްކޭން ކުރުމަށް ދައްކަވާ، ނުވަތަ ނަންބަރު ވިދާޅުވެދެއްވާ.",
+  "comingSoonTitle": "އަންނަނީ",
+  "discoverComingBody": "ކައިރި ފިހާރަތަކާއި، އިތުރު ރޭޓުތަކާއި، ޚާއްޞަ އޮފަރތައް އަވަހަށް މިތަނަށް އަންނާނެ.",
+  "activityComingBody": "ލިބުނު ހުރިހާ ކޭޝްބެކަކާއި ޕޭއައުޓްތައް މިތަނުން ފެންނާނެ.",
+  "profileLanguage": "ބަސް",
+  "languageEnglish": "English",
+  "languageDhivehi": "ދިވެހި",
+  "profileDevices": "ސައިން އިން ކުރެވިފައިވާ ޑިވައިސްތައް",
+  "signOut": "ސައިން އައުޓް",
+  "signOutConfirmTitle": "ސައިން އައުޓް ކުރައްވަނީތޯ؟",
+  "signOutConfirmBody": "ކޯޑާއި ބެލެންސް ރައްކާތެރިކޮށް ހުންނާނެ — ކޮންމެ އިރަކުވެސް އަނބުރާ ސައިން އިން ކުރެއްވޭނެ.",
+  "cancel": "ކެންސަލް",
+  "updateRequiredTitle": "އަޕްޑޭޓް ބޭނުންވޭ",
+  "updateRequiredBody": "މަންފާގެ މި ވަރޝަން ދެން ބޭނުމެއް ނުކުރެއްވޭނެ. ކުރިއަށް ދިއުމަށް ސްޓޯރުން އަޕްޑޭޓް ކުރައްވާ.",
+  "errorGeneric": "މައްސަލައެއް ދިމާވެއްޖެ. އަލުން މަސައްކަތް ކުރައްވާ.",
+  "retry": "އަލުން",
+  "codeTitle": "ކޯޑު ޖައްސަވާ",
+  "codeSentTo": "{phone} އަށް 6 އަކުރުގެ ކޯޑެއް ފޮނުވައިފިން.",
+  "@codeSentTo": {
+    "placeholders": {
+      "phone": {
+        "type": "String"
+      }
+    }
+  },
+  "verifyLabel": "ޔަޤީންކުރޭ",
+  "resendCode": "ކޯޑު އަލުން ފޮނުވާ",
+  "resendCountdown": "{seconds} ސިކުންތުން އަލުން ފޮނުވޭނެ",
+  "@resendCountdown": {
+    "placeholders": {
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
+  "back": "އަނބުރާ",
+  "nameTitle": "ކޮން ނަމަކުން ގޮވަންވީ؟",
+  "nameSubtitle": "ތިޔަބޭފުޅާކަން ޔަޤީންކުރުމަށް ކޭޝިއަރުންނަށް ނަން ފެންނާނެ.",
+  "nameLabel": "ނަން",
+  "finishLabel": "އެކައުންޓް ހަދާ",
+  "errOtpInvalid": "އެ ކޯޑު ރަނގަޅެއް ނޫން ނުވަތަ މުއްދަތު ހަމަވެއްޖެ. ބައްލަވާ، ނުވަތަ އާ ކޯޑެއް ހޯއްދަވާ.",
+  "errOtpAttempts": "މާ ގިނަ ފަހަރު ނުބައި ކޯޑު ޖެއްސެވިއްޖެ. އާ ކޯޑެއް ހޯއްދަވާ.",
+  "errSignupExpired": "އެ ޔަޤީންކުރުން މުއްދަތު ހަމަވެއްޖެ. ފޯނު ނަންބަރުން އަލުން ފައްޓަވާ.",
+  "errAccountUnavailable": "މި އެކައުންޓް މިވަގުތު ސައިން އިން ނުކުރެއްވޭނެ. މަންފާ ސަޕޯޓަށް ގުޅުއްވާ.",
+  "errTooManyTries": "މާ ގިނަ ފަހަރު މަސައްކަތް ކުރެވިއްޖެ. ކުޑައިރުކޮޅަކުން އަލުން މަސައްކަތް ކުރައްވާ.",
+  "browseStores": "ފިހާރަތައް ބައްލަވާ",
+  "segmentEarned": "ލިބުނު",
+  "segmentPaidOut": "ދެއްކުނު",
+  "emptyEarnedTitle": "އަދި އެއްޗެއް ނެތް",
+  "emptyEarnedBody": "މަންފާ ފިހާރައަކުން ވިޔަފާރިކޮށް، ކޯޑު ފިހާރައިގައި ދައްކަވާ.",
+  "emptyPaidTitle": "އަދި ޕޭއައުޓެއް ނެތް",
+  "emptyPaidBody": "ޔަޤީންވި ކޭޝްބެކް ކޮންމެ މަހަކު ބޭންކަށް ފޮނުވޭނެ. ފުރަތަމަ ޕޭއައުޓް ފޮނުވުމުން މިތަނުން ފެންނާނެ.",
+  "statusPending": "މަޑުކުރެވިފައި",
+  "statusConfirmed": "ޔަޤީންވެފައި",
+  "statusPaid": "ދެއްކިއްޖެ",
+  "statusReversed": "އަނބުރާ ގެންދެވިފައި",
+  "statusUnpaid": "ނުދެއްކޭ",
+  "reasonValidationWindow": "{merchant} ޔަޤީންކުރުމުން މި ލިބޭނެ.",
+  "@reasonValidationWindow": {
+    "placeholders": {
+      "merchant": {
+        "type": "String"
+      }
+    }
+  },
+  "reasonSettlementWindow": "{merchant} ސެޓްލްކުރަންދެން — ދެން ތިޔަބޭފުޅާގެ.",
+  "@reasonSettlementWindow": {
+    "placeholders": {
+      "merchant": {
+        "type": "String"
+      }
+    }
+  },
+  "reasonUnderReview": "މަންފާއިން ބަލަމުންދަނީ.",
+  "reasonNotSettled": "ފިހާރައިން މި ސެޓްލްނުކުރުމުން ނުދެއްކޭނެ.",
+  "reasonRefund": "ފިހާރައިން ރީފަންޑް ކުރެވިއްޖެ.",
+  "reasonBelowMinimum": "ފިހާރައިގެ އެންމެ ކުޑަ މިންވަރަށްވުރެ ދަށް.",
+  "reasonReversed": "އަނބުރާ ގެންދެވިއްޖެ.",
+  "payoutPaid": "ދެއްކިއްޖެ",
+  "payoutSent": "ދަތުރުމަތީގައި",
+  "payoutFailed": "ނާކާމިޔާބު",
+  "payoutPeriod": "ލިބުނީ {from} – {to}",
+  "@payoutPeriod": {
+    "placeholders": {
+      "from": {
+        "type": "String"
+      },
+      "to": {
+        "type": "String"
+      }
+    }
+  },
+  "payoutFailedNote": "ޓްރާންސްފަރ ނުދިޔަ — މި ކޭޝްބެކް ބެލެންސަށް އަނބުރާ އަންނާނެ.",
+  "payoutDetailTitle": "ޕޭއައުޓް",
+  "payoutPeriodLabel": "ލިބުނު މުއްދަތު",
+  "payoutReferenceLabel": "ބޭންކް ރެފަރެންސް",
+  "payoutAccountLabel": "ދެއްކުނު އެކައުންޓް",
+  "payoutPaidAtLabel": "ދެއްކުނު ތާރީޚް",
+  "payoutFailedDetail": "ބޭންކަށް މި ޓްރާންސްފަރ ފުރިހަމަނުކުރެވުމުން ކޭޝްބެކް ބެލެންސަށް އަނބުރާ ގޮސް، ފަހުގެ ޕޭއައުޓެއްގައި ހިމެނޭނެ. ޕޭއައުޓް އެކައުންޓްގެ މަޢުލޫމާތު ރަނގަޅުތޯ ބައްލަވާ.",
+  "payoutCovered": "{count, plural, =1{މި ޕޭއައުޓްގައި 1 ވިޔަފާރި} other{މި ޕޭއައުޓްގައި {count} ވިޔަފާރި}}",
+  "@payoutCovered": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "shelfBoosted": "މިވަގުތު އިތުރުކުރެވިފައި",
+  "shelfFeatured": "ޚާއްޞަ",
+  "shelfNearby": "ކައިރީގައި",
+  "shelfNew": "މަންފާއަށް އާ",
+  "shelfInStore": "ފިހާރައިގައި",
+  "shelfOnline": "އޮންލައިން",
+  "ratePercent": "{rate}%",
+  "@ratePercent": {
+    "placeholders": {
+      "rate": {
+        "type": "String"
+      }
+    }
+  },
+  "ratePercentCashback": "{rate}% ކޭޝްބެކް",
+  "@ratePercentCashback": {
+    "placeholders": {
+      "rate": {
+        "type": "String"
+      }
+    }
+  },
+  "usuallyRate": "އާންމުކޮށް {rate}%",
+  "@usuallyRate": {
+    "placeholders": {
+      "rate": {
+        "type": "String"
+      }
+    }
+  },
+  "promoUntil": "{date} އާ ހަމައަށް އިތުރު ރޭޓް",
+  "@promoUntil": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "channelInStore": "ފިހާރައިގައި",
+  "channelOnline": "އޮންލައިން",
+  "channelBoth": "ފިހާރައިގައި އަދި އޮންލައިން",
+  "storeEligibility": "ކޭޝްބެކް ލިބެނީ ކޮން އެއްޗަކަށް",
+  "storeRates": "ރޭޓްތައް",
+  "storeNoCashback": "ކޭޝްބެކް ނުލިބޭ",
+  "storeBranches": "ގޮފިތައް",
+  "storeContact": "ގުޅުއްވުމަށް",
+  "searchTitle": "ފިހާރަ ހޯއްދަވާ",
+  "searchHint": "ފިހާރައިގެ ނަން…",
+  "searchPrompt": "ހޯއްދެވުމަށް މަދުވެގެން ދެ އަކުރު ލިޔުއްވާ.",
+  "searchEmpty": "އެއްވެސް ފިހާރައެއް ނުފެނުނު.",
+  "profileDevicesBody": "ސައިން އިން ކުރެވިފައިވާ ހުރިހާ ފޯނެއް ބައްލަވާ، ނުދަންނަ އެއްޗެއް ކަނޑާލައްވާ.",
+  "devicesIntro": "މި ޑިވައިސްތަކަށް ބެލެންސާއި ކޯޑު ފެންނާނެ. ނުދަންނަ ނުވަތަ ގެއްލިފައިވާ އެއްޗެއް ކަނޑާލައްވާ.",
+  "deviceThisOne": "މި ފޯނު",
+  "deviceLastUsed": "އެންމެ ފަހުން ބޭނުންކުރީ {date}",
+  "@deviceLastUsed": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "deviceSignedIn": "ސައިން އިން ކުރީ {date}",
+  "@deviceSignedIn": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "deviceRevokeTitle": "{name} ސައިން އައުޓް ކުރައްވަނީތޯ؟",
+  "@deviceRevokeTitle": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "deviceRevokeBody": "އެ ފޯނަށް އެއްޗެއް ފެންނާނީ އަލުން ސައިން އިން ކުރުމުން.",
+  "deviceRevokeCurrentBody": "މިއީ ތިޔަ ގެންގުޅުއްވާ ފޯނު — މިހާރުން މިހާރަށް ސައިން އައުޓް ވާނެ.",
+  "deviceRevokeAction": "ޑިވައިސް ސައިން އައުޓް ކުރޭ",
+  "deviceRevokeAllTitle": "ހުރިހާ ތަނަކުން ސައިން އައުޓް ކުރައްވަނީތޯ؟",
+  "deviceRevokeAllBody": "މި ފޯނު ހިމެނޭހެން ހުރިހާ ޑިވައިސްއެއް ސައިން އައުޓް ވާނެ. ފޯނެއް ގެއްލިއްޖެނަމަ މި ބޭނުންކުރައްވާ.",
+  "deviceRevokeAllAction": "ހުރިހާ ތަނަކުން ސައިން އައުޓް",
+  "errPhoneRegistered": "މި ނަންބަރުގައި މިހާރުވެސް އެކައުންޓެއް އެބައޮތް. އާ ކޯޑަކުން ސައިން އިން ކުރައްވާ.",
+  "payoutAccountTitle": "ޕޭއައުޓް އެކައުންޓް",
+  "payoutAccountTileBody": "ކޭޝްބެކް ފޮނުވޭ ބޭންކް އެކައުންޓް.",
+  "payoutAccountIntro": "ތިޔަބޭފުޅާގެ ކޭޝްބެކް މި އެކައުންޓަށް ދެއްކޭ. ބަދަލުކުރެއްވުމަށް ފޯނަށް ފޮނުވޭ ކޯޑެއް ބޭނުންވޭ.",
+  "payoutBankLabel": "ބޭންކް",
+  "payoutAccountNoLabel": "އެކައުންޓް ނަންބަރު",
+  "payoutAccountNameLabel": "އެކައުންޓް ވެރިޔާގެ ނަން",
+  "payoutSendCode": "ކޯޑު ފޮނުވާ",
+  "payoutOtpSent": "މި ބަދަލު ޔަޤީންކުރުމަށް ފޯނަށް ފޮނުވި ކޯޑު ޖައްސަވާ.",
+  "payoutSaveAction": "އެކައުންޓް ސޭވްކުރޭ",
+  "payoutAccountSaved": "ޕޭއައުޓް އެކައުންޓް އަޕްޑޭޓް ކުރެވިއްޖެ.",
+  "payoutChangeEffective": "ބަދަލު އަސަރުކުރާނީ ދެން އަންނަ ޕޭއައުޓުން ފެށިގެން.",
+  "notificationsTitle": "ނޮޓިފިކޭޝަން",
+  "notificationsBody": "ކޭޝްބެކް ލިބުމުން އަދި ފައިސާ ދެއްކުމުން އެންގުން ލިބޭ.",
+  "a11yShowQr": "މަންފާ ކޯޑު ފުލްސްކްރީނުގައި ދައްކާ"
+}

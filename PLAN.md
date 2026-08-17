@@ -719,7 +719,87 @@ symlink, so styled markup there would ship with its classes missing.
 `leaflet`, `react-leaflet` and `@types/leaflet` dropped from all three apps —
 zero imports, inherited template weight.
 
-### Queue: EMPTY. Next work needs a product decision — see below.
+### Queue (updated 2026-08-17) — the mobile programme
+
+The mobile API round is DONE and reviewed (PLAN-mobile-api.md: M1–M5, two
+adversarial passes, 31 defects fixed, suite 1166, committed on branch
+`mobile-api`). The Customer App foundation R0 is DONE (PLAN-customer-app.md:
+scaffold, identity, credentials, tokens/theme, en+dv/RTL, api client, shell,
+Home real against /customer/home; analyze clean, tests 17/17). FCM is live
+(`PUSH_DRIVER=fcm`, credential verified against Google).
+
+**Remaining, in order. One workflow round each, with the adversarial gate.**
+
+#### Customer app (details per round in PLAN-customer-app.md §5)
+- [x] **R1 — OTP auth end to end** (2026-08-17; reviewed, 5 blockers fixed). Backend first: mobile OTP endpoints that
+      MINT TOKENS (reuse OtpService + the per-phone/per-IP limiter
+      conventions; security-reviewed like M1 — it mints bearer credentials;
+      SIM-swap mitigation: payout-account changes demand a fresh OTP). Then
+      the app's onboarding flow replaces the debug password path.
+- [x] **R2 — Home polish** (2026-08-17). Brightness bump on the fullscreen QR
+      (screen_brightness plugin), nearest-stores hook in the empty state,
+      per-store pending clock ("Store A confirms within N days"), payout nag
+      wired to its screen, skeleton loading.
+- [x] **R3 — Activity** (2026-08-17). Earned|Paid segmented history, cursor infinite
+      scroll, payout detail, localized reason keys.
+- [x] **R4 — Discover + store page** (2026-08-17; map view still key-blocked). Shelves, featured offers (two-kinds
+      banner rule), boosted "8% — usually 5%", categories, search, Near you
+      list. Map view BLOCKED on Maps-key restriction (below).
+- [x] **R5 — Profile** (2026-08-17): devices, push, and the payout-account
+      screen with its fresh-OTP gate all done. (Notifications on/off → R6.)
+- [~] **R6 — Polish** (2026-08-17): dark-mode fix, notifications toggle,
+      accessibility, locale×theme test matrix DONE. OWED — I cannot do these:
+      native Thaana review (app strings + templates + push titles together)
+      and pixel goldens (deferred to the macOS build box).
+- [ ] **R7 — Release.** Icons/splash, store listings en+dv, Codemagic
+      signing both stores, version-gate values, privacy policy URL + Play
+      data-safety forms.
+
+#### Merchant app (after customer R5; scope agreed 2026-08-16: the TILL, not
+the panel)
+- [ ] Register `mv.manfaa.merchant` (Android+iOS) in Firebase project
+      manfaa-6e1b4 — same project, same server key; only client configs are new.
+- [ ] `mobile/merchant` scaffold on `manfaa_core`/`manfaa_ui` (they exist for
+      this). Navigation built FROM `/merchant/me` permissions — a cashier
+      with only credits.create sees one screen, nothing greyed out.
+- [ ] Till round: scan customer QR (camera) + type-in fallback, credit with
+      idempotency keys, backdated acknowledgement UX, today's credits, void.
+- [ ] Settlement round: outstanding buckets, Settle All, exact amount,
+      receipt from camera, rejection reasons; settlement pushes land here.
+- [ ] Offline credit queue draining with stored Idempotency-Keys (the API
+      side is built and tested; this is the client half).
+
+#### Backend follow-ups (small, from the reviews)
+- [ ] The 18 remaining inline `throttle:n,1` routes share ONE per-IP bucket
+      (logos.php's 240/min can starve panel logins) — repo-wide key-prefix
+      pass, its own ticket.
+- [ ] Per-channel `active` switch on notification templates: push is free
+      per message, SMS is not — `cashback_earned` should be able to push
+      without starting an SMS bill.
+- [ ] "Contact the store" path for the customer app (claims stay OFF —
+      decision 2026-08-14; the app needs the merchant's phone from the
+      store page, nothing more).
+- [ ] Consolidate the suspended-store refusal onto
+      EnsureMerchantApproved:trading (pre-existing item).
+- [ ] Merge branch `mobile-api` → main once the owner has read the diff
+      (the working tree IS being served; the merge is bookkeeping, but
+      main must not drift behind production).
+
+#### Operational (not code — owner or console actions)
+- [ ] **Rotate the Firebase service-account key** (passed through a chat
+      transcript). Swap = one .env line + `systemctl restart manfaa-queue`.
+- [ ] **APNs .p8** into Firebase Cloud Messaging — until then iOS registers
+      and receives NOTHING, silently. Needs the Apple Developer account.
+- [ ] Apple Developer + Play Console accounts; Codemagic hooked to the repo
+      with signing + PROJECT_BUILD_NUMBER.
+- [ ] Restrict the Google Maps key (shared with avasprint, unrestricted —
+      long-flagged) and mint per-platform mobile keys before app R4.
+- [ ] Push live-fire test on a real handset once a build installs.
+- [ ] Older standing items: rotate admin/test-merchant/Cloudflare/origin
+      credentials; MsgOwl sender id; SPF/DKIM/DMARC; real BML bank file
+      format; category artwork ×9; backup audit for the OTHER databases on
+      this host (archive_mode is still off).
+
 
 ### Open decisions awaiting the owner
 1. **Category-terms resolution instant** (documented above §1): product-category

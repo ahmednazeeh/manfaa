@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "932894903426",
+    "project_id": "manfaa-6e1b4",
+    "storage_bucket": "manfaa-6e1b4.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:932894903426:android:ac9c4b19d959a85dfcf89b",
+        "android_client_info": {
+          "package_name": "mv.manfaa.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBhxd62YIEyOLUopyOst4p4EZ8Q-Ojjt1k"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -47,3 +47,9 @@ Schedule::command('sanctum:prune-expired --hours=24')->daily()->withoutOverlappi
 // factory-reset device's restarted key counter into permanently refused
 // sales. See PruneIdempotencyKeysCommand.
 Schedule::command('manfaa:prune-idempotency-keys')->dailyAt('03:40')->withoutOverlapping()->onOneServer();
+
+// OTP codes became the customer app's PRIMARY auth write table with R1's
+// passwordless sign-in, and OtpService never deletes a row. Seven days is
+// long past the 10-minute code and 15-minute signup-token windows. Same
+// unbounded-table pattern the M5 review fixed for idempotency_keys.
+Schedule::command('manfaa:prune-otp-codes')->dailyAt('03:50')->withoutOverlapping()->onOneServer();

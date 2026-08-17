@@ -1,0 +1,50 @@
+# Codemagic builds BOTH store artifacts — this Linux server deliberately has
+# no Android SDK and can never build iOS. Signing is configured in the
+# Codemagic dashboard (App Store Connect key, Play service account, and the
+# APNs .p8 upload into Firebase remains a separate, still-outstanding step —
+# without it iOS push registers fine and delivers nothing).
+#
+# BUILD_NUMBER feeds the API's version gate (GET /config minimum_build), so
+# it must increase monotonically per released build.
+
+workflows:
+  customer-android:
+    name: Customer app · Android
+    instance_type: linux_x2
+    working_directory: mobile/customer
+    environment:
+      flutter: stable
+    scripts:
+      - name: Analyze and test
+        script: |
+          flutter analyze
+          flutter test
+      - name: Build appbundle
+        script: |
+          flutter build appbundle \
+            --release \
+            --build-number=$PROJECT_BUILD_NUMBER \
+            --dart-define=BUILD_NUMBER=$PROJECT_BUILD_NUMBER
+    artifacts:
+      - build/**/outputs/bundle/**/*.aab
+
+  customer-ios:
+    name: Customer app · iOS
+    instance_type: mac_mini_m2
+    working_directory: mobile/customer
+    environment:
+      flutter: stable
+      xcode: latest
+    scripts:
+      - name: Analyze and test
+        script: |
+          flutter analyze
+          flutter test
+      - name: Build ipa
+        script: |
+          flutter build ipa \
+            --release \
+            --build-number=$PROJECT_BUILD_NUMBER \
+            --dart-define=BUILD_NUMBER=$PROJECT_BUILD_NUMBER
+    artifacts:
+      - build/ios/ipa/*.ipa

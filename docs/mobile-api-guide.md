@@ -50,6 +50,26 @@ tries to authenticate.
 
 ## 2. Signing in
 
+### Customer app — passwordless OTP (the real flow)
+
+One flow serves sign-in AND signup; the server decides which after the code
+proves phone possession. Never ask the user whether they have an account.
+
+1. `POST /customer/auth/otp/request` `{phone}` → `200 {data:{sent, expires_in_minutes}}`.
+   The answer is IDENTICAL for known and unknown numbers. Budget: 3/hour per
+   phone (shared with the website — don't burn it on retries; honour the 429).
+2. `POST /customer/auth/otp/verify` `{phone, code, device_name}` →
+   - existing account: `200 {data:{status:"signed_in", token, expires_at, customer}}` — store the token, done;
+   - unknown number: `200 {data:{status:"registration_required", signup_token, expires_in_minutes}}`.
+   Five wrong guesses kill the code (`otp_attempts_exceeded`); request a fresh one.
+3. `POST /customer/auth/register` `{signup_token, name, device_name}` →
+   `201` with the same signed-in shape.
+
+Accounts created this way are **passwordless** — they cannot use the
+website's password login until a web OTP flow ships. The app is their home.
+
+### Password endpoints (merchant app; legacy customer accounts)
+
 | | Customer | Merchant |
 |---|---|---|
 | `POST` | `/customer/auth/token` | `/merchant/auth/token` |
@@ -152,6 +172,11 @@ machine-readable value.
 | 422 | `merchant_not_active` / `future_dated` / `no_effective_rate` | Terminal. Show `message`; retyping cannot fix these. |
 | 422 | `backdated_confirmation_required` | See §7. Check the device clock before resending. |
 | 422 | `cursor_invalid` | Discard the cursor and restart the list from the top. |
+| 422 | `otp_invalid` | Wrong or expired code — let them retype or resend. |
+| 422 | `otp_attempts_exceeded` | The code is dead; only a fresh request helps. |
+| 422 | `signup_token_invalid` | Verification expired; restart from the phone step. |
+| 409 | `phone_already_registered` | Race only — route to sign-in. |
+| 403 | `account_unavailable` | The account exists but cannot sign in; show support contact. |
 | 422 | `validation_failed` | Show `meta.fields` against the form. |
 | 429 | `rate_limited` | Wait — see §6. |
 | 5xx | `server_error` | Retry with backoff. |
@@ -218,6 +243,23 @@ This is what lets an offline queue drain safely: a request that timed out
 second sale. `(merchant_id, invoice_no)` is still the final backstop and
 answers `409` — but a 409 tells you nothing about what happened the first
 time, which is why the key matters.
+
+### Payout account (the fresh-OTP gate)
+
+Reading the account (`GET /customer/payout-account`) and clearing it need
+only the token. **Changing** the bank the platform pays to is money-critical
+and demands a fresh code to the number on file — a stolen 365-day token must
+not be enough to redirect someone's cashback:
+
+1. `POST /customer/payout-account/otp` → sends a code (shared 3/hour budget).
+2. `PUT /customer/payout-account` `{bank_name, account_no, account_name,
+   otp_code}` → verifies the code, then saves. Wrong/expired code →
+   `422 otp_invalid`; five wrong → `422 otp_attempts_exceeded`. The code is
+   single-use, so a captured code cannot be replayed to change the account
+   again later.
+
+A change applies from the **next** payout batch (`change_effective:
+"next_batch"`); an in-flight batch pays the account it snapshotted.
 
 ### Clock
 

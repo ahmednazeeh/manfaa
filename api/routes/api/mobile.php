@@ -8,9 +8,12 @@ use App\Http\Controllers\Devices\MerchantDevicesController;
 use App\Http\Controllers\Devices\MerchantPushTokenController;
 use App\Http\Controllers\Mobile\ConfigController;
 use App\Http\Controllers\Mobile\CreditController;
+use App\Http\Controllers\Mobile\CustomerOtpController;
 use App\Http\Controllers\Mobile\CustomerTokenController;
 use App\Http\Controllers\Mobile\HomeController;
 use App\Http\Controllers\Mobile\MerchantTokenController;
+use App\Http\Controllers\Mobile\PayoutAccountController;
+use App\Http\Controllers\Mobile\PayoutsController;
 use App\Http\Controllers\Mobile\SessionController;
 use App\Http\Controllers\Mobile\TransactionsController;
 use App\Http\Middleware\IdempotencyMiddleware;
@@ -62,6 +65,22 @@ Route::prefix('mobile/v1')
         Route::post('customer/auth/token', [CustomerTokenController::class, 'store'])
             ->middleware('throttle:5,1,mobile-customer-signin');
 
+        /*
+         * Passwordless OTP sign-in/signup (R1) — the customer app's real
+         * flow; the password endpoint above remains for accounts that hold
+         * one. request carries its own dual limiter (3/h per phone + 10/h
+         * per IP, SHARED with the web signup so the SMS budget cannot be
+         * doubled by alternating surfaces); these route throttles are the
+         * coarse backstop. The OTP attempt cap itself lives in OtpService,
+         * inside a row lock.
+         */
+        Route::post('customer/auth/otp/request', [CustomerOtpController::class, 'request'])
+            ->middleware('throttle:30,1,mobile-otp-request');
+        Route::post('customer/auth/otp/verify', [CustomerOtpController::class, 'verify'])
+            ->middleware('throttle:10,1,mobile-otp-verify');
+        Route::post('customer/auth/register', [CustomerOtpController::class, 'register'])
+            ->middleware('throttle:10,1,mobile-otp-register');
+
         Route::post('merchant/auth/token', [MerchantTokenController::class, 'store'])
             ->middleware('throttle:5,1,mobile-merchant-signin');
 
@@ -84,6 +103,24 @@ Route::prefix('mobile/v1')
                 // Cursor-paged: this list grows at the TOP, and offset paging
                 // duplicates and skips rows while sales are landing.
                 Route::get('transactions', [TransactionsController::class, 'customer']);
+
+                // Payout history (R3): the money that reached the bank, and
+                // what each transfer covered. Same rules as the web —
+                // pending excluded, failed included, own rows only.
+                Route::get('payouts', [PayoutsController::class, 'index']);
+                Route::get('payouts/{id}', [PayoutsController::class, 'show'])->whereNumber('id');
+
+                // Payout account (R5). Reading and clearing move no money to a
+                // new destination and carry no gate; CHANGING the bank the
+                // platform pays to demands a fresh code to the number on file
+                // (the SIM-swap / stolen-token mitigation). The otp request
+                // carries its own shared SMS budget; the route throttle is a
+                // coarse backstop.
+                Route::get('payout-account', [PayoutAccountController::class, 'show']);
+                Route::post('payout-account/otp', [PayoutAccountController::class, 'requestOtp'])
+                    ->middleware('throttle:10,1,mobile-payout-otp');
+                Route::put('payout-account', [PayoutAccountController::class, 'update'])
+                    ->middleware('throttle:10,1,mobile-payout-update');
 
                 // Also mounted on the WEBSITE (routes/api/customer.php). See the
                 // DevicesController docblock: a device list reachable only from a

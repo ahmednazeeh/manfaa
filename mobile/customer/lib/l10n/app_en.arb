@@ -1,0 +1,255 @@
+{
+  "@@locale": "en",
+  "appTitle": "Manfaa",
+  "tabHome": "Home",
+  "tabDiscover": "Discover",
+  "tabActivity": "Activity",
+  "tabProfile": "Profile",
+  "signInTitle": "Sign in",
+  "signInSubtitle": "Earn cashback at stores across the Maldives.",
+  "phoneLabel": "Phone number",
+  "phoneHint": "7XXXXXX",
+  "continueLabel": "Continue",
+  "homeGreeting": "Hi {name}",
+  "@homeGreeting": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "yourCode": "Your Manfaa code",
+  "showAtTill": "Show this at the till to earn cashback.",
+  "tapForFullscreen": "Tap for fullscreen",
+  "availableCashback": "Available cashback",
+  "confirmedHint": "Confirmed and ready for your next payout.",
+  "pendingLine": "{amount} pending — becomes available once the store confirms.",
+  "@pendingLine": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "nextPayout": "Next payout",
+  "minimumPayoutNote": "Payouts start at {amount}. Anything below carries over.",
+  "@minimumPayoutNote": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "paidThisMonth": "Paid this month",
+  "addPayoutAccountTitle": "Add your bank account",
+  "addPayoutAccountBody": "Tell us where to send your cashback — payouts need a bank account.",
+  "startEarningTitle": "Start earning",
+  "startEarningBody": "Show your code at any Manfaa store and the cashback lands here.",
+  "offlineCodeBanner": "You're offline — your code still works at the till.",
+  "qrTitle": "Your code",
+  "qrHint": "Let the cashier scan this, or read them the number.",
+  "comingSoonTitle": "On its way",
+  "discoverComingBody": "Nearby stores, boosted rates and featured offers land here soon.",
+  "activityComingBody": "Everything you've earned and every payout will live here.",
+  "profileLanguage": "Language",
+  "languageEnglish": "English",
+  "languageDhivehi": "ދިވެހި",
+  "profileDevices": "Signed-in devices",
+  "signOut": "Sign out",
+  "signOutConfirmTitle": "Sign out?",
+  "signOutConfirmBody": "Your code and balance stay safe — sign back in any time.",
+  "cancel": "Cancel",
+  "updateRequiredTitle": "Update needed",
+  "updateRequiredBody": "This version of Manfaa can no longer be used. Please update from the store to continue.",
+  "errorGeneric": "Something went wrong. Please try again.",
+  "retry": "Try again",
+  "codeTitle": "Enter the code",
+  "codeSentTo": "We sent a 6-digit code to {phone}.",
+  "@codeSentTo": {
+    "placeholders": {
+      "phone": {
+        "type": "String"
+      }
+    }
+  },
+  "verifyLabel": "Verify",
+  "resendCode": "Resend code",
+  "resendCountdown": "Resend in {seconds}s",
+  "@resendCountdown": {
+    "placeholders": {
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
+  "back": "Back",
+  "nameTitle": "What should we call you?",
+  "nameSubtitle": "Your name is shown to cashiers so they can confirm it's you.",
+  "nameLabel": "Your name",
+  "finishLabel": "Create my account",
+  "errOtpInvalid": "That code isn't right or has expired. Check it, or request a fresh one.",
+  "errOtpAttempts": "Too many wrong codes. Request a fresh one and try again.",
+  "errSignupExpired": "That verification expired. Start again with your phone number.",
+  "errAccountUnavailable": "This account can't be signed in right now. Contact Manfaa support.",
+  "errTooManyTries": "Too many attempts. Please wait a moment and try again.",
+  "browseStores": "Browse stores",
+  "segmentEarned": "Earned",
+  "segmentPaidOut": "Paid out",
+  "emptyEarnedTitle": "Nothing here yet",
+  "emptyEarnedBody": "Shop at a Manfaa store and show your code at the till.",
+  "emptyPaidTitle": "No payouts yet",
+  "emptyPaidBody": "Confirmed cashback is paid to your bank every month. Your first payout will appear here once it's sent.",
+  "statusPending": "Pending",
+  "statusConfirmed": "Confirmed",
+  "statusPaid": "Paid",
+  "statusReversed": "Reversed",
+  "statusUnpaid": "Unpaid",
+  "reasonValidationWindow": "You'll earn this once {merchant} confirms.",
+  "@reasonValidationWindow": {
+    "placeholders": {
+      "merchant": {
+        "type": "String"
+      }
+    }
+  },
+  "reasonSettlementWindow": "Waiting for {merchant} to settle — then it's yours.",
+  "@reasonSettlementWindow": {
+    "placeholders": {
+      "merchant": {
+        "type": "String"
+      }
+    }
+  },
+  "reasonUnderReview": "Being checked by Manfaa.",
+  "reasonNotSettled": "The store didn't settle this, so it can't be paid.",
+  "reasonRefund": "Refunded at the store.",
+  "reasonBelowMinimum": "Below the store's minimum for cashback.",
+  "reasonReversed": "Reversed.",
+  "payoutPaid": "Paid",
+  "payoutSent": "On its way",
+  "payoutFailed": "Failed",
+  "payoutPeriod": "Earned {from} – {to}",
+  "@payoutPeriod": {
+    "placeholders": {
+      "from": {
+        "type": "String"
+      },
+      "to": {
+        "type": "String"
+      }
+    }
+  },
+  "payoutFailedNote": "The transfer didn't go through — this cashback returns to your balance.",
+  "payoutDetailTitle": "Payout",
+  "payoutPeriodLabel": "Earning period",
+  "payoutReferenceLabel": "Bank reference",
+  "payoutAccountLabel": "Paid to",
+  "payoutPaidAtLabel": "Paid on",
+  "payoutFailedDetail": "The bank couldn't complete this transfer, so the cashback has gone back to your balance and will be included in a later payout. Check your payout account details are correct.",
+  "payoutCovered": "{count, plural, =1{1 purchase in this payout} other{{count} purchases in this payout}}",
+  "@payoutCovered": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "shelfBoosted": "Boosted right now",
+  "shelfFeatured": "Featured",
+  "shelfNearby": "Near you",
+  "shelfNew": "New on Manfaa",
+  "shelfInStore": "In store",
+  "shelfOnline": "Online",
+  "ratePercent": "{rate}%",
+  "@ratePercent": {
+    "placeholders": {
+      "rate": {
+        "type": "String"
+      }
+    }
+  },
+  "ratePercentCashback": "{rate}% cashback",
+  "@ratePercentCashback": {
+    "placeholders": {
+      "rate": {
+        "type": "String"
+      }
+    }
+  },
+  "usuallyRate": "usually {rate}%",
+  "@usuallyRate": {
+    "placeholders": {
+      "rate": {
+        "type": "String"
+      }
+    }
+  },
+  "promoUntil": "Boosted rate until {date}",
+  "@promoUntil": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "channelInStore": "In store",
+  "channelOnline": "Online",
+  "channelBoth": "In store & online",
+  "storeEligibility": "What earns cashback",
+  "storeRates": "Rates",
+  "storeNoCashback": "No cashback",
+  "storeBranches": "Branches",
+  "storeContact": "Contact",
+  "searchTitle": "Search stores",
+  "searchHint": "Store name…",
+  "searchPrompt": "Type at least two letters to search.",
+  "searchEmpty": "No stores match.",
+  "profileDevicesBody": "See every phone signed in, and cut off any you don't recognise.",
+  "devicesIntro": "These devices can see your balance and code. Cut off any you don't recognise — or lost.",
+  "deviceThisOne": "This phone",
+  "deviceLastUsed": "Last used {date}",
+  "@deviceLastUsed": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "deviceSignedIn": "Signed in {date}",
+  "@deviceSignedIn": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "deviceRevokeTitle": "Sign out {name}?",
+  "@deviceRevokeTitle": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "deviceRevokeBody": "That phone will need to sign in again to see anything.",
+  "deviceRevokeCurrentBody": "This is the phone you're holding — you'll be signed out right now.",
+  "deviceRevokeAction": "Sign out device",
+  "deviceRevokeAllTitle": "Sign out everywhere?",
+  "deviceRevokeAllBody": "Every device — including this one — is signed out. Use this if a phone was lost or stolen.",
+  "deviceRevokeAllAction": "Sign out everywhere",
+  "errPhoneRegistered": "This number already has an account. Sign in with a new code.",
+  "payoutAccountTitle": "Payout account",
+  "payoutAccountTileBody": "The bank account your cashback is sent to.",
+  "payoutAccountIntro": "Your cashback is paid to this account. Changing it needs a code sent to your phone.",
+  "payoutBankLabel": "Bank",
+  "payoutAccountNoLabel": "Account number",
+  "payoutAccountNameLabel": "Account holder name",
+  "payoutSendCode": "Send confirmation code",
+  "payoutOtpSent": "Enter the code we sent to your phone to confirm this change.",
+  "payoutSaveAction": "Save account",
+  "payoutAccountSaved": "Payout account updated.",
+  "payoutChangeEffective": "A change applies from your next payout.",
+  "notificationsTitle": "Notifications",
+  "notificationsBody": "Get told when you earn cashback and when you're paid.",
+  "a11yShowQr": "Show your Manfaa code fullscreen"
+}
