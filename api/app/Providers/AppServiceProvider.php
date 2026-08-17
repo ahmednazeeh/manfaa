@@ -101,6 +101,21 @@ class AppServiceProvider extends ServiceProvider
             );
         });
 
+        // The mobile setup wizard's POST routes (logo, submit) — the web
+        // mounts these at throttle:20,1 behind a session; on the mobile tree
+        // the inline form would key on the bare numeric id and collide
+        // across audiences exactly as described above, so the same named
+        // class-discriminated key at the same 20/min.
+        RateLimiter::for('mobile-setup-writes', function (Request $request): Limit {
+            $user = $request->user();
+
+            return Limit::perMinute(20)->by(
+                $user instanceof Authenticatable
+                    ? $user::class.':'.$user->getAuthIdentifier()
+                    : 'ip:'.$request->ip(),
+            );
+        });
+
         RateLimiter::for('discovery', function (Request $request): Limit {
             $token = (string) config('services.discovery.internal_token');
 

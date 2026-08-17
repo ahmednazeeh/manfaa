@@ -1,3 +1,7 @@
+import 'dart:typed_data';
+
+import 'package:dio/dio.dart';
+
 import 'api_base.dart';
 import 'merchant_models.dart';
 import 'models.dart';
@@ -37,6 +41,17 @@ class MerchantApi extends ManfaaApiBase<MerchantSession> {
       ),
     );
 
+    await _saveAuthPayload(data);
+  }
+
+  /// The one parser for the token-minting answers — sign-in and signup
+  /// register share the EXACT response shape, so they share this. The
+  /// payload never carries the merchant's status; [statusOverride] lets
+  /// register write the status its contract guarantees.
+  Future<void> _saveAuthPayload(
+    Map<String, dynamic>? data, {
+    String? statusOverride,
+  }) async {
     final payload = (data?['data'] as Map?)?.cast<String, dynamic>() ?? {};
     final user = MerchantUserInfo.fromJson(
       (payload['user'] as Map?)?.cast<String, dynamic>() ?? {},
@@ -52,13 +67,166 @@ class MerchantApi extends ManfaaApiBase<MerchantSession> {
       merchantId: merchant.id == 0 ? null : merchant.id,
       merchantName: merchant.name,
       merchantSlug: merchant.slug,
-      merchantStatus: merchant.status,
+      merchantStatus: merchant.status ?? statusOverride,
       permissions: [
         for (final slug in (payload['permissions'] as List? ?? const []))
           slug.toString(),
       ],
     );
   }
+
+  // ------------------------------------------------------------- signup
+
+  /// Ask for a signup code. Enumeration-safe server-side: the answer is
+  /// identical for known and unknown phones. The SMS budget is 3/hour per
+  /// phone (SHARED with the web signup) — a 429 here still leaves an
+  /// earlier code redeemable for its 10-minute life.
+  Future<void> requestSignupOtp(String phone) async => run(
+        () => dio.post<void>('/merchant/signup/request-otp', data: {
+          'phone': phone,
+        }),
+      );
+
+  /// Redeem the code for a signup token (15-minute life, single use).
+  /// Refusals: `otp_invalid` (retype or resend), `otp_attempts_exceeded`
+  /// (five wrong guesses killed the code — request a fresh one).
+  Future<String> verifySignupOtp({
+    required String phone,
+    required String code,
+  }) async {
+    final data = await run(
+      () => dio.post<Map<String, dynamic>>('/merchant/signup/verify-otp',
+          data: {'phone': phone, 'code': code}),
+    );
+
+    return ((data?['data'] as Map?)?['signup_token'])?.toString() ?? '';
+  }
+
+  /// Finish signup — the mobile difference from the web: this mints a
+  /// normal 90-day merchant token instead of a session, and the answer is
+  /// the EXACT sign-in shape, so the app is signed in the moment it lands.
+  /// The merchant is created `draft`, which the payload does not carry —
+  /// saved here so the router walks straight into the wizard, and
+  /// /merchant/me refreshes it as usual afterwards.
+  ///
+  /// Refusals: `signup_token_invalid` (expired/consumed — restart from the
+  /// phone step), `email_already_registered` (route to sign-in; only sent
+  /// after the OTP proved phone possession).
+  Future<void> registerMerchant({
+    required String signupToken,
+    required String businessName,
+    String? businessNameDv,
+    required String email,
+    required String password,
+    required String deviceName,
+  }) async {
+    final data = await run(
+      () => dio.post<Map<String, dynamic>>('/merchant/signup/register', data: {
+        'signup_token': signupToken,
+        'business_name': businessName,
+        'business_name_dv': ?businessNameDv,
+        'email': email,
+        'password': password,
+        'device_name': deviceName,
+      }),
+    );
+
+    await _saveAuthPayload(data, statusOverride: 'draft');
+  }
+
+  // ------------------------------------------------------- setup wizard
+
+  MerchantSetupState _setupState(Map<String, dynamic>? data) =>
+      MerchantSetupState.fromJson(
+        (data?['data'] as Map?)?.cast<String, dynamic>() ?? {},
+      );
+
+  /// The whole resumable wizard state — readable in EVERY status (the
+  /// waiting and rejected screens render from it too). Gate: `setup.view`.
+  Future<MerchantSetupState> getSetup() async =>
+      MerchantSetupState.fromJson(await getJson('/merchant/setup'));
+
+  /// The profile step's save: category + channel + contacts, all keys sent
+  /// every time (an explicit null CLEARS server-side — that is how "same as
+  /// contact" stores the support phone). Gate: `setup.edit`; refused with
+  /// `setup_not_editable` outside draft|rejected. Answers the full state.
+  Future<MerchantSetupState> saveSetupProfile({
+    required String category,
+    required String channel,
+    String? contactEmail,
+    String? contactPhone,
+    String? supportPhone,
+    String? websiteUrl,
+  }) async =>
+      _setupState(await run(
+        () => dio.patch<Map<String, dynamic>>('/merchant/setup/profile', data: {
+          'category': category,
+          'channel': channel,
+          'contact_email': contactEmail,
+          'contact_phone': contactPhone,
+          'support_phone': supportPhone,
+          'website_url': websiteUrl,
+        }),
+      ));
+
+  /// The terms step — same endpoint as the profile, ONLY the eligibility
+  /// text: absent keys are untouched, so the two steps never clobber each
+  /// other's fields.
+  Future<MerchantSetupState> saveSetupTerms(String eligibilityBasis) async =>
+      _setupState(await run(
+        () => dio.patch<Map<String, dynamic>>('/merchant/setup/profile', data: {
+          'eligibility_basis': eligibilityBasis,
+        }),
+      ));
+
+  /// Pin (or move) the primary branch. Creates it named after the store on
+  /// the first pin.
+  Future<MerchantSetupState> saveSetupLocation({
+    required double lat,
+    required double lng,
+  }) async =>
+      _setupState(await run(
+        () => dio.patch<Map<String, dynamic>>('/merchant/setup/location',
+            data: {'lat': lat, 'lng': lng}),
+      ));
+
+  /// Save the advertised cashback rate as the exact percent STRING typed
+  /// (§11 — never a float). Refusals: `validation_failed` (shape/bounds),
+  /// `rate_not_priced` (above the live tier ceiling).
+  Future<MerchantSetupState> saveSetupRate(String percent) async =>
+      _setupState(await run(
+        () => dio.patch<Map<String, dynamic>>('/merchant/setup/rate', data: {
+          'cashback_rate_percent': percent,
+        }),
+      ));
+
+  /// Upload the store logo (multipart field `logo`; jpg/png/webp, ≤2048 KB,
+  /// 64..4096 px). Gate: `branding.update`. Answers the new versioned URL.
+  /// `logo_write_failed` (503) is a storage hiccup — retryable as-is.
+  Future<String?> uploadSetupLogo({
+    required Uint8List bytes,
+    required String filename,
+  }) async {
+    final data = await run(
+      () => dio.post<Map<String, dynamic>>(
+        '/merchant/setup/logo',
+        data: FormData.fromMap({
+          'logo': MultipartFile.fromBytes(bytes, filename: filename),
+        }),
+      ),
+    );
+
+    return (data?['data'] as Map?)?['logo_url'] as String?;
+  }
+
+  /// Submit for review. Success answers the full state with
+  /// `status: pending_review`; `setup_incomplete` (422) carries the unmet
+  /// keys in `meta.missing`. Gate: `setup.submit`.
+  Future<MerchantSetupState> submitSetup() async => _setupState(
+        await run(
+          () => dio.post<Map<String, dynamic>>('/merchant/setup/submit'),
+        ),
+      );
 
   /// Sign out THIS device. The local wipe happens regardless of whether
   /// the server call lands — a till with no signal must still be able to

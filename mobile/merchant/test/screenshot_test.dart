@@ -32,20 +32,80 @@ const _permissions = [
   'credits.create',
   'credits.custom_rate',
   'transactions.view',
+  // The owner's setup estate (MR1) — the wizard shots need the gates.
+  'setup.view',
+  'setup.edit',
+  'setup.submit',
+  'branding.update',
 ];
 
+/// A believable wizard state per shot: fresh (the profile step), complete
+/// (the review step), pending (the waiting screen).
+Map<String, dynamic> _setupFixture({
+  required String status,
+  bool complete = false,
+  String? submittedAt,
+}) =>
+    {
+      'status': status,
+      'steps': {
+        'profile': complete,
+        'location': complete,
+        'logo': false,
+        'rate': complete,
+      },
+      'values': {
+        'name': 'Tropical Mart',
+        'slug': 'tropical-mart',
+        'category': complete ? 'grocery' : null,
+        'channel': 'in_store',
+        'eligibility_basis': complete
+            ? 'Everything in store except tobacco, phone top-ups and gift cards.'
+            : null,
+        'contact_email': complete ? 'hello@tropicalmart.mv' : null,
+        'contact_phone': complete ? '+9607781234' : null,
+        'support_phone': null,
+        'website_url': null,
+        'primary_branch': complete
+            ? {
+                'id': 3,
+                'name': 'Tropical Mart',
+                'address': 'Majeedhee Magu, Malé',
+                'lat': 4.1755354,
+                'lng': 73.5093474,
+              }
+            : null,
+        'logo_url': null,
+        'cashback_rate_percent': complete ? '2.00' : null,
+      },
+      'rate_bounds': {'min_percent': '0.50', 'max_percent': '10.00'},
+      'categories': [
+        {'slug': 'grocery', 'name_en': 'Grocery / Supermarket', 'name_dv': 'ފިހާރަ'},
+        {'slug': 'dining', 'name_en': 'Dining & Cafés', 'name_dv': 'ކެފޭ'},
+        {'slug': 'fashion', 'name_en': 'Fashion', 'name_dv': null},
+        {'slug': 'electronics', 'name_en': 'Electronics', 'name_dv': null},
+        {'slug': 'health', 'name_en': 'Health & Beauty', 'name_dv': null},
+        {'slug': 'services', 'name_en': 'Services', 'name_dv': null},
+      ],
+      'submitted_at': submittedAt,
+      'rejected_reason': null,
+    };
+
 class _ShotApi extends MerchantApi {
-  _ShotApi({required super.session});
+  _ShotApi({required super.session, this.status = 'active', this.setup});
+
+  final String status;
+  final Map<String, dynamic>? setup;
 
   @override
   Future<MerchantMe> me() async {
-    final me = MerchantMe.fromJson(const {
+    final me = MerchantMe.fromJson({
       'user': {'id': 1, 'name': 'Aminath Waheedha', 'email': 'a@tropical.mv'},
       'merchant': {
         'id': 7,
         'name': 'Tropical Mart',
         'slug': 'tropical-mart',
-        'status': 'active',
+        'status': status,
       },
       'permissions': _permissions,
     });
@@ -111,13 +171,40 @@ class _ShotApi extends MerchantApi {
         },
         'open_settlement': null,
       });
+
+  @override
+  Future<MerchantSetupState> getSetup() async =>
+      MerchantSetupState.fromJson(setup ?? _setupFixture(status: status));
+
+  @override
+  Future<void> requestSignupOtp(String phone) async {}
+
+  @override
+  Future<String> verifySignupOtp({
+    required String phone,
+    required String code,
+  }) async =>
+      'shot-signup-token';
+
+  @override
+  Future<void> registerMerchant({
+    required String signupToken,
+    required String businessName,
+    String? businessNameDv,
+    required String email,
+    required String password,
+    required String deviceName,
+  }) async {}
 }
 
 void main() {
   setUpAll(_loadFonts);
 
   Future<void> shot(WidgetTester tester, String name, Brightness b,
-      {bool signedOut = false}) async {
+      {bool signedOut = false,
+      String status = 'active',
+      Map<String, dynamic>? setup,
+      Future<void> Function(WidgetTester tester)? drive}) async {
     await tester.binding.setSurfaceSize(const Size(390, 844));
     tester.view.devicePixelRatio = 3.0;
     tester.view.physicalSize = const Size(390 * 3, 844 * 3);
@@ -137,7 +224,7 @@ void main() {
         merchantId: 7,
         merchantName: 'Tropical Mart',
         merchantSlug: 'tropical-mart',
-        merchantStatus: 'active',
+        merchantStatus: status,
         permissions: _permissions,
       );
     }
@@ -146,7 +233,8 @@ void main() {
       overrides: [
         secretStoreProvider.overrideWithValue(store),
         sessionProvider.overrideWithValue(session),
-        apiProvider.overrideWith((ref) => _ShotApi(session: session)),
+        apiProvider.overrideWith(
+            (ref) => _ShotApi(session: session, status: status, setup: setup)),
         configProvider.overrideWith((ref) async => MobileConfig.fromJson(const {
               'apps': {
                 'merchant': {
@@ -167,10 +255,30 @@ void main() {
       await tester.pump(const Duration(milliseconds: 120));
     }
 
+    if (drive != null) {
+      await drive(tester);
+    }
+
     await expectLater(
       find.byType(MerchantApp),
       matchesGoldenFile('shots/$name.png'),
     );
+  }
+
+  /// Walk the signup flow to the DETAILS step (business name, Thaana name,
+  /// email, password) — the screen the golden captures.
+  Future<void> driveToSignupDetails(WidgetTester tester) async {
+    await tester.scrollUntilVisible(find.text('Register your store'), 120,
+        scrollable: find.byType(Scrollable).first);
+    await tester.tap(find.text('Register your store'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), '7781234');
+    await tester.tap(find.text('Continue'));
+    await tester.pump(const Duration(milliseconds: 60));
+    await tester.enterText(find.byType(TextField), '123456');
+    await tester.tap(find.text('Verify'));
+    await tester.pump(const Duration(milliseconds: 60));
+    await tester.pump(const Duration(milliseconds: 60));
   }
 
   testWidgets('login light',
@@ -179,4 +287,31 @@ void main() {
       (t) => shot(t, 'login_dark', Brightness.dark, signedOut: true));
   testWidgets('shell light', (t) => shot(t, 'shell_light', Brightness.light));
   testWidgets('shell dark', (t) => shot(t, 'shell_dark', Brightness.dark));
+
+  // ---- MR1: signup + wizard + status --------------------------------------
+  testWidgets(
+      'signup details light',
+      (t) => shot(t, 'signup_details', Brightness.light,
+          signedOut: true, drive: driveToSignupDetails));
+  testWidgets(
+      'wizard profile light',
+      (t) => shot(t, 'wizard_profile_light', Brightness.light,
+          status: 'draft', setup: _setupFixture(status: 'draft')));
+  testWidgets(
+      'wizard profile dark',
+      (t) => shot(t, 'wizard_profile_dark', Brightness.dark,
+          status: 'draft', setup: _setupFixture(status: 'draft')));
+  testWidgets(
+      'wizard review light',
+      (t) => shot(t, 'wizard_review', Brightness.light,
+          status: 'draft',
+          setup: _setupFixture(status: 'draft', complete: true)));
+  testWidgets(
+      'status pending light',
+      (t) => shot(t, 'status_pending', Brightness.light,
+          status: 'pending_review',
+          setup: _setupFixture(
+              status: 'pending_review',
+              complete: true,
+              submittedAt: '2026-08-17T09:41:00Z')));
 }

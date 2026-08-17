@@ -7,11 +7,13 @@ use App\Http\Controllers\Devices\CustomerDevicesController;
 use App\Http\Controllers\Devices\CustomerPushTokenController;
 use App\Http\Controllers\Devices\MerchantDevicesController;
 use App\Http\Controllers\Devices\MerchantPushTokenController;
+use App\Http\Controllers\Merchant\SetupController;
 use App\Http\Controllers\Mobile\ConfigController;
 use App\Http\Controllers\Mobile\CreditController;
 use App\Http\Controllers\Mobile\CustomerOtpController;
 use App\Http\Controllers\Mobile\CustomerTokenController;
 use App\Http\Controllers\Mobile\HomeController;
+use App\Http\Controllers\Mobile\MerchantSignupController;
 use App\Http\Controllers\Mobile\MerchantTokenController;
 use App\Http\Controllers\Mobile\PayoutAccountController;
 use App\Http\Controllers\Mobile\PayoutsController;
@@ -84,6 +86,24 @@ Route::prefix('mobile/v1')
 
         Route::post('merchant/auth/token', [MerchantTokenController::class, 'store'])
             ->middleware('throttle:5,1,mobile-merchant-signin');
+
+        /*
+         * Store self-signup from the app (merchant app MR1) — the web
+         * signup flow (routes/api/merchant-signup.php) on the mobile
+         * surface: PUBLIC by definition, same MerchantOtpService, same
+         * shared SMS budget (MerchantOtpRequestLimiter inside the
+         * controller); these route throttles are the coarse backstop at the
+         * web flow's numbers. register mints a merchant token instead of a
+         * session — the app lands signed in as the draft store's owner.
+         */
+        Route::prefix('merchant/signup')->group(function (): void {
+            Route::post('request-otp', [MerchantSignupController::class, 'requestOtp'])
+                ->middleware('throttle:30,1,mobile-merchant-otp-request');
+            Route::post('verify-otp', [MerchantSignupController::class, 'verifyOtp'])
+                ->middleware('throttle:10,1,mobile-merchant-otp-verify');
+            Route::post('register', [MerchantSignupController::class, 'register'])
+                ->middleware('throttle:10,1,mobile-merchant-otp-register');
+        });
 
         /*
          * Customer app.
@@ -205,5 +225,37 @@ Route::prefix('mobile/v1')
 
                 Route::put('push-token', [MerchantPushTokenController::class, 'update']);
                 Route::delete('push-token', [MerchantPushTokenController::class, 'destroy']);
+
+                /*
+                 * The setup wizard (merchant app MR1) — the EXACT web routes
+                 * (routes/api/merchant-signup.php), same SetupController,
+                 * same permission gates: EnsureMobileToken has set the
+                 * merchant guard user, so merchant.can:* and the domain
+                 * layer's draft/rejected write gate (409 setup_not_editable,
+                 * enveloped) behave as on web. Payload shapes are the web's,
+                 * unchanged — the wizard state object with categories,
+                 * rate_bounds, missing[] and the rest.
+                 *
+                 * The write throttles are NAMED (mobile-setup-writes), not
+                 * inline `throttle:20,1` — see the credits route above for
+                 * the cross-audience id-collision the inline form invites.
+                 */
+                Route::get('setup', [SetupController::class, 'show'])
+                    ->middleware('merchant.can:setup.view');
+
+                Route::patch('setup/profile', [SetupController::class, 'updateProfile'])
+                    ->middleware('merchant.can:setup.edit');
+
+                Route::patch('setup/location', [SetupController::class, 'updateLocation'])
+                    ->middleware('merchant.can:setup.edit');
+
+                Route::post('setup/logo', [SetupController::class, 'storeLogo'])
+                    ->middleware(['merchant.can:branding.update', 'throttle:mobile-setup-writes']);
+
+                Route::patch('setup/rate', [SetupController::class, 'updateRate'])
+                    ->middleware('merchant.can:setup.edit');
+
+                Route::post('setup/submit', [SetupController::class, 'submit'])
+                    ->middleware(['merchant.can:setup.submit', 'throttle:mobile-setup-writes']);
             });
     });

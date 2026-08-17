@@ -43,6 +43,26 @@ abstract final class ApiCode {
   static const idempotencyKeyRequired = 'idempotency_key_required';
   static const idempotencyKeyReuseMismatch = 'idempotency_key_reuse_mismatch';
   static const idempotencyKeyInFlight = 'idempotency_key_in_flight';
+
+  // -------------------------------------------------- signup + setup wizard
+  // The merchant onboarding path (mobile signup/setup mounting, MR1).
+  static const otpInvalid = 'otp_invalid';
+  static const otpAttemptsExceeded = 'otp_attempts_exceeded';
+  static const signupTokenInvalid = 'signup_token_invalid';
+
+  /// Only ever sent AFTER the OTP proved possession of the phone — safe to
+  /// route to sign-in without leaking who is registered to strangers.
+  static const emailAlreadyRegistered = 'email_already_registered';
+
+  /// 409 — the wizard writes are refused unless status is draft|rejected.
+  static const setupNotEditable = 'setup_not_editable';
+
+  /// 422 on submit — `meta.missing` lists the requirement keys
+  /// (category|channel|rate|terms) still unmet; see [MobileApiException.missingRequirements].
+  static const setupIncomplete = 'setup_incomplete';
+
+  /// 503 on the logo upload — storage hiccup, retryable as-is.
+  static const logoWriteFailed = 'logo_write_failed';
 }
 
 class MobileApiException implements Exception {
@@ -105,6 +125,14 @@ class MobileApiException implements Exception {
         final int s => s,
         final String s => int.tryParse(s),
         _ => null,
+      };
+
+  /// `setup_incomplete` carries the unmet requirement keys under
+  /// `meta.missing` (category|channel|rate|terms) — the review step turns
+  /// each into a fix-this jump-back.
+  List<String> get missingRequirements => switch (meta['missing']) {
+        final List keys => [for (final key in keys) key.toString()],
+        _ => const [],
       };
 
   static String _codeFor(int? status) => switch (status) {

@@ -171,6 +171,54 @@ const _creditFixture = {
   },
 };
 
+/// The exact GET /merchant/setup shape (the wizard's whole state).
+const _setupFixture = {
+  'data': {
+    'status': 'draft',
+    'steps': {'profile': true, 'location': true, 'logo': false, 'rate': true},
+    'values': {
+      'name': 'Fresh Mart',
+      'slug': 'fresh-mart',
+      'category': 'grocery',
+      'channel': 'in_store',
+      'eligibility_basis': 'All items except tobacco.',
+      'contact_email': 'owner@freshmart.mv',
+      'contact_phone': '+9607712345',
+      'support_phone': null,
+      'website_url': null,
+      'primary_branch': {
+        'id': 12,
+        'name': 'Fresh Mart',
+        'address': null,
+        'lat': 4.1755354,
+        'lng': 73.5093474,
+      },
+      'logo_url': null,
+      'cashback_rate_percent': '2.00',
+    },
+    'rate_bounds': {'min_percent': '0.50', 'max_percent': '10.00'},
+    'categories': [
+      {'slug': 'grocery', 'name_en': 'Grocery / Supermarket', 'name_dv': 'ފިހާރަ'},
+      {'slug': 'dining', 'name_en': 'Dining', 'name_dv': null},
+    ],
+    'submitted_at': null,
+    'rejected_reason': null,
+  },
+};
+
+/// The register answer — the EXACT sign-in shape (one parser server-side
+/// and client-side), minus any merchant status.
+const _registerFixture = {
+  'data': {
+    'token': '17|zzz',
+    'expires_at': '2026-11-15T09:41:00Z',
+    'device_name': "Owner's phone",
+    'user': {'id': 9, 'name': 'Fresh Mart', 'email': 'owner@freshmart.mv'},
+    'merchant': {'id': 5, 'name': 'Fresh Mart', 'slug': 'fresh-mart'},
+    'permissions': ['setup.view', 'setup.edit', 'setup.submit', 'branding.update'],
+  },
+};
+
 MerchantApi _api(_RecordingAdapter adapter, {MerchantSession? session}) {
   final api = MerchantApi(session: session ?? MerchantSession(MemorySecretStore()));
   api.dio.httpClientAdapter = adapter;
@@ -491,6 +539,200 @@ void main() {
 
       expect(home.today.creditCount, 12);
       expect(home.outstanding?.total.payableLaari, 367232);
+    });
+
+    test('signup: request/verify speak the wire shapes', () async {
+      final adapter = _RecordingAdapter((options) => switch (options.path) {
+            '/merchant/signup/request-otp' => _json(
+                {'data': {'sent': true, 'expires_in_minutes': 10}}, 200),
+            _ => _json(
+                {'data': {'signup_token': 'st-48chars', 'expires_in_minutes': 15}},
+                200),
+          });
+      final api = _api(adapter);
+
+      await api.requestSignupOtp('+9607712345');
+      final token = await api.verifySignupOtp(
+        phone: '+9607712345',
+        code: '123456',
+      );
+
+      expect(token, 'st-48chars');
+      expect(adapter.requests.first.data, {'phone': '+9607712345'});
+      expect(adapter.requests.last.data, {
+        'phone': '+9607712345',
+        'code': '123456',
+      });
+      // Public routes: no Authorization header goes out.
+      expect(adapter.requests.first.headers['Authorization'], isNull);
+    });
+
+    test('registerMerchant persists a USABLE session, status draft', () async {
+      final adapter = _RecordingAdapter((options) =>
+          options.path == '/merchant/signup/register'
+              ? _json(_registerFixture, 201)
+              : _json(_setupFixture, 200));
+      final session = MerchantSession(MemorySecretStore());
+      await session.init();
+      final api = _api(adapter, session: session);
+
+      await api.registerMerchant(
+        signupToken: 'st-48chars',
+        businessName: 'Fresh Mart',
+        email: 'owner@freshmart.mv',
+        password: 'hunter22',
+        deviceName: "Owner's phone",
+      );
+
+      final body = adapter.requests.first.data as Map;
+      expect(body['signup_token'], 'st-48chars');
+      expect(body['business_name'], 'Fresh Mart');
+      // Omitted, never null-sent, when the owner skipped the Thaana name.
+      expect(body.containsKey('business_name_dv'), isFalse);
+
+      expect(session.signedIn, isTrue);
+      expect(session.merchantName, 'Fresh Mart');
+      // The payload has no status; the register contract guarantees draft —
+      // this is what routes the fresh account straight into the wizard.
+      expect(session.merchantStatus, 'draft');
+      expect(session.can('setup.submit'), isTrue);
+
+      // And the minted token authenticates the very next call.
+      await api.getSetup();
+      expect(adapter.requests.last.headers['Authorization'], 'Bearer 17|zzz');
+    });
+
+    test('the Thaana name is sent when given', () async {
+      final adapter = _RecordingAdapter((_) => _json(_registerFixture, 201));
+      final api = _api(adapter);
+
+      await api.registerMerchant(
+        signupToken: 'st',
+        businessName: 'Fresh Mart',
+        businessNameDv: 'ފްރެޝް މާޓް',
+        email: 'owner@freshmart.mv',
+        password: 'hunter22',
+        deviceName: 'd',
+      );
+
+      expect((adapter.requests.single.data as Map)['business_name_dv'],
+          'ފްރެޝް މާޓް');
+    });
+
+    test('MerchantSetupState parses the exact wizard shape', () async {
+      final adapter = _RecordingAdapter((_) => _json(_setupFixture, 200));
+      final api = _api(adapter);
+
+      final state = await api.getSetup();
+
+      expect(state.status, 'draft');
+      expect(state.editable, isTrue);
+      expect(state.steps.profile, isTrue);
+      expect(state.steps.logo, isFalse);
+      expect(state.values.name, 'Fresh Mart');
+      expect(state.values.category, 'grocery');
+      expect(state.values.channel, 'in_store');
+      expect(state.values.supportPhone, isNull);
+      expect(state.values.cashbackRatePercent, '2.00');
+      expect(state.values.primaryBranch?.lat, 4.1755354);
+      expect(state.pinned, isTrue);
+      expect(state.locationRequired, isTrue);
+      expect(state.rateBounds.minPercent, '0.50');
+      expect(state.rateBounds.maxPercent, '10.00');
+      expect(state.categories, hasLength(2));
+      expect(state.categories.first.label(dhivehi: true), 'ފިހާރަ');
+      // A category without a Thaana name falls back to English, not blank.
+      expect(state.categories.last.label(dhivehi: true), 'Dining');
+      expect(state.submittedAt, isNull);
+      expect(state.rejectedReason, isNull);
+    });
+
+    test('the profile save sends every key — explicit nulls clear', () async {
+      final adapter = _RecordingAdapter((_) => _json(_setupFixture, 200));
+      final api = _api(adapter);
+
+      await api.saveSetupProfile(
+        category: 'grocery',
+        channel: 'both',
+        contactEmail: 'owner@freshmart.mv',
+      );
+
+      final request = adapter.requests.single;
+      expect(request.method, 'PATCH');
+      expect(request.data, {
+        'category': 'grocery',
+        'channel': 'both',
+        'contact_email': 'owner@freshmart.mv',
+        'contact_phone': null,
+        'support_phone': null,
+        'website_url': null,
+      });
+    });
+
+    test('the terms save touches ONLY eligibility_basis', () async {
+      final adapter = _RecordingAdapter((_) => _json(_setupFixture, 200));
+      final api = _api(adapter);
+
+      await api.saveSetupTerms('All items except tobacco.');
+
+      expect(adapter.requests.single.data, {
+        'eligibility_basis': 'All items except tobacco.',
+      });
+    });
+
+    test('rate goes out as the exact percent STRING typed', () async {
+      final adapter = _RecordingAdapter((_) => _json(_setupFixture, 200));
+      final api = _api(adapter);
+
+      final state = await api.saveSetupRate('2.50');
+
+      expect(adapter.requests.single.data, {'cashback_rate_percent': '2.50'});
+      expect(state.values.cashbackRatePercent, '2.00');
+    });
+
+    test('the logo upload is multipart under the field `logo`', () async {
+      final adapter = _RecordingAdapter((_) => _json({
+            'data': {
+              'logo_url': 'https://manfaa.app/api/merchants/fresh-mart/logo?v=abc',
+            },
+          }, 200));
+      final api = _api(adapter);
+
+      final url = await api.uploadSetupLogo(
+        bytes: Uint8List.fromList([1, 2, 3]),
+        filename: 'logo.png',
+      );
+
+      expect(url, 'https://manfaa.app/api/merchants/fresh-mart/logo?v=abc');
+      final data = adapter.requests.single.data;
+      expect(data, isA<FormData>());
+      expect((data as FormData).files.single.key, 'logo');
+      expect(data.files.single.value.filename, 'logo.png');
+    });
+
+    test('setup_incomplete surfaces the missing[] keys typed', () async {
+      final adapter = _RecordingAdapter(
+        (_) => _json({
+          'error': {
+            'code': 'setup_incomplete',
+            'message': 'The store setup is not complete: category, terms.',
+            'meta': {
+              'missing': ['category', 'terms'],
+            },
+          },
+        }, 422),
+      );
+      final api = _api(adapter);
+
+      await expectLater(
+        api.submitSetup(),
+        throwsA(
+          isA<MobileApiException>()
+              .having((e) => e.code, 'code', ApiCode.setupIncomplete)
+              .having((e) => e.missingRequirements, 'missing',
+                  ['category', 'terms']),
+        ),
+      );
     });
 
     test('a credit refusal surfaces the envelope code and meta', () async {

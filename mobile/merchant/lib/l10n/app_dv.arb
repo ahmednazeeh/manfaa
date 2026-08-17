@@ -33,5 +33,188 @@
   "creditComingBody": "ކައުންޓަރުގައި ސިކުންތުކޮޅެއްގެ ތެރޭ ކަސްޓަމަރަށް ކޭޝްބެކް ކްރެޑިޓް ކުރެއްވުން — ދެން އަންނަނީ މިތަނަށް.",
   "transactionsComingBody": "ކްރެޑިޓް ކުރެއްވި ކޮންމެ ވިޔަފާރިއެއް މިތަނުން ފެންނާނެ.",
   "settlementsComingBody": "ދައްކަންޖެހޭ ޢަދަދުތައް، އަވަސް ދެއްކުމުގެ ޑިސްކައުންޓް އަދި ރަސީދުތައް މިތަނަށް އަންނާނެ.",
-  "moreComingBody": "ޕްރޮފައިލް، މުވައްޒަފުން، ރޯލްތައް، ބްރާންޗްތައް އަދި ކޭޝްބެކް ސެޓިންގްސް މިތަނަށް އަންނާނެ."
+  "moreComingBody": "ޕްރޮފައިލް، މުވައްޒަފުން، ރޯލްތައް، ބްރާންޗްތައް އަދި ކޭޝްބެކް ސެޓިންގްސް މިތަނަށް އަންނާނެ.",
+
+  "continueLabel": "ކުރިއަށް",
+  "back": "އަނބުރާ",
+  "skip": "ދޫކޮށްލާ",
+  "skipForNow": "މިވަގުތު ދޫކޮށްލާ",
+  "notSet": "ނުޖައްސާ",
+
+  "newMerchantPrompt": "އާ މާޗަންޓެއްތޯ؟",
+  "registerStore": "ފިހާރަ ރަޖިސްޓަރ ކުރައްވާ",
+  "signupTitle": "ފިހާރަ ރަޖިސްޓަރ ކުރައްވާ",
+  "signupSubtitle": "ކުޑަ ވަގުތުކޮޅެއްގެ ސެޓަޕަކަށްފަހު ފިހާރައިން ކަސްޓަމަރުންނަށް ކޭޝްބެކް ދެއްވަން ފެއްޓެވޭނެ.",
+  "phoneLabel": "ފޯނު ނަންބަރު",
+  "phoneHint": "7XXX XXXX",
+  "otpDeliveryNote": "ނަންބަރު ޔަޤީންކުރުމަށް SMS އަކުން ކޯޑެއް ފޮނުވާނަން.",
+  "codeTitle": "ކޯޑު ޖައްސަވާ",
+  "codeSentTo": "{phone} އަށް 6 އަކުރުގެ ކޯޑެއް ފޮނުވައިފިން.",
+  "@codeSentTo": {
+    "placeholders": {
+      "phone": {
+        "type": "String"
+      }
+    }
+  },
+  "verifyLabel": "ޔަޤީންކުރޭ",
+  "resendCode": "ކޯޑު އަލުން ފޮނުވާ",
+  "resendCountdown": "{seconds} ސިކުންތުން އަލުން ފޮނުވޭނެ",
+  "@resendCountdown": {
+    "placeholders": {
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
+  "detailsTitle": "ފިހާރައާ ބެހޭ މަޢުލޫމާތު",
+  "detailsSubtitle": "މަންފާގައި ކަސްޓަމަރުންނަށް ފިހާރަ ފެންނާނީ މިގޮތަށް.",
+  "businessNameLabel": "ފިހާރައިގެ ނަން",
+  "businessNameHint": "މިސާލަކަށް: Fresh Mart",
+  "businessNameDvLabel": "ދިވެހިން ފިހާރައިގެ ނަން (އިޚްތިޔާރީ)",
+  "passwordRule": "މަދުވެގެން 8 އަކުރު.",
+  "createStore": "ފިހާރަ ހަދާ",
+  "alreadyRegistered": "ކުރިން އެކައުންޓެއް އޮތްތޯ؟",
+  "errOtpInvalid": "އެ ކޯޑު ރަނގަޅެއް ނޫން ނުވަތަ މުއްދަތު ހަމަވެއްޖެ. ބައްލަވާ، ނުވަތަ އާ ކޯޑެއް ހޯއްދަވާ.",
+  "errOtpAttempts": "މާ ގިނަ ފަހަރު ނުބައި ކޯޑު ޖެއްސެވިއްޖެ. އާ ކޯޑެއް ހޯއްދަވާ.",
+  "errSignupExpired": "އެ ޔަޤީންކުރުން މުއްދަތު ހަމަވެއްޖެ. ފޯނު ނަންބަރުން އަލުން ފައްޓަވާ.",
+  "errEmailRegistered": "އެ އީމެއިލްގައި މާޗަންޓް އެކައުންޓެއް އެބައޮތް. ލޮގިން ކުރައްވާ.",
+  "errSignupDetailsMissing": "ފިހާރައިގެ ނަން، އީމެއިލް، އަދި މަދުވެގެން 8 އަކުރުގެ ޕާސްވޯޑެއް ލިޔުއްވާ.",
+
+  "setupTitle": "ފިހާރަ ސެޓަޕް ކުރައްވާ",
+  "setupStepOf": "6 ން {current} ވަނަ ފިޔަވަޅު",
+  "@setupStepOf": {
+    "placeholders": {
+      "current": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "stepProfile": "ޕްރޮފައިލް",
+  "stepLocation": "ތަން",
+  "stepLogo": "ލޯގޯ",
+  "stepRate": "ރޭޓް",
+  "stepTerms": "ޝަރުޠު",
+  "stepReview": "ރިވިއު",
+  "profileTitle": "ފިހާރައިގެ ޕްރޮފައިލް",
+  "categoryLabel": "ބާވަތް",
+  "categoryHint": "އެންމެ ގުޅޭ ބާވަތް ނަންގަވާ — ކަސްޓަމަރުން ފިހާރަތައް ހޯދަނީ ބާވަތުން.",
+  "categoryRequired": "ކުރިއަށް ދިއުމަށް ބާވަތެއް ނަންގަވާ.",
+  "channelLabel": "ވިޔަފާރި ކުރައްވަނީ ކޮންތާކު؟",
+  "channelInStore": "ފިހާރައިގައި",
+  "channelOnline": "އޮންލައިން",
+  "channelBoth": "ދެގޮތަށް",
+  "channelInStoreHint": "ކަސްޓަމަރުން ފިހާރައަށް އައިސް ގަންނަނީ.",
+  "channelOnlineHint": "އޯޑަރުތައް އަންނަނީ އޮންލައިންކޮށް.",
+  "channelBothHint": "ކައުންޓަރާއި އޮންލައިން އޯޑަރު ދެގޮތް.",
+  "contactEmailLabel": "ގުޅޭނެ އީމެއިލް",
+  "contactPhoneLabel": "ގުޅޭނެ ނަންބަރު",
+  "supportPhoneLabel": "ކަސްޓަމަރ ސަޕޯޓް ނަންބަރު",
+  "supportSameAsContact": "ގުޅޭނެ ނަންބަރާ އެއްގޮތް",
+  "websiteLabel": "ވެބްސައިޓް (އިޚްތިޔާރީ)",
+  "locationTitle": "ފިހާރަ ހުންނަ ތަން",
+  "locationSubtitle": "ޕިން ފިހާރަ މައްޗަށް އަންނަންދެން ޗާޓު ދަމާލައްވާ.",
+  "locationOnlineNote": "ވިއްކަވަނީ އޮންލައިންކޮށް އެކަނި — ޕިން ދޫކޮށްލެއްވިދާނެ.",
+  "myLocation": "އަހަރެން މިހުރި ތަން",
+  "locationDenied": "ލޮކޭޝަން ހުއްދަ ނުދެއްވާ.",
+  "locationFailed": "ލޮކޭޝަން ހޯދޭގޮތެއް ނުވި.",
+  "logoTitle": "ފިހާރައިގެ ލޯގޯ",
+  "logoSubtitle": "އިޚްތިޔާރީ — ލޯގޯއަކުން ފިހާރަ ފާހަގަކުރަން ފަސޭހަވާނެ.",
+  "chooseLogo": "ލޯގޯ ނަންގަވާ",
+  "replaceLogo": "ލޯގޯ ބަދަލުކުރައްވާ",
+  "logoUploading": "އަޕްލޯޑް ކުރެވެނީ…",
+  "logoHint": "JPG، PNG ނުވަތަ WebP، ގިނަވެގެން 2 MB.",
+  "logoUploaded": "ލޯގޯ އަޕްލޯޑް ވެއްޖެ.",
+  "errLogoType": "JPG، PNG ނުވަތަ WebP ފޮޓޯއެއް ބޭނުންކުރައްވާ.",
+  "errLogoSize": "އެ ފޮޓޯ 2 MB އަށްވުރެ ބޮޑު. ކުޑަ ފޮޓޯއެއް ނަންގަވާ.",
+  "rateTitle": "ކޭޝްބެކް ރޭޓް",
+  "rateSubtitle": "ފިހާރައިން ޝަރުޠު ހަމަވާ ވިޔަފާރިއަށް ކަސްޓަމަރުންނަށް ލިބޭ މިންވަރު.",
+  "rateLabel": "ކޭޝްބެކް ރޭޓް",
+  "rateRangeHint": "{min} އާއި {max} އާ ދެމެދު.",
+  "@rateRangeHint": {
+    "placeholders": {
+      "min": {
+        "type": "String"
+      },
+      "max": {
+        "type": "String"
+      }
+    }
+  },
+  "ratePreviewCashback": "ކަސްޓަމަރަށް ލިބޭ",
+  "ratePreviewFee": "ޕްލެޓްފޯމް ފީ",
+  "ratePreviewAllIn": "ޖުމްލަ ޚަރަދު",
+  "ratePreviewNote": "އަންދާޒާއެއް — ޕްލެޓްފޯމް ފީ ހިނގާނީ ޝާއިޢުކޮށްފައިވާ ފީ ތާވަލާ އެއްގޮތަށް.",
+  "errRateFormat": "2 ނުވަތަ 2.5 ފަދަ ރޭޓެއް ލިޔުއްވާ.",
+  "errRateMin": "އެންމެ ދަށްވެގެން {min}.",
+  "@errRateMin": {
+    "placeholders": {
+      "min": {
+        "type": "String"
+      }
+    }
+  },
+  "errRateMax": "އެންމެ މަތިވެގެން {max}.",
+  "@errRateMax": {
+    "placeholders": {
+      "max": {
+        "type": "String"
+      }
+    }
+  },
+  "rateNotPricedTitle": "އެ ރޭޓެއް ނުލިބޭނެ",
+  "termsTitle": "ކޭޝްބެކް ލިބޭ ތަކެތި",
+  "termsLabel": "ޝަރުޠު ހަމަވާ ވިޔަފާރި",
+  "termsPlaceholder": "މިސާލަކަށް: ދުންފަތާއި ރީލޯޑް ފިޔަވައި ފިހާރައިގެ ހުރިހާ އެއްޗެއް.",
+  "termsGuidance": "ވިޔަފާރި ކުރުމުގެ ކުރިން ކަސްޓަމަރުންނަށް މި ފެންނާނެ — ސާފުކޮށް ލިޔުއްވާ.",
+  "termsRequired": "ކުރިއަށް ދިއުމަށް ކޭޝްބެކް ލިބޭ ތަކެތި ބަޔާންކުރައްވާ.",
+  "reviewTitle": "ރިވިއުކޮށް ހުށަހަޅުއްވާ",
+  "reviewSubtitle": "ހުރިހާ އެއްޗެއް ބައްލަވާ — ފިހާރަ ލައިވްވުމުގެ ކުރިން މަންފާއިން ރިވިއު ކުރާނެ.",
+  "reviewName": "ފިހާރައިގެ ނަން",
+  "reviewCategory": "ބާވަތް",
+  "reviewChannel": "ވިއްކާ ގޮތް",
+  "reviewLocation": "ތަން",
+  "reviewLogo": "ލޯގޯ",
+  "reviewRate": "ކޭޝްބެކް ރޭޓް",
+  "reviewTerms": "ކޭޝްބެކް ލިބޭ ތަކެތި",
+  "rateSummary": "{rate} · ފީ {fee} · ޖުމްލަ {allIn}",
+  "@rateSummary": {
+    "placeholders": {
+      "rate": {
+        "type": "String"
+      },
+      "fee": {
+        "type": "String"
+      },
+      "allIn": {
+        "type": "String"
+      }
+    }
+  },
+  "noLocation": "ޕިން ނުޖަހާ",
+  "noLogo": "ލޯގޯއެއް ނެތް",
+  "submitForReview": "ރިވިއުއަށް ހުށަހަޅާ",
+  "missingTitle": "ރިވިއުގެ ކުރިން ފުރިހަމަކުރަންޖެހޭ",
+  "missingCategory": "ބާވަތެއް ނަންގަވާ",
+  "missingChannel": "ވިއްކާ ގޮތް ނަންގަވާ",
+  "missingRate": "ކޭޝްބެކް ރޭޓް ޖައްސަވާ",
+  "missingTerms": "ކޭޝްބެކް ލިބޭ ތަކެތި ބަޔާންކުރައްވާ",
+  "edit": "ބަދަލުކުރޭ",
+  "errSetupNotEditable": "ރިވިއުގައި އޮތްހާ ހިނދަކު ފިހާރައިގެ ސެޓަޕް ބަދަލެއް ނުކުރެއްވޭނެ.",
+  "rejectedTitle": "ބަދަލުތަކެއް ބޭނުންވޭ",
+  "rejectedBody": "މަންފާއިން ފިހާރަ ރިވިއުކޮށް ބަދަލުތަކަކަށް އެދިފައި:",
+  "editAndResubmit": "ބަދަލުކޮށް އަލުން ހުށަހަޅާ",
+  "pendingSubmittedAt": "ހުށަހެޅުނީ {date}",
+  "@pendingSubmittedAt": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "staffSetupTitle": "ސެޓަޕް ނިންމޭނީ ވެރިފަރާތަށް",
+  "staffSetupBody": "މި ފިހާރައިގެ ސެޓަޕް އަދި ނުނިމޭ، އަދި ތިޔަ ރޯލަކުން އެ ބަދަލެއް ނުކުރެއްވޭނެ. ފިހާރައިގެ ވެރިފަރާތުގެ އެކައުންޓުން ނިންމަވަން ދަންނަވާ."
 }

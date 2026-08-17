@@ -2,6 +2,10 @@
     <!-- The till talks to /api/mobile/v1 — declared explicitly rather than
          inherited from a plugin's manifest merge. -->
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- The setup wizard's "use my location" on the map pin picker (MR1).
+         Asked at runtime only when the owner taps it — never at launch. -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
     <application
         android:label="Manfaa Merchant"
         android:name="${applicationName}"

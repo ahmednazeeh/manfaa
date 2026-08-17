@@ -97,10 +97,11 @@ just work):
       staff list/invite/edit, roles CRUD + the served permission catalogue,
       bank account, preferences, product categories, promotions, rate
       GET/POST.
-- [ ] **Signup + setup on mobile**: request-otp / verify-otp / register
+- [x] **Signup + setup on mobile**: request-otp / verify-otp / register
       variants that mint a merchant token at register (web register only
       logs in a session), plus the setup wizard endpoints (`GET setup`,
       PATCH profile/location/rate, POST logo, POST submit) on token auth.
+      (Mounted 2026-08-17 alongside MR1 step 2.)
 - [ ] Feature tests per mounted group (authz, permission gating, envelope).
 
 ## Notification work (server + app — an owner requirement)
@@ -137,8 +138,8 @@ via the polymorphic device_tokens path the customer app already exercises
 
 ## Task list — status
 - **MR0 Foundation — IN PROGRESS (started 2026-08-17)**
-- MR1 Signup + setup wizard — queued
-- MR2 Till (Credit) + Transactions — queued
+- MR1 Signup + setup wizard — DONE 2026-08-17 (API mounted + app flow;
+  all three Flutter suites green, goldens EYE-reviewed)
 - MR3 Money (Dashboard/Settlements/Wallet) — queued
 - MR4 Notifications — queued (Firebase registration blocker)
 - MR5 More estate — queued
@@ -169,16 +170,20 @@ harness goldens reviewed by EYE (light+dark, en+dv where layout-affecting)
 - [x] Screenshot harness (`_ShotApi over MerchantApi`) from day one.
 
 ### MR1 — Signup + setup wizard (all web steps, in-app)
-- [ ] API: mobile signup/setup mounting (gap list above).
-- [ ] Phone → OTP → details (name, optional Thaana name, email, password).
-- [ ] Wizard, resumable, server-persisted per step: 1 profile (curated
+- [x] API: mobile signup/setup mounting (gap list above).
+- [x] Phone → OTP → details (name, optional Thaana name, email, password).
+      Register mints the 90-day token and lands signed-in as draft; the
+      login gained the mock's "Register your store" footer link.
+- [x] Wizard, resumable, server-persisted per step: 1 profile (curated
       category chips, channel, contacts, website) → 2 location (map pin,
-      Maldives-bounded search, skippable only for online-only) → 3 logo
-      (optional, raster ≤2MB) → 4 rate (percent with bounds + all-in
-      preview) → 5 terms (eligibility text) → 6 review & submit with
-      fix-this jump-backs on `setup_incomplete.missing[]`.
-- [ ] Status screens: pending_review (hourglass), rejected (admin reason +
-      Edit-and-resubmit), owner-only notice for staff.
+      skippable only for online-only; pin drag + my-location per the map
+      note below — no search needed) → 3 logo (optional, raster ≤2MB,
+      client-downscaled) → 4 rate (percent with bounds + all-in preview
+      from the §4 static bands) → 5 terms (eligibility text) → 6 review &
+      submit with fix-this jump-backs on `setup_incomplete.missing[]`.
+- [x] Status screens: pending_review (hourglass + submitted date),
+      rejected (admin reason blockquote + Edit-and-resubmit), owner-only
+      notice for staff without `setup.view`.
 - Map: flutter_map + OSM pin picker (consistent with the customer app's
   no-key decision); Places-style search via the zones/Nominatim approach
   only if needed — pin drag + my-location covers the wizard.

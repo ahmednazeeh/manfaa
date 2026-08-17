@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Mobile;
 
+use App\Domain\Mobile\IssuedMobileToken;
 use App\Domain\Mobile\MobileAudience;
 use App\Domain\Mobile\MobileTokenService;
 use App\Http\Controllers\Controller;
@@ -61,30 +62,41 @@ final class MerchantTokenController extends Controller
             $validated['device_name'],
         );
 
+        return response()->json(['data' => self::signedInPayload($user, $issued)], 201);
+    }
+
+    /**
+     * The merchant signed-in shape — ONE definition, answered by both doors
+     * that mint a merchant token: this password sign-in and the mobile
+     * signup's register step (MerchantSignupController). The app parses one
+     * payload however the token was earned.
+     *
+     * @return array<string, mixed>
+     */
+    public static function signedInPayload(MerchantUser $user, IssuedMobileToken $issued): array
+    {
         $user->loadMissing('merchant');
 
-        return response()->json([
-            'data' => [
-                'token' => $issued->plainTextToken,
-                'expires_at' => $issued->expiresAt->toIso8601ZuluString(),
-                'device_name' => $issued->deviceName,
-                'user' => [
-                    'id' => $user->getKey(),
-                    'name' => $user->name,
-                    'email' => $user->email,
-                ],
-                'merchant' => [
-                    'id' => $user->merchant?->getKey(),
-                    'name' => $user->merchant?->name,
-                    'slug' => $user->merchant?->slug,
-                ],
-                // The till builds its navigation from this. A fixed tab bar
-                // would show a cashier the settlement builder and refuse it
-                // on tap; the app should not draw what the account may not
-                // reach (PLAN-mobile-api.md §1).
-                'permissions' => $user->resolvedPermissions(),
+        return [
+            'token' => $issued->plainTextToken,
+            'expires_at' => $issued->expiresAt->toIso8601ZuluString(),
+            'device_name' => $issued->deviceName,
+            'user' => [
+                'id' => $user->getKey(),
+                'name' => $user->name,
+                'email' => $user->email,
             ],
-        ], 201);
+            'merchant' => [
+                'id' => $user->merchant?->getKey(),
+                'name' => $user->merchant?->name,
+                'slug' => $user->merchant?->slug,
+            ],
+            // The till builds its navigation from this. A fixed tab bar
+            // would show a cashier the settlement builder and refuse it
+            // on tap; the app should not draw what the account may not
+            // reach (PLAN-mobile-api.md §1).
+            'permissions' => $user->resolvedPermissions(),
+        ];
     }
 
     /** Sign out THIS till device. */

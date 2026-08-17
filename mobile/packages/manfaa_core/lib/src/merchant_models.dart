@@ -407,6 +407,214 @@ class CreditLine {
       };
 }
 
+/// GET /merchant/setup (and every wizard PATCH/POST answer) — the whole
+/// resumable-wizard state in one object, exactly the server's shape.
+///
+/// Readable in EVERY status: the waiting and rejected screens render from it
+/// too (submitted_at, rejected_reason), not only the editable wizard.
+class MerchantSetupState {
+  MerchantSetupState({
+    required this.status,
+    required this.steps,
+    required this.values,
+    required this.rateBounds,
+    required this.categories,
+    this.submittedAt,
+    this.rejectedReason,
+  });
+
+  factory MerchantSetupState.fromJson(Map<String, dynamic> json) =>
+      MerchantSetupState(
+        status: _s(json['status']),
+        steps: MerchantSetupSteps.fromJson(
+          (json['steps'] as Map?)?.cast<String, dynamic>() ?? {},
+        ),
+        values: MerchantSetupValues.fromJson(
+          (json['values'] as Map?)?.cast<String, dynamic>() ?? {},
+        ),
+        rateBounds: SetupRateBounds.fromJson(
+          (json['rate_bounds'] as Map?)?.cast<String, dynamic>() ?? {},
+        ),
+        categories: [
+          for (final item in (json['categories'] as List? ?? const []))
+            SetupCategory.fromJson((item as Map).cast<String, dynamic>()),
+        ],
+        submittedAt: json['submitted_at'] as String?,
+        rejectedReason: json['rejected_reason'] as String?,
+      );
+
+  /// draft | pending_review | rejected | active.
+  final String status;
+  final MerchantSetupSteps steps;
+  final MerchantSetupValues values;
+  final SetupRateBounds rateBounds;
+
+  /// The curated category options, served WITH the state so the chips render
+  /// from the same payload they save into.
+  final List<SetupCategory> categories;
+
+  final String? submittedAt;
+  final String? rejectedReason;
+
+  /// Whether the wizard's writes will land (the server refuses with
+  /// `setup_not_editable` outside draft|rejected).
+  bool get editable => status == 'draft' || status == 'rejected';
+
+  /// Whether the location step may be PASSED without a pin. Read from the
+  /// channel the SERVER holds (web parity): a channel merely being
+  /// considered on the profile step must not decide whether a later step
+  /// blocks. Never a submit requirement either way.
+  bool get locationRequired => values.channel != 'online';
+
+  /// The pin on file — a branch without coordinates is a branch, not a pin.
+  bool get pinned =>
+      values.primaryBranch?.lat != null && values.primaryBranch?.lng != null;
+}
+
+/// The server's per-step completion flags.
+class MerchantSetupSteps {
+  MerchantSetupSteps({
+    required this.profile,
+    required this.location,
+    required this.logo,
+    required this.rate,
+  });
+
+  factory MerchantSetupSteps.fromJson(Map<String, dynamic> json) =>
+      MerchantSetupSteps(
+        profile: json['profile'] as bool? ?? false,
+        location: json['location'] as bool? ?? false,
+        logo: json['logo'] as bool? ?? false,
+        rate: json['rate'] as bool? ?? false,
+      );
+
+  final bool profile;
+  final bool location;
+  final bool logo;
+  final bool rate;
+}
+
+/// The wizard's saved values. Rates stay 2-decimal percent STRINGS (§11);
+/// the branch coordinates are the one place doubles are correct — they are
+/// geometry, not money.
+class MerchantSetupValues {
+  MerchantSetupValues({
+    required this.name,
+    required this.slug,
+    required this.category,
+    required this.channel,
+    required this.eligibilityBasis,
+    required this.contactEmail,
+    required this.contactPhone,
+    required this.supportPhone,
+    required this.websiteUrl,
+    required this.primaryBranch,
+    required this.logoUrl,
+    required this.cashbackRatePercent,
+  });
+
+  factory MerchantSetupValues.fromJson(Map<String, dynamic> json) =>
+      MerchantSetupValues(
+        name: _s(json['name']),
+        slug: _s(json['slug']),
+        category: json['category'] as String?,
+        channel: _s(json['channel']),
+        eligibilityBasis: json['eligibility_basis'] as String?,
+        contactEmail: json['contact_email'] as String?,
+        contactPhone: json['contact_phone'] as String?,
+        supportPhone: json['support_phone'] as String?,
+        websiteUrl: json['website_url'] as String?,
+        primaryBranch: json['primary_branch'] is Map
+            ? SetupBranch.fromJson(
+                (json['primary_branch'] as Map).cast<String, dynamic>(),
+              )
+            : null,
+        logoUrl: json['logo_url'] as String?,
+        cashbackRatePercent: json['cashback_rate_percent'] as String?,
+      );
+
+  final String name;
+  final String slug;
+
+  /// A curated category slug, or null while unpicked (a submit requirement).
+  final String? category;
+
+  /// in_store | online | both.
+  final String channel;
+  final String? eligibilityBasis;
+  final String? contactEmail;
+  final String? contactPhone;
+
+  /// Null means "same as contact" — the storefront falls back on its own,
+  /// so a copy would only go stale (web parity).
+  final String? supportPhone;
+  final String? websiteUrl;
+  final SetupBranch? primaryBranch;
+  final String? logoUrl;
+
+  /// "2.00" once the rate step saved; null is a submit blocker.
+  final String? cashbackRatePercent;
+}
+
+/// The primary branch the location step pins (created on first pin, moved
+/// after).
+class SetupBranch {
+  SetupBranch({
+    required this.id,
+    required this.name,
+    this.address,
+    this.lat,
+    this.lng,
+  });
+
+  factory SetupBranch.fromJson(Map<String, dynamic> json) => SetupBranch(
+        id: json['id'] as int? ?? 0,
+        name: _s(json['name']),
+        address: json['address'] as String?,
+        lat: (json['lat'] as num?)?.toDouble(),
+        lng: (json['lng'] as num?)?.toDouble(),
+      );
+
+  final int id;
+  final String name;
+  final String? address;
+  final double? lat;
+  final double? lng;
+}
+
+/// The structural rate window ("0.50".."10.00") the rate step renders; the
+/// live tier ceiling is enforced server-side on top (`rate_not_priced`).
+class SetupRateBounds {
+  SetupRateBounds({required this.minPercent, required this.maxPercent});
+
+  factory SetupRateBounds.fromJson(Map<String, dynamic> json) =>
+      SetupRateBounds(
+        minPercent: _s(json['min_percent']),
+        maxPercent: _s(json['max_percent']),
+      );
+
+  final String minPercent;
+  final String maxPercent;
+}
+
+/// One curated store category option (slug + bilingual names).
+class SetupCategory {
+  SetupCategory({required this.slug, required this.nameEn, this.nameDv});
+
+  factory SetupCategory.fromJson(Map<String, dynamic> json) => SetupCategory(
+        slug: _s(json['slug']),
+        nameEn: _s(json['name_en']),
+        nameDv: json['name_dv'] as String?,
+      );
+
+  final String slug;
+  final String nameEn;
+  final String? nameDv;
+
+  String label({required bool dhivehi}) =>
+      dhivehi && (nameDv ?? '').isNotEmpty ? nameDv! : nameEn;
+}
+
 /// POST /merchant/credits — the recorded sale, plus whether this answer is
 /// an idempotent REPLAY of an earlier commit (guide §6: the replay arrives
 /// as 200 with `Idempotency-Replay: true`; the first commit is a 201 —

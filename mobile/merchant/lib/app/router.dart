@@ -4,6 +4,8 @@ import 'package:manfaa_core/manfaa_core.dart';
 
 import '../features/auth/login_screen.dart';
 import '../features/boot/boot_screen.dart';
+import '../features/setup/setup_screen.dart';
+import '../features/signup/signup_screen.dart';
 import '../features/status/setup_pending_screen.dart';
 import '../features/tabs/tab_screens.dart';
 import 'providers.dart';
@@ -30,11 +32,26 @@ const kSetupStatuses = {'draft', 'pending_review', 'rejected'};
 bool _needsSetup(MerchantSession session) =>
     kSetupStatuses.contains(session.merchantStatus);
 
+/// The setup-flow surfaces a not-yet-trading session may stand on, and the
+/// one it lands on by default. Draft lives IN the wizard; pending_review is
+/// locked to the waiting screen; rejected lands on the status screen (the
+/// admin's reason + "Edit and resubmit") but may re-enter the wizard.
+({Set<String> allowed, String home}) _setupSurfacesFor(
+        MerchantSession session) =>
+    switch (session.merchantStatus) {
+      'draft' => (allowed: const {'/setup'}, home: '/setup'),
+      'rejected' => (
+          allowed: const {'/setup', '/setup-pending'},
+          home: '/setup-pending',
+        ),
+      _ => (allowed: const {'/setup-pending'}, home: '/setup-pending'),
+    };
+
 /// Where a signed-in session lands: the setup flow while the store is not
 /// yet trading, otherwise the first tab this account may see (More is always
 /// held, so there is always somewhere to land).
 String homeLocationFor(MerchantSession session) {
-  if (_needsSetup(session)) return '/setup-pending';
+  if (_needsSetup(session)) return _setupSurfacesFor(session).home;
   for (final tab in kTabs) {
     final permission = tab.permission;
     if (permission == null || session.can(permission)) return tab.path;
@@ -59,15 +76,20 @@ final routerProvider = Provider<GoRouter>((ref) {
       // Boot decides its own exit; the update gate is above sign-in.
       if (location == '/boot' || location == '/update-required') return null;
 
-      if (!session.signedIn) return location == '/login' ? null : '/login';
-
-      if (_needsSetup(session)) {
-        return location == '/setup-pending' ? null : '/setup-pending';
+      if (!session.signedIn) {
+        return location == '/login' || location == '/signup' ? null : '/login';
       }
 
-      if (location == '/setup-pending') return homeLocationFor(session);
+      if (_needsSetup(session)) {
+        final surfaces = _setupSurfacesFor(session);
+        return surfaces.allowed.contains(location) ? null : surfaces.home;
+      }
 
-      if (location == '/login') {
+      if (location == '/setup-pending' || location == '/setup') {
+        return homeLocationFor(session);
+      }
+
+      if (location == '/login' || location == '/signup') {
         // Status unknown means sign-in landed but /merchant/me has not: the
         // login flow finishes with its own explicit go once it has tried,
         // so the redirect holds rather than flashing a tab that a status
@@ -90,6 +112,8 @@ final routerProvider = Provider<GoRouter>((ref) {
     routes: [
       GoRoute(path: '/boot', builder: (_, _) => const BootScreen()),
       GoRoute(path: '/login', builder: (_, _) => const LoginScreen()),
+      GoRoute(path: '/signup', builder: (_, _) => const SignupScreen()),
+      GoRoute(path: '/setup', builder: (_, _) => const SetupScreen()),
       GoRoute(
         path: '/update-required',
         builder: (_, state) =>

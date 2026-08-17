@@ -12,10 +12,10 @@ use App\Domain\Onboarding\EmailAlreadyRegisteredException;
 use App\Domain\Onboarding\MerchantOtpService;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\MerchantUserResource;
+use App\Http\Support\MerchantOtpRequestLimiter;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -36,10 +36,6 @@ class SignupController extends Controller
      */
     private const string PHONE_RULE = 'regex:/^\+960[79]\d{6}$/';
 
-    private const int PHONE_LIMIT_PER_HOUR = 3;
-
-    private const int IP_LIMIT_PER_HOUR = 10;
-
     public function __construct(private readonly MerchantOtpService $otp) {}
 
     public function requestOtp(Request $request): JsonResponse
@@ -50,25 +46,11 @@ class SignupController extends Controller
             'phone' => ['required', 'string', self::PHONE_RULE],
         ]);
 
-        // Dual throttle, keyed separately from the customer flow: 3/hour per
-        // phone so a number cannot be SMS-bombed, 10/hour per IP so one
-        // caller cannot spray codes across many numbers.
-        $phoneKey = 'merchant-otp-request:phone:'.$validated['phone'];
-        $ipKey = 'merchant-otp-request:ip:'.$request->ip();
-
-        if (RateLimiter::tooManyAttempts($phoneKey, self::PHONE_LIMIT_PER_HOUR)
-            || RateLimiter::tooManyAttempts($ipKey, self::IP_LIMIT_PER_HOUR)) {
-            $retryAfter = max(RateLimiter::availableIn($phoneKey), RateLimiter::availableIn($ipKey));
-
-            return response()->json(
-                ['message' => 'Too many verification requests. Try again later.'],
-                429,
-                ['Retry-After' => (string) $retryAfter],
-            );
+        // Dual throttle, keyed separately from the customer flow and SHARED
+        // with the mobile signup surface — see MerchantOtpRequestLimiter.
+        if ($refusal = MerchantOtpRequestLimiter::hitOrRefuse($validated['phone'], (string) $request->ip())) {
+            return $refusal;
         }
-
-        RateLimiter::hit($phoneKey, 3600);
-        RateLimiter::hit($ipKey, 3600);
 
         $this->otp->request($validated['phone']);
 

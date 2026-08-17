@@ -33,5 +33,188 @@
   "creditComingBody": "Credit a customer's cashback in seconds at the counter — the till lands here next.",
   "transactionsComingBody": "Every sale you've credited will live here.",
   "settlementsComingBody": "Amounts due, the prompt-payment discount and your receipts will live here.",
-  "moreComingBody": "Profile, employees, roles, branches and cashback settings will live here."
+  "moreComingBody": "Profile, employees, roles, branches and cashback settings will live here.",
+
+  "continueLabel": "Continue",
+  "back": "Back",
+  "skip": "Skip",
+  "skipForNow": "Skip for now",
+  "notSet": "Not set",
+
+  "newMerchantPrompt": "New merchant?",
+  "registerStore": "Register your store",
+  "signupTitle": "Register your store",
+  "signupSubtitle": "A few minutes of setup and your store starts rewarding customers.",
+  "phoneLabel": "Phone number",
+  "phoneHint": "7XXX XXXX",
+  "otpDeliveryNote": "We'll send a code by SMS to verify your number.",
+  "codeTitle": "Enter the code",
+  "codeSentTo": "We sent a 6-digit code to {phone}.",
+  "@codeSentTo": {
+    "placeholders": {
+      "phone": {
+        "type": "String"
+      }
+    }
+  },
+  "verifyLabel": "Verify",
+  "resendCode": "Resend code",
+  "resendCountdown": "Resend in {seconds}s",
+  "@resendCountdown": {
+    "placeholders": {
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
+  "detailsTitle": "Tell us about your store",
+  "detailsSubtitle": "This is how customers will see you on Manfaa.",
+  "businessNameLabel": "Store name",
+  "businessNameHint": "e.g. Fresh Mart",
+  "businessNameDvLabel": "Store name in Dhivehi (optional)",
+  "passwordRule": "At least 8 characters.",
+  "createStore": "Create my store",
+  "alreadyRegistered": "Already have an account?",
+  "errOtpInvalid": "That code isn't right or has expired. Check it, or request a fresh one.",
+  "errOtpAttempts": "Too many wrong codes. Request a fresh one and try again.",
+  "errSignupExpired": "That verification expired. Start again with your phone number.",
+  "errEmailRegistered": "That email already has a merchant account. Log in instead.",
+  "errSignupDetailsMissing": "Enter the store name, an email, and a password of at least 8 characters.",
+
+  "setupTitle": "Set up your store",
+  "setupStepOf": "Step {current} of {total}",
+  "@setupStepOf": {
+    "placeholders": {
+      "current": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "stepProfile": "Profile",
+  "stepLocation": "Location",
+  "stepLogo": "Logo",
+  "stepRate": "Rate",
+  "stepTerms": "Terms",
+  "stepReview": "Review",
+  "profileTitle": "Store profile",
+  "categoryLabel": "Category",
+  "categoryHint": "Pick the closest match — customers browse by category.",
+  "categoryRequired": "Pick a category to continue.",
+  "channelLabel": "Where do you sell?",
+  "channelInStore": "In-store",
+  "channelOnline": "Online",
+  "channelBoth": "Both",
+  "channelInStoreHint": "Customers walk in to buy.",
+  "channelOnlineHint": "Orders come in online.",
+  "channelBothHint": "A counter and online orders.",
+  "contactEmailLabel": "Contact email",
+  "contactPhoneLabel": "Contact phone",
+  "supportPhoneLabel": "Customer support number",
+  "supportSameAsContact": "Same as contact number",
+  "websiteLabel": "Website (optional)",
+  "locationTitle": "Store location",
+  "locationSubtitle": "Drag the map until the pin sits on your storefront.",
+  "locationOnlineNote": "You sell online only — you can skip the pin.",
+  "myLocation": "Use my location",
+  "locationDenied": "Location permission was denied.",
+  "locationFailed": "Couldn't get your location.",
+  "logoTitle": "Store logo",
+  "logoSubtitle": "Optional — a logo makes your store easy to spot.",
+  "chooseLogo": "Choose logo",
+  "replaceLogo": "Replace logo",
+  "logoUploading": "Uploading…",
+  "logoHint": "JPG, PNG or WebP, up to 2 MB.",
+  "logoUploaded": "Logo uploaded.",
+  "errLogoType": "Use a JPG, PNG or WebP image.",
+  "errLogoSize": "That image is over 2 MB. Pick a smaller one.",
+  "rateTitle": "Cashback rate",
+  "rateSubtitle": "What customers earn on eligible spending at your store.",
+  "rateLabel": "Cashback rate",
+  "rateRangeHint": "Between {min} and {max}.",
+  "@rateRangeHint": {
+    "placeholders": {
+      "min": {
+        "type": "String"
+      },
+      "max": {
+        "type": "String"
+      }
+    }
+  },
+  "ratePreviewCashback": "Customer earns",
+  "ratePreviewFee": "Platform fee",
+  "ratePreviewAllIn": "Your all-in cost",
+  "ratePreviewNote": "Estimate — the platform fee follows the published fee schedule.",
+  "errRateFormat": "Enter a rate like 2 or 2.5.",
+  "errRateMin": "The minimum is {min}.",
+  "@errRateMin": {
+    "placeholders": {
+      "min": {
+        "type": "String"
+      }
+    }
+  },
+  "errRateMax": "The maximum is {max}.",
+  "@errRateMax": {
+    "placeholders": {
+      "max": {
+        "type": "String"
+      }
+    }
+  },
+  "rateNotPricedTitle": "That rate isn't available",
+  "termsTitle": "What earns cashback",
+  "termsLabel": "Eligible spending",
+  "termsPlaceholder": "e.g. Everything in store except tobacco and top-ups.",
+  "termsGuidance": "Customers see this before they shop — be specific.",
+  "termsRequired": "Describe what earns cashback to continue.",
+  "reviewTitle": "Review & submit",
+  "reviewSubtitle": "Check everything — Manfaa reviews your store before it goes live.",
+  "reviewName": "Store name",
+  "reviewCategory": "Category",
+  "reviewChannel": "Channel",
+  "reviewLocation": "Location",
+  "reviewLogo": "Logo",
+  "reviewRate": "Cashback rate",
+  "reviewTerms": "What earns cashback",
+  "rateSummary": "{rate} · {fee} fee · {allIn} all-in",
+  "@rateSummary": {
+    "placeholders": {
+      "rate": {
+        "type": "String"
+      },
+      "fee": {
+        "type": "String"
+      },
+      "allIn": {
+        "type": "String"
+      }
+    }
+  },
+  "noLocation": "No pin",
+  "noLogo": "No logo",
+  "submitForReview": "Submit for review",
+  "missingTitle": "Still needed before review",
+  "missingCategory": "Pick a category",
+  "missingChannel": "Choose where you sell",
+  "missingRate": "Set your cashback rate",
+  "missingTerms": "Describe what earns cashback",
+  "edit": "Edit",
+  "errSetupNotEditable": "The store setup can't be edited while it's under review.",
+  "rejectedTitle": "Changes requested",
+  "rejectedBody": "Manfaa reviewed your store and asked for changes:",
+  "editAndResubmit": "Edit and resubmit",
+  "pendingSubmittedAt": "Submitted {date}",
+  "@pendingSubmittedAt": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "staffSetupTitle": "Setup needs the owner",
+  "staffSetupBody": "This store hasn't finished setup, and your role can't edit it. Ask the store owner to finish it on their account."
 }

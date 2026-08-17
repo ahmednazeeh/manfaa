@@ -226,6 +226,32 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             ),
             const SizedBox(height: Gap.xl),
             const _SecurityNote(),
+            const SizedBox(height: Gap.lg),
+            // The mock's footer: "New merchant?  Register your store" — the
+            // violet link opens the MR1 signup flow (phone → OTP → details).
+            // A Wrap, not a Row: dv (and any tight width) folds to two
+            // centred lines instead of overflowing.
+            Wrap(
+              alignment: WrapAlignment.center,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                Text(
+                  l10n.newMerchantPrompt,
+                  style: theme.textTheme.bodyMedium
+                      ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                ),
+                TextButton(
+                  onPressed: _busy ? null : () => context.go('/signup'),
+                  child: Text(
+                    l10n.registerStore,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.colorScheme.secondary,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ],
         ),
       ),
@@ -367,10 +393,11 @@ class _SecurityNote extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(l10n.securityTitle,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.titleSmall),
+                // Wraps rather than truncates: with the Protected pill on
+                // the end side, a phone-width card cannot always fit the
+                // title on one line — "Secure merchant acc…" is worse than
+                // two lines.
+                Text(l10n.securityTitle, style: theme.textTheme.titleSmall),
                 const SizedBox(height: 2),
                 Text(
                   l10n.securityBody,
