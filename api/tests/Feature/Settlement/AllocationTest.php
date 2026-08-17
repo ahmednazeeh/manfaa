@@ -6,13 +6,19 @@ use App\Domain\Cashback\TransactionState;
 use App\Domain\Ledger\AccountCode;
 use App\Domain\Ledger\Balances;
 use App\Domain\Ledger\Postings;
+use App\Domain\Mobile\MobileAudience;
+use App\Domain\Mobile\MobileTokenService;
 use App\Domain\Money\Laari;
+use App\Domain\Notifications\NotificationTemplateKey;
 use App\Domain\Settlement\InvalidSettlementStateException;
 use App\Domain\Settlement\SettlementAllocator;
 use App\Domain\Settlement\SettlementBuilder;
 use App\Domain\Settlement\SettlementState;
 use App\Domain\Settlement\WalletFunding;
+use App\Jobs\SendPushNotification;
 use App\Models\AdminUser;
+use App\Models\DeviceToken;
+use App\Models\MerchantUser;
 use App\Models\Settlement;
 use App\Models\Transaction;
 use Carbon\CarbonImmutable;
@@ -20,6 +26,8 @@ use Database\Seeders\LedgerAccountSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Queue;
+use Laravel\Sanctum\PersonalAccessToken;
 use Tests\Feature\Settlement\SettlementFixture;
 use Tests\TestCase;
 
@@ -339,4 +347,39 @@ it('confirms nothing and refuses to match the same payment twice', function () {
         ->toThrow(InvalidSettlementStateException::class);
 
     expect($this->balances->naturalBalance(AccountCode::MerchantReceivable))->toBe(0);
+});
+
+it('announces a settlement as accepted only once, on the move into settled', function () {
+    // The gate used to test the state AFTER the write rather than the
+    // transition into it. On the second match every line is already
+    // allocated, so the row is re-written `settled` and the store was told
+    // "paid off, thank you" a second time — saying nothing about the
+    // overpayment now parked in its wallet.
+    Queue::fake();
+
+    DB::table('notification_templates')
+        ->where('key', NotificationTemplateKey::SettlementAccepted->value)
+        ->update(['active' => true]);
+
+    $owner = MerchantUser::query()->where('merchant_id', $this->fixture->merchant->id)->firstOrFail();
+
+    DeviceToken::query()->create([
+        'tokenable_type' => $owner->getMorphClass(),
+        'tokenable_id' => $owner->getKey(),
+        'personal_access_token_id' => app(MobileTokenService::class)
+            ->issue($owner, MobileAudience::Merchant, 'Till')->plainTextToken
+            ? PersonalAccessToken::query()->latest('id')->value('id')
+            : null,
+        'token' => 'till-accept', 'platform' => 'android',
+    ]);
+
+    $allocator = app(SettlementAllocator::class);
+
+    $p1 = $allocator->recordBankPayment($this->settlement, Laari::of(11825), 'BML-ONCE-1');
+    $p2 = $allocator->recordBankPayment($this->settlement->refresh(), Laari::of(11825), 'BML-ONCE-2');
+
+    $allocator->matchPayment($p1, $this->admin);
+    $allocator->matchPayment($p2, $this->admin);
+
+    Queue::assertPushed(SendPushNotification::class, 1);
 });

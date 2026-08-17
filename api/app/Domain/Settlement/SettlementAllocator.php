@@ -6,7 +6,10 @@ namespace App\Domain\Settlement;
 
 use App\Domain\Cashback\Actor;
 use App\Domain\Ledger\Postings;
+use App\Domain\MerchantAccess\Permission;
 use App\Domain\Money\Laari;
+use App\Domain\Notifications\NotificationService;
+use App\Domain\Notifications\NotificationTemplateKey;
 use App\Models\AdminUser;
 use App\Models\Settlement;
 use App\Models\SettlementPayment;
@@ -64,6 +67,7 @@ final class SettlementAllocator
         private readonly Postings $postings,
         private readonly WalletFunding $wallet,
         private readonly LineAllocator $allocator,
+        private readonly NotificationService $notifications,
     ) {}
 
     /**
@@ -344,6 +348,16 @@ final class SettlementAllocator
                 $this->postings->walletTopUp($remainder, referenceId: $movement->id);
             }
 
+            // Captured BEFORE the write: the gate below must fire on a
+            // TRANSITION into settled, not on the state afterwards. Two
+            // payments recorded while the batch sits in payment_review are
+            // matched in sequence, and on the second every line is already
+            // allocated — so the row is re-written `settled` and, tested
+            // after the fact, would announce "paid off, thank you" a second
+            // time while saying nothing about the overpayment now parked in
+            // the wallet.
+            $wasSettled = $settlement->state === SettlementState::Settled;
+
             $settlement->forceFill([
                 'amount_received_laari' => $received,
                 // Written with the journal it counts, in the same
@@ -357,6 +371,19 @@ final class SettlementAllocator
                     ? SettlementState::Settled
                     : SettlementState::PartiallySettled,
             ])->save();
+
+            // Told only when the batch is FULLY paid off, and only on the
+            // move into that state. A partial allocation leaves the store
+            // still owing, and announcing "accepted" then would read as "we
+            // are done" when they are not.
+            if (! $wasSettled && $settlement->state === SettlementState::Settled) {
+                $this->notifications->sendToMerchantStaff(
+                    NotificationTemplateKey::SettlementAccepted,
+                    $settlement->merchant,
+                    ['reference' => (string) $settlement->reference],
+                    Permission::SettlementsView,
+                );
+            }
 
             return $settlement;
         });

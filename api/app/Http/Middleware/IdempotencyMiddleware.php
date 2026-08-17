@@ -6,6 +6,7 @@ namespace App\Http\Middleware;
 
 use App\Models\IdempotencyKey;
 use App\Models\Merchant;
+use App\Models\MerchantUser;
 use Carbon\CarbonImmutable;
 use Closure;
 use Illuminate\Database\UniqueConstraintViolationException;
@@ -64,7 +65,19 @@ final class IdempotencyMiddleware
 
     public function handle(Request $request, Closure $next): Response
     {
-        $merchant = $request->user();
+        // The KEY IS SCOPED TO THE MERCHANT, whichever principal presented
+        // it — a POS vendor token authenticates as the Merchant itself, a
+        // till app as one of its staff. Scoping to the store rather than to
+        // the account is deliberate: two tills in one shop retrying the same
+        // key are retrying the SAME sale, and they must collide rather than
+        // book it twice.
+        $principal = $request->user();
+
+        $merchant = match (true) {
+            $principal instanceof Merchant => $principal,
+            $principal instanceof MerchantUser => $principal->merchant,
+            default => null,
+        };
 
         if (! $merchant instanceof Merchant) {
             return $this->error(401, 'unauthorized', 'Unauthenticated.');

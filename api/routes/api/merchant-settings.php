@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Devices\MerchantDevicesController;
 use App\Http\Controllers\Merchant\BankAccountController;
 use App\Http\Controllers\Merchant\BranchesController;
 use App\Http\Controllers\Merchant\CustomerLookupController;
@@ -115,4 +116,15 @@ Route::prefix('merchant')->middleware('auth:merchant')->group(function () {
 
     Route::patch('preferences', [PreferencesController::class, 'update'])
         ->middleware('merchant.can:preferences.update');
+
+    // A staff member's OWN signed-in app devices. Deliberately ungated by
+    // the permission catalogue: signing your own phone out is a personal
+    // security act, not a merchant capability, and the account that most
+    // needs it — a cashier whose phone was taken — is the one holding the
+    // fewest permissions. Scoped to self inside the controller, so no
+    // permission would make it reach another person's devices anyway.
+    // Also mounted on the app itself in routes/api/mobile.php.
+    Route::get('devices', [MerchantDevicesController::class, 'index']);
+    Route::delete('devices/{id}', [MerchantDevicesController::class, 'destroy'])->whereNumber('id');
+    Route::delete('devices', [MerchantDevicesController::class, 'destroyAll']);
 });

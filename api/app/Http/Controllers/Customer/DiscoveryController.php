@@ -4,13 +4,20 @@ namespace App\Http\Controllers\Customer;
 
 use App\Domain\Discovery\DiscoveryService;
 use App\Http\Controllers\Controller;
-use Illuminate\Http\JsonResponse;
+use App\Http\Responses\CacheableJson;
 use Illuminate\Http\Request;
+use Symfony\Component\HttpFoundation\Response;
 
 /**
  * Public merchant discovery (§10 apps/web) — no auth, throttled per IP,
  * dataset cached 60s in DiscoveryService. The response carries no customer
  * data and no internal ids beyond the merchant slug.
+ *
+ * CONDITIONAL (M3). These are the largest payloads either app or the
+ * storefront fetches, and until now every load re-downloaded the whole thing
+ * even when nothing had changed. An ETag turns an unchanged shelf into a
+ * ~200-byte 304. Safe by construction: a client can only send an
+ * If-None-Match it was given, which means it already holds that body.
  */
 class DiscoveryController extends Controller
 {
@@ -21,7 +28,7 @@ class DiscoveryController extends Controller
      * store categories at least one listed merchant carries, in the
      * admin's own sort order, each with its en+dv name and merchant count.
      */
-    public function index(Request $request, DiscoveryService $discovery): JsonResponse
+    public function index(Request $request, DiscoveryService $discovery): Response
     {
         $validated = $request->validate([
             // Coordinates travel as a pair or not at all.
@@ -32,9 +39,9 @@ class DiscoveryController extends Controller
         $lat = isset($validated['lat']) ? (float) $validated['lat'] : null;
         $lng = isset($validated['lng']) ? (float) $validated['lng'] : null;
 
-        return response()->json([
+        return CacheableJson::respond($request, response()->json([
             'data' => $discovery->sections($lat, $lng),
-        ]);
+        ]));
     }
 
     /**
@@ -43,7 +50,7 @@ class DiscoveryController extends Controller
      * strings arrive as null (ConvertEmptyStringsToNull), so the 2..40 length
      * rule applies to the trimmed needle.
      */
-    public function directory(Request $request, DiscoveryService $discovery): JsonResponse
+    public function directory(Request $request, DiscoveryService $discovery): Response
     {
         // Laravel's `string` rule accepts byte strings that are not valid
         // UTF-8 (e.g. a raw %C3%28 in the query string); passed through to
@@ -71,7 +78,7 @@ class DiscoveryController extends Controller
             (int) ($validated['page'] ?? 1),
         );
 
-        return response()->json([
+        return CacheableJson::respond($request, response()->json([
             'data' => $result['merchants'],
             'meta' => [
                 'total' => $result['total'],
@@ -79,7 +86,7 @@ class DiscoveryController extends Controller
                 'per_page' => $result['per_page'],
                 'categories' => $result['categories'],
             ],
-        ]);
+        ]));
     }
 
     /**
@@ -87,7 +94,7 @@ class DiscoveryController extends Controller
      * take the identical abort(404) path — the response must never reveal
      * that a merchant exists but is not active.
      */
-    public function show(string $slug, DiscoveryService $discovery): JsonResponse
+    public function show(Request $request, string $slug, DiscoveryService $discovery): Response
     {
         $store = $discovery->store($slug);
 
@@ -95,6 +102,6 @@ class DiscoveryController extends Controller
             abort(404);
         }
 
-        return response()->json(['data' => $store]);
+        return CacheableJson::respond($request, response()->json(['data' => $store]));
     }
 }

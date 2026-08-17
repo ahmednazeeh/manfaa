@@ -103,6 +103,25 @@ final readonly class CreditRecorder
      */
     public const string BACKDATED_REASON = 'backdated_final';
 
+    /**
+     * Would a sale at this instant skip the refund window?
+     *
+     * PUBLIC because the HTTP layer has to ask the same question BEFORE
+     * recording: the till app must refuse to silently create an
+     * irreversible, immediately-payable credit when a device clock is
+     * wrong (PLAN-mobile-api.md M5). A second copy of this arithmetic in a
+     * controller is exactly how the two would drift, so there is one.
+     */
+    public static function wouldBeBackdated(
+        Merchant $merchant,
+        CarbonImmutable $occurredAt,
+        CarbonImmutable $now,
+    ): bool {
+        return $occurredAt->utc()->isBefore(
+            $now->utc()->subDays($merchant->validation_window_days + self::STALE_GRACE_DAYS),
+        );
+    }
+
     public function __construct(
         private TransitionService $transitions,
         private Postings $postings,
@@ -156,7 +175,7 @@ final readonly class CreditRecorder
         // validation window (plus the grace days) has already outlived the
         // refund window it would have waited in. It therefore skips
         // awaiting_validation AND on_hold entirely — see the routing below.
-        $backdated = $occurredAt->isBefore($now->subDays($merchant->validation_window_days + self::STALE_GRACE_DAYS));
+        $backdated = self::wouldBeBackdated($merchant, $occurredAt, $now);
 
         // Nothing ever accrues on an ineligible or below-minimum sale, and
         // the row goes terminal immediately. Suspension outranks the minimum:

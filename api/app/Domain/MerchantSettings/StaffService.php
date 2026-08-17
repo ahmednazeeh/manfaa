@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Domain\MerchantSettings;
 
+use App\Domain\Mobile\MobileTokenService;
 use App\Models\Merchant;
 use App\Models\MerchantRole;
 use App\Models\MerchantUser;
@@ -41,7 +42,10 @@ final class StaffService
      */
     public const int OWNER_GUARD_LOCK_CLASS = 0x4D4F57; // 'MOW'
 
-    public function __construct(private readonly RoleService $roles) {}
+    public function __construct(
+        private readonly RoleService $roles,
+        private readonly MobileTokenService $mobileTokens,
+    ) {}
 
     /**
      * Creates a panel account with a generated temporary password, returned
@@ -127,6 +131,18 @@ final class StaffService
             }
 
             $target->save();
+
+            // Deactivation must DESTROY the app credentials, not merely make
+            // them refuse. EnsureMobileToken already turns a deactivated
+            // account away, but the rows survive — so reactivating someone
+            // months later would bring a live token on a phone they no
+            // longer hold straight back to life, with nobody having
+            // re-entered a password. This is the same act as the removal
+            // itself: "no DELETE, deactivation is the only removal" is only
+            // true if deactivation actually removes the way back in.
+            if ($deactivating) {
+                $this->mobileTokens->revokeEverything($target);
+            }
 
             return $target;
         });

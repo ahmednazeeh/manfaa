@@ -4,10 +4,16 @@ declare(strict_types=1);
 
 namespace App\Domain\Notifications;
 
+use App\Domain\MerchantAccess\Permission;
 use App\Domain\Money\Laari;
 use App\Jobs\SendCustomerSms;
+use App\Jobs\SendPushNotification;
 use App\Models\Customer;
+use App\Models\DeviceToken;
+use App\Models\Merchant;
+use App\Models\MerchantUser;
 use App\Models\NotificationTemplate;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -47,16 +53,12 @@ final class NotificationService
      */
     public function send(NotificationTemplateKey $key, Customer $customer, array $variables): void
     {
-        try {
+        // EVERYTHING runs after the caller's transaction commits — including
+        // the template lookup and every query behind it. See deferred().
+        $this->deferred($key, $customer::class, (int) $customer->getKey(), function () use ($key, $customer, $variables): void {
             $template = $this->template($key);
 
             if ($template === null || ! $template->active) {
-                return;
-            }
-
-            $phone = trim((string) $customer->phone);
-
-            if ($phone === '') {
                 return;
             }
 
@@ -66,20 +68,163 @@ final class NotificationService
                 return;
             }
 
-            // afterCommit, not dispatch(): the queue worker can pick a job up
-            // before the writing transaction commits, and would then read a
-            // balance that does not exist yet — or send about a sale that
-            // never happened. Outside a transaction this runs immediately.
-            DB::afterCommit(function () use ($phone, $body, $key, $customer): void {
-                try {
-                    SendCustomerSms::dispatch($phone, $body, $key->value, $customer->id);
-                } catch (Throwable $exception) {
-                    $this->swallow($key, $customer, $exception);
-                }
-            });
-        } catch (Throwable $exception) {
-            $this->swallow($key, $customer, $exception);
+            $phone = trim((string) $customer->phone);
+
+            // SMS and push are INDEPENDENT. A customer with no number on
+            // file can still hold a phone with the app on it, and the old
+            // shape returned before either could be considered. Each channel
+            // decides for itself whether it has somewhere to deliver.
+            if ($phone !== '') {
+                SendCustomerSms::dispatch($phone, $body, $key->value, $customer->id);
+            }
+
+            $this->push($key, $customer, $body, $template->sendsDhivehi());
+        });
+    }
+
+    /**
+     * A merchant-facing moment, to the till devices of the staff who may act
+     * on it.
+     *
+     * Push only — a store's staff have no SMS relationship with the
+     * platform, and there is no number to fall back to.
+     *
+     * Addressed by PERMISSION rather than to everyone: a settlement message
+     * reaching a cashier who cannot open the settlement screen is noise they
+     * cannot act on, and the catalogue already knows who can. Inactive staff
+     * are excluded — their tokens are destroyed on deactivation anyway, but
+     * the query should not depend on that having happened.
+     *
+     * @param  array<string, string>|callable(NotificationTemplate): array<string, string>  $variables
+     *                                                                                                  A callable when a value depends on the template's LANGUAGE — money
+     *                                                                                                  is written "MVR 500.00" in English and "500.00 ރުފިޔާ" in Dhivehi,
+     *                                                                                                  and the template is not resolved until after the commit.
+     * @param  ?callable(): bool  $when  asked against COMMITTED state
+     */
+    public function sendToMerchantStaff(
+        NotificationTemplateKey $key,
+        Merchant $merchant,
+        array|callable $variables,
+        Permission $required,
+        ?callable $when = null,
+    ): void {
+        $this->deferred($key, $merchant::class, (int) $merchant->getKey(), function () use ($key, $merchant, $variables, $required, $when): void {
+            // Re-read the row as it COMMITTED. A caller may have moved the
+            // settlement on inside the same transaction — submit() is reused
+            // by the receipt-first and wallet-funded paths, where the batch
+            // never rests in awaiting_payment — so "should this still be
+            // sent?" can only be answered honestly from committed state.
+            if ($when !== null && ! $when()) {
+                return;
+            }
+
+            $template = $this->template($key);
+
+            if ($template === null || ! $template->active) {
+                return;
+            }
+
+            $body = self::render(
+                $template->body(),
+                is_callable($variables) ? $variables($template) : $variables,
+            );
+
+            if (trim($body) === '') {
+                return;
+            }
+
+            $recipients = MerchantUser::query()
+                ->where('merchant_id', $merchant->getKey())
+                ->where('is_active', true)
+                // Eager-loaded: ->can() resolves through the role, and
+                // without this the fan-out is one query per staff member.
+                ->with('role')
+                ->get()
+                ->filter(fn (MerchantUser $user): bool => $user->can($required));
+
+            foreach ($recipients as $user) {
+                $this->push($key, $user, $body, $template->sendsDhivehi());
+            }
+        });
+    }
+
+    /**
+     * Run a notification's ENTIRE body after the caller's transaction
+     * commits, and swallow anything it throws.
+     *
+     * WHY THIS EXISTS, and it is the most important thing in this class:
+     * these calls sit INSIDE money transactions — a settlement being
+     * submitted, a payment being matched, a sale being credited. Running a
+     * query there and catching its exception is not safe on PostgreSQL. One
+     * failed statement puts the transaction in an ABORTED state; a swallowed
+     * error therefore leaves the caller believing it may continue, and the
+     * COMMIT that follows is executed as a ROLLBACK **which reports no
+     * error at all**. Laravel sees a successful commit and answers 200 while
+     * the ledger postings, the wallet debit and the state change have all
+     * been discarded.
+     *
+     * Deferring the whole body — not merely the dispatch — is what makes the
+     * old promise ("nothing here can fail a settlement") actually true:
+     * afterCommit callbacks run once the transaction has already committed,
+     * so nothing in here shares its fate. Outside a transaction it runs
+     * immediately, which is why the try/catch is still required.
+     */
+    private function deferred(NotificationTemplateKey $key, string $recipientType, int $recipientId, callable $work): void
+    {
+        DB::afterCommit(function () use ($key, $recipientType, $recipientId, $work): void {
+            try {
+                $work();
+            } catch (Throwable $exception) {
+                $this->swallow($key, $recipientType, $recipientId, $exception);
+            }
+        });
+    }
+
+    /**
+     * Queue one push per registered device, after the transaction commits.
+     *
+     * The TITLE is localised per device from the code catalogue; the BODY is
+     * the template's own language, exactly as the SMS would be. Full
+     * per-device body language would mean re-rendering the money inside the
+     * variables, which the CALLER formats — see NotificationService::money —
+     * so it waits until customers carry a language preference and that
+     * decision moves.
+     *
+     * The trailing "— Manfaa" is stripped: iOS and Android already print the
+     * app's name above the body, and a push gets about two lines.
+     */
+    private function push(NotificationTemplateKey $key, Model $recipient, string $body, bool $dhivehi): void
+    {
+        $body = self::stripSignature($body);
+
+        // No afterCommit here: every caller already reaches this from inside
+        // deferred(), so the transaction is long gone.
+        $devices = DeviceToken::query()
+            ->where('tokenable_type', $recipient->getMorphClass())
+            ->where('tokenable_id', $recipient->getKey())
+            // A token that has expired but has not yet been swept authenticates
+            // nothing and is hidden from the user's own device list — pushing
+            // to it would announce settlement references to a handset its owner
+            // has no way to see, let alone revoke.
+            ->whereHas('accessToken', fn ($token) => $token
+                ->whereNull('expires_at')
+                ->orWhere('expires_at', '>', now()))
+            ->get();
+
+        foreach ($devices as $device) {
+            $title = $key->pushTitle()[$device->sendsDhivehi() || $dhivehi ? 'dv' : 'en'];
+
+            SendPushNotification::dispatch($device->getKey(), $title, $body, $key->value);
         }
+    }
+
+    /**
+     * "…— Manfaa" and its Thaana twin, which belong on an SMS and nowhere
+     * else.
+     */
+    private static function stripSignature(string $body): string
+    {
+        return trim(preg_replace('/\s*[—-]\s*(Manfaa|މަންފާ)\s*$/u', '', $body) ?? $body);
     }
 
     /**
@@ -136,13 +281,14 @@ final class NotificationService
         Cache::forget(self::CACHE_PREFIX.$key->value);
     }
 
-    private function swallow(NotificationTemplateKey $key, Customer $customer, Throwable $exception): void
+    private function swallow(NotificationTemplateKey $key, string $recipientType, int $recipientId, Throwable $exception): void
     {
-        // The customer id, never the phone number: this line goes to a log
-        // that is not the place to accumulate a list of mobile numbers.
-        Log::warning('Customer notification not queued.', [
+        // The id, never the phone number: this line goes to a log that is
+        // not the place to accumulate a list of mobile numbers.
+        Log::warning('Notification not queued.', [
             'template' => $key->value,
-            'customer_id' => $customer->id,
+            'recipient_type' => $recipientType,
+            'recipient_id' => $recipientId,
             'exception' => $exception->getMessage(),
         ]);
     }

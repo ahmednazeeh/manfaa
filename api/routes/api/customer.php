@@ -8,6 +8,7 @@ use App\Http\Controllers\Customer\OtpAuthController;
 use App\Http\Controllers\Customer\PayoutAccountController;
 use App\Http\Controllers\Customer\PayoutsController;
 use App\Http\Controllers\Customer\TransactionsController;
+use App\Http\Controllers\Devices\CustomerDevicesController;
 use Illuminate\Support\Facades\Route;
 
 // Customer platform (§10 apps/web, §12 Phase 3): OTP signup, balance,
@@ -29,6 +30,13 @@ Route::prefix('customer')->middleware('auth:customer')->group(function () {
 
     Route::get('payout-account', [PayoutAccountController::class, 'show']);
     Route::post('payout-account', [PayoutAccountController::class, 'store']);
+
+    // Signed-in app devices, reachable from the WEBSITE with nothing but the
+    // session — because the phone is what went missing. The same three
+    // actions are mounted on the app itself in routes/api/mobile.php.
+    Route::get('devices', [CustomerDevicesController::class, 'index']);
+    Route::delete('devices/{id}', [CustomerDevicesController::class, 'destroy'])->whereNumber('id');
+    Route::delete('devices', [CustomerDevicesController::class, 'destroyAll']);
 
     // The money that actually reached the bank, and what each payment
     // covered. Scoped to the authenticated customer inside the controller.

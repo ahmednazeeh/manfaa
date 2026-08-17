@@ -8,11 +8,15 @@ use App\Domain\Cashback\Actor;
 use App\Domain\Cashback\TransactionState;
 use App\Domain\Cashback\TransitionService;
 use App\Domain\Ledger\Postings;
+use App\Domain\MerchantAccess\Permission;
 use App\Domain\Money\Laari;
+use App\Domain\Notifications\NotificationService;
+use App\Domain\Notifications\NotificationTemplateKey;
 use App\Models\Adjustment;
 use App\Models\AdminUser;
 use App\Models\Merchant;
 use App\Models\MerchantUser;
+use App\Models\NotificationTemplate;
 use App\Models\Settlement;
 use App\Models\SettlementLine;
 use App\Models\SettlementPayment;
@@ -55,6 +59,7 @@ final class SettlementBuilder
         private readonly WalletFunding $wallet,
         private readonly SlipStorage $slips,
         private readonly PromptDiscount $discounts,
+        private readonly NotificationService $notifications,
     ) {}
 
     /**
@@ -268,6 +273,22 @@ final class SettlementBuilder
 
             $this->releaseLinesAndCancel($settlement);
 
+            // The store has to ACT on this one — the transfer was refused and
+            // the batch is cancelled — so it earns an interruption, and the
+            // reason travels with it rather than making them open the panel
+            // to find out why.
+            $this->notifications->sendToMerchantStaff(
+                NotificationTemplateKey::SettlementRejected,
+                $settlement->merchant,
+                [
+                    'reference' => (string) $settlement->reference,
+                    'reason' => $reason,
+                ],
+                Permission::SettlementsView,
+            );
+            // No `when` guard: reject() is the only path to this state and
+            // the batch is cancelled by the time it commits.
+
             return $settlement;
         });
     }
@@ -434,6 +455,36 @@ final class SettlementBuilder
             }
 
             $settlement->forceFill(['state' => SettlementState::AwaitingPayment])->save();
+
+            // The store now owes a transfer, and the prompt-payment discount
+            // is money with a clock on it.
+            //
+            // GATED ON COMMITTED STATE, because submit() is reused by paths
+            // where the batch never rests in awaiting_payment:
+            // createAndSubmitWithReceipt() moves it straight to
+            // payment_review, and createAndSettleFromWallet() settles it
+            // outright. Telling a store to go and transfer money for a batch
+            // it has already paid produces a duplicate bank transfer landing
+            // as an unmatched deposit. The check runs after the commit, so
+            // it sees the state the caller actually left behind.
+            $this->notifications->sendToMerchantStaff(
+                NotificationTemplateKey::SettlementDue,
+                $settlement->merchant,
+                // The amount follows the TEMPLATE's language: "MVR 500.00"
+                // in English, "500.00 ރުފިޔާ" in Dhivehi — never "MVR"
+                // inside a Thaana sentence.
+                fn (NotificationTemplate $template): array => [
+                    'amount' => NotificationService::money(
+                        (int) $settlement->amount_due_laari,
+                        $template->sendsDhivehi(),
+                    ),
+                    'reference' => (string) $settlement->reference,
+                ],
+                Permission::SettlementsView,
+                when: fn (): bool => Settlement::query()
+                    ->whereKey($settlement->getKey())
+                    ->value('state') === SettlementState::AwaitingPayment->value,
+            );
 
             return $settlement;
         });

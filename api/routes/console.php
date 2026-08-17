@@ -32,3 +32,18 @@ Schedule::command('manfaa:escalate')->dailyAt('09:00')->timezone(config('app.bus
 Schedule::command('manfaa:suspend-overdue')->dailyAt('00:15')->timezone(config('app.business_timezone'))->withoutOverlapping()->onOneServer();
 Schedule::command('manfaa:write-off')->dailyAt('01:00')->timezone(config('app.business_timezone'))->withoutOverlapping()->onOneServer();
 Schedule::command('manfaa:reconcile')->dailyAt('02:00')->timezone(config('app.business_timezone'))->withoutOverlapping()->onOneServer();
+
+// Expired mobile/vendor tokens authenticate nothing, but the rows persist
+// forever without this. MobileTokenService reaps a user's own dead rows when
+// they next sign in — which is exactly when a user who has STOPPED signing in
+// never does. --hours=24 keeps a day's grace so a support conversation about
+// "it signed me out yesterday" still has a row to look at.
+Schedule::command('sanctum:prune-expired --hours=24')->daily()->withoutOverlapping()->onOneServer();
+
+// Idempotency keys are released on failure but kept forever on success, and
+// M5 pointed every till sale at that table. Thirty days is long past any
+// honest retry — a till draining a queue after days without signal still
+// finds its keys — and well short of the unbounded window that turns a
+// factory-reset device's restarted key counter into permanently refused
+// sales. See PruneIdempotencyKeysCommand.
+Schedule::command('manfaa:prune-idempotency-keys')->dailyAt('03:40')->withoutOverlapping()->onOneServer();

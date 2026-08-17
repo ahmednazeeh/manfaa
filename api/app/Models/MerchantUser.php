@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Domain\MerchantAccess\Permission;
+use App\Domain\Mobile\MobileTokenSubject;
 use Database\Factories\MerchantUserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
@@ -14,10 +15,23 @@ use Laravel\Sanctum\HasApiTokens;
 
 #[Fillable(['merchant_id', 'name', 'email', 'password', 'merchant_role_id', 'is_active'])]
 #[Hidden(['password', 'remember_token'])]
-class MerchantUser extends Authenticatable
+class MerchantUser extends Authenticatable implements MobileTokenSubject
 {
     /** @use HasFactory<MerchantUserFactory> */
     use HasApiTokens, HasFactory, Notifiable;
+
+    /**
+     * A deactivated staff member may not use the merchant app.
+     *
+     * `!== false`, matching MerchantAuthController::login exactly: a
+     * not-yet-migrated is_active column reads null, and null must mean "not
+     * deactivated" rather than locking every existing account out of the app
+     * on the deploy that ships this.
+     */
+    public function mayUseMobileApp(): bool
+    {
+        return $this->is_active !== false;
+    }
 
     /**
      * Whether this account holds $permission (PLAN §13b staff permissions).

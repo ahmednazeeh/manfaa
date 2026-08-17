@@ -62,14 +62,20 @@ return new class extends Migration
             ]);
         }
 
-        // A key in the code with no row would be a template the admin screen
-        // cannot show and the sender cannot render — fail the migration
-        // rather than discover it at the first send.
-        $seeded = array_keys(self::SEED);
-
-        foreach (NotificationTemplateKey::values() as $key) {
-            if (! in_array($key, $seeded, true)) {
-                throw new RuntimeException("NotificationTemplateKey [{$key}] has no seeded template row.");
+        // Guards a typo in SEED above: a row whose key matches no case in
+        // the code catalogue is a template nothing can ever fire.
+        //
+        // This deliberately checks SEED -> enum and no longer enum -> SEED.
+        // The reverse direction is a property of the whole migration SET,
+        // not of this one file, and asserting it here made every later
+        // moment (M4 added three merchant ones) fail this migration on a
+        // fresh database. It is covered continuously instead by
+        // CustomerNotificationTest, which asserts the seeded rows and the
+        // enum agree exactly — a better home, because it runs on every
+        // commit rather than only at migrate time.
+        foreach (array_keys(self::SEED) as $key) {
+            if (! in_array($key, NotificationTemplateKey::values(), true)) {
+                throw new RuntimeException("Seeded template [{$key}] matches no NotificationTemplateKey.");
             }
         }
     }

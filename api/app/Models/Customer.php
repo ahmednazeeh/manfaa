@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Domain\Mobile\MobileTokenSubject;
 use Database\Factories\CustomerFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
@@ -32,7 +33,7 @@ use Laravel\Sanctum\HasApiTokens;
     'kyc_status',
 ])]
 #[Hidden(['password', 'remember_token'])]
-class Customer extends Authenticatable
+class Customer extends Authenticatable implements MobileTokenSubject
 {
     /** @use HasFactory<CustomerFactory> */
     use HasApiTokens, HasFactory, Notifiable;
@@ -46,6 +47,19 @@ class Customer extends Authenticatable
             'phone_verified_at' => 'immutable_datetime',
             'password' => 'hashed',
         ];
+    }
+
+    /**
+     * Only an ACTIVE customer may use the app. `suspended` and `closed` are
+     * both refusals — a closed account keeps its rows for the ledger's sake,
+     * which is precisely why it must not keep its access.
+     *
+     * Strict comparison against the string, not a `!== 'suspended'` test: a
+     * status added later defaults to refused rather than silently allowed.
+     */
+    public function mayUseMobileApp(): bool
+    {
+        return $this->status === 'active';
     }
 
     /**

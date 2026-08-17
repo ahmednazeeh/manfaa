@@ -3,6 +3,7 @@
 namespace App\Listeners;
 
 use App\Models\ApiCredential;
+use App\Models\Merchant;
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Database\Eloquent\Builder;
 use Laravel\Sanctum\Events\TokenAuthenticated;
@@ -27,6 +28,15 @@ class TouchCredentialLastUsed
 
     public function handle(TokenAuthenticated $event): void
     {
+        // Sanctum fires this for EVERY bearer token, and mobile app tokens
+        // are now the busiest kind. They never have an api_credentials row —
+        // that table is vendor credentials only — so the UPDATE below would
+        // match nothing, once per mobile request, forever. Leave before
+        // touching the database rather than paying a round trip to learn it.
+        if (! $event->token->tokenable instanceof Merchant) {
+            return;
+        }
+
         $now = CarbonImmutable::now('UTC');
 
         ApiCredential::query()
