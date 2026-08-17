@@ -70,13 +70,23 @@ export function MerchantLanding() {
       <footer className="border-t border-border">
         <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-2 px-5 py-5 text-xs text-muted-foreground sm:px-8">
           <span>© {new Date().getFullYear()} Manfaa</span>
-          <a
-            href="https://manfaa.app"
-            rel="noopener"
-            className="hover:text-foreground"
-          >
-            {t('marketing.forShoppers')}
-          </a>
+          <div className="flex items-center gap-4">
+            {/* Legal pages are English-only documents — titles untranslated
+                on purpose, matching the pages themselves. */}
+            <Link href="/privacy" className="hover:text-foreground">
+              Privacy
+            </Link>
+            <Link href="/terms" className="hover:text-foreground">
+              Terms
+            </Link>
+            <a
+              href="https://manfaa.app"
+              rel="noopener"
+              className="hover:text-foreground"
+            >
+              {t('marketing.forShoppers')}
+            </a>
+          </div>
         </div>
       </footer>
     </div>

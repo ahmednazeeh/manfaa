@@ -173,7 +173,9 @@ via the polymorphic device_tokens path the customer app already exercises
   Firebase config; suites green: api 1315, merchant 62, core 72,
   customer 35. LIVE-push remains dark until the console registration of
   `mv.manfaa.merchant` — a config-file swap, zero code changes.)
-- **MR5 More estate — NEXT**
+- **MR5 More estate — IN PROGRESS** (A-half shipped 2026-08-17: More
+  shell + Profile + Cashback Settings, per-round notes below; B-half —
+  Employees/Roles/Branches/Promotions — replaces the coming-soon routes)
 - MR6 Release — queued
 - WL merchant.manfaa.app landing — SHIPPED 2026-08-17 (landing + split
   auth panels + real-Dashboard mockup; also retired the METRONIC template
@@ -287,9 +289,21 @@ harness goldens reviewed by EYE (light+dark, en+dv where layout-affecting)
          still missing, inherited blocker).
 
 ### MR5 — More (management estate)
-- [ ] More screen per Merchant More.png (identity card + menu + logout).
-- [ ] Profile per Profile.png (logo, names en+dv, category, channel,
+- [x] More screen per Merchant More.png (identity card + menu + logout).
+      (2026-08-17, engineer A: six tinted rows each behind its own read
+      permission — absent slug, absent row; Cashback row any-of its three
+      section slugs like the web menu; Verified chip only for
+      status=active; log-out confirm dialog; agent-B rows route to real
+      paths behind the coming-soon pattern. Router grew kMoreGuards
+      permission redirects for the /more/* estate.)
+- [x] Profile per Profile.png (logo, names en+dv, category, channel,
       contacts, website, what-earns-cashback chips; edit via PATCH).
+      (2026-08-17, engineer A: view + edit; the ref's chips render as the
+      ONE eligibility_basis string per reconciliation; support-phone tick
+      BY COMPARISON sending the contact value; category travels only when
+      changed — retired slug stays pickable; logo replace through the MR1
+      setup endpoint with the 2MB/type pre-flight. manfaa_core grew
+      MerchantProfile + profile GET/PATCH with wire tests.)
 - [ ] Manage Employees per Manage Employees.png (stat tiles, search, rows
       with role + status chips incl. Suspended; invite → one-time temp
       password reveal; role reassign + active toggle; last-owner guard).
@@ -299,9 +313,21 @@ harness goldens reviewed by EYE (light+dark, en+dv where layout-affecting)
 - [ ] Manage Branches per Branches.png layout (stat tiles, search, cards
       with name/address/pin/zone + active state; add/edit dialog with
       flutter_map pin picker; delete → 409 branch_referenced handling).
-- [ ] Cashback Settings per Cashback Settings.png (general rate with §7
+- [x] Cashback Settings per Cashback Settings.png (general rate with §7
       timing copy, per-category rules incl. excluded mode, min eligible
       sale, validation window; matches the web's merged screen).
+      (2026-08-17, engineer A: three sections each on its own permission;
+      rate edit sheet posts the EXACT percent string and renders the
+      SERVER's change.applies/effective_at answer — timing never derived
+      client-side; ref's category toggle omitted (no backing data),
+      "Customer visibility: Pending" rendered as static info; the ref's
+      violet Save CTA saves the two preference knobs (laari integers, max
+      window from the server). manfaa_core: changeRate/RateChangeSummary,
+      preferences read-by-empty-PATCH, product-category writes — 14 wire
+      tests. Sheets open on the ROOT navigator (the floating nav bar
+      otherwise overlays their CTA). Goldens more_{light,dark},
+      profile_light, cashback_settings{,_earning}_light EYE-checked vs the
+      refs; suites green: merchant 75, core 86, ui 3, customer 35.)
 - [ ] Promotions (list, create draft with cost preview + tier-cliff
       warning, publish confirm — immutable once live, cancel draft only).
 
@@ -373,6 +399,31 @@ touches only apps/merchant.
       grey; that look retires.
 - [ ] After MR6 ships the APK: add the app download card
       (manfaa-merchant.apk slot + Cloudflare purge rule applies).
+
+## Store readiness (App Store / Play — from the 2026-08-17 approval review)
+
+The model itself is store-safe (cashback on physical retail = Rakuten's
+category; customer app ships as Shopping, merchant app as Business). The
+approval risk is compliance details:
+
+- [x] Privacy policy, Terms, and account-deletion pages — customer set on
+      manfaa.app/{privacy,terms,account-deletion}, merchant set on
+      merchant.manfaa.app/{privacy,terms,account-deletion}; English-only
+      LTR legal documents, linked from both footers. (2026-08-17. Owner
+      to-dos flagged: confirm the legal entity name used ("Manfaa Pvt
+      Ltd") and stand up the support@manfaa.app mailbox; lawyer review
+      recommended before store submission.)
+- [ ] IN-APP account deletion (customer app; Apple 5.1.1(v) + Play
+      require it) — server-side anonymise-not-delete design per the
+      ledger law (transactions survive, identity unlinked), plus the
+      one-tap flow in Profile.
+- [ ] OTP review bypass: a designated test number whose SMS code is
+      static server-side (reviewers cannot receive Maldivian SMS) — both
+      apps, gated so it never works for real numbers.
+- [ ] Organization developer accounts in the company name (Apple needs
+      D-U-N-S; start early, takes weeks).
+- [ ] App Privacy (Apple) / Data Safety (Play) questionnaires + reviewer
+      notes ("merchant-funded cashback, no deposits, no investment").
 
 ## Standing blockers / owner asks
 - Firebase console: register `mv.manfaa.merchant` (Android; iOS later).

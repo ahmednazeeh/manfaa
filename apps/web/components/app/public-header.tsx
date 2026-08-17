@@ -163,6 +163,14 @@ export function PublicFooter() {
           >
             {t('landing.forMerchants')}
           </a>
+          {/* Legal pages are English-only documents — their titles stay
+              untranslated on purpose, matching the pages themselves. */}
+          <Link href="/privacy" className="hover:text-foreground">
+            Privacy
+          </Link>
+          <Link href="/terms" className="hover:text-foreground">
+            Terms
+          </Link>
           {/* Static docs served by nginx, not a Next.js route — a plain
               anchor, so no client-side navigation is attempted. */}
           <a href="/docs/" className="hover:text-foreground">
