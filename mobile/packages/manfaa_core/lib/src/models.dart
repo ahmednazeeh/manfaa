@@ -11,25 +11,35 @@ String _s(Object? v) => v?.toString() ?? '';
 
 /// GET /config — the version gate and feature switches.
 class MobileConfig {
-  MobileConfig({required this.customerGates, required this.features});
+  MobileConfig({required this.gates, required this.features});
 
   factory MobileConfig.fromJson(Map<String, dynamic> json) {
     final apps = json['apps'] as Map? ?? const {};
-    final customer = apps['customer'] as Map? ?? const {};
 
     return MobileConfig(
-      customerGates: {
-        for (final platform in ['android', 'ios'])
-          if (customer[platform] is Map)
-            platform: AppGate.fromJson(
-              (customer[platform] as Map).cast<String, dynamic>(),
-            ),
+      gates: {
+        for (final MapEntry(:key, :value) in apps.entries)
+          if (value is Map)
+            key.toString(): {
+              for (final platform in ['android', 'ios'])
+                if (value[platform] is Map)
+                  platform: AppGate.fromJson(
+                    (value[platform] as Map).cast<String, dynamic>(),
+                  ),
+            },
       },
       features: (json['features'] as Map?)?.cast<String, dynamic>() ?? const {},
     );
   }
 
-  final Map<String, AppGate> customerGates;
+  /// Version gates by app name ('customer', 'merchant'), then platform.
+  /// The server serves every app's gates to every caller; each app reads
+  /// its own via [resolveGate]'s `app` parameter.
+  final Map<String, Map<String, AppGate>> gates;
+
+  /// The customer app's view, kept because that app predates per-app gates.
+  Map<String, AppGate> get customerGates => gates['customer'] ?? const {};
+
   final Map<String, dynamic> features;
 }
 

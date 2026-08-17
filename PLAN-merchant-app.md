@@ -135,6 +135,15 @@ via the polymorphic device_tokens path the customer app already exercises
       prompt-payment discount on DATE — settle before then and save
       MVR X").
 
+## Task list — status
+- **MR0 Foundation — IN PROGRESS (started 2026-08-17)**
+- MR1 Signup + setup wizard — queued
+- MR2 Till (Credit) + Transactions — queued
+- MR3 Money (Dashboard/Settlements/Wallet) — queued
+- MR4 Notifications — queued (Firebase registration blocker)
+- MR5 More estate — queued
+- MR6 Release — queued
+
 ## Rounds
 
 House convention per round: read the design refs first → build → full
@@ -144,20 +153,20 @@ harness goldens reviewed by EYE (light+dark, en+dv where layout-affecting)
 `systemctl restart manfaa-queue.service`.
 
 ### MR0 — Foundation
-- [ ] manfaa_core refactor (transport base, session split, per-app gates,
+- [x] manfaa_core refactor (transport base, session split, per-app gates,
       merchant ApiCodes, Idempotency-Key) — customer app suites stay green.
-- [ ] `mobile/merchant` scaffold: applicationId `mv.manfaa.merchant`,
+- [x] `mobile/merchant` scaffold: applicationId `mv.manfaa.merchant`,
       compileSdk 37, Java/Kotlin 17, minify template copied from customer;
       fonts (Manrope/Faruma/MVWaheed); l10n en+dv skeleton; theme =
       manfaa_ui with violet accent + "Merchant" wordmark suffix widget.
-- [ ] Boot/config gate (`apps.merchant`), router with revision-listening
+- [x] Boot/config gate (`apps.merchant`), router with revision-listening
       redirect + **status routing**: 401→login; merchant.status
       draft/pending_review/rejected→setup flow; active→shell.
-- [ ] Login per Merchant Login.png (hero panel, email+password, ink CTA,
+- [x] Login per Merchant Login.png (hero panel, email+password, ink CTA,
       security note; no Google/forgot).
-- [ ] Shell: floating pill nav Dashboard/Credit/Transactions/Settlements/
+- [x] Shell: floating pill nav Dashboard/Credit/Transactions/Settlements/
       More, permission-aware.
-- [ ] Screenshot harness (`_ShotApi over MerchantApi`) from day one.
+- [x] Screenshot harness (`_ShotApi over MerchantApi`) from day one.
 
 ### MR1 — Signup + setup wizard (all web steps, in-app)
 - [ ] API: mobile signup/setup mounting (gap list above).

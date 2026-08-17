@@ -11,7 +11,7 @@ import '../session.dart';
 class AuthInterceptor extends Interceptor {
   AuthInterceptor(this._session);
 
-  final SessionStore _session;
+  final SessionBase _session;
 
   @override
   void onRequest(RequestOptions options, RequestInterceptorHandler handler) {

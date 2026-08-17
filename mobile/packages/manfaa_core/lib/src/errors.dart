@@ -20,6 +20,29 @@ abstract final class ApiCode {
   static const serverError = 'server_error';
   static const cursorInvalid = 'cursor_invalid';
   static const customerNotFound = 'customer_not_found';
+
+  // ------------------------------------------------------- merchant till
+  // The credit path's refusals (guide §4/§6; HandlesCreditRequests and
+  // IdempotencyMiddleware server-side). All terminal except the two the
+  // guide singles out: `idempotency_key_in_flight` retries with the SAME
+  // key, and `backdated_confirmation_required` resends with the flag only
+  // after a human confirms (meta carries `server_time` — check the device
+  // clock first).
+  static const merchantNotActive = 'merchant_not_active';
+  static const futureDated = 'future_dated';
+  static const noEffectiveRate = 'no_effective_rate';
+  static const rateBelowAdvertised = 'rate_below_advertised';
+  static const rateNotPriced = 'rate_not_priced';
+  static const backdatedConfirmationRequired = 'backdated_confirmation_required';
+  static const duplicateInvoice = 'duplicate_invoice';
+
+  /// 403 with the missing slug in `meta.permission` — refresh /merchant/me;
+  /// the role may have narrowed since the navigation was drawn.
+  static const permissionRequired = 'permission_required';
+
+  static const idempotencyKeyRequired = 'idempotency_key_required';
+  static const idempotencyKeyReuseMismatch = 'idempotency_key_reuse_mismatch';
+  static const idempotencyKeyInFlight = 'idempotency_key_in_flight';
 }
 
 class MobileApiException implements Exception {

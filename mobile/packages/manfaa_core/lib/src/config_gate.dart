@@ -7,10 +7,11 @@ enum UpdateVerdict { none, optional, required }
 
 ({UpdateVerdict verdict, String storeUrl}) resolveGate(
   MobileConfig config, {
+  String app = 'customer', // 'customer' | 'merchant'
   required String platform, // 'android' | 'ios'
   required int build,
 }) {
-  final gate = config.customerGates[platform];
+  final gate = config.gates[app]?[platform];
 
   if (gate == null) return (verdict: UpdateVerdict.none, storeUrl: '');
 

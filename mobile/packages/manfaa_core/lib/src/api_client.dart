@@ -2,65 +2,29 @@ import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 
-import 'errors.dart';
-import 'http/interceptors.dart';
+import 'api_base.dart';
 import 'models.dart';
 import 'session.dart';
 
-/// The API base. Overridable per build (`--dart-define=API_BASE_URL=`);
-/// defaults to production — there is no staging environment, and dev runs
-/// against live with test accounts exactly as the web panels are developed.
-abstract final class ApiEnv {
-  static const baseUrl = String.fromEnvironment(
-    'API_BASE_URL',
-    defaultValue: 'https://manfaa.app/api/mobile/v1',
-  );
-
-  /// The PUBLIC api root (discovery, storefront) — the same origin one level
-  /// up from the mobile tree. Derived, so one --dart-define moves both.
-  static final publicBaseUrl = baseUrl.replaceFirst(RegExp(r'/mobile/v1/?$'), '');
-}
-
-/// The one client for /api/mobile/v1.
+/// The customer app's client for /api/mobile/v1.
 ///
-/// Thin by design: every business rule lives on the server, and this class
-/// only speaks the transport contract (docs/mobile-api-guide.md) — bearer
-/// auth, the error envelope, conditional GETs, the retry law. Screens call
-/// typed methods and receive models or a MobileApiException whose `message`
-/// is always safe to show.
-class ManfaaApi {
-  ManfaaApi({required this.session, Dio? dio})
-      : dio = dio ??
-            Dio(
-              BaseOptions(
-                baseUrl: ApiEnv.baseUrl,
-                connectTimeout: const Duration(seconds: 10),
-                receiveTimeout: const Duration(seconds: 20),
-                headers: {'Accept': 'application/json'},
-              ),
-            ) {
-    this.dio.interceptors.addAll([
-      AuthInterceptor(session),
-      EtagCacheInterceptor(),
-      RetryInterceptor(this.dio),
-    ]);
-  }
-
-  final Dio dio;
-  final SessionStore session;
+/// The transport itself (Dio construction, interceptors, envelope plumbing)
+/// lives in [ManfaaApiBase]; this class is the customer endpoint surface
+/// plus the public discovery reads. The name predates the merchant split
+/// and stays: every screen and test in mobile/customer constructs
+/// `ManfaaApi`, and renaming it would churn an installed, working app for
+/// nothing.
+class ManfaaApi extends ManfaaApiBase<CustomerSession> {
+  ManfaaApi({required super.session, super.dio});
 
   // ------------------------------------------------------------- reads
 
-  Future<MobileConfig> fetchConfig() async => MobileConfig.fromJson(
-        await _get('/config'),
-      );
-
   Future<CustomerMe> me() async => CustomerMe.fromJson(
-        await _get('/customer/me'),
+        await getJson('/customer/me'),
       );
 
   Future<HomeData> home() async {
-    final data = HomeData.fromJson(await _get('/customer/home'));
+    final data = HomeData.fromJson(await getJson('/customer/home'));
 
     // Keep the offline avatar cache honest: /home is the call every launch
     // makes, so a picture changed on the website lands here first.
@@ -71,14 +35,14 @@ class ManfaaApi {
 
   /// Earnings history, cursor-paged (the list grows at the top).
   Future<CursorPage<TransactionEntry>> transactions({String? cursor}) =>
-      _page('/customer/transactions', cursor, TransactionEntry.fromJson);
+      getPage('/customer/transactions', cursor, TransactionEntry.fromJson);
 
   /// Payout history — pending excluded server-side, failed included.
   Future<CursorPage<PayoutEntry>> payouts({String? cursor}) =>
-      _page('/customer/payouts', cursor, PayoutEntry.fromJson);
+      getPage('/customer/payouts', cursor, PayoutEntry.fromJson);
 
   Future<PayoutDetail> payoutDetail(int id) async {
-    final data = await _run(
+    final data = await run(
       () => dio.get<Map<String, dynamic>>('/customer/payouts/$id'),
     );
 
@@ -87,36 +51,12 @@ class ManfaaApi {
     );
   }
 
-  Future<CursorPage<T>> _page<T>(
-    String path,
-    String? cursor,
-    T Function(Map<String, dynamic>) parse,
-  ) async {
-    final data = await _run(
-      () => dio.get<Map<String, dynamic>>(
-        path,
-        queryParameters: {'cursor': ?cursor},
-      ),
-    );
-
-    final page = (data?['page'] as Map?)?.cast<String, dynamic>() ?? {};
-
-    return CursorPage(
-      items: [
-        for (final item in (data?['data'] as List? ?? const []))
-          parse((item as Map).cast<String, dynamic>()),
-      ],
-      nextCursor: page['next_cursor'] as String?,
-      hasMore: page['has_more'] as bool? ?? false,
-    );
-  }
-
   // ------------------------------------------------ public discovery (R4)
 
   /// The Discover landing feed. PUBLIC — no auth, served from the same
   /// origin outside /mobile/v1, cached 60s server-side and ETagged.
   Future<DiscoverFeed> discover({double? lat, double? lng, int? zone}) async {
-    final data = await _run(
+    final data = await run(
       () => dio.get<Map<String, dynamic>>(
         '${ApiEnv.publicBaseUrl}/discover',
         queryParameters: {'lat': ?lat, 'lng': ?lng, 'zone': ?zone},
@@ -130,7 +70,7 @@ class ManfaaApi {
 
   /// The islands the location picker offers (admin-drawn zones).
   Future<List<ZoneEntry>> zones() async {
-    final data = await _run(
+    final data = await run(
       () => dio.get<Map<String, dynamic>>(
         '${ApiEnv.publicBaseUrl}/discover/zones',
       ),
@@ -148,7 +88,7 @@ class ManfaaApi {
     String? category,
     int page = 1,
   }) async {
-    final data = await _run(
+    final data = await run(
       () => dio.get<Map<String, dynamic>>(
         '${ApiEnv.publicBaseUrl}/discover/merchants',
         queryParameters: {'q': ?q, 'category': ?category, 'page': page},
@@ -162,7 +102,7 @@ class ManfaaApi {
   }
 
   Future<StorePage> store(String slug) async {
-    final data = await _run(
+    final data = await run(
       () => dio.get<Map<String, dynamic>>(
         '${ApiEnv.publicBaseUrl}/discover/merchants/$slug',
       ),
@@ -174,7 +114,7 @@ class ManfaaApi {
   }
 
   Future<List<DeviceEntry>> devices() async {
-    final data = await _run(
+    final data = await run(
       () => dio.get<Map<String, dynamic>>('/customer/devices'),
     );
 
@@ -194,7 +134,7 @@ class ManfaaApi {
     required String password,
     required String deviceName,
   }) async {
-    final data = await _run(
+    final data = await run(
       () => dio.post<Map<String, dynamic>>(
         '/customer/auth/token',
         data: {
@@ -214,7 +154,7 @@ class ManfaaApi {
   /// whether or not the phone has an account, so the UI never learns —
   /// or leaks — anything at this step.
   Future<void> requestOtp(String phone) async =>
-      _run(() => dio.post<void>('/customer/auth/otp/request', data: {
+      run(() => dio.post<void>('/customer/auth/otp/request', data: {
             'phone': phone,
           }));
 
@@ -226,7 +166,7 @@ class ManfaaApi {
     required String code,
     required String deviceName,
   }) async {
-    final data = await _run(
+    final data = await run(
       () => dio.post<Map<String, dynamic>>('/customer/auth/otp/verify', data: {
         'phone': phone,
         'code': code,
@@ -253,7 +193,7 @@ class ManfaaApi {
     required String name,
     required String deviceName,
   }) async {
-    final data = await _run(
+    final data = await run(
       () => dio.post<Map<String, dynamic>>('/customer/auth/register', data: {
         'signup_token': signupToken,
         'name': name,
@@ -292,7 +232,7 @@ class ManfaaApi {
   // ------------------------------------------------- payout account (R5)
 
   Future<PayoutAccount> payoutAccount() async {
-    final data = await _run(
+    final data = await run(
       () => dio.get<Map<String, dynamic>>('/customer/payout-account'),
     );
 
@@ -304,7 +244,7 @@ class ManfaaApi {
   /// Send the confirmation code to the number on file, so a stolen token
   /// alone cannot redirect payouts.
   Future<void> requestPayoutAccountOtp() async =>
-      _run(() => dio.post<void>('/customer/payout-account/otp'));
+      run(() => dio.post<void>('/customer/payout-account/otp'));
 
   /// Change the account — the code proves possession of the phone.
   Future<PayoutAccount> updatePayoutAccount({
@@ -313,7 +253,7 @@ class ManfaaApi {
     required String accountName,
     required String otpCode,
   }) async {
-    final data = await _run(
+    final data = await run(
       () => dio.put<Map<String, dynamic>>('/customer/payout-account', data: {
         'bank_name': bankName,
         'account_no': accountNo,
@@ -337,7 +277,7 @@ class ManfaaApi {
     required Uint8List bytes,
     required String filename,
   }) async {
-    final data = await _run(
+    final data = await run(
       () => dio.post<Map<String, dynamic>>(
         '/customer/avatar',
         data: FormData.fromMap({
@@ -354,15 +294,15 @@ class ManfaaApi {
 
   /// Remove the profile picture — back to initials everywhere.
   Future<void> removeAvatar() async {
-    await _run(() => dio.delete<Map<String, dynamic>>('/customer/avatar'));
+    await run(() => dio.delete<Map<String, dynamic>>('/customer/avatar'));
     await session.setAvatarUrl(null);
   }
 
   Future<void> revokeDevice(int id) async =>
-      _run(() => dio.delete<Map<String, dynamic>>('/customer/devices/$id'));
+      run(() => dio.delete<Map<String, dynamic>>('/customer/devices/$id'));
 
   Future<void> revokeAllDevices() async =>
-      _run(() => dio.delete<Map<String, dynamic>>('/customer/devices'));
+      run(() => dio.delete<Map<String, dynamic>>('/customer/devices'));
 
   // ------------------------------------------------------------- push
 
@@ -372,7 +312,7 @@ class ManfaaApi {
     int? appBuild,
     String? locale,
   }) async =>
-      _run(
+      run(
         () => dio.put<void>('/customer/push-token', data: {
           'token': token,
           'platform': platform,
@@ -381,32 +321,9 @@ class ManfaaApi {
         }),
       );
 
-  Future<void> deletePushToken(String token) async => _run(
+  Future<void> deletePushToken(String token) async => run(
         () => dio.delete<void>('/customer/push-token', data: {'token': token}),
       );
-
-  // ------------------------------------------------------------ plumbing
-
-  Future<Map<String, dynamic>> _get(String path) async {
-    final data = await _run(() => dio.get<Map<String, dynamic>>(path));
-
-    return (data?['data'] as Map?)?.cast<String, dynamic>() ?? {};
-  }
-
-  /// Every call funnels through here so the envelope mapping exists once.
-  Future<T?> _run<T>(Future<Response<T>> Function() call) async {
-    try {
-      return (await call()).data;
-    } on DioException catch (e) {
-      if (e.type == DioExceptionType.badResponse) {
-        throw MobileApiException.fromResponse(
-          e.response?.data,
-          e.response?.statusCode,
-        );
-      }
-      throw MobileApiException.network();
-    }
-  }
 }
 
 /// Mirrors the server's Msisdn normalisation: seven local digits become the
