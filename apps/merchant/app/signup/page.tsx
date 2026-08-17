@@ -37,6 +37,7 @@ import {
   InputOTPSlot,
 } from '@/components/ui/input-otp';
 import { LanguageSwitcher } from '@/components/app/language-switcher';
+import { PitchPanel } from '@/components/marketing/pitch';
 
 type Step = 'phone' | 'code' | 'details';
 
@@ -188,23 +189,36 @@ export default function SignupPage() {
   };
 
   return (
-    <div className="relative grow flex items-center justify-center min-h-screen w-full bg-muted/40 p-5">
-      <div className="absolute top-4 end-4">
-        <LanguageSwitcher />
-      </div>
-      <Card className="w-full max-w-[440px]">
+    // Split layout on the ENTRY step only (PLAN §WL): the pitch panel
+    // welcomes a prospect at the phone step, then disappears so the code
+    // and details steps stay a clean centered form.
+    <div
+      className={
+        step === 'phone' ? 'grid min-h-screen w-full lg:grid-cols-2' : undefined
+      }
+    >
+      {step === 'phone' && <PitchPanel />}
+      <div className="relative grow flex items-center justify-center min-h-screen w-full bg-muted/40 p-5">
+        <div className="absolute top-4 end-4">
+          <LanguageSwitcher />
+        </div>
+        <Card className="w-full max-w-[440px]">
         <CardContent className="p-8 flex flex-col gap-6">
           <div className="flex flex-col items-center gap-3">
-            <img
-              src={toAbsoluteUrl('/media/app/default-logo.svg')}
-              className="dark:hidden h-[26px]"
-              alt={t('common.appName')}
-            />
-            <img
-              src={toAbsoluteUrl('/media/app/default-logo-dark.svg')}
-              className="hidden dark:block h-[26px]"
-              alt={t('common.appName')}
-            />
+            <span className="flex items-center gap-2">
+              <img
+                src={toAbsoluteUrl('/media/app/mini-logo.svg')}
+                className="h-5"
+                alt=""
+                aria-hidden
+              />
+              <span className="text-lg font-semibold tracking-tight text-mono">
+                {t('common.appName')}
+              </span>
+              <span className="text-lg font-semibold text-violet-600 dark:text-violet-400">
+                {t('marketing.wordmark')}
+              </span>
+            </span>
             <div className="text-center">
               <h1 className="text-lg font-semibold text-mono">
                 {t('signup.title')}
@@ -469,7 +483,8 @@ export default function SignupPage() {
             </Link>
           </p>
         </CardContent>
-      </Card>
+        </Card>
+      </div>
     </div>
   );
 }

@@ -64,6 +64,18 @@
 
 /** Theme Setup **/
 @theme inline {
+  /* The WL landing's floating phone (mirrors apps/web's hero-float). */
+  @keyframes hero-float {
+    0%,
+    100% {
+      transform: translateY(0);
+    }
+    50% {
+      transform: translateY(-10px);
+    }
+  }
+  --animate-hero-float: hero-float 7s ease-in-out infinite;
+
   /** Base Colors **/
   --color-background: var(--background);
   --color-foreground: var(--foreground);

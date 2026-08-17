@@ -871,5 +871,22 @@
     "cancelFailed": "Could not cancel the sale.",
     "amendLinesLabel": "Category amounts",
     "amendLinesHint": "The eligible amount adds up from these lines:"
+  },
+  "marketing": {
+    "wordmark": "Merchant",
+    "headline": "Bring shoppers back to your store",
+    "subtitle": "Manfaa puts your store in front of cashback shoppers across the Maldives — and gives them a reason to come back.",
+    "point1Title": "Customers discover you",
+    "point1Body": "Your store appears in the Manfaa app and on the map, with your cashback rate on the card.",
+    "point2Title": "You set the rate",
+    "point2Body": "Choose the cashback you offer and change it as your business needs.",
+    "point3Title": "Simple settlement",
+    "point3Body": "Settle what you owe in a few taps — pay early and keep the 5% prompt-payment discount.",
+    "register": "Register your store",
+    "haveAccount": "I already have an account",
+    "login": "Log in",
+    "panelTitle": "The cashback platform for Maldivian stores",
+    "phoneAlt": "The Manfaa Merchant app dashboard",
+    "forShoppers": "For shoppers: manfaa.app"
   }
 }

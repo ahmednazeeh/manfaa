@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show debugDisableShadows;
 import 'package:flutter/services.dart' show FontLoader, rootBundle;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -689,6 +690,33 @@ void main() {
   testWidgets(
     'dashboard dark',
     (t) => shot(t, 'dashboard_dark', Brightness.dark),
+  );
+
+  // ---- WL marketing renderer ------------------------------------------------
+  // Not review goldens: the merchant.manfaa.app landing's phone mockup — the
+  // REAL Dashboard, same fixture as above. Goldens normally run with shadows
+  // disabled, which paints solid grey boxes where every card's soft shadow
+  // belongs (the halo the owner flagged on the manfaa.app hero); marketing
+  // shots must look like the device, so real shadows are restored here and
+  // put back INSIDE the body — the framework asserts painting debug vars
+  // before tearDowns run.
+  Future<void> marketingShot(
+    WidgetTester tester,
+    String name,
+    Brightness b,
+  ) async {
+    debugDisableShadows = false;
+    await shot(tester, name, b);
+    debugDisableShadows = true;
+  }
+
+  testWidgets(
+    'marketing dashboard light',
+    (t) => marketingShot(t, 'marketing_dashboard_light', Brightness.light),
+  );
+  testWidgets(
+    'marketing dashboard dark',
+    (t) => marketingShot(t, 'marketing_dashboard_dark', Brightness.dark),
   );
   testWidgets(
     'settlements light',

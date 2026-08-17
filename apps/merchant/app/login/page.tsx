@@ -25,6 +25,7 @@ import {
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { LanguageSwitcher } from '@/components/app/language-switcher';
+import { PitchPanel } from '@/components/marketing/pitch';
 
 export default function LoginPage() {
   const { t } = useTranslation();
@@ -67,23 +68,32 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="relative grow flex items-center justify-center min-h-screen w-full bg-muted/40 p-5">
-      <div className="absolute top-4 end-4">
-        <LanguageSwitcher />
-      </div>
-      <Card className="w-full max-w-[400px]">
+    // Split layout (PLAN §WL): the landing's own pitch panel rides beside
+    // the form ≥lg, so a bookmarked login still tells the brand story;
+    // below lg the form stands alone exactly as before.
+    <div className="grid min-h-screen w-full lg:grid-cols-2">
+      <PitchPanel />
+      <div className="relative flex grow items-center justify-center bg-muted/40 p-5">
+        <div className="absolute top-4 end-4">
+          <LanguageSwitcher />
+        </div>
+        <Card className="w-full max-w-[400px]">
         <CardContent className="p-8 flex flex-col gap-6">
           <div className="flex flex-col items-center gap-3">
-            <img
-              src={toAbsoluteUrl('/media/app/default-logo.svg')}
-              className="dark:hidden h-[26px]"
-              alt={t('common.appName')}
-            />
-            <img
-              src={toAbsoluteUrl('/media/app/default-logo-dark.svg')}
-              className="hidden dark:block h-[26px]"
-              alt={t('common.appName')}
-            />
+            <span className="flex items-center gap-2">
+              <img
+                src={toAbsoluteUrl('/media/app/mini-logo.svg')}
+                className="h-5"
+                alt=""
+                aria-hidden
+              />
+              <span className="text-lg font-semibold tracking-tight text-mono">
+                {t('common.appName')}
+              </span>
+              <span className="text-lg font-semibold text-violet-600 dark:text-violet-400">
+                {t('marketing.wordmark')}
+              </span>
+            </span>
             <div className="text-center">
               <h1 className="text-lg font-semibold text-mono">
                 {t('auth.loginTitle')}
@@ -188,7 +198,8 @@ export default function LoginPage() {
             </Link>
           </p>
         </CardContent>
-      </Card>
+        </Card>
+      </div>
     </div>
   );
 }

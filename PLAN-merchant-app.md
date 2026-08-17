@@ -175,8 +175,10 @@ via the polymorphic device_tokens path the customer app already exercises
   `mv.manfaa.merchant` — a config-file swap, zero code changes.)
 - **MR5 More estate — NEXT**
 - MR6 Release — queued
-- WL merchant.manfaa.app landing (web side-quest, §WL below) — queued;
-  can run beside any round (apps/merchant only); APK card follows MR6
+- WL merchant.manfaa.app landing — SHIPPED 2026-08-17 (landing + split
+  auth panels + real-Dashboard mockup; also retired the METRONIC template
+  logo the auth cards had been shipping). Only the APK card remains,
+  after MR6
 - MR7 Tablet optimisation (merchant only) — queued after MR6 (owner-agreed
   2026-08-17; phone-first until then)
 
@@ -348,19 +350,21 @@ gets said aloud and printed. The main site keeps the SEO-weighted pitch
 converts whoever arrives directly. Can run beside any MR round — it
 touches only apps/merchant.
 
-- [ ] Root `/`: signed-in → dashboard exactly as today; signed-out →
-      landing instead of the login bounce.
-- [ ] Landing content (one page, violet system, en+dv): concise pitch —
+- [x] Root `/`: signed-in → dashboard exactly as today (session-cookie
+      presence check, real auth stays with the app layout); signed-out →
+      landing instead of the login bounce. (Shipped 2026-08-17.)
+- [x] Landing content (one page, violet system, en+dv): concise pitch —
       customers discover you on the app and map; you set your own
       cashback rate; simple settlement with the 5% prompt-payment
       discount — prominent **Register your store** → existing /signup
       wizard, **Log in** beside it.
-- [ ] Do NOT duplicate manfaa.app's marketing content; keep it a lean
+- [x] Do NOT duplicate manfaa.app's marketing content; keep it a lean
       converter.
-- [ ] Nice-to-have: render the merchant app's real Dashboard via the
+- [x] Nice-to-have: render the merchant app's real Dashboard via the
       screenshot-harness pattern (marketing fixture) as the landing's
-      phone mockup, like the manfaa.app hero.
-- [ ] Split-panel auth pages (same round, owner yes 2026-08-17): /login
+      phone mockup, like the manfaa.app hero. (marketing_dashboard shots
+      in the merchant screenshot harness → app-dashboard-{light,dark}.png.)
+- [x] Split-panel auth pages (same round, owner yes 2026-08-17): /login
       and /signup entry step get a split layout — form on one side, the
       landing's OWN pitch panel (same component: three bullets + mockup)
       on the other — so a bookmarked login still tells the brand story.
