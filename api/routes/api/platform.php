@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Admin\AdminUsersController;
 use App\Http\Controllers\Admin\AppReleasesController;
+use App\Http\Controllers\Admin\BrandThemeController;
 use App\Http\Controllers\Admin\PlatformBankAccountsController;
 use App\Http\Controllers\Admin\PlatformFeeTiersController;
 use App\Http\Controllers\Admin\PlatformSettingsController;
@@ -37,7 +38,12 @@ Route::prefix('admin')->middleware('auth:admin')->group(function () {
     Route::get('platform/app-releases', [AppReleasesController::class, 'index']);
     Route::put('platform/app-releases', [AppReleasesController::class, 'update']);
 
+    // The storefront accent colour — read by any admin, changed only by a
+    // superadmin (a whole-storefront repaint is not an emergency lever).
+    Route::get('platform/brand', [BrandThemeController::class, 'show']);
+
     Route::middleware(EnsureSuperadmin::class)->group(function () {
+        Route::put('platform/brand', [BrandThemeController::class, 'update']);
         Route::get('admins', [AdminUsersController::class, 'index']);
         Route::post('admins', [AdminUsersController::class, 'store']);
         Route::patch('admins/{id}', [AdminUsersController::class, 'update'])->whereNumber('id');

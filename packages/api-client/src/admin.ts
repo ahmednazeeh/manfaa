@@ -1669,3 +1669,36 @@ export async function deleteZone(
     signal: options.signal,
   });
 }
+
+// ---------------------------------------------------------------------------
+// Storefront brand colour (superadmin appearance lever)
+// ---------------------------------------------------------------------------
+
+export const BrandColorResponseSchema = z.object({
+  data: z.object({ color: z.string().nullable() }),
+});
+export type BrandColorResponse = z.infer<typeof BrandColorResponseSchema>;
+
+/** GET /api/admin/platform/brand — null until a colour has been chosen. */
+export function getAdminBrandColor(
+  options: RequestOptions = {},
+): Promise<BrandColorResponse> {
+  return apiFetch('/api/admin/platform/brand', BrandColorResponseSchema, {
+    signal: options.signal,
+  });
+}
+
+/**
+ * PUT /api/admin/platform/brand — superadmin. `#rrggbb` sets the storefront
+ * accent; null clears it back to the built-in hue.
+ */
+export function setAdminBrandColor(
+  color: string | null,
+  options: RequestOptions = {},
+): Promise<BrandColorResponse> {
+  return apiFetch('/api/admin/platform/brand', BrandColorResponseSchema, {
+    method: 'PUT',
+    body: { color },
+    signal: options.signal,
+  });
+}

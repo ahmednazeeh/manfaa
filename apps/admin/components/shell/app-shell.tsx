@@ -19,6 +19,7 @@ import {
   ShieldAlert,
   ShieldCheck,
   SlidersHorizontal,
+  Palette,
   Smartphone,
   Store,
   Tags,
@@ -122,6 +123,7 @@ const NAV_ITEMS: NavItem[] = [
 const SETTINGS_ITEMS: NavItem[] = [
   { href: '/settings/platform', label: 'Platform', icon: SlidersHorizontal },
   { href: '/settings/app-releases', label: 'App releases', icon: Smartphone },
+  { href: '/settings/appearance', label: 'Appearance', icon: Palette },
   { href: '/settings/fee-tiers', label: 'Fee tiers', icon: Percent },
   { href: '/settings/bank-accounts', label: 'Bank accounts', icon: CreditCard },
   { href: '/settings/store-categories', label: 'Store categories', icon: Tags },

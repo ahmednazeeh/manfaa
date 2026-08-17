@@ -3,6 +3,7 @@ import { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import { ThemeProvider } from 'next-themes';
 import { cn } from '@/lib/utils';
+import { BrandThemeApplier } from '@/components/app/brand-theme';
 import { I18nProvider } from '@/providers/i18n-provider';
 import { QueryProvider } from '@/providers/query-provider';
 import { Toaster } from '@/components/ui/sonner';
@@ -50,6 +51,7 @@ export default async function RootLayout({
                   and a root-level boundary makes dynamic routes stream — the
                   200 commits before /store/[slug]'s notFound() can 404. */}
               <TooltipProvider delayDuration={0}>
+                <BrandThemeApplier />
                 {children}
                 <Toaster />
               </TooltipProvider>

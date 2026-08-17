@@ -11,6 +11,7 @@ use App\Http\Controllers\Customer\PayoutsController;
 use App\Http\Controllers\Customer\TransactionsController;
 use App\Http\Controllers\CustomerAvatarController;
 use App\Http\Controllers\Devices\CustomerDevicesController;
+use App\Http\Controllers\ThemeController;
 use Illuminate\Support\Facades\Route;
 
 // Customer platform (§10 apps/web, §12 Phase 3): OTP signup, balance,
@@ -82,6 +83,11 @@ if (config('features.customer_claims')) {
 // AppServiceProvider), dataset cached 60s in the service.
 Route::get('discover', [DiscoveryController::class, 'index'])->middleware('throttle:discovery');
 Route::get('discover/zones', [DiscoveryController::class, 'zones'])->middleware('throttle:discovery');
+
+// The admin-chosen storefront accent — public, tiny, ETagged; null until a
+// superadmin picks a colour.
+Route::get('theme', [ThemeController::class, 'show'])
+    ->middleware('throttle:discovery');
 
 // Storefront: paginated directory + per-slug store page. Same cache and
 // throttle discipline; the slug pattern is constrained so junk never reaches
