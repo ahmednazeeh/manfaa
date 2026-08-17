@@ -89,6 +89,17 @@ Route::prefix('merchant')->middleware('auth:merchant')->group(function () {
         ->whereNumber('id')
         ->middleware('merchant.can:staff.edit');
 
+    // The MR8 password reset rides `staff.edit`, NOT `staff.invite`: it is
+    // an operation on an EXISTING account, like the PATCH above — and like
+    // that PATCH it carries no approval gate, because resetting the password
+    // of a cashier whose phone was taken is exactly what a suspended or
+    // still-waiting store must stay able to do. The invite's slug and its
+    // approval gate belong to minting NEW accounts. The temp password is in
+    // THIS response and never again.
+    Route::post('staff/{id}/reset-password', [StaffController::class, 'resetPassword'])
+        ->whereNumber('id')
+        ->middleware('merchant.can:staff.edit');
+
     // The permission CATALOGUE, published so the roles screen renders the
     // groups and their wording from the server rather than hardcoding a
     // copy that goes stale on the next deploy (D8). Read-only and gated

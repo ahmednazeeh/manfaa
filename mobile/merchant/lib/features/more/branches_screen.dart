@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:manfaa_core/manfaa_core.dart';
@@ -9,6 +8,7 @@ import '../../app/app.dart';
 import '../../app/providers.dart';
 import '../../widgets/adaptive.dart';
 import '../../widgets/merchant_brand.dart';
+import '../../widgets/osm_map.dart';
 import '../settlements/settlement_widgets.dart' show ToneBanner;
 import 'estate_widgets.dart';
 import 'more_providers.dart';
@@ -43,9 +43,9 @@ class _BranchesScreenState extends ConsumerState<BranchesScreen> {
   var _query = '';
 
   /// MR7 — the expanded list | editor split's right pane: open with a
-  /// branch id to edit, open with null to add. Local state on a
-  /// shell-branch screen, so rail navigation away and back keeps it.
-  /// Phones keep the bottom sheet instead.
+  /// branch id to edit, open with null to add. Local state, cleared when
+  /// the tab is left (MR8's tab-reset). Phones keep the bottom sheet
+  /// instead.
   var _paneOpen = false;
   int? _paneBranchId;
 
@@ -671,59 +671,15 @@ class _BranchSheetState extends ConsumerState<_BranchSheet> {
                   borderRadius: BorderRadius.circular(Corner.tile),
                   child: SizedBox(
                     height: 220,
-                    child: Stack(
-                      children: [
-                        FlutterMap(
-                          options: MapOptions(
-                            initialCenter: _center,
-                            initialZoom: widget.existing?.pinned == true
-                                ? 17
-                                : 15,
-                            onPositionChanged: (camera, _) =>
-                                setState(() => _center = camera.center),
-                          ),
-                          children: [
-                            TileLayer(
-                              urlTemplate:
-                                  'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                              userAgentPackageName: 'mv.manfaa.merchant',
-                            ),
-                            const Align(
-                              alignment: Alignment.bottomRight,
-                              child: Padding(
-                                padding: EdgeInsets.all(2),
-                                child: Text(
-                                  '© OpenStreetMap',
-                                  style: TextStyle(
-                                    fontSize: 9,
-                                    color: Color(0x99000000),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        // The fixed centre pin the map drags under — the
-                        // setup location step's exact idiom.
-                        IgnorePointer(
-                          child: Center(
-                            child: Transform.translate(
-                              offset: const Offset(0, -18),
-                              child: const Icon(
-                                Icons.place_rounded,
-                                size: 40,
-                                color: ManfaaColors.coral,
-                                shadows: [
-                                  Shadow(
-                                    color: Color(0x40000000),
-                                    blurRadius: 6,
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
+                    // MR8: the shared pin-picker map — identified OSM user
+                    // agent, https tiles, and the graceful tile-error state
+                    // live THERE (the setup location step renders the same
+                    // widget).
+                    child: PinPickerMap(
+                      initialCenter: _center,
+                      initialZoom: widget.existing?.pinned == true ? 17 : 15,
+                      onCenterChanged: (center) =>
+                          setState(() => _center = center),
                     ),
                   ),
                 ),

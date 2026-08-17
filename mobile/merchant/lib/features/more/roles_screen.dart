@@ -44,9 +44,8 @@ class _RolesScreenState extends ConsumerState<RolesScreen> {
   ];
 
   /// MR7 — the expanded list | editor split's right pane: open with a role
-  /// id to edit, open with null to create. Local state on a shell-branch
-  /// screen, so rail navigation away and back keeps it. Phones keep the
-  /// bottom sheet instead.
+  /// id to edit, open with null to create. Local state, cleared when the
+  /// tab is left (MR8's tab-reset). Phones keep the bottom sheet instead.
   var _paneOpen = false;
   int? _paneRoleId;
 

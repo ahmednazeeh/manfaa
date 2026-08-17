@@ -72,8 +72,11 @@ class MerchantShell extends ConsumerWidget {
           item,
     ];
 
-    void select(int branch) =>
-        shell.goBranch(branch, initialLocation: branch == shell.currentIndex);
+    // MR8: entering a tab ALWAYS lands on its root (initialLocation) — the
+    // departed branch was already unmounted by the shell's active-only
+    // container, so a stale sub-route (an open settlement, a pushed detail)
+    // can never be what a returning tap restores.
+    void select(int branch) => shell.goBranch(branch, initialLocation: true);
 
     if (railShell(context)) {
       // Expanded: the rail sits at the leading edge (start — it mirrors to

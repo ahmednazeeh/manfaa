@@ -475,6 +475,15 @@ Route::prefix('mobile/v1')
                     ->whereNumber('id')
                     ->middleware('merchant.can:staff.edit');
 
+                // MR8 password reset — same slug as the PATCH (an operation
+                // on an existing account, not a mint) and no approval gate,
+                // mirroring the web mount exactly. The temp password is in
+                // THIS response and never again; the target's mobile tokens
+                // die with the old password, so their app signs out.
+                Route::post('staff/{id}/reset-password', [StaffController::class, 'resetPassword'])
+                    ->whereNumber('id')
+                    ->middleware('merchant.can:staff.edit');
+
                 // The permission CATALOGUE, published so the roles screen
                 // renders groups and wording from the server (D8) — an app
                 // build predating a permission still shows its checkbox.

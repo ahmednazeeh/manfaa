@@ -433,6 +433,8 @@ class _FakeApi extends MerchantApi {
   @override
   Future<MerchantStaff> updateStaff(
     int id, {
+    String? name,
+    String? email,
     int? merchantRoleId,
     bool? isActive,
   }) async {

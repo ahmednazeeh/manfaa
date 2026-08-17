@@ -183,6 +183,69 @@ void main() {
       expect(adapter.requests.last.data, {'merchant_role_id': 3});
     });
 
+    test('MR8: PATCH carries name and email edits — still only given keys',
+        () async {
+      final adapter = _RecordingAdapter((_) => _json({'data': _staffRow}, 200));
+
+      await _api(adapter).updateStaff(4, name: 'Mariyam Shifa');
+      expect(adapter.requests.single.method, 'PATCH');
+      expect(adapter.requests.single.path, '/merchant/staff/4');
+      expect(adapter.requests.single.data, {'name': 'Mariyam Shifa'});
+
+      await _api(adapter).updateStaff(
+        4,
+        name: 'Mariyam Shifa',
+        email: 'shifa@newmail.mv',
+      );
+      expect(adapter.requests.last.data, {
+        'name': 'Mariyam Shifa',
+        'email': 'shifa@newmail.mv',
+      });
+    });
+
+    test('MR8: a duplicate email refuses 422 exactly like a duplicate invite',
+        () async {
+      final adapter = _RecordingAdapter(
+        (_) => _json({
+          'error': {
+            'code': 'validation_failed',
+            'message': 'This email is already registered.',
+            'meta': <String, dynamic>{},
+          },
+        }, 422),
+      );
+
+      await expectLater(
+        _api(adapter).updateStaff(4, email: 'taken@tropicalmart.mv'),
+        throwsA(
+          isA<MobileApiException>()
+              .having((e) => e.code, 'code', 'validation_failed')
+              .having((e) => e.status, 'status', 422),
+        ),
+      );
+    });
+
+    test(
+        'MR8: reset-password POSTs the bare path and parses the ONE-TIME '
+        'temp password beside (not inside) the resource — the invite shape',
+        () async {
+      final adapter = _RecordingAdapter(
+        (_) => _json({
+          'data': _staffRow,
+          'temp_password': 'zY7!pQw2#Vt9mL0xR4sB',
+        }, 200),
+      );
+
+      final result = await _api(adapter).resetStaffPassword(4);
+
+      final request = adapter.requests.single;
+      expect(request.method, 'POST');
+      expect(request.path, '/merchant/staff/4/reset-password');
+      expect(request.data, isNull); // no body — the id IS the request
+      expect(result.staff.id, 4);
+      expect(result.tempPassword, 'zY7!pQw2#Vt9mL0xR4sB');
+    });
+
     test('the last-owner guard 422 surfaces as the envelope sentence',
         () async {
       final adapter = _RecordingAdapter(
@@ -557,6 +620,149 @@ void main() {
         throwsA(
           isA<MobileApiException>()
               .having((e) => e.code, 'code', 'rate_not_priced'),
+        ),
+      );
+    });
+  });
+
+  group('account closure (MR8)', () {
+    // The PUBLIC mount, one level above the mobile tree — the absolute URL
+    // derived from the same base every other call uses.
+    const publicRoot = 'https://manfaa.app/api/merchant/account-closure';
+
+    test('request-otp POSTs the phone to the PUBLIC mount', () async {
+      final adapter = _RecordingAdapter(
+        (_) => _json({
+          'message': 'If the number is valid, a verification code has been sent.',
+        }, 200),
+      );
+
+      await _api(adapter).requestClosureOtp('+9607781234');
+
+      final request = adapter.requests.single;
+      expect(request.method, 'POST');
+      expect(request.uri.toString(), '$publicRoot/request-otp');
+      expect(request.data, {'phone': '+9607781234'});
+    });
+
+    test('verify parses the closure token and every store with the '
+        "server's own can_close verdict", () async {
+      final adapter = _RecordingAdapter(
+        (_) => _json({
+          'data': {
+            'closure_token': 'tok-abc123',
+            'expires_in_minutes': 15,
+            'stores': [
+              {
+                'id': 7,
+                'name': 'Tropical Mart',
+                'status': 'active',
+                'outstanding_laari': 0,
+                'can_close': true,
+              },
+              {
+                'id': 9,
+                'name': 'Tropical Café',
+                'status': 'suspended',
+                'outstanding_laari': 275050,
+                'can_close': false,
+              },
+            ],
+          },
+        }, 200),
+      );
+
+      final verification = await _api(adapter).verifyClosureOtp(
+        phone: '+9607781234',
+        code: '123456',
+      );
+
+      final request = adapter.requests.single;
+      expect(request.uri.toString(), '$publicRoot/verify');
+      expect(request.data, {'phone': '+9607781234', 'code': '123456'});
+      expect(verification.closureToken, 'tok-abc123');
+      expect(verification.expiresInMinutes, 15);
+      expect(verification.stores, hasLength(2));
+      expect(verification.stores.first.canClose, isTrue);
+      expect(verification.stores.first.outstandingLaari, 0);
+      expect(verification.stores.last.canClose, isFalse);
+      expect(verification.stores.last.outstandingLaari, 275050);
+    });
+
+    test('confirm POSTs the token + merchant id', () async {
+      final adapter = _RecordingAdapter(
+        (_) => _json({'message': 'Store closed.'}, 200),
+      );
+
+      await _api(adapter).confirmClosure(
+        closureToken: 'tok-abc123',
+        merchantId: 7,
+      );
+
+      final request = adapter.requests.single;
+      expect(request.uri.toString(), '$publicRoot/confirm');
+      expect(request.data, {'closure_token': 'tok-abc123', 'merchant_id': 7});
+    });
+
+    test('a Laravel-shape refusal surfaces its FIRST field code — these '
+        'endpoints answer outside the mobile envelope', () async {
+      final adapter = _RecordingAdapter(
+        (_) => _json({
+          'message': 'no_store',
+          'errors': {
+            'phone': ['no_store'],
+          },
+        }, 422),
+      );
+
+      await expectLater(
+        _api(adapter).verifyClosureOtp(phone: '+9607000000', code: '123456'),
+        throwsA(
+          isA<MobileApiException>()
+              .having((e) => e.code, 'code', 'no_store')
+              // An empty message keeps the raw snake_case token off every
+              // screen by construction — the UI localises the code.
+              .having((e) => e.message, 'message', isEmpty)
+              .having((e) => e.status, 'status', 422),
+        ),
+      );
+    });
+
+    test('outstanding_balance at confirm maps the same way', () async {
+      final adapter = _RecordingAdapter(
+        (_) => _json({
+          'message': 'outstanding_balance',
+          'errors': {
+            'merchant_id': ['outstanding_balance'],
+          },
+        }, 422),
+      );
+
+      await expectLater(
+        _api(adapter).confirmClosure(closureToken: 't', merchantId: 9),
+        throwsA(
+          isA<MobileApiException>()
+              .having((e) => e.code, 'code', 'outstanding_balance'),
+        ),
+      );
+    });
+
+    test("the OTP limiter's 429 prose passes through with its retry budget",
+        () async {
+      final adapter = _RecordingAdapter(
+        (_) => _json({
+          'message': 'Too many verification requests. Try again later.',
+          'retry_after_seconds': 1800,
+        }, 429),
+      );
+
+      await expectLater(
+        _api(adapter).requestClosureOtp('+9607781234'),
+        throwsA(
+          isA<MobileApiException>()
+              .having((e) => e.code, 'code', ApiCode.rateLimited)
+              .having((e) => e.message, 'message', contains('Too many'))
+              .having((e) => e.retryAfterSeconds, 'retryAfterSeconds', 1800),
         ),
       );
     });

@@ -40,7 +40,6 @@ import {
   updateMerchantSetupLocation,
   updateMerchantSetupProfile,
   updateMerchantSetupRate,
-  updateMerchantStaff,
   uploadMerchantSettingsLogo,
   uploadMerchantSetupLogo,
   verifyMerchantSignupOtp,
@@ -62,7 +61,6 @@ import {
   type UpdateMerchantRoleRequest,
   type UpdateMerchantSetupLocationRequest,
   type UpdateMerchantSetupProfileRequest,
-  type UpdateMerchantStaffRequest,
   type UpdateProductCategoryRequest,
 } from '@manfaa/api-client';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -80,10 +78,13 @@ import {
   login,
   logout,
   previewSettlement,
+  resetStaffPassword,
   submitSettlementWithReceipt,
+  updateStaff,
   walletSettleSelection,
   type ReceiptSubmission,
   type SettlementSelection,
+  type UpdateStaffBody,
 } from '@/lib/api';
 
 /**
@@ -676,13 +677,16 @@ export function useStaff() {
 /**
  * Inviting or reassigning an account moves a role's `staff_count` as well as
  * the staff list, and that count is what the roles screen refuses a delete
- * on — so the roles list goes stale with it.
+ * on — so the roles list goes stale with it. `me` joins the set with MR8's
+ * name/email edits: the one row a staff PATCH may now touch that the header
+ * renders from cache is the editor's own.
  */
 function useInvalidateAfterStaffChange() {
   const queryClient = useQueryClient();
   return () => {
     void queryClient.invalidateQueries({ queryKey: queryKeys.staff });
     void queryClient.invalidateQueries({ queryKey: queryKeys.roles });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.me });
   };
 }
 
@@ -697,14 +701,24 @@ export function useCreateStaff() {
 export function useUpdateStaff() {
   const invalidate = useInvalidateAfterStaffChange();
   return useMutation({
-    mutationFn: ({
-      id,
-      body,
-    }: {
-      id: number;
-      body: UpdateMerchantStaffRequest;
-    }) => updateMerchantStaff(id, body),
+    // The panel's own widened body (MR8: + name/email), not the shared
+    // client's role/activation pair — see lib/api.ts.
+    mutationFn: ({ id, body }: { id: number; body: UpdateStaffBody }) =>
+      updateStaff(id, body),
     onSuccess: invalidate,
+  });
+}
+
+/**
+ * MR8 staff password reset. The response carries the one-time temp password
+ * exactly as the invite does — handed to the caller for the reveal dialog
+ * and deliberately never written into the query cache, so no refetch or
+ * devtools panel can resurrect it. Nothing the staff table renders changes,
+ * so there is nothing to invalidate.
+ */
+export function useResetStaffPassword() {
+  return useMutation({
+    mutationFn: (id: number) => resetStaffPassword(id),
   });
 }
 

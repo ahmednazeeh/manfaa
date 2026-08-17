@@ -146,8 +146,8 @@ void main() {
     expect(find.textContaining('This sale already earns 2%'), findsOneWidget);
   });
 
-  testWidgets('split-editor sum mismatch blocks submit; a matching sum sends '
-      'the lines with the null bucket key present', (tester) async {
+  testWidgets('split-on hides the eligible field and the rows BECOME the '
+      'eligible amount — the sum can no longer disagree (MR8)', (tester) async {
     final api = await pumpTill(tester);
 
     await enterCode(tester, '374230');
@@ -160,44 +160,49 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Category breakdown'), findsOneWidget);
 
-    // First line: Everything else, MVR 60 — sum 60 ≠ 100.
-    await tester.tap(find.text('Add category'));
-    await tester.pumpAndSettle();
-    await tester.enterText(find.byType(TextField).last, '60');
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Save'));
-    await tester.pumpAndSettle();
+    // The owner's fix: with the split on there is NO eligible-amount field
+    // left to drift from the lines — the rows are the amount.
+    expect(find.text('Eligible amount'), findsNothing);
 
-    expect(
-      find.text("The lines don't add up to the eligible amount."),
-      findsOneWidget,
+    // Rows are addressed by their own fields, not by form-wide index: the
+    // search box carries the search hint, the amount box the MVR prefix.
+    Finder searchFields() => find.byWidgetPredicate(
+      (w) => w is TextField && w.decoration?.hintText == 'Search categories',
     );
-    expect(submitButton(tester).onPressed, isNull);
-    expect(api.credits, isEmpty);
-
-    // Second line (defaults to the first unused category): MVR 40 — now the
-    // sum matches and the credit goes out with BOTH lines.
-    await tester.tap(find.text('Add category'));
-    await tester.pumpAndSettle();
-    await tester.enterText(find.byType(TextField).last, '40');
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Save'));
-    await tester.pumpAndSettle();
-
-    expect(
-      find.text("The lines don't add up to the eligible amount."),
-      findsNothing,
+    Finder amountFields() => find.byWidgetPredicate(
+      (w) => w is TextField && w.decoration?.prefixText == 'MVR ',
     );
+
+    // Row 1 starts present: pick a category by typing, then tap the option.
+    await tester.enterText(searchFields().first, 'fru');
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Fruits').last);
+    await tester.pumpAndSettle();
+    await tester.enterText(amountFields().first, '60');
+    await tester.pumpAndSettle();
+
+    // A second row on the Everything-else bucket — every row names its
+    // category explicitly, the bucket included, so nothing is implicit.
+    await tester.tap(find.text('Add row'));
+    await tester.pumpAndSettle();
+    await tester.enterText(searchFields().last, 'every');
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Everything else').last);
+    await tester.pumpAndSettle();
+    await tester.enterText(amountFields().last, '40');
+    await tester.pumpAndSettle();
+
     expect(submitButton(tester).onPressed, isNotNull);
-
     await tapSubmit(tester);
+
     expect(api.credits, hasLength(1));
     final lines = api.credits.single['lines'] as List<CreditLine>;
     expect(lines, hasLength(2));
-    expect(lines.first.category, isNull); // the Everything-else bucket
+    expect(lines.first.category, 'fruits');
     expect(lines.first.amountLaari, 6000);
-    expect(lines.last.category, 'fruits');
+    expect(lines.last.category, isNull); // the Everything-else bucket
     expect(lines.last.amountLaari, 4000);
+    // Derived in the background from the rows, never typed twice.
     expect(api.credits.single['eligible'], 10000);
   });
 

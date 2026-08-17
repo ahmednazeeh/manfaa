@@ -36,8 +36,8 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
 
   /// MR7 — the expanded list | editor split's right pane: the invite form,
   /// or the account being edited (by id, so a refreshed list re-resolves
-  /// it). Local state on a shell-branch screen, so rail navigation away and
-  /// back keeps it. Phones never read these — they keep the sheets.
+  /// it). Local state, cleared when the tab is left (MR8's tab-reset).
+  /// Phones never read these — they keep the sheets.
   var _paneInvite = false;
   int? _paneMemberId;
 
@@ -985,10 +985,17 @@ class _StaffEditSheet extends ConsumerStatefulWidget {
 }
 
 class _StaffEditSheetState extends ConsumerState<_StaffEditSheet> {
+  late final _name = TextEditingController(text: widget.member.name);
   late int? _roleId = widget.member.role?.id;
   late bool _active = widget.member.isActive;
   var _busy = false;
   String? _error;
+
+  @override
+  void dispose() {
+    _name.dispose();
+    super.dispose();
+  }
 
   bool get _isSelf => widget.member.email == widget.actorEmail;
 
@@ -1002,6 +1009,65 @@ class _StaffEditSheetState extends ConsumerState<_StaffEditSheet> {
 
   bool get _isOwnerAccount => widget.member.role?.isOwner ?? false;
 
+  /// MR8: owner/manager-triggered password reset — the one-time temp
+  /// reveal, the invite handover's exact idiom. The confirm says out loud
+  /// what the server does: every session and app token of the target dies
+  /// (a self-reset therefore signs THIS device out too — allowed, said
+  /// first). No approval gate, matching the staff PATCH.
+  Future<void> _resetPassword() async {
+    final l10n = context.l10n;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(l10n.resetPasswordConfirmTitle(widget.member.name)),
+        content: Text(
+          _isSelf
+              ? l10n.resetPasswordConfirmSelfBody
+              : l10n.resetPasswordConfirmBody(widget.member.name),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: Text(l10n.cancel),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            style: FilledButton.styleFrom(
+              minimumSize: const Size(0, 44),
+              padding: const EdgeInsets.symmetric(horizontal: Gap.lg),
+            ),
+            child: Text(l10n.resetPasswordCta),
+          ),
+        ],
+      ),
+    );
+    if (!(confirmed ?? false) || !mounted) return;
+
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      final result =
+          await ref.read(apiProvider).resetStaffPassword(widget.member.id);
+      if (!mounted) return;
+      // The ONE-TIME handover — modal until acknowledged, exactly like the
+      // invite's (the same dialog: the reset answers the same shape).
+      await showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => _TempPasswordDialog(result: result),
+      );
+    } on MobileApiException catch (e) {
+      if (mounted) setState(() => _error = e.message);
+    } catch (_) {
+      if (mounted) setState(() => _error = context.l10n.staffSaveFailed);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   /// The D4 arithmetic: this row is the store's ONLY active owner-flagged
   /// account. Both controls lock — losing every active owner locks the
   /// whole settings surface permanently.
@@ -1010,9 +1076,12 @@ class _StaffEditSheetState extends ConsumerState<_StaffEditSheet> {
 
   Future<void> _save() async {
     final l10n = context.l10n;
+    final trimmedName = _name.text.trim();
+    final nameChanged =
+        trimmedName.isNotEmpty && trimmedName != widget.member.name;
     final roleChanged = _roleId != widget.member.role?.id;
     final activeChanged = _active != widget.member.isActive;
-    if (!roleChanged && !activeChanged) {
+    if (!nameChanged && !roleChanged && !activeChanged) {
       _finish(false);
       return;
     }
@@ -1026,6 +1095,7 @@ class _StaffEditSheetState extends ConsumerState<_StaffEditSheet> {
           .read(apiProvider)
           .updateStaff(
             widget.member.id,
+            name: nameChanged ? trimmedName : null,
             merchantRoleId: roleChanged ? _roleId : null,
             isActive: activeChanged ? _active : null,
           );
@@ -1109,6 +1179,18 @@ class _StaffEditSheetState extends ConsumerState<_StaffEditSheet> {
               ],
             ),
             const SizedBox(height: Gap.lg),
+            // MR8: the details themselves are editable now, not only the
+            // role — starting with the name (the server's PATCH extension).
+            Text(l10n.staffNameLabel, style: theme.textTheme.labelLarge),
+            const SizedBox(height: Gap.sm),
+            TextField(
+              controller: _name,
+              onChanged: (_) => setState(() {}),
+              decoration: const InputDecoration(
+                prefixIcon: Icon(Icons.person_outline_rounded),
+              ),
+            ),
+            const SizedBox(height: Gap.lg),
             Text(l10n.employeeRoleLabel, style: theme.textTheme.labelLarge),
             const SizedBox(height: Gap.sm),
             if (roles == null)
@@ -1168,6 +1250,26 @@ class _StaffEditSheetState extends ConsumerState<_StaffEditSheet> {
                       : null,
                 ),
               ],
+            ),
+            const SizedBox(height: Gap.lg),
+            // MR8: the password reset — one-time temp reveal, invite idiom.
+            Text(l10n.resetPasswordLabel, style: theme.textTheme.labelLarge),
+            const SizedBox(height: 2),
+            Text(
+              _isSelf
+                  ? l10n.resetPasswordSelfHint
+                  : l10n.resetPasswordHint,
+              style: theme.textTheme.bodySmall?.copyWith(color: muted),
+            ),
+            const SizedBox(height: Gap.sm),
+            Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: OutlinedButton.icon(
+                onPressed: _busy ? null : _resetPassword,
+                icon: const Icon(Icons.key_rounded, size: 18),
+                label: Text(l10n.resetPasswordCta),
+                style: OutlinedButton.styleFrom(minimumSize: const Size(0, 44)),
+              ),
             ),
             if (_error != null) ...[
               const SizedBox(height: Gap.md),

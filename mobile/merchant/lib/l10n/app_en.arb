@@ -1249,5 +1249,86 @@
   "@panePromoHintTitle": {
     "description": "MR7 expanded two-pane: the empty builder pane on Promotions"
   },
-  "panePromoHintBody": "The builder opens here. A published promotion cannot be changed — drafts can."
+  "panePromoHintBody": "The builder opens here. A published promotion cannot be changed — drafts can.",
+  "menuPrivacy": "Privacy Policy",
+  "menuTerms": "Terms of Service",
+  "closeStoreRowHint": "Settle everything, then close the store for good.",
+  "closeStoreTitle": "Close store",
+  "closeStoreSubtitle": "Verify the store's contact number, then close a settled store.",
+  "closeStoreIrreversibleTitle": "Closing cannot be undone",
+  "closeStoreIrreversibleBody": "The store leaves Manfaa, crediting stops and every staff account is signed out. Your records stay with us as financial records.",
+  "closeStorePhoneLabel": "Store contact number",
+  "closeStorePhoneHint": "We'll text a 6-digit code to this number.",
+  "closeStoreSendCode": "Send code",
+  "closeStoreVerify": "Verify",
+  "closeStoreStoresLead": "Stores on this number",
+  "closeStoreSettled": "Fully settled — can be closed.",
+  "closeStoreOwes": "Outstanding {amount} — settle before closing.",
+  "@closeStoreOwes": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "closeStoreCta": "Close store",
+  "closeStoreConfirmTitle": "Close {store}?",
+  "@closeStoreConfirmTitle": {
+    "placeholders": {
+      "store": {
+        "type": "String"
+      }
+    }
+  },
+  "closeStoreConfirmBody": "This is permanent. The store leaves Manfaa immediately and every staff account is signed out.",
+  "closeStoreConfirmCta": "Close permanently",
+  "closeStoreClosed": "{store} is closed",
+  "@closeStoreClosed": {
+    "placeholders": {
+      "store": {
+        "type": "String"
+      }
+    }
+  },
+  "closeStoreSignedOutNote": "You'll be signed out now.",
+  "closeStoreOtherStoreNote": "Your other stores are untouched.",
+  "closeStoreNoStore": "No store is registered with this contact number.",
+  "closeStorePhoneInvalid": "Enter the store's contact number — a Maldivian mobile starting with 7 or 9.",
+  "closeStoreOutstandingRefusal": "This store still owes a settlement. Settle it first, then close.",
+  "closeStoreExpired": "That verification expired. Start again.",
+  "staffNameLabel": "Name",
+  "resetPasswordLabel": "Password",
+  "resetPasswordHint": "Give this person a new one-time password. Their current one stops working immediately.",
+  "resetPasswordSelfHint": "Reset your own password. You'll be signed out and must sign in with the new one.",
+  "resetPasswordCta": "Reset password",
+  "resetPasswordConfirmTitle": "Reset the password for {name}?",
+  "@resetPasswordConfirmTitle": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "resetPasswordConfirmBody": "{name} is signed out everywhere and can only sign in with the one-time password we show you next.",
+  "@resetPasswordConfirmBody": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "resetPasswordConfirmSelfBody": "You'll be signed out everywhere and must sign in again with the one-time password shown next. Copy it before closing.",
+  "payAmountChangedTitle": "The amount to transfer changed",
+  "payAmountChangedBody": "Your balance moved while this screen was open. Transfer {amount} — the figure below is the current one.",
+  "@payAmountChangedBody": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "splitAddRow": "Add row",
+  "splitSumIsEligible": "These rows are the eligible amount — they add up to the sale you're crediting.",
+  "splitSearchHint": "Search categories",
+  "mapTilesFailed": "The map couldn't load. Check your connection and try again."
 }

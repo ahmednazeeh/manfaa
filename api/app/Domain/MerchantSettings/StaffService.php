@@ -84,8 +84,13 @@ final class StaffService
      * admin is not any store's staff — while the last-active-owner guard
      * applies to both, because a store with zero active owners is locked out
      * of its settings whoever pulled the switch.
+     *
+     * Name and email (MR8 employee-management completeness) ride the same
+     * write: identity details, no guard concerns — uniqueness of the email
+     * is the caller's validation (the same unique rule the invite uses,
+     * ignoring the target's own row).
      */
-    public function update(MerchantUser $target, MerchantUser|AdminUser $actor, ?MerchantRole $role = null, ?bool $isActive = null): MerchantUser
+    public function update(MerchantUser $target, MerchantUser|AdminUser $actor, ?MerchantRole $role = null, ?bool $isActive = null, ?string $name = null, ?string $email = null): MerchantUser
     {
         if ($role !== null) {
             // Role assignment is the merchant's own delegation question
@@ -99,7 +104,7 @@ final class StaffService
             $this->roles->assertMayAssign($actor, $role);
         }
 
-        return DB::transaction(function () use ($target, $actor, $role, $isActive): MerchantUser {
+        return DB::transaction(function () use ($target, $actor, $role, $isActive, $name, $email): MerchantUser {
             MerchantUser::query()->whereKey($target->getKey())->lockForUpdate()->first();
             $target->refresh();
 
@@ -146,6 +151,14 @@ final class StaffService
 
             if ($isActive !== null) {
                 $target->is_active = $isActive;
+            }
+
+            if ($name !== null) {
+                $target->name = $name;
+            }
+
+            if ($email !== null) {
+                $target->email = $email;
             }
 
             $target->save();

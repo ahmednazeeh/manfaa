@@ -26,8 +26,12 @@ use InvalidArgumentException;
  * cannot be ended early — the domain simply offers no such operation, and
  * publish/cancelDraft refuse anything that is not a draft. The published
  * window is a public commitment tills and customers rely on. Publishing
- * additionally requires starts_at >= now, so the frozen window always lies
- * entirely in the future — never retroactively repricing past sales.
+ * additionally requires starts_at >= now MINUS 24 HOURS (MR8 owner
+ * decision): a same-day start set in Maldives wall-clock time must publish
+ * even while the server's UTC date lags a day behind, and a last-night
+ * start is deliberately allowed — backdated credits inside that elapsed
+ * slice price at the promo rate (PromotionResolver keys on occurred_at),
+ * which is exactly the owner's intent for "the promo runs today".
  *
  * A promotion is a BOOST: its rate must strictly exceed the merchant's
  * standing rate effective at starts_at. Decreases have their own §7 path
@@ -55,6 +59,14 @@ use InvalidArgumentException;
  */
 final readonly class PromotionService
 {
+    /**
+     * How far in the past a draft's start may lie and still publish (MR8
+     * owner decision). Wide enough that "starts today at local midnight"
+     * clears every UTC/+05:00 skew; narrow enough that no window further
+     * back than yesterday can retroactively reprice sales.
+     */
+    public const int PUBLISH_GRACE_HOURS = 24;
+
     public function __construct(private TierScheduleService $schedules) {}
 
     public function createDraft(
@@ -131,8 +143,13 @@ final readonly class PromotionService
 
             $now = CarbonImmutable::now('UTC');
 
-            if ($locked->starts_at->isBefore($now)) {
-                throw InvalidPromotionWindowException::startsInPast($locked->starts_at, $now);
+            // Instants compare timezone-free; the 24h grace is what lets a
+            // start the owner picked as "today" in business time publish
+            // while UTC is still on yesterday's date. The refusal formats
+            // its dates in the business timezone (never a shifted UTC
+            // string) — the message IS where the original bug showed.
+            if ($locked->starts_at->isBefore($now->subHours(self::PUBLISH_GRACE_HOURS))) {
+                throw InvalidPromotionWindowException::startsTooFarInPast($locked->starts_at, $now);
             }
 
             // Authoritative re-checks: the fee schedule and the standing

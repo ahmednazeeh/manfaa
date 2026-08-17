@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:manfaa_ui/manfaa_ui.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../app/app.dart';
 import '../../app/providers.dart';
@@ -12,12 +13,18 @@ import 'more_providers.dart';
 import 'more_widgets.dart';
 
 /// The More tab (MR5), drawn to Merchant More.png: identity card, the six
-/// tinted menu rows, the red log-out row.
+/// tinted menu rows, the red log-out row. MR8 adds the store-readiness
+/// estate: the legal card (Privacy Policy / Terms of Service — the
+/// merchant.manfaa.app documents, opened in the external browser) and the
+/// danger-styled Close store card riding the public phone+OTP closure flow.
 ///
 /// PERMISSION-DRAWN like every surface: a row exists only when the session
 /// holds its read permission (the server enforces regardless). Cashback
 /// Settings is the web's merged screen and self-gates any-of its three
-/// section permissions, exactly as apps/merchant's menu does.
+/// section permissions, exactly as apps/merchant's menu does. The legal and
+/// closure rows are deliberately UNGATED, like Log out: the documents are
+/// public, and closure's credential is the store phone's OTP, not a
+/// permission slug.
 class MoreScreen extends ConsumerWidget {
   const MoreScreen({super.key});
 
@@ -143,10 +150,146 @@ class MoreScreen extends ConsumerWidget {
                 ),
                 const SizedBox(height: Gap.lg),
               ],
+              _LegalCard(l10n: l10n),
+              const SizedBox(height: Gap.lg),
               _LogOutCard(l10n: l10n),
+              const SizedBox(height: Gap.lg),
+              // Below Log out, deliberately last: the estate's one
+              // irreversible act sits at the bottom of the page in its own
+              // danger card (the More.png card idiom, coral family).
+              _CloseStoreCard(l10n: l10n),
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Privacy Policy + Terms of Service — the merchant.manfaa.app documents,
+/// opened OUTSIDE the app (url_launcher external mode): legal documents are
+/// the web pages, never a re-render that could drift from them.
+class _LegalCard extends StatelessWidget {
+  const _LegalCard({required this.l10n});
+
+  final AppLocalizations l10n;
+
+  Future<void> _open(String path) async {
+    await launchUrl(
+      Uri.parse('https://merchant.manfaa.app/$path'),
+      mode: LaunchMode.externalApplication,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    Widget row({
+      required IconData icon,
+      required String label,
+      required String path,
+    }) =>
+        InkWell(
+          onTap: () => _open(path),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: Gap.md),
+            child: Row(
+              children: [
+                IconTile(icon, tint: ManfaaTint.blue, size: 44, iconSize: 22),
+                const SizedBox(width: Gap.md),
+                Expanded(
+                  child: Text(
+                    label,
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                Icon(
+                  Icons.open_in_new_rounded,
+                  size: 20,
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ],
+            ),
+          ),
+        );
+
+    return ManfaaCard(
+      padding: const EdgeInsets.symmetric(
+        horizontal: Gap.lg,
+        vertical: Gap.xs,
+      ),
+      child: Column(
+        children: [
+          row(
+            icon: Icons.privacy_tip_outlined,
+            label: l10n.menuPrivacy,
+            path: 'privacy',
+          ),
+          Divider(height: 1, color: theme.colorScheme.outlineVariant),
+          row(
+            icon: Icons.description_outlined,
+            label: l10n.menuTerms,
+            path: 'terms',
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The danger row into the in-app closure flow (phone+OTP — the same rules
+/// as the public web page; see CloseStoreScreen).
+class _CloseStoreCard extends StatelessWidget {
+  const _CloseStoreCard({required this.l10n});
+
+  final AppLocalizations l10n;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return ManfaaCard(
+      onTap: () => context.go('/more/close-store'),
+      child: Row(
+        children: [
+          const IconTile(
+            Icons.storefront_outlined,
+            tint: ManfaaTint.coral,
+            size: 44,
+            iconSize: 22,
+          ),
+          const SizedBox(width: Gap.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  l10n.closeStoreTitle,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: theme.brightness == Brightness.dark
+                        ? ManfaaColors.coral
+                        : ManfaaColors.coralDeep,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  l10n.closeStoreRowHint,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Icon(
+            Icons.chevron_right_rounded,
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ],
       ),
     );
   }

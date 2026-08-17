@@ -185,8 +185,11 @@ via the polymorphic device_tokens path the customer app already exercises
   Enter path tested; ZERO phone goldens changed — shipped v1.0.0 pixels
   untouched; 9 tablet goldens eye-checked; suites green: merchant 101,
   core 102, ui 3, customer 35)
-- **MR8 Owner feedback round — IN FLIGHT** (admin-approval flow split
-  out to its own designed round, MR9)
+- MR8 Owner feedback round — DONE 2026-08-17 (all ten reported items
+  fixed across server, app and web; suites green: api 1349, merchant 101,
+  core 111, ui 3, customer 35)
+- **MR9 Admin approval for store edits + new branches — NEXT** (needs the
+  design pass first; §MR8 carries the scope note)
 
 - WL merchant.manfaa.app landing — SHIPPED 2026-08-17 (landing + split
   auth panels + real-Dashboard mockup; also retired the METRONIC template
@@ -503,7 +506,7 @@ fix lives.
 
 ### Bugs
 
-- [ ] **Promotion publish timezone bug** (server + both clients): owner
+- [x] **Promotion publish timezone bug** (server + both clients): owner
       picked the 18th, refusal says the 17th is in the past — the window
       validation compares in the wrong timezone. Fix: evaluate
       starts_at/ends_at in the business timezone (Indian/Maldives);
@@ -512,19 +515,19 @@ fix lives.
       as a human local date, never a raw shifted timestamp. Audit what
       the web panel sends (naive vs +05:00) — the app already sends
       explicit +05:00.
-- [ ] **Branch map grey screen** (app branches add/edit + check web):
+- [x] **Branch map grey screen** (app branches add/edit + check web):
       the pin-picker map fails to load tiles when creating a branch.
       App uses flutter_map/OSM — check tile requests on-device (OSM
       blocks default user agents: set userAgentPackageName; also check
       release-APK cleartext/network config). Web setup map is Google
       (NEXT_PUBLIC_GOOGLE_MAPS_API_KEY) — verify key referrer
       restrictions cover merchant.manfaa.app.
-- [ ] **Dashboard staleness after crediting** (app): after a credit —
+- [x] **Dashboard staleness after crediting** (app): after a credit —
       especially a backdated one that is immediately payable — returning
       Home still shows the old outstanding/due figures. Invalidate the
       dashboard providers (outstanding, settle-all preview, home) on
       every successful credit submit, and refresh on tab re-entry.
-- [ ] **Pay-now shows a stale amount** (app settlements): the
+- [x] **Pay-now shows a stale amount** (app settlements): the
       "Transfer exactly this amount" step keeps the preview it was
       opened with — after the balance changes (a fresh credit, another
       settlement) the amount-to-transfer is wrong until the owner backs
@@ -532,30 +535,30 @@ fix lives.
       settlement preview every time it opens (and before submit, since
       the server prices the slip amount server-side anyway — surface a
       changed amount rather than letting a mismatched transfer happen).
-- [ ] **Split-by-category: eligible amount must not contradict lines**
+- [x] **Split-by-category: eligible amount must not contradict lines**
       (app, web parity): when the split is ON, hide the eligible-amount
       field and derive it from the lines sum in the background — the
       owner hit "doesn't add up" from the visible field drifting.
 
 ### UX
 
-- [ ] **Split editor add-category rework** (app credit screen): the
+- [x] **Split editor add-category rework** (app credit screen): the
       add-category popup is not friendly. Replace with inline add-row:
       each row = searchable category dropdown + amount field; "Add row"
       appends; delete per row. Keep the sum check + Everything-else
       bucket semantics.
-- [ ] **Tab switch resets the left tab** (app): navigating to another
+- [x] **Tab switch resets the left tab** (app): navigating to another
       tab resets the tab being left to its root/fresh state, so
       returning never lands mid-flow.
 
 ### Features
 
-- [ ] **Employee management completeness** (server + web + app): add
+- [x] **Employee management completeness** (server + web + app): add
       staff PASSWORD RESET (owner/manager-triggered, one-time temp
       password reveal like invite) and EDIT of staff details (name; and
       email if server allows) — currently only role + active toggle
       exist everywhere.
-- [ ] **Merchant app legal + closure estate** (store-readiness): More
+- [x] **Merchant app legal + closure estate** (store-readiness): More
       gains Privacy Policy and Terms of Service entries (the
       merchant.manfaa.app/{privacy,terms} documents) and a
       close-store/delete-account entry riding the shipped

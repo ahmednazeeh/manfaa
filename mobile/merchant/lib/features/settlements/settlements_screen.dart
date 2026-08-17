@@ -16,10 +16,12 @@ import 'settlement_pay_screen.dart';
 import 'settlement_widgets.dart';
 
 /// MR7 — which settlement the expanded overview | detail split is showing.
-/// Session state, deliberately NOT autoDispose: rail navigation away and
-/// back keeps the selection exactly as left. Phones never read it — they
-/// push the detail route instead.
-final settlementsSelectionProvider = StateProvider<int?>((_) => null);
+/// Phones never read it — they push the detail route instead. autoDispose
+/// since MR8: the owner's tab-reset decision reversed MR7's
+/// keep-the-selection stance — leaving the tab unmounts the screen and the
+/// selection dies with it, so returning always lands fresh.
+final settlementsSelectionProvider =
+    StateProvider.autoDispose<int?>((_) => null);
 
 /// The Settlements tab (MR3), drawn to Settlements.png: amount-due hero +
 /// Pay now, the discount banner, the payment-method selector (wallet with
@@ -196,12 +198,13 @@ class SettlementsScreen extends ConsumerWidget {
         _confirmWalletSettle(context, ref, preview, preset, nothingDue);
         return;
       }
+      // MR8: the pay screen carries only the SELECTION — it prices itself
+      // fresh on open and again before submit, never this tab's preview.
       Navigator.of(context).push(
         MaterialPageRoute<void>(
           builder: (_) => SettlementPayScreen(
             settleAll: preset == 'all',
             transactionIds: preview.transactionIds,
-            preview: preview,
           ),
         ),
       );

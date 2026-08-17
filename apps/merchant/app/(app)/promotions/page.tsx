@@ -11,7 +11,6 @@ import {
   type PromotionCostPreview,
 } from '@manfaa/api-client';
 import { MoneyText } from '@manfaa/ui';
-import { format } from 'date-fns';
 import { LoaderCircle, Plus, TriangleAlert, X } from 'lucide-react';
 import { formatBp, formatRate, formatRateOrDash } from '@/lib/estimate';
 import { can } from '@/lib/roles';
@@ -116,6 +115,31 @@ function toBusinessIso(localValue: string): string {
   const withSeconds =
     localValue.length === 16 ? `${localValue}:00` : localValue;
   return `${withSeconds}${BUSINESS_UTC_OFFSET}`;
+}
+
+/**
+ * A server timestamp rendered in BUSINESS wall time, never the browser's
+ * (MR8 promotion-timezone audit). The API serializes promotion instants
+ * with the +05:00 offset already on them; running those through
+ * `new Date()` and a plain formatter re-shifts them into whatever timezone
+ * the viewing machine sits in — the owner's "18th" reading as "the 17th"
+ * on a laptop set elsewhere. The instant is parsed exactly (the offset
+ * makes it unambiguous) and the DIGITS are produced for Indian/Maldives,
+ * matching the wall time the merchant picked and the dates the server's
+ * refusal messages now name.
+ */
+const businessTimeFormat = new Intl.DateTimeFormat('en-GB', {
+  timeZone: 'Indian/Maldives',
+  day: '2-digit',
+  month: 'short',
+  hour: '2-digit',
+  minute: '2-digit',
+  hour12: false,
+});
+
+/** ISO 8601 instant → "18 Aug, 00:00" in business (Maldives) wall time. */
+function formatBusinessTime(iso: string): string {
+  return businessTimeFormat.format(new Date(iso));
 }
 
 /** parseMvrToLaari without the throw: null when not a valid MVR amount. */
@@ -511,8 +535,8 @@ function DraftActions({
                 promotion?
               </AlertDialogTitle>
               <AlertDialogDescription>
-                It runs {format(new Date(promotion.starts_at), 'dd MMM, HH:mm')}{' '}
-                to {format(new Date(promotion.ends_at), 'dd MMM, HH:mm')}. Once
+                It runs {formatBusinessTime(promotion.starts_at)} to{' '}
+                {formatBusinessTime(promotion.ends_at)} (Maldives time). Once
                 published it cannot be changed or ended early — customers can
                 rely on the advertised boost for the whole window.
               </AlertDialogDescription>
@@ -646,11 +670,8 @@ export default function PromotionsPage() {
                         </span>
                       </TableCell>
                       <TableCell className="text-secondary-foreground whitespace-nowrap">
-                        {format(
-                          new Date(promotion.starts_at),
-                          'dd MMM, HH:mm',
-                        )}{' '}
-                        – {format(new Date(promotion.ends_at), 'dd MMM, HH:mm')}
+                        {formatBusinessTime(promotion.starts_at)} –{' '}
+                        {formatBusinessTime(promotion.ends_at)}
                       </TableCell>
                       <TableCell>
                         {promotion.min_purchase_laari === null ? (

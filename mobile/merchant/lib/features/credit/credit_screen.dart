@@ -100,7 +100,17 @@ class _CreditScreenState extends ConsumerState<CreditScreen> {
   final _override = TextEditingController();
 
   var _splitEnabled = false;
+
+  /// The COMPLETE rows the editor reported, plus its all-rows-valid flag.
+  /// MR8: while the split is ON these rows ARE the eligible amount — the
+  /// field is hidden and the sum is computed in the background, so the old
+  /// sum-mismatch refusal is impossible from this UI.
   var _splitRows = <SplitRow>[];
+  var _splitComplete = false;
+
+  /// Bumped whenever the split must start over (toggle, reset) — the
+  /// editor owns its draft controllers, so a fresh key is the reset.
+  var _splitEpoch = 0;
 
   var _busy = false;
   MobileApiException? _error;
@@ -188,12 +198,23 @@ class _CreditScreenState extends ConsumerState<CreditScreen> {
 
   // ------------------------------------------------------------ compose
 
-  int? get _eligibleLaari =>
-      _eligible.text.trim().isEmpty ? null : parseMvrToLaari(_eligible.text);
+  int get _splitSum =>
+      _splitRows.fold<int>(0, (acc, row) => acc + row.amountLaari);
+
+  /// The eligible amount as it will go to the wire: the typed field, or —
+  /// split ON — the lines' sum (null until every row is complete, so a
+  /// half-built split can never submit a partial amount).
+  int? get _eligibleLaari => _splitEnabled
+      ? (_splitComplete && _splitRows.isNotEmpty ? _splitSum : null)
+      : (_eligible.text.trim().isEmpty
+          ? null
+          : parseMvrToLaari(_eligible.text));
 
   bool get _eligibleInvalid =>
+      !_splitEnabled &&
       _eligible.text.trim().isNotEmpty &&
-      (_eligibleLaari == null || _eligibleLaari! < 1);
+      (parseMvrToLaari(_eligible.text) == null ||
+          parseMvrToLaari(_eligible.text)! < 1);
 
   int? get _saleLaari =>
       _sale.text.trim().isEmpty ? null : parseMvrToLaari(_sale.text);
@@ -321,6 +342,8 @@ class _CreditScreenState extends ConsumerState<CreditScreen> {
     _overrideOpen = false;
     _splitEnabled = false;
     _splitRows = [];
+    _splitComplete = false;
+    _splitEpoch++;
   }
 
   int? get _activeOverrideBp {
@@ -376,10 +399,13 @@ class _CreditScreenState extends ConsumerState<CreditScreen> {
     List<Widget> act() => [
       if (_splitEnabled) ...[
         SplitEditorCard(
-          rows: _splitRows,
+          key: ValueKey('split-$_splitEpoch'),
           categories: activeCategories,
-          eligibleLaari: _eligibleInvalid ? null : _eligibleLaari,
-          onRowsChanged: (rows) => setState(() => _splitRows = rows),
+          onChanged: (rows, complete) => setState(() {
+            _splitRows = rows;
+            _splitComplete = complete;
+            _error = null;
+          }),
         ),
         const SizedBox(height: Gap.md),
       ],
@@ -516,13 +542,11 @@ class _CreditScreenState extends ConsumerState<CreditScreen> {
         _override.text.trim().isNotEmpty &&
         _activeOverrideBp == null;
     final overrideHalf = _overrideOpen && _override.text.trim().isEmpty;
-    final splitSum = _splitRows.fold<int>(
-      0,
-      (acc, row) => acc + row.amountLaari,
-    );
 
     return _lookup?.phase == _LookupPhase.found &&
         _invoice.text.trim().isNotEmpty &&
+        // Split ON: _eligibleLaari IS the lines' sum and stays null until
+        // every row is complete — the sum-mismatch state cannot exist.
         _eligibleLaari != null &&
         _eligibleLaari! >= 1 &&
         !_saleInvalid &&
@@ -530,8 +554,6 @@ class _CreditScreenState extends ConsumerState<CreditScreen> {
         // standing one: fix it or close the control (web parity).
         !overrideBroken &&
         !overrideHalf &&
-        (!_splitEnabled ||
-            (_splitRows.isNotEmpty && splitSum == _eligibleLaari)) &&
         (!_backdatedWarning || _backdatedConfirmed) &&
         !_busy;
   }
@@ -849,22 +871,30 @@ class _CreditScreenState extends ConsumerState<CreditScreen> {
               l10n.saleDateTimeNow,
               style: theme.textTheme.bodySmall?.copyWith(color: muted),
             ),
-          const SizedBox(height: Gap.lg),
-          _FieldLabel(icon: Icons.payments_outlined, label: l10n.eligibleLabel),
-          const SizedBox(height: Gap.sm),
-          _MvrField(
-            controller: _eligible,
-            invalid: _eligibleInvalid,
-            onChanged: (_) => setState(() => _error = null),
-            onSubmitted: (_) => _submitFromKeyboard(),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            _eligibleInvalid ? l10n.eligibleInvalid : l10n.eligibleHint,
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: _eligibleInvalid ? theme.colorScheme.error : muted,
+          // MR8 (owner report): with the split ON the eligible amount IS
+          // the lines' sum — the field disappears so the two can never
+          // contradict ("doesn't add up"). The full-sale field below stays.
+          if (!_splitEnabled) ...[
+            const SizedBox(height: Gap.lg),
+            _FieldLabel(
+              icon: Icons.payments_outlined,
+              label: l10n.eligibleLabel,
             ),
-          ),
+            const SizedBox(height: Gap.sm),
+            _MvrField(
+              controller: _eligible,
+              invalid: _eligibleInvalid,
+              onChanged: (_) => setState(() => _error = null),
+              onSubmitted: (_) => _submitFromKeyboard(),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              _eligibleInvalid ? l10n.eligibleInvalid : l10n.eligibleHint,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: _eligibleInvalid ? theme.colorScheme.error : muted,
+              ),
+            ),
+          ],
           const SizedBox(height: Gap.lg),
           _FieldLabel(
             icon: Icons.request_quote_outlined,
@@ -909,7 +939,15 @@ class _CreditScreenState extends ConsumerState<CreditScreen> {
               value: _splitEnabled,
               title: l10n.splitToggle,
               subtitle: l10n.splitToggleHint,
-              onChanged: (value) => setState(() => _splitEnabled = value),
+              onChanged: (value) => setState(() {
+                _splitEnabled = value;
+                // Either direction starts the split over: rows compose
+                // against the CURRENT sale, never a previous one's.
+                _splitRows = [];
+                _splitComplete = false;
+                _splitEpoch++;
+                _error = null;
+              }),
             ),
           ],
         ],

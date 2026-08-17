@@ -4285,6 +4285,240 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The builder opens here. A published promotion cannot be changed — drafts can.'**
   String get panePromoHintBody;
+
+  /// No description provided for @menuPrivacy.
+  ///
+  /// In en, this message translates to:
+  /// **'Privacy Policy'**
+  String get menuPrivacy;
+
+  /// No description provided for @menuTerms.
+  ///
+  /// In en, this message translates to:
+  /// **'Terms of Service'**
+  String get menuTerms;
+
+  /// No description provided for @closeStoreRowHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Settle everything, then close the store for good.'**
+  String get closeStoreRowHint;
+
+  /// No description provided for @closeStoreTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Close store'**
+  String get closeStoreTitle;
+
+  /// No description provided for @closeStoreSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Verify the store\'s contact number, then close a settled store.'**
+  String get closeStoreSubtitle;
+
+  /// No description provided for @closeStoreIrreversibleTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Closing cannot be undone'**
+  String get closeStoreIrreversibleTitle;
+
+  /// No description provided for @closeStoreIrreversibleBody.
+  ///
+  /// In en, this message translates to:
+  /// **'The store leaves Manfaa, crediting stops and every staff account is signed out. Your records stay with us as financial records.'**
+  String get closeStoreIrreversibleBody;
+
+  /// No description provided for @closeStorePhoneLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Store contact number'**
+  String get closeStorePhoneLabel;
+
+  /// No description provided for @closeStorePhoneHint.
+  ///
+  /// In en, this message translates to:
+  /// **'We\'ll text a 6-digit code to this number.'**
+  String get closeStorePhoneHint;
+
+  /// No description provided for @closeStoreSendCode.
+  ///
+  /// In en, this message translates to:
+  /// **'Send code'**
+  String get closeStoreSendCode;
+
+  /// No description provided for @closeStoreVerify.
+  ///
+  /// In en, this message translates to:
+  /// **'Verify'**
+  String get closeStoreVerify;
+
+  /// No description provided for @closeStoreStoresLead.
+  ///
+  /// In en, this message translates to:
+  /// **'Stores on this number'**
+  String get closeStoreStoresLead;
+
+  /// No description provided for @closeStoreSettled.
+  ///
+  /// In en, this message translates to:
+  /// **'Fully settled — can be closed.'**
+  String get closeStoreSettled;
+
+  /// No description provided for @closeStoreOwes.
+  ///
+  /// In en, this message translates to:
+  /// **'Outstanding {amount} — settle before closing.'**
+  String closeStoreOwes(String amount);
+
+  /// No description provided for @closeStoreCta.
+  ///
+  /// In en, this message translates to:
+  /// **'Close store'**
+  String get closeStoreCta;
+
+  /// No description provided for @closeStoreConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Close {store}?'**
+  String closeStoreConfirmTitle(String store);
+
+  /// No description provided for @closeStoreConfirmBody.
+  ///
+  /// In en, this message translates to:
+  /// **'This is permanent. The store leaves Manfaa immediately and every staff account is signed out.'**
+  String get closeStoreConfirmBody;
+
+  /// No description provided for @closeStoreConfirmCta.
+  ///
+  /// In en, this message translates to:
+  /// **'Close permanently'**
+  String get closeStoreConfirmCta;
+
+  /// No description provided for @closeStoreClosed.
+  ///
+  /// In en, this message translates to:
+  /// **'{store} is closed'**
+  String closeStoreClosed(String store);
+
+  /// No description provided for @closeStoreSignedOutNote.
+  ///
+  /// In en, this message translates to:
+  /// **'You\'ll be signed out now.'**
+  String get closeStoreSignedOutNote;
+
+  /// No description provided for @closeStoreOtherStoreNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Your other stores are untouched.'**
+  String get closeStoreOtherStoreNote;
+
+  /// No description provided for @closeStoreNoStore.
+  ///
+  /// In en, this message translates to:
+  /// **'No store is registered with this contact number.'**
+  String get closeStoreNoStore;
+
+  /// No description provided for @closeStorePhoneInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the store\'s contact number — a Maldivian mobile starting with 7 or 9.'**
+  String get closeStorePhoneInvalid;
+
+  /// No description provided for @closeStoreOutstandingRefusal.
+  ///
+  /// In en, this message translates to:
+  /// **'This store still owes a settlement. Settle it first, then close.'**
+  String get closeStoreOutstandingRefusal;
+
+  /// No description provided for @closeStoreExpired.
+  ///
+  /// In en, this message translates to:
+  /// **'That verification expired. Start again.'**
+  String get closeStoreExpired;
+
+  /// No description provided for @staffNameLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Name'**
+  String get staffNameLabel;
+
+  /// No description provided for @resetPasswordLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Password'**
+  String get resetPasswordLabel;
+
+  /// No description provided for @resetPasswordHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Give this person a new one-time password. Their current one stops working immediately.'**
+  String get resetPasswordHint;
+
+  /// No description provided for @resetPasswordSelfHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset your own password. You\'ll be signed out and must sign in with the new one.'**
+  String get resetPasswordSelfHint;
+
+  /// No description provided for @resetPasswordCta.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset password'**
+  String get resetPasswordCta;
+
+  /// No description provided for @resetPasswordConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset the password for {name}?'**
+  String resetPasswordConfirmTitle(String name);
+
+  /// No description provided for @resetPasswordConfirmBody.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} is signed out everywhere and can only sign in with the one-time password we show you next.'**
+  String resetPasswordConfirmBody(String name);
+
+  /// No description provided for @resetPasswordConfirmSelfBody.
+  ///
+  /// In en, this message translates to:
+  /// **'You\'ll be signed out everywhere and must sign in again with the one-time password shown next. Copy it before closing.'**
+  String get resetPasswordConfirmSelfBody;
+
+  /// No description provided for @payAmountChangedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'The amount to transfer changed'**
+  String get payAmountChangedTitle;
+
+  /// No description provided for @payAmountChangedBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Your balance moved while this screen was open. Transfer {amount} — the figure below is the current one.'**
+  String payAmountChangedBody(String amount);
+
+  /// No description provided for @splitAddRow.
+  ///
+  /// In en, this message translates to:
+  /// **'Add row'**
+  String get splitAddRow;
+
+  /// No description provided for @splitSumIsEligible.
+  ///
+  /// In en, this message translates to:
+  /// **'These rows are the eligible amount — they add up to the sale you\'re crediting.'**
+  String get splitSumIsEligible;
+
+  /// No description provided for @splitSearchHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Search categories'**
+  String get splitSearchHint;
+
+  /// No description provided for @mapTilesFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The map couldn\'t load. Check your connection and try again.'**
+  String get mapTilesFailed;
 }
 
 class _AppLocalizationsDelegate

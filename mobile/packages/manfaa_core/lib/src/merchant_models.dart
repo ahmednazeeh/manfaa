@@ -1271,3 +1271,59 @@ class PromotionWriteResult {
   final Promotion promotion;
   final PromotionCostPreview? costPreview;
 }
+
+// --------------------------------------------------------- closure (MR8)
+
+/// One store on the phone number the closure OTP proved — the verify
+/// answer's list. Money is integer laari; `canClose` is the server's own
+/// verdict (payable outstanding == 0), never re-derived client-side.
+class ClosureStore {
+  ClosureStore({
+    required this.id,
+    required this.name,
+    required this.status,
+    required this.outstandingLaari,
+    required this.canClose,
+  });
+
+  factory ClosureStore.fromJson(Map<String, dynamic> json) => ClosureStore(
+        id: json['id'] as int? ?? 0,
+        name: _s(json['name']),
+        status: _s(json['status']),
+        outstandingLaari: json['outstanding_laari'] as int? ?? 0,
+        canClose: json['can_close'] as bool? ?? false,
+      );
+
+  final int id;
+  final String name;
+  final String status;
+
+  /// Payable outstanding, integer laari. A store owing money cannot close —
+  /// settling stays open, closing waits.
+  final int outstandingLaari;
+  final bool canClose;
+}
+
+/// POST /merchant/account-closure/verify — the single-use closure token
+/// (15-minute life) plus every non-closed store on the proven number.
+class ClosureVerification {
+  ClosureVerification({
+    required this.closureToken,
+    required this.expiresInMinutes,
+    required this.stores,
+  });
+
+  factory ClosureVerification.fromJson(Map<String, dynamic> json) =>
+      ClosureVerification(
+        closureToken: _s(json['closure_token']),
+        expiresInMinutes: json['expires_in_minutes'] as int? ?? 0,
+        stores: [
+          for (final item in (json['stores'] as List? ?? const []))
+            ClosureStore.fromJson((item as Map).cast<String, dynamic>()),
+        ],
+      );
+
+  final String closureToken;
+  final int expiresInMinutes;
+  final List<ClosureStore> stores;
+}

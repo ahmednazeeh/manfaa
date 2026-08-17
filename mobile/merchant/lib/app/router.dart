@@ -8,6 +8,7 @@ import '../features/credit/credit_screen.dart';
 import '../features/dashboard/dashboard_screen.dart';
 import '../features/more/branches_screen.dart';
 import '../features/more/cashback_screen.dart';
+import '../features/more/close_store_screen.dart';
 import '../features/more/employees_screen.dart';
 import '../features/more/more_screen.dart';
 import '../features/more/profile_screen.dart';
@@ -171,8 +172,21 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/setup-pending',
         builder: (_, _) => const SetupPendingScreen(),
       ),
-      StatefulShellRoute.indexedStack(
+      // MR8 (owner report): "navigating to another tab resets the tab being
+      // left". NOT the stock indexedStack — that container keeps every
+      // branch subtree alive, which is exactly the mid-flow persistence the
+      // owner rejected. Mounting ONLY the active branch unmounts the
+      // departed tab wholesale: form fields, pane selections and every
+      // otherwise-unwatched autoDispose provider reset, so returning always
+      // lands fresh (and re-fetches — the Dashboard-staleness fix's second
+      // half). What must survive tab switches lives outside the branches by
+      // construction: the session, the offline credit queue (a root
+      // ChangeNotifierProvider over persistent storage) and the queue-drain
+      // driver watched from the shell itself.
+      StatefulShellRoute(
         builder: (context, state, shell) => MerchantShell(shell: shell),
+        navigatorContainerBuilder: (context, shell, children) =>
+            children[shell.currentIndex],
         branches: [
           StatefulShellBranch(routes: [
             GoRoute(
@@ -231,6 +245,13 @@ final routerProvider = Provider<GoRouter>((ref) {
                 GoRoute(
                   path: 'promotions',
                   builder: (_, _) => const PromotionsScreen(),
+                ),
+                // MR8: the in-app closure flow. UNGUARDED like Log out —
+                // its credential is the store phone's OTP, not a
+                // permission slug (the endpoints are public by design).
+                GoRoute(
+                  path: 'close-store',
+                  builder: (_, _) => const CloseStoreScreen(),
                 ),
               ],
             ),

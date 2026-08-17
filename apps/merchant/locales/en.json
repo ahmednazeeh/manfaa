@@ -340,7 +340,16 @@
     "copyPassword": "Copy password",
     "passwordCopied": "Password copied",
     "tempAcknowledge": "I have securely shared this password and understand it will not be shown again.",
-    "done": "Done"
+    "done": "Done",
+    "editAria": "Edit details of {{name}}",
+    "editTitle": "Edit {{name}}",
+    "detailsSaved": "{{name}} updated",
+    "resetAria": "Reset password of {{name}}",
+    "resetTitle": "Reset {{name}}'s password?",
+    "resetBody": "A new one-time password is created and shown to you exactly once. The old password stops working immediately, and {{name}} is signed out everywhere — this panel and the merchant app.",
+    "resetSelfBody": "This is your own account. Your current password stops working immediately and you are signed out right after the new one is shown — copy it, then sign back in with it.",
+    "resetConfirm": "Reset password",
+    "resetFailed": "Could not reset the password."
   },
   "settings": {
     "profileTitle": "Profile",

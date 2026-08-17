@@ -6,13 +6,21 @@ import {
   type MerchantRole,
   type MerchantStaff,
 } from '@manfaa/api-client';
-import { Copy, KeyRound, LoaderCircle, Plus, UserRound } from 'lucide-react';
+import {
+  Copy,
+  KeyRound,
+  LoaderCircle,
+  Plus,
+  SquarePen,
+  UserRound,
+} from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { roleDisplayName } from '@/lib/labels';
 import {
   apiErrorMessage,
   useCreateStaff,
+  useResetStaffPassword,
   useRoles,
   useStaff,
   useUpdateStaff,
@@ -316,6 +324,173 @@ function TempPasswordDialog({
   );
 }
 
+/**
+ * MR8 employee-management completeness: the identity details (name, email)
+ * become editable — until this round only the role and the active toggle
+ * were. Only CHANGED fields are sent ('sometimes' rules server-side), and a
+ * duplicate email is refused 422 exactly like a duplicate invite — the
+ * server's sentence is shown as-is.
+ */
+function EditStaffDialog({
+  user,
+  onOpenChange,
+}: {
+  user: MerchantStaff;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const { t } = useTranslation();
+  const updateStaff = useUpdateStaff();
+  const [name, setName] = useState(user.name);
+  const [email, setEmail] = useState(user.email);
+
+  const trimmedName = name.trim();
+  const trimmedEmail = email.trim();
+  const changed = trimmedName !== user.name || trimmedEmail !== user.email;
+  const canSave =
+    trimmedName !== '' &&
+    trimmedEmail !== '' &&
+    changed &&
+    !updateStaff.isPending;
+
+  const submit = () => {
+    updateStaff.mutate(
+      {
+        id: user.id,
+        body: {
+          ...(trimmedName !== user.name ? { name: trimmedName } : {}),
+          ...(trimmedEmail !== user.email ? { email: trimmedEmail } : {}),
+        },
+      },
+      {
+        onSuccess: () => {
+          toast.success(t('staff.detailsSaved', { name: trimmedName }));
+          onOpenChange(false);
+        },
+        onError: (error) =>
+          toast.error(apiErrorMessage(error, t('staff.updateFailed'))),
+      },
+    );
+  };
+
+  return (
+    <Dialog open onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>{t('staff.editTitle', { name: user.name })}</DialogTitle>
+        </DialogHeader>
+        <DialogBody className="flex flex-col gap-5">
+          <div className="flex flex-col gap-2.5">
+            <Label htmlFor="staff-edit-name">{t('staff.nameLabel')}</Label>
+            <Input
+              id="staff-edit-name"
+              value={name}
+              maxLength={255}
+              onChange={(event) => setName(event.target.value)}
+            />
+          </div>
+          <div className="flex flex-col gap-2.5">
+            <Label htmlFor="staff-edit-email">{t('staff.emailLabel')}</Label>
+            <Input
+              id="staff-edit-email"
+              type="email"
+              dir="ltr"
+              value={email}
+              maxLength={255}
+              onChange={(event) => setEmail(event.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">
+              {t('staff.emailHint')}
+            </p>
+          </div>
+        </DialogBody>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            {t('common.cancel')}
+          </Button>
+          <Button disabled={!canSave} onClick={submit}>
+            {updateStaff.isPending && <LoaderCircle className="animate-spin" />}
+            {t('common.save')}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/**
+ * The MR8 password reset's confirm step. What it must say plainly: the old
+ * password stops working NOW, and everything it unlocked dies with it — the
+ * panel sessions and the merchant app sign-in on whatever phone holds them.
+ * That is the feature (the reset exists for the phone in unknown hands),
+ * but it must never be a surprise. Self-reset is allowed and gets its own
+ * sentence: the caller is signed out right after the reveal.
+ */
+function ResetPasswordDialog({
+  user,
+  isSelf,
+  onOpenChange,
+  onReset,
+}: {
+  user: MerchantStaff;
+  isSelf: boolean;
+  onOpenChange: (open: boolean) => void;
+  onReset: (response: CreateMerchantStaffResponse) => void;
+}) {
+  const { t } = useTranslation();
+  const reset = useResetStaffPassword();
+
+  const submit = () => {
+    reset.mutate(user.id, {
+      onSuccess: (response) => {
+        onReset(response);
+      },
+      onError: (error) =>
+        toast.error(apiErrorMessage(error, t('staff.resetFailed'))),
+    });
+  };
+
+  return (
+    <Dialog open onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <KeyRound className="size-4.5" />
+            {t('staff.resetTitle', { name: user.name })}
+          </DialogTitle>
+        </DialogHeader>
+        <DialogBody>
+          <Alert variant="warning" appearance="light">
+            <AlertContent>
+              <AlertDescription>
+                {isSelf
+                  ? t('staff.resetSelfBody')
+                  : t('staff.resetBody', { name: user.name })}
+              </AlertDescription>
+            </AlertContent>
+          </Alert>
+        </DialogBody>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            {t('common.cancel')}
+          </Button>
+          <Button
+            variant="destructive"
+            disabled={reset.isPending}
+            onClick={submit}
+          >
+            {reset.isPending ? (
+              <LoaderCircle className="animate-spin" />
+            ) : (
+              <KeyRound />
+            )}
+            {t('staff.resetConfirm')}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export default function StaffSettingsPage() {
   const { t, i18n } = useTranslation();
   const { me } = useLayout();
@@ -335,9 +510,16 @@ export default function StaffSettingsPage() {
   const roles = useRoles(canSeeRoles);
 
   const [creating, setCreating] = useState(false);
+  /**
+   * One reveal state for BOTH acts that mint a temp password — the invite
+   * and the MR8 reset share a response shape, and the handover dialog must
+   * behave identically: shown once, locked until acknowledged.
+   */
   const [created, setCreated] = useState<CreateMerchantStaffResponse | null>(
     null,
   );
+  const [editing, setEditing] = useState<MerchantStaff | null>(null);
+  const [resetting, setResetting] = useState<MerchantStaff | null>(null);
 
   const roleRows = roles.data ?? [];
   const pickerReady = canSeeRoles && roleRows.length > 0;
@@ -428,6 +610,7 @@ export default function StaffSettingsPage() {
                     <TableHead className="w-56">
                       {t('staff.columnStatus')}
                     </TableHead>
+                    {canEdit && <TableHead className="w-20 text-end" />}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -608,6 +791,39 @@ export default function StaffSettingsPage() {
                             )}
                           </div>
                         </TableCell>
+                        {/* MR8: edit the identity details, and reset the
+                            password with a one-time reveal. Both stand on
+                            `staff.edit` alone — a reset is not a
+                            deactivation, so neither the self guard nor the
+                            last-owner guard applies (the server agrees). */}
+                        {canEdit && (
+                          <TableCell>
+                            <div className="flex justify-end gap-1">
+                              <Button
+                                variant="ghost"
+                                mode="icon"
+                                size="sm"
+                                aria-label={t('staff.editAria', {
+                                  name: user.name,
+                                })}
+                                onClick={() => setEditing(user)}
+                              >
+                                <SquarePen />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                mode="icon"
+                                size="sm"
+                                aria-label={t('staff.resetAria', {
+                                  name: user.name,
+                                })}
+                                onClick={() => setResetting(user)}
+                              >
+                                <KeyRound />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        )}
                       </TableRow>
                     );
                   })}
@@ -629,6 +845,31 @@ export default function StaffSettingsPage() {
           }}
           onCreated={(response) => {
             setCreating(false);
+            setCreated(response);
+          }}
+        />
+      )}
+
+      {editing && (
+        <EditStaffDialog
+          key={`staff-edit-${editing.id}`}
+          user={editing}
+          onOpenChange={(open) => {
+            if (!open) setEditing(null);
+          }}
+        />
+      )}
+
+      {resetting && (
+        <ResetPasswordDialog
+          key={`staff-reset-${resetting.id}`}
+          user={resetting}
+          isSelf={resetting.id === me.id}
+          onOpenChange={(open) => {
+            if (!open) setResetting(null);
+          }}
+          onReset={(response) => {
+            setResetting(null);
             setCreated(response);
           }}
         />

@@ -2423,4 +2423,146 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get panePromoHintBody =>
       'The builder opens here. A published promotion cannot be changed — drafts can.';
+
+  @override
+  String get menuPrivacy => 'Privacy Policy';
+
+  @override
+  String get menuTerms => 'Terms of Service';
+
+  @override
+  String get closeStoreRowHint =>
+      'Settle everything, then close the store for good.';
+
+  @override
+  String get closeStoreTitle => 'Close store';
+
+  @override
+  String get closeStoreSubtitle =>
+      'Verify the store\'s contact number, then close a settled store.';
+
+  @override
+  String get closeStoreIrreversibleTitle => 'Closing cannot be undone';
+
+  @override
+  String get closeStoreIrreversibleBody =>
+      'The store leaves Manfaa, crediting stops and every staff account is signed out. Your records stay with us as financial records.';
+
+  @override
+  String get closeStorePhoneLabel => 'Store contact number';
+
+  @override
+  String get closeStorePhoneHint =>
+      'We\'ll text a 6-digit code to this number.';
+
+  @override
+  String get closeStoreSendCode => 'Send code';
+
+  @override
+  String get closeStoreVerify => 'Verify';
+
+  @override
+  String get closeStoreStoresLead => 'Stores on this number';
+
+  @override
+  String get closeStoreSettled => 'Fully settled — can be closed.';
+
+  @override
+  String closeStoreOwes(String amount) {
+    return 'Outstanding $amount — settle before closing.';
+  }
+
+  @override
+  String get closeStoreCta => 'Close store';
+
+  @override
+  String closeStoreConfirmTitle(String store) {
+    return 'Close $store?';
+  }
+
+  @override
+  String get closeStoreConfirmBody =>
+      'This is permanent. The store leaves Manfaa immediately and every staff account is signed out.';
+
+  @override
+  String get closeStoreConfirmCta => 'Close permanently';
+
+  @override
+  String closeStoreClosed(String store) {
+    return '$store is closed';
+  }
+
+  @override
+  String get closeStoreSignedOutNote => 'You\'ll be signed out now.';
+
+  @override
+  String get closeStoreOtherStoreNote => 'Your other stores are untouched.';
+
+  @override
+  String get closeStoreNoStore =>
+      'No store is registered with this contact number.';
+
+  @override
+  String get closeStorePhoneInvalid =>
+      'Enter the store\'s contact number — a Maldivian mobile starting with 7 or 9.';
+
+  @override
+  String get closeStoreOutstandingRefusal =>
+      'This store still owes a settlement. Settle it first, then close.';
+
+  @override
+  String get closeStoreExpired => 'That verification expired. Start again.';
+
+  @override
+  String get staffNameLabel => 'Name';
+
+  @override
+  String get resetPasswordLabel => 'Password';
+
+  @override
+  String get resetPasswordHint =>
+      'Give this person a new one-time password. Their current one stops working immediately.';
+
+  @override
+  String get resetPasswordSelfHint =>
+      'Reset your own password. You\'ll be signed out and must sign in with the new one.';
+
+  @override
+  String get resetPasswordCta => 'Reset password';
+
+  @override
+  String resetPasswordConfirmTitle(String name) {
+    return 'Reset the password for $name?';
+  }
+
+  @override
+  String resetPasswordConfirmBody(String name) {
+    return '$name is signed out everywhere and can only sign in with the one-time password we show you next.';
+  }
+
+  @override
+  String get resetPasswordConfirmSelfBody =>
+      'You\'ll be signed out everywhere and must sign in again with the one-time password shown next. Copy it before closing.';
+
+  @override
+  String get payAmountChangedTitle => 'The amount to transfer changed';
+
+  @override
+  String payAmountChangedBody(String amount) {
+    return 'Your balance moved while this screen was open. Transfer $amount — the figure below is the current one.';
+  }
+
+  @override
+  String get splitAddRow => 'Add row';
+
+  @override
+  String get splitSumIsEligible =>
+      'These rows are the eligible amount — they add up to the sale you\'re crediting.';
+
+  @override
+  String get splitSearchHint => 'Search categories';
+
+  @override
+  String get mapTilesFailed =>
+      'The map couldn\'t load. Check your connection and try again.';
 }

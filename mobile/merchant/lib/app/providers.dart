@@ -6,6 +6,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:manfaa_core/manfaa_core.dart';
 
+import '../features/money/money_providers.dart';
+
 /// The build number the version gate compares against `minimum_build`.
 /// Injected at build time (`--dart-define=BUILD_NUMBER=`) so CI stamps it;
 /// MR6 wires it into the release pipeline properly.
@@ -105,17 +107,27 @@ final creditQueueProvider = ChangeNotifierProvider<CreditQueue>((ref) {
   final api = ref.watch(apiProvider);
   final queue = CreditQueue(
     ref.watch(secretStoreProvider),
-    (entry) => api.createCredit(
-      idempotencyKey: entry.key,
-      customerCode: entry.customerCode,
-      invoiceNo: entry.invoiceNo,
-      eligibleLaari: entry.eligibleLaari,
-      saleLaari: entry.saleLaari,
-      occurredAt: entry.occurredAt,
-      cashbackRatePercent: entry.cashbackRatePercent,
-      lines: entry.lines.isEmpty ? null : entry.lines,
-      backdatedAcknowledged: entry.backdatedAcknowledged,
-    ),
+    (entry) async {
+      final result = await api.createCredit(
+        idempotencyKey: entry.key,
+        customerCode: entry.customerCode,
+        invoiceNo: entry.invoiceNo,
+        eligibleLaari: entry.eligibleLaari,
+        saleLaari: entry.saleLaari,
+        occurredAt: entry.occurredAt,
+        cashbackRatePercent: entry.cashbackRatePercent,
+        lines: entry.lines.isEmpty ? null : entry.lines,
+        backdatedAcknowledged: entry.backdatedAcknowledged,
+      );
+      // MR8 (owner report): ANY landed credit — an immediate submit or a
+      // queued drain — moves the money the Dashboard shows. Every sale
+      // funnels through this ONE sender, so the invalidation cannot be
+      // forgotten by a new call site. Invalidate = refetch on next watch;
+      // the ETag layer still answers 304 when nothing actually moved.
+      ref.invalidate(homeProvider);
+      ref.invalidate(settleAllPreviewProvider);
+      return result;
+    },
   );
   // Fire-and-forget: load() is idempotent and every queue method awaits it.
   queue.load();

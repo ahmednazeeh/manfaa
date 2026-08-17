@@ -1,8 +1,10 @@
 import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart' show visibleForTesting;
 
 import 'api_base.dart';
+import 'errors.dart';
 import 'merchant_models.dart';
 import 'models.dart';
 import 'session.dart';
@@ -821,9 +823,11 @@ class MerchantApi extends ManfaaApiBase<MerchantSession> {
     );
   }
 
-  /// Repoint or (de)activate an account — partial: only the given keys
-  /// travel (`sometimes` server rules). Deactivation is the ONLY removal
-  /// (no staff DELETE), and it destroys the account's app tokens.
+  /// Repoint, rename or (de)activate an account — partial: only the given
+  /// keys travel (`sometimes` server rules). MR8 extends the PATCH with
+  /// [name] and [email] (a taken email refuses 422 exactly like a duplicate
+  /// invite). Deactivation is the ONLY removal (no staff DELETE), and it
+  /// destroys the account's app tokens.
   ///
   /// Refusals: the delegation family above, plus the guards as 422
   /// sentences — the last active OWNER can be neither deactivated nor
@@ -831,11 +835,15 @@ class MerchantApi extends ManfaaApiBase<MerchantSession> {
   /// Gate: `staff.edit`.
   Future<MerchantStaff> updateStaff(
     int id, {
+    String? name,
+    String? email,
     int? merchantRoleId,
     bool? isActive,
   }) async {
     final data = await run(
       () => dio.patch<Map<String, dynamic>>('/merchant/staff/$id', data: {
+        'name': ?name,
+        'email': ?email,
         'merchant_role_id': ?merchantRoleId,
         'is_active': ?isActive,
       }),
@@ -843,6 +851,26 @@ class MerchantApi extends ManfaaApiBase<MerchantSession> {
 
     return MerchantStaff.fromJson(
       (data?['data'] as Map?)?.cast<String, dynamic>() ?? {},
+    );
+  }
+
+  /// Reset a staff member's password (MR8) — answers a fresh generated
+  /// temporary password EXACTLY ONCE, beside (not inside) the resource:
+  /// the same handover shape as [inviteStaff], so the same reveal dialog
+  /// serves both. Server-side the reset rotates the remember token, kills
+  /// web sessions and deletes every app token the target holds — their
+  /// phone signs out. Self-reset is allowed (this device's own token dies
+  /// with the rest). Gate: `staff.edit`.
+  Future<StaffInviteResult> resetStaffPassword(int id) async {
+    final data = await run(
+      () => dio.post<Map<String, dynamic>>('/merchant/staff/$id/reset-password'),
+    );
+
+    return StaffInviteResult(
+      staff: MerchantStaff.fromJson(
+        (data?['data'] as Map?)?.cast<String, dynamic>() ?? {},
+      ),
+      tempPassword: (data?['temp_password'])?.toString() ?? '',
     );
   }
 
@@ -1075,6 +1103,118 @@ class MerchantApi extends ManfaaApiBase<MerchantSession> {
               )
             : null,
       );
+
+  // ------------------------------------------- account closure (MR8)
+  //
+  // The PUBLIC /api/merchant/account-closure endpoints — the same flow the
+  // merchant.manfaa.app/account-deletion page rides. Deliberately
+  // UNAUTHENTICATED: possession of the store's CONTACT phone (proven by
+  // OTP) is the credential, exactly as the server mounts them outside both
+  // auth stacks. They live one level above the mobile tree, so refusals
+  // arrive in Laravel's standard `{message, errors:{field:[code]}}` shape,
+  // not the mobile envelope — [_closureError] lifts the first field code
+  // into a [MobileApiException] so screens switch on `code` as everywhere
+  // else (otp_invalid, otp_attempts_exceeded, no_store, outstanding_balance,
+  // closure_token_invalid, phone_invalid).
+
+  /// Ask for a closure code on the store's CONTACT number. Enumeration-safe:
+  /// the answer is identical for known and unknown phones; the SMS budget
+  /// (3/hour per phone, shared with signup) refuses 429 with Retry-After.
+  Future<void> requestClosureOtp(String phone) async => _closureRun(
+        () => dio.post<Map<String, dynamic>>(
+          '${ApiEnv.publicBaseUrl}/merchant/account-closure/request-otp',
+          data: {'phone': phone},
+        ),
+      );
+
+  /// Redeem the code for a single-use closure token (15-minute life) and
+  /// the list of every non-closed store on the number, each carrying the
+  /// server's own settle-first verdict (`can_close`).
+  Future<ClosureVerification> verifyClosureOtp({
+    required String phone,
+    required String code,
+  }) async {
+    final data = await _closureRun(
+      () => dio.post<Map<String, dynamic>>(
+        '${ApiEnv.publicBaseUrl}/merchant/account-closure/verify',
+        data: {'phone': phone, 'code': code},
+      ),
+    );
+
+    return ClosureVerification.fromJson(
+      (data?['data'] as Map?)?.cast<String, dynamic>() ?? {},
+    );
+  }
+
+  /// The irreversible step: close ONE store on the proven number. The
+  /// server re-checks the outstanding balance at this moment —
+  /// `outstanding_balance` refuses a store that started owing between
+  /// verify and confirm. Success shuts every staff door and deletes their
+  /// tokens; the caller signs the local session out when it just closed
+  /// its own store.
+  Future<void> confirmClosure({
+    required String closureToken,
+    required int merchantId,
+  }) async =>
+      _closureRun(
+        () => dio.post<Map<String, dynamic>>(
+          '${ApiEnv.publicBaseUrl}/merchant/account-closure/confirm',
+          data: {'closure_token': closureToken, 'merchant_id': merchantId},
+        ),
+      );
+
+  /// [run], but for the closure endpoints' NON-envelope errors: a Laravel
+  /// validation refusal carries its machine code as the first `errors`
+  /// entry — surface that as [MobileApiException.code] so the UI localises
+  /// it; everything else (429 prose, proxy pages) falls through to the
+  /// standard status-derived mapping.
+  Future<Map<String, dynamic>?> _closureRun(
+    Future<Response<Map<String, dynamic>>> Function() call,
+  ) async {
+    try {
+      return (await call()).data;
+    } on DioException catch (e) {
+      if (e.type == DioExceptionType.badResponse) {
+        throw closureError(e.response?.data, e.response?.statusCode);
+      }
+      throw MobileApiException.network();
+    }
+  }
+
+  /// Map a Laravel-standard error body onto the app's coded exception.
+  /// Visible for the wire tests; screens never call it.
+  @visibleForTesting
+  static MobileApiException closureError(Object? body, int? status) {
+    if (body is Map) {
+      final errors = body['errors'];
+      if (errors is Map && errors.isNotEmpty) {
+        final Object? first = errors.values.first;
+        final raw = first is List
+            ? first.firstOrNull?.toString()
+            : first?.toString();
+        if (raw != null && RegExp(r'^[a-z0-9_]+$').hasMatch(raw)) {
+          // A machine code (otp_invalid, no_store, outstanding_balance…):
+          // the screens localise it — an empty message keeps a raw
+          // snake_case token off every screen by construction.
+          return MobileApiException(code: raw, message: '', status: status);
+        }
+      }
+      final message = body['message'];
+      if (message is String && message.trim().contains(' ')) {
+        // Prose (the OTP limiter's 429 sentence) — safe to show verbatim.
+        return MobileApiException(
+          code: status == 429 ? ApiCode.rateLimited : ApiCode.validationFailed,
+          message: message,
+          meta: {
+            if (body['retry_after_seconds'] != null)
+              'retry_after_seconds': body['retry_after_seconds'] as Object,
+          },
+          status: status,
+        );
+      }
+    }
+    return MobileApiException.fromResponse(body, status);
+  }
 
   // ------------------------------------------------------------- devices
 

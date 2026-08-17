@@ -14,6 +14,7 @@ use App\Models\MerchantRole;
 use App\Models\MerchantUser;
 use App\Models\Transaction;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
 
 uses(TestCase::class, RefreshDatabase::class);
@@ -76,6 +77,7 @@ function settingsRoutesMr5(): array
         ['getJson', '/api/mobile/v1/merchant/staff', Permission::StaffView->value],
         ['postJson', '/api/mobile/v1/merchant/staff', Permission::StaffInvite->value],
         ['patchJson', '/api/mobile/v1/merchant/staff/1', Permission::StaffEdit->value],
+        ['postJson', '/api/mobile/v1/merchant/staff/1/reset-password', Permission::StaffEdit->value],
         ['getJson', '/api/mobile/v1/merchant/permissions', Permission::RolesView->value],
         ['getJson', '/api/mobile/v1/merchant/roles', Permission::RolesView->value],
         ['postJson', '/api/mobile/v1/merchant/roles', Permission::RolesManage->value],
@@ -358,6 +360,52 @@ it('invites staff (temp password shown once), reassigns and toggles them', funct
         ->patchJson("/api/mobile/v1/merchant/staff/{$staffId}", ['is_active' => true])
         ->assertOk()
         ->assertJsonPath('data.is_active', true);
+});
+
+it('edits a staff name and resets a password from the app; the target phone signs out (MR8)', function () {
+    $merchant = Merchant::factory()->create();
+    $owner = MerchantUser::factory()->for($merchant)->owner()->create();
+    $staff = MerchantUser::factory()->for($merchant)->create();
+    $headers = settingsHeadersMr5($owner);
+
+    // The identity PATCH rides the same mobile mount as role/active.
+    $this->withHeaders($headers)
+        ->patchJson("/api/mobile/v1/merchant/staff/{$staff->id}", ['name' => 'Renamed On Phone'])
+        ->assertOk()
+        ->assertJsonPath('data.name', 'Renamed On Phone');
+
+    expect($staff->refresh()->name)->toBe('Renamed On Phone');
+
+    // The staff member's own signed-in phone, working before the reset.
+    $staffToken = app(MobileTokenService::class)
+        ->issue($staff, MobileAudience::Merchant, 'Staff phone')->plainTextToken;
+
+    app('auth')->forgetGuards();
+    $this->withHeaders(['Authorization' => 'Bearer '.$staffToken])
+        ->getJson('/api/mobile/v1/merchant/devices')
+        ->assertOk();
+
+    // Owner resets from the app: temp password once, at the root beside
+    // data — the same shape the invite answers with.
+    app('auth')->forgetGuards();
+    $response = $this->withHeaders($headers)
+        ->postJson("/api/mobile/v1/merchant/staff/{$staff->id}/reset-password")
+        ->assertOk()
+        ->assertJsonPath('data.id', $staff->id);
+
+    $tempPassword = $response->json('temp_password');
+
+    expect($tempPassword)->toBeString()->and(strlen($tempPassword))->toBeGreaterThanOrEqual(20)
+        ->and(Hash::check($tempPassword, $staff->refresh()->password))->toBeTrue()
+        ->and($staff->tokens()->count())->toBe(0);
+
+    // The token row is GONE, not merely refused — the app is signed out.
+    app('auth')->forgetGuards();
+    $refused = $this->withHeaders(['Authorization' => 'Bearer '.$staffToken])
+        ->getJson('/api/mobile/v1/merchant/devices')
+        ->assertStatus(401);
+
+    expect($refused->json('error.code'))->toBe('unauthenticated');
 });
 
 it('never removes the last active owner, in the envelope', function () {

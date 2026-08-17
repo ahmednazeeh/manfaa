@@ -2,9 +2,11 @@ import {
   apiFetch,
   bootstrapCsrf,
   bpToPercentString,
+  CreateMerchantStaffResponseSchema,
   dataWrapped,
   MerchantAuthUserResponseSchema,
   MerchantAuthUserSchema,
+  MerchantStaffResponseSchema,
   paginated,
   PercentSchema,
   RateDescriptionSchema,
@@ -12,7 +14,9 @@ import {
   SettlementPreviewSchema,
   SettlementSchema,
   TransactionSchema,
+  type CreateMerchantStaffResponse,
   type MerchantAuthUser,
+  type MerchantStaffResponse,
   type MerchantStatus,
   type SettlementBankAccount,
   type SettlementPreview,
@@ -480,6 +484,55 @@ export function walletSettleSelection(
     MerchantSettlementResponseSchema,
     { method: 'POST', body },
   ).then((response) => response.data);
+}
+
+// ---------------------------------------------------------------------------
+// Staff — MR8 employee-management completeness
+// ---------------------------------------------------------------------------
+
+/**
+ * PATCH /api/merchant/staff/{id}, widened past the shared client's
+ * role/activation pair: MR8 added NAME and EMAIL edits to the same route.
+ * The email keeps the invite's global-unique rule (ignoring only the
+ * target's own row), so a duplicate refuses 422 exactly like a duplicate
+ * invite — the server's message is shown as-is. Every guard on the
+ * role/active pair (last owner, self) is unchanged.
+ */
+export interface UpdateStaffBody {
+  merchant_role_id?: number;
+  is_active?: boolean;
+  name?: string;
+  email?: string;
+}
+
+export function updateStaff(
+  id: number,
+  body: UpdateStaffBody,
+): Promise<MerchantStaffResponse> {
+  return apiFetch(`/api/merchant/staff/${id}`, MerchantStaffResponseSchema, {
+    method: 'PATCH',
+    body,
+  });
+}
+
+/**
+ * POST /api/merchant/staff/{id}/reset-password (MR8) — a fresh
+ * server-generated temporary password, returned EXACTLY ONCE at the root
+ * beside `data`, byte-for-byte the invite's shape (hence the shared
+ * response schema, not a restatement). Everything the old password
+ * unlocked dies with it server-side: the target's panel sessions, every
+ * mobile token, the remember-me cookie. Self-reset is allowed — the
+ * caller's own session then dies on its next request, so the reveal
+ * dialog is the last thing they do signed in.
+ */
+export function resetStaffPassword(
+  id: number,
+): Promise<CreateMerchantStaffResponse> {
+  return apiFetch(
+    `/api/merchant/staff/${id}/reset-password`,
+    CreateMerchantStaffResponseSchema,
+    { method: 'POST' },
+  );
 }
 
 // ---------------------------------------------------------------------------

@@ -183,6 +183,9 @@ function merchantPermissionMatrix(): array
         'staff read' => ['method' => 'GET', 'uri' => '/api/merchant/staff', 'payload' => [], 'permission' => 'staff.view', 'allowed' => 200],
         'staff create' => ['method' => 'POST', 'uri' => '/api/merchant/staff', 'payload' => [], 'permission' => 'staff.invite', 'allowed' => 422],
         'staff update' => ['method' => 'PATCH', 'uri' => '/api/merchant/staff/999999', 'payload' => [], 'permission' => 'staff.edit', 'allowed' => 404],
+        // MR8: the reset answers to staff.edit like the PATCH above — an
+        // operation on an existing account, not the invite's mint.
+        'staff password reset' => ['method' => 'POST', 'uri' => '/api/merchant/staff/999999/reset-password', 'payload' => [], 'permission' => 'staff.edit', 'allowed' => 404],
         'permission catalogue' => ['method' => 'GET', 'uri' => '/api/merchant/permissions', 'payload' => [], 'permission' => 'roles.view', 'allowed' => 200],
         'roles read' => ['method' => 'GET', 'uri' => '/api/merchant/roles', 'payload' => [], 'permission' => 'roles.view', 'allowed' => 200],
         'role create' => ['method' => 'POST', 'uri' => '/api/merchant/roles', 'payload' => [], 'permission' => 'roles.manage', 'allowed' => 422],

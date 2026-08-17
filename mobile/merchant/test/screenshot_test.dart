@@ -1247,24 +1247,26 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  /// Add one split line through the editor dialog, picking [category] from
-  /// the dropdown when it is not the default.
-  Future<void> addLine(
+  /// Fill one split ROW (MR8: inline rows, no dialog) — search the
+  /// category, tap the option, type the amount. The first row already
+  /// exists; later ones are appended with "Add row" by the caller.
+  Future<void> fillRow(
     WidgetTester tester,
-    String? category,
+    String category,
     String amount,
   ) async {
-    await tester.tap(find.text('Add category'));
+    Finder searchFields() => find.byWidgetPredicate(
+      (w) => w is TextField && w.decoration?.hintText == 'Search categories',
+    );
+    Finder amountFields() => find.byWidgetPredicate(
+      (w) => w is TextField && w.decoration?.prefixText == 'MVR ',
+    );
+
+    await tester.enterText(searchFields().last, category);
     await tester.pumpAndSettle();
-    if (category != null) {
-      await tester.tap(find.text('Everything else').last);
-      await tester.pumpAndSettle();
-      await tester.tap(find.text(category).last);
-      await tester.pumpAndSettle();
-    }
-    await tester.enterText(find.byType(TextField).last, amount);
+    await tester.tap(find.text(category).last);
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Save'));
+    await tester.enterText(amountFields().last, amount);
     await tester.pumpAndSettle();
   }
 
@@ -1281,14 +1283,18 @@ void main() {
     await tester.tap(find.byType(Switch).last);
     await tester.pumpAndSettle();
     await tester.scrollUntilVisible(
-      find.text('Add category'),
+      find.text('Add row'),
       120,
       scrollable: find.byType(Scrollable).first,
     );
     await tester.pumpAndSettle();
-    await addLine(tester, 'Fruits', '300');
-    await addLine(tester, 'Veggies', '250');
-    await addLine(tester, null, '450');
+    await fillRow(tester, 'Fruits', '300');
+    await tester.tap(find.text('Add row'));
+    await tester.pumpAndSettle();
+    await fillRow(tester, 'Veggies', '250');
+    await tester.tap(find.text('Add row'));
+    await tester.pumpAndSettle();
+    await fillRow(tester, 'Everything else', '450');
     await tester.scrollUntilVisible(
       find.text('Cost preview'),
       120,

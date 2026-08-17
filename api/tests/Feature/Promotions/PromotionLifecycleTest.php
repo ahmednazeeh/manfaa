@@ -10,6 +10,7 @@ use App\Models\MerchantBranch;
 use App\Models\MerchantRate;
 use App\Models\MerchantUser;
 use App\Models\Promotion;
+use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -133,17 +134,81 @@ it('publishes a draft, stamping published_at', function () {
         ->and($promotion->published_at)->not->toBeNull();
 });
 
-it('refuses to publish a draft whose window has already started', function () {
-    // Publishing freezes the window, so it must lie entirely in the future.
+it('refuses to publish a draft whose window started more than 24 hours ago', function () {
+    // Publishing freezes the window. A start inside the last 24 hours is
+    // allowed (MR8 owner decision, tested below); older than that must be
+    // re-drafted.
     $promotion = Promotion::query()->create([
         'merchant_id' => $this->merchant->id,
         'rate_bp' => 500,
-        'starts_at' => now()->subHour(),
+        'starts_at' => now()->subHours(25),
         'ends_at' => now()->addDays(7),
         'status' => 'draft',
     ]);
 
     $this->postJson("/api/merchant/promotions/{$promotion->id}/publish")->assertUnprocessable();
+
+    expect($promotion->refresh()->status)->toBe('draft');
+});
+
+it('publishes a draft that started last night in Maldives time — up to 24h past is allowed (MR8)', function () {
+    // Frozen at 18 Aug 2026 10:00 in Indian/Maldives (+05:00). The promo
+    // was set to start "yesterday 23:00" local — 11 hours ago.
+    $this->travelTo(CarbonImmutable::parse('2026-08-18T10:00:00+05:00'));
+
+    $promotion = Promotion::query()->create([
+        'merchant_id' => $this->merchant->id,
+        'rate_bp' => 500,
+        'starts_at' => CarbonImmutable::parse('2026-08-17T23:00:00+05:00'),
+        'ends_at' => CarbonImmutable::parse('2026-08-24T23:00:00+05:00'),
+        'status' => 'draft',
+    ]);
+
+    $this->postJson("/api/merchant/promotions/{$promotion->id}/publish")
+        ->assertOk()
+        ->assertJsonPath('data.status', 'published');
+
+    expect($promotion->refresh()->status)->toBe('published');
+});
+
+it('publishes the owner repro: start = today local midnight while UTC still says yesterday (MR8)', function () {
+    // 18 Aug 2026 00:40 in Maldives — the server's UTC clock still reads
+    // 17 Aug 19:40. The owner picked "the 18th"; the old instant-vs-now
+    // comparison refused it and the message named the 17th.
+    $this->travelTo(CarbonImmutable::parse('2026-08-17T19:40:00+00:00'));
+
+    $id = $this->postJson('/api/merchant/promotions', promotionPayload([
+        'starts_at' => '2026-08-18T00:00:00+05:00',
+        'ends_at' => '2026-08-25T00:00:00+05:00',
+    ]))->assertCreated()->json('data.id');
+
+    $this->postJson("/api/merchant/promotions/{$id}/publish")
+        ->assertOk()
+        ->assertJsonPath('data.status', 'published');
+});
+
+it('names the LOCAL business date in the too-far-past refusal, never a shifted timestamp (MR8)', function () {
+    // Frozen at 18 Aug 2026 10:00 +05:00. The start is 17 Aug 02:00 local
+    // (32h ago) — which is still 16 Aug in UTC, so a message formatting in
+    // the wrong zone would name the 16th, exactly the owner's bug.
+    $this->travelTo(CarbonImmutable::parse('2026-08-18T10:00:00+05:00'));
+
+    $promotion = Promotion::query()->create([
+        'merchant_id' => $this->merchant->id,
+        'rate_bp' => 500,
+        'starts_at' => CarbonImmutable::parse('2026-08-17T02:00:00+05:00'),
+        'ends_at' => CarbonImmutable::parse('2026-08-27T02:00:00+05:00'),
+        'status' => 'draft',
+    ]);
+
+    $response = $this->postJson("/api/merchant/promotions/{$promotion->id}/publish")
+        ->assertUnprocessable();
+
+    expect($response->json('message'))
+        ->toContain('17 Aug 2026')   // starts_at, business-local date
+        ->toContain('18 Aug 2026')   // "today", business-local date
+        ->not->toContain('16 Aug')   // the UTC-shifted date the bug showed
+        ->not->toContain('2026-08-'); // no raw ISO timestamps anywhere
 
     expect($promotion->refresh()->status)->toBe('draft');
 });

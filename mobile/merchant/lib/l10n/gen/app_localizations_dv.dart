@@ -2451,4 +2451,150 @@ class AppLocalizationsDv extends AppLocalizations {
   @override
   String get panePromoHintBody =>
       'ބިލްޑަރ ހުޅުވޭނީ މިތަނުންނެވެ. ޝާއިޢުކުރެއްވި ޕްރޮމޯޝަނެއް ބަދަލެއް ނުކުރެވޭނެ — ޑްރާފްޓެއް ބަދަލުކުރެއްވޭނެއެވެ.';
+
+  @override
+  String get menuPrivacy => 'ޕްރައިވެސީ ޕޮލިސީ';
+
+  @override
+  String get menuTerms => 'ޚިދުމަތުގެ ޝަރުޠުތައް';
+
+  @override
+  String get closeStoreRowHint =>
+      'ހުރިހާ ފައިސާއެއް ދެއްކެވުމަށްފަހު ފިހާރަ ބަންދުކުރައްވާ.';
+
+  @override
+  String get closeStoreTitle => 'ފިހާރަ ބަންދުކުރުން';
+
+  @override
+  String get closeStoreSubtitle =>
+      'ފިހާރައިގެ ގުޅޭނެ ނަންބަރު ކަށަވަރުކުރެއްވުމަށްފަހު، ފައިސާ ދައްކާ ނިމިފައިވާ ފިހާރަ ބަންދުކުރެއްވޭނެ.';
+
+  @override
+  String get closeStoreIrreversibleTitle =>
+      'ބަންދުކުރުމަށްފަހު އަނބުރާ ނުގެނެވޭނެ';
+
+  @override
+  String get closeStoreIrreversibleBody =>
+      'ފިހާރަ މަންފާއިން ނަގާ، ކޭޝްބެކް ދިނުން ހުއްޓި، ހުރިހާ މުވައްޒަފުންގެ އެކައުންޓުތައް ސައިން އައުޓްވާނެއެވެ. މާލީ ރެކޯޑުތައް އަޅުގަނޑުމެންގެ އަތުގައި ބަހައްޓާނަމެވެ.';
+
+  @override
+  String get closeStorePhoneLabel => 'ފިހާރައިގެ ގުޅޭނެ ނަންބަރު';
+
+  @override
+  String get closeStorePhoneHint =>
+      'މި ނަންބަރަށް 6 އަކުރުގެ ކޯޑެއް ފޮނުވާނަން.';
+
+  @override
+  String get closeStoreSendCode => 'ކޯޑް ފޮނުއްވާ';
+
+  @override
+  String get closeStoreVerify => 'ކަށަވަރުކުރައްވާ';
+
+  @override
+  String get closeStoreStoresLead => 'މި ނަންބަރުގައިވާ ފިހާރަތައް';
+
+  @override
+  String get closeStoreSettled =>
+      'ހުރިހާ ފައިސާއެއް ދައްކާ ނިމިފައި — ބަންދުކުރެއްވޭނެ.';
+
+  @override
+  String closeStoreOwes(String amount) {
+    return 'ދައްކަން ޖެހޭ $amount — ބަންދުކުރެއްވުމުގެ ކުރިން ދައްކަވާ.';
+  }
+
+  @override
+  String get closeStoreCta => 'ފިހާރަ ބަންދުކުރައްވާ';
+
+  @override
+  String closeStoreConfirmTitle(String store) {
+    return '$store ބަންދުކުރައްވަންތޯ؟';
+  }
+
+  @override
+  String get closeStoreConfirmBody =>
+      'މިއީ ދާއިމީ ކަމެކެވެ. ފިހާރަ ވަގުތުން މަންފާއިން ނަގާ، ހުރިހާ މުވައްޒަފުންގެ އެކައުންޓުތައް ސައިން އައުޓްވާނެއެވެ.';
+
+  @override
+  String get closeStoreConfirmCta => 'ދާއިމީކޮށް ބަންދުކުރައްވާ';
+
+  @override
+  String closeStoreClosed(String store) {
+    return '$store ބަންދުކުރެވިއްޖެ';
+  }
+
+  @override
+  String get closeStoreSignedOutNote => 'މިހާރު ސައިން އައުޓްވާނެއެވެ.';
+
+  @override
+  String get closeStoreOtherStoreNote =>
+      'ތިޔަބޭފުޅުންގެ އަނެއް ފިހާރަތަކަށް ބަދަލެއް ނާދޭ.';
+
+  @override
+  String get closeStoreNoStore =>
+      'މި ގުޅޭނެ ނަންބަރުގައި ފިހާރައެއް ރަޖިސްޓަރީކޮށްފައެއް ނެތް.';
+
+  @override
+  String get closeStorePhoneInvalid =>
+      'ފިހާރައިގެ ގުޅޭނެ ނަންބަރު ލިޔުއްވާ — 7 ނުވަތަ 9 އިން ފެށޭ ދިވެހި މޯބައިލް ނަންބަރެއް.';
+
+  @override
+  String get closeStoreOutstandingRefusal =>
+      'މި ފިހާރައިން ދައްކަން ޖެހޭ ފައިސާ އެބަހުރި. އެ ދެއްކެވުމަށްފަހު ބަންދުކުރައްވާ.';
+
+  @override
+  String get closeStoreExpired =>
+      'އެ ކަށަވަރުކުރުން މުއްދަތު ހަމަވެއްޖެ. އަލުން ފައްޓަވާ.';
+
+  @override
+  String get staffNameLabel => 'ނަން';
+
+  @override
+  String get resetPasswordLabel => 'ޕާސްވޯޑް';
+
+  @override
+  String get resetPasswordHint =>
+      'މި މުވައްޒަފަށް އެއްފަހަރު ބޭނުންކުރެވޭ އައު ޕާސްވޯޑެއް ދެއްވާ. މިހާރުގެ ޕާސްވޯޑް ވަގުތުން ބާތިލްވާނެ.';
+
+  @override
+  String get resetPasswordSelfHint =>
+      'ތިޔަބޭފުޅުންގެ އަމިއްލަ ޕާސްވޯޑް ރީސެޓްކުރައްވާ. ސައިން އައުޓްވެ، އައު ޕާސްވޯޑުން ސައިން އިން ކުރައްވަން ޖެހޭނެ.';
+
+  @override
+  String get resetPasswordCta => 'ޕާސްވޯޑް ރީސެޓްކުރައްވާ';
+
+  @override
+  String resetPasswordConfirmTitle(String name) {
+    return '$name ގެ ޕާސްވޯޑް ރީސެޓްކުރައްވަންތޯ؟';
+  }
+
+  @override
+  String resetPasswordConfirmBody(String name) {
+    return '$name ހުރިހާ ތަނަކުން ސައިން އައުޓްވެ، ދެން ދައްކާ އެއްފަހަރު ބޭނުންކުރެވޭ ޕާސްވޯޑުން އެކަނި ސައިން އިން ކުރެވޭނެ.';
+  }
+
+  @override
+  String get resetPasswordConfirmSelfBody =>
+      'ހުރިހާ ތަނަކުން ސައިން އައުޓްވެ، ދެން ދައްކާ އެއްފަހަރު ބޭނުންކުރެވޭ ޕާސްވޯޑުން އަލުން ސައިން އިން ކުރައްވަން ޖެހޭނެ. ބަންދުކުރެއްވުމުގެ ކުރިން ކޮޕީކުރައްވާ.';
+
+  @override
+  String get payAmountChangedTitle => 'ފޮނުއްވަން ޖެހޭ އަދަދު ބަދަލުވެއްޖެ';
+
+  @override
+  String payAmountChangedBody(String amount) {
+    return 'މި ސްކްރީން ހުޅުވިފައި ހުއްޓާ ބެލެންސް ބަދަލުވެއްޖެ. $amount ފޮނުއްވާ — ތިރީގައިވަނީ މިހާރުގެ އަދަދު.';
+  }
+
+  @override
+  String get splitAddRow => 'ސަފެއް އިތުރުކުރައްވާ';
+
+  @override
+  String get splitSumIsEligible =>
+      'މި ސަފުތަކަކީ ކޭޝްބެކް ލިބޭ އަދަދު — ޖުމްލަވަނީ ކްރެޑިޓްކުރައްވާ ވިޔަފާރިއަށެވެ.';
+
+  @override
+  String get splitSearchHint => 'ބާވަތްތައް ހޯއްދަވާ';
+
+  @override
+  String get mapTilesFailed =>
+      'މެޕް ލޯޑެއް ނުވި. ކަނެކްޝަން ބައްލަވާފައި އަލުން މަސައްކަތްކުރައްވާ.';
 }

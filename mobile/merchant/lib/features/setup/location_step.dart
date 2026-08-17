@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_map/flutter_map.dart';
+import 'package:flutter_map/flutter_map.dart' show MapController;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
@@ -8,6 +8,7 @@ import 'package:manfaa_ui/manfaa_ui.dart';
 
 import '../../app/app.dart';
 import '../../app/providers.dart';
+import '../../widgets/osm_map.dart';
 import 'setup_common.dart';
 
 /// Step 2 — the primary branch's pin: drag the map UNDER a fixed centre pin
@@ -138,55 +139,13 @@ class _LocationStepState extends ConsumerState<LocationStep> {
           borderRadius: BorderRadius.circular(Corner.tile),
           child: SizedBox(
             height: 260,
-            child: Stack(
-              children: [
-                FlutterMap(
-                  mapController: _map,
-                  options: MapOptions(
-                    initialCenter: _center,
-                    initialZoom: _saved != null ? 17 : 15,
-                    onPositionChanged: (camera, _) =>
-                        setState(() => _center = camera.center),
-                  ),
-                  children: [
-                    TileLayer(
-                      urlTemplate:
-                          'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                      userAgentPackageName: 'mv.manfaa.merchant',
-                    ),
-                    // OSM's attribution requirement — small, but present.
-                    const Align(
-                      alignment: Alignment.bottomRight,
-                      child: Padding(
-                        padding: EdgeInsets.all(2),
-                        child: Text(
-                          '© OpenStreetMap',
-                          style:
-                              TextStyle(fontSize: 9, color: Color(0x99000000)),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                // The fixed centre pin the map drags under. Lifted by half
-                // its height so the TIP marks the centre, not the glyph's
-                // middle; ignores pointers so it never eats a drag.
-                IgnorePointer(
-                  child: Center(
-                    child: Transform.translate(
-                      offset: const Offset(0, -18),
-                      child: const Icon(
-                        Icons.place_rounded,
-                        size: 40,
-                        color: ManfaaColors.coral,
-                        shadows: [
-                          Shadow(color: Color(0x40000000), blurRadius: 6),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ],
+            // MR8: the shared pin-picker map — identified OSM user agent,
+            // https tiles, and the graceful tile-error state live THERE.
+            child: PinPickerMap(
+              controller: _map,
+              initialCenter: _center,
+              initialZoom: _saved != null ? 17 : 15,
+              onCenterChanged: (center) => setState(() => _center = center),
             ),
           ),
         ),

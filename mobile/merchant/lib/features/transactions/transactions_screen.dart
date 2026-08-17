@@ -34,12 +34,13 @@ const kTransactionStates = [
   'written_off',
 ];
 
-final txStateFilterProvider = StateProvider<String?>((_) => null);
+final txStateFilterProvider = StateProvider.autoDispose<String?>((_) => null);
 
-/// MR7 — which sale the expanded master-detail pane is showing. Session
-/// state, deliberately NOT autoDispose: rail navigation away and back keeps
-/// the selection exactly as left. Phones never read it.
-final txSelectedProvider = StateProvider<int?>((_) => null);
+/// MR7 — which sale the expanded master-detail pane is showing. Phones
+/// never read it. autoDispose since MR8: the owner's tab-reset decision
+/// reversed MR7's keep-the-selection stance — leaving the tab unmounts the
+/// screen and this selection dies with it, so returning always lands fresh.
+final txSelectedProvider = StateProvider.autoDispose<int?>((_) => null);
 
 final txPagerProvider =
     StateNotifierProvider.autoDispose<

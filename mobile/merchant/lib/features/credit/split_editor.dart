@@ -6,14 +6,20 @@ import '../../app/app.dart';
 import '../setup/rate_step.dart'
     show estimateLaariAtBp, parsePercentToBp, staticFeeBp;
 
-/// The With-Category ref's "Category breakdown" editor: colour-chipped rows
-/// with amount + edit/delete, an Add-category action, the Everything-else
-/// bucket, and the client-side sum check against the eligible amount.
+/// The split-by-category editor, reworked to the owner's MR8 spec: INLINE
+/// ROWS instead of the add-category popup. Each row is a searchable
+/// category dropdown (type-to-filter over the served categories, the
+/// Everything-else bucket included) beside an MVR amount field and a
+/// per-row delete; "Add row" appends.
+///
+/// The card OWNS its draft rows (controllers and all) and reports upward
+/// only what the wire needs: the COMPLETE rows as [SplitRow]s plus a
+/// completeness flag. Since MR8 the lines total IS the eligible amount —
+/// computed in the background and sent as `eligible_amount` — so the old
+/// sum-mismatch error path is impossible from this UI by construction.
 ///
 /// Everything priced here is a display ESTIMATE mirroring the §4 per-line
-/// ceiling math — the server prices authoritatively at the sale time. Lines
-/// on the wire must sum EXACTLY to the eligible amount
-/// (`lines_sum_mismatch` otherwise), which is the mismatch gate below.
+/// ceiling math — the server prices authoritatively at the sale time.
 
 /// One composed line. `category` is a slug, or null for Everything else.
 class SplitRow {
@@ -53,6 +59,9 @@ class SplitRow {
   return (cashback: cashback, fee: fee);
 }
 
+/// Sentinel key for the Everything-else bucket inside the editor.
+const kSplitElseKey = '__everything_else__';
+
 /// The rotating chip palette, index-stable within the active list so a
 /// category keeps its colour while the screen lives.
 const _chipTints = [
@@ -63,58 +72,139 @@ const _chipTints = [
   ManfaaTint.violet,
 ];
 
-class SplitEditorCard extends StatelessWidget {
+/// One draft line: a picked (or not-yet-picked) category key and the raw
+/// amount text. The controllers live exactly as long as the row.
+class _DraftRow {
+  _DraftRow({String label = '', String amount = ''})
+      : search = TextEditingController(text: label),
+        amount = TextEditingController(text: amount);
+
+  /// Assigned when the row's search field resolves to a category (null is
+  /// the Everything-else bucket, which is a deliberate value, not "unset").
+  String? key;
+  final TextEditingController search;
+  final TextEditingController amount;
+  final FocusNode focus = FocusNode();
+
+  int? get laari {
+    final parsed = parseMvrToLaari(amount.text);
+    return parsed != null && parsed >= 1 ? parsed : null;
+  }
+
+  bool get amountInvalid =>
+      amount.text.trim().isNotEmpty && laari == null;
+
+  void dispose() {
+    search.dispose();
+    amount.dispose();
+    focus.dispose();
+  }
+}
+
+class SplitEditorCard extends StatefulWidget {
   const SplitEditorCard({
     super.key,
-    required this.rows,
     required this.categories,
-    required this.eligibleLaari,
-    required this.onRowsChanged,
+    required this.onChanged,
   });
-
-  final List<SplitRow> rows;
 
   /// ACTIVE categories only.
   final List<ProductCategory> categories;
 
-  /// The typed eligible amount the lines must sum to; null while invalid.
-  final int? eligibleLaari;
-  final ValueChanged<List<SplitRow>> onRowsChanged;
+  /// Reports the COMPLETE rows (category picked, valid amount) and whether
+  /// EVERY row is complete — the parent derives the eligible amount from
+  /// the rows' sum and gates submit on the flag.
+  final void Function(List<SplitRow> rows, bool complete) onChanged;
+
+  @override
+  State<SplitEditorCard> createState() => _SplitEditorCardState();
+}
+
+class _SplitEditorCardState extends State<SplitEditorCard> {
+  // One empty row from the start: turning the split on means composing a
+  // line, not hunting for an Add button first.
+  late final List<_DraftRow> _rows = [_DraftRow()];
+
+  @override
+  void dispose() {
+    for (final row in _rows) {
+      row.dispose();
+    }
+    super.dispose();
+  }
 
   bool get _canAdd =>
-      rows.length < categories.length + 1; // every slug + the else-bucket
+      _rows.length < widget.categories.length + 1; // every slug + else
+
+  void _emit() {
+    final complete =
+        _rows.isNotEmpty &&
+        _rows.every((row) => row.key != null && row.laari != null);
+    widget.onChanged([
+      for (final row in _rows)
+        if (row.key != null && row.laari != null)
+          SplitRow(
+            category: row.key == kSplitElseKey ? null : row.key,
+            amountLaari: row.laari!,
+          ),
+    ], complete);
+  }
+
+  void _addRow() {
+    setState(() => _rows.add(_DraftRow()));
+    _emit();
+  }
+
+  void _removeRow(int index) {
+    final row = _rows.removeAt(index);
+    // Dispose after the frame — the field is still in the closing tree.
+    WidgetsBinding.instance.addPostFrameCallback((_) => row.dispose());
+    setState(() {});
+    _emit();
+  }
+
+  /// The keys this row may still pick: the else-bucket plus every active
+  /// slug, minus what OTHER rows already hold.
+  List<String> _optionsFor(_DraftRow row) {
+    final used = {
+      for (final other in _rows)
+        if (!identical(other, row) && other.key != null) other.key!,
+    };
+    return [
+      if (!used.contains(kSplitElseKey)) kSplitElseKey,
+      for (final category in widget.categories)
+        if (!used.contains(category.slug)) category.slug,
+    ];
+  }
+
+  String _labelFor(String key, {required bool dhivehi}) {
+    if (key == kSplitElseKey) return context.l10n.splitEverythingElse;
+    return widget.categories
+            .where((c) => c.slug == key)
+            .firstOrNull
+            ?.label(dhivehi: dhivehi) ??
+        key;
+  }
+
+  ManfaaTint _tintFor(String? key) {
+    if (key == null) return ManfaaTint.neutral;
+    if (key == kSplitElseKey) return ManfaaTint.violet;
+    final index = widget.categories.indexWhere((c) => c.slug == key);
+    return index < 0 ? ManfaaTint.neutral : _chipTints[index % _chipTints.length];
+  }
+
+  bool _excluded(String? key) =>
+      widget.categories.where((c) => c.slug == key).firstOrNull?.excluded ??
+      false;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final l10n = context.l10n;
     final dhivehi = Localizations.localeOf(context).languageCode == 'dv';
+    final muted = theme.colorScheme.onSurfaceVariant;
 
-    final sum = rows.fold<int>(0, (acc, row) => acc + row.amountLaari);
-    final mismatch =
-        rows.isNotEmpty && eligibleLaari != null && sum != eligibleLaari;
-
-    String rowLabel(SplitRow row) {
-      // The chip wears the ref's short "Other"; the dialog keeps the full
-      // "Everything else" where there is room to explain.
-      if (row.category == null) return l10n.splitOtherChip;
-      final category = categories
-          .where((c) => c.slug == row.category)
-          .firstOrNull;
-      return category?.label(dhivehi: dhivehi) ?? row.category!;
-    }
-
-    ManfaaTint rowTint(SplitRow row) {
-      if (row.category == null) return ManfaaTint.violet;
-      final index = categories.indexWhere((c) => c.slug == row.category);
-      return index < 0
-          ? ManfaaTint.neutral
-          : _chipTints[index % _chipTints.length];
-    }
-
-    bool rowExcluded(SplitRow row) =>
-        categories.where((c) => c.slug == row.category).firstOrNull?.excluded ??
-        false;
+    final sum = _rows.fold<int>(0, (acc, row) => acc + (row.laari ?? 0));
 
     return ManfaaCard(
       child: Column(
@@ -129,327 +219,281 @@ class SplitEditorCard extends StatelessWidget {
                 ),
               ),
               TextButton.icon(
-                onPressed: _canAdd ? () => _editRow(context) : null,
+                onPressed: _canAdd ? _addRow : null,
                 icon: const Icon(Icons.add_rounded, size: 18),
-                label: Text(l10n.splitAddCategory),
+                label: Text(l10n.splitAddRow),
                 style: TextButton.styleFrom(
                   foregroundColor: theme.colorScheme.secondary,
                 ),
               ),
             ],
           ),
-          if (rows.isEmpty) ...[
-            const SizedBox(height: Gap.sm),
-            Text(
-              l10n.splitEmptyHint,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
+          const SizedBox(height: 2),
+          // Fix 4's contract, said out loud: the lines ARE the eligible
+          // amount — there is no second field to disagree with.
+          Text(
+            l10n.splitSumIsEligible,
+            style: theme.textTheme.bodySmall?.copyWith(color: muted),
+          ),
+          const SizedBox(height: Gap.md),
+          for (final (index, row) in _rows.indexed) ...[
+            if (index > 0) const SizedBox(height: Gap.sm),
+            _buildRow(context, index, row, dhivehi: dhivehi),
+            if (_excluded(row.key))
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Text(
+                  l10n.splitExcludedNote,
+                  style: theme.textTheme.labelSmall?.copyWith(color: muted),
+                ),
               ),
-            ),
           ],
-          for (final (index, row) in rows.indexed) ...[
-            if (index > 0)
-              Divider(height: 1, color: theme.colorScheme.outlineVariant),
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: Gap.sm),
-              child: Row(
-                children: [
-                  Flexible(
-                    child: _CategoryChip(
-                      label: rowLabel(row),
-                      tint: rowTint(row),
-                    ),
-                  ),
-                  if (rowExcluded(row)) ...[
+          const SizedBox(height: Gap.md),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  l10n.splitLinesTotal,
+                  style: theme.textTheme.bodySmall?.copyWith(color: muted),
+                ),
+              ),
+              MoneyText(
+                sum,
+                style: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRow(
+    BuildContext context,
+    int index,
+    _DraftRow row, {
+    required bool dhivehi,
+  }) {
+    final theme = Theme.of(context);
+    final l10n = context.l10n;
+    final tint = _tintFor(row.key);
+    final colors = tintColors(tint, theme.brightness);
+
+    // A SETTLED row shows its category as a chip, not as raw field text:
+    // the box is narrower than a long name ("Everything else"), and a
+    // TextField cannot ellipsize — it scrolls, so the row ended up reading
+    // "…ing else" instead of naming its category. Tapping the chip hands
+    // the field back for a change of mind.
+    if (row.key != null && !row.focus.hasFocus) {
+      return Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: InkWell(
+              borderRadius: BorderRadius.circular(Corner.control),
+              onTap: () {
+                row.search.clear();
+                setState(() => row.key = null);
+                row.focus.requestFocus();
+                _emit();
+              },
+              child: Container(
+                height: 56,
+                padding: const EdgeInsets.symmetric(horizontal: Gap.sm + 2),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(Corner.control),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.circle_rounded, size: 14, color: colors.fg),
                     const SizedBox(width: Gap.sm),
                     Expanded(
                       child: Text(
-                        l10n.splitExcludedNote,
-                        style: theme.textTheme.labelSmall?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant,
-                        ),
+                        _labelFor(row.key!, dhivehi: dhivehi),
+                        maxLines: 1,
                         overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodyMedium,
                       ),
                     ),
-                  ] else
-                    const Spacer(),
-                  MoneyText(row.amountLaari, style: theme.textTheme.titleSmall),
-                  IconButton(
-                    onPressed: () => _editRow(context, index: index),
-                    tooltip: l10n.splitEditLine,
-                    icon: const Icon(Icons.edit_outlined, size: 19),
-                    color: theme.colorScheme.onSurfaceVariant,
-                    visualDensity: VisualDensity.compact,
-                  ),
-                  IconButton(
-                    onPressed: () => onRowsChanged([...rows]..removeAt(index)),
-                    tooltip: l10n.splitRemoveLine,
-                    icon: const Icon(Icons.delete_outline_rounded, size: 19),
-                    color: theme.colorScheme.onSurfaceVariant,
-                    visualDensity: VisualDensity.compact,
-                  ),
-                ],
-              ),
-            ),
-          ],
-          if (rows.isNotEmpty) ...[
-            const SizedBox(height: Gap.sm),
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    l10n.splitLinesTotal,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                  ),
+                  ],
                 ),
-                MoneyText(
-                  sum,
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ],
-            ),
-          ],
-          if (mismatch) ...[
-            const SizedBox(height: Gap.md),
-            _MismatchNotice(
-              difference: formatMoney(
-                (eligibleLaari! - sum).abs(),
-                dhivehi: dhivehi,
               ),
             ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Future<void> _editRow(BuildContext context, {int? index}) async {
-    final editing = index == null ? null : rows[index];
-
-    // The categories still free for this row: all active slugs plus the
-    // else-bucket, minus the ones other rows already hold.
-    final used = {
-      for (final (i, row) in rows.indexed)
-        if (i != index) row.category ?? kSplitElseKey,
-    };
-    final options = [
-      if (!used.contains(kSplitElseKey)) kSplitElseKey,
-      for (final category in categories)
-        if (!used.contains(category.slug)) category.slug,
-    ];
-    if (options.isEmpty) return;
-
-    final row = await showDialog<SplitRow>(
-      context: context,
-      builder: (_) => _SplitRowDialog(
-        categories: categories,
-        options: options,
-        initialKey: editing == null
-            ? options.first
-            : (editing.category ?? kSplitElseKey),
-        initialAmount: editing == null
-            ? ''
-            : formatRufiyaa(editing.amountLaari),
-        editing: editing != null,
-      ),
-    );
-    if (row == null) return;
-
-    final next = [...rows];
-    if (index == null) {
-      next.add(row);
-    } else {
-      next[index] = row;
-    }
-    onRowsChanged(next);
-  }
-}
-
-/// Sentinel key for the Everything-else bucket inside the row dialog.
-const kSplitElseKey = '__everything_else__';
-
-/// The add/edit dialog OWNS its controller so disposal follows the route's
-/// real teardown (an inline dispose fires while the close animation still
-/// rebuilds the field).
-class _SplitRowDialog extends StatefulWidget {
-  const _SplitRowDialog({
-    required this.categories,
-    required this.options,
-    required this.initialKey,
-    required this.initialAmount,
-    required this.editing,
-  });
-
-  final List<ProductCategory> categories;
-  final List<String> options;
-  final String initialKey;
-  final String initialAmount;
-  final bool editing;
-
-  @override
-  State<_SplitRowDialog> createState() => _SplitRowDialogState();
-}
-
-class _SplitRowDialogState extends State<_SplitRowDialog> {
-  late String _selected = widget.initialKey;
-  late final TextEditingController _amount = TextEditingController(
-    text: widget.initialAmount,
-  );
-
-  @override
-  void dispose() {
-    _amount.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = context.l10n;
-    final dhivehi = Localizations.localeOf(context).languageCode == 'dv';
-    final parsed = parseMvrToLaari(_amount.text);
-    final invalid =
-        _amount.text.trim().isNotEmpty && (parsed == null || parsed < 1);
-
-    String optionLabel(String key) {
-      if (key == kSplitElseKey) return l10n.splitEverythingElse;
-      return widget.categories
-              .where((c) => c.slug == key)
-              .firstOrNull
-              ?.label(dhivehi: dhivehi) ??
-          key;
-    }
-
-    return AlertDialog(
-      title: Text(
-        widget.editing ? l10n.splitDialogTitleEdit : l10n.splitDialogTitleAdd,
-      ),
-      content: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            DropdownButtonFormField<String>(
-              initialValue: _selected,
-              decoration: InputDecoration(labelText: l10n.splitCategoryLabel),
-              items: [
-                for (final key in widget.options)
-                  DropdownMenuItem(value: key, child: Text(optionLabel(key))),
-              ],
-              onChanged: (value) =>
-                  setState(() => _selected = value ?? _selected),
-            ),
-            const SizedBox(height: Gap.lg),
-            TextField(
-              controller: _amount,
-              keyboardType: const TextInputType.numberWithOptions(
-                decimal: true,
-              ),
-              textDirection: TextDirection.ltr,
-              autofocus: true,
-              onChanged: (_) => setState(() {}),
-              decoration: InputDecoration(
-                labelText: l10n.splitAmountLabel,
-                prefixText: 'MVR ',
-                errorText: invalid ? l10n.splitAmountInvalid : null,
-              ),
-            ),
-          ],
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: Text(l10n.cancel),
-        ),
-        FilledButton(
-          style: FilledButton.styleFrom(
-            minimumSize: const Size(0, 44),
-            padding: const EdgeInsets.symmetric(horizontal: Gap.xl),
           ),
-          onPressed: parsed != null && parsed >= 1
-              ? () => Navigator.of(context).pop(
-                  SplitRow(
-                    category: _selected == kSplitElseKey ? null : _selected,
-                    amountLaari: parsed,
+          const SizedBox(width: Gap.sm),
+          _amountField(context, row),
+          _deleteButton(context, index),
+        ],
+      );
+    }
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: RawAutocomplete<String>(
+            textEditingController: row.search,
+            focusNode: row.focus,
+            optionsBuilder: (value) {
+              final options = _optionsFor(row);
+              final query = value.text.trim().toLowerCase();
+              // A settled pick shows the whole menu again on refocus —
+              // that is how "change my mind" works without clearing first.
+              final settled =
+                  row.key != null &&
+                  value.text == _labelFor(row.key!, dhivehi: dhivehi);
+              if (query.isEmpty || settled) return options;
+              return [
+                for (final key in options)
+                  if (_labelFor(key, dhivehi: dhivehi)
+                      .toLowerCase()
+                      .contains(query))
+                    key,
+              ];
+            },
+            displayStringForOption: (key) =>
+                _labelFor(key, dhivehi: dhivehi),
+            onSelected: (key) {
+              setState(() => row.key = key);
+              // Park the caret at the START of the settled label: the field
+              // is narrower than a long category name ("Everything else"),
+              // and a caret left at the end scrolls the text so the row
+              // reads "…ing else" instead of naming its category.
+              row.search.selection = const TextSelection.collapsed(offset: 0);
+              _emit();
+            },
+            fieldViewBuilder:
+                (context, controller, focusNode, onFieldSubmitted) =>
+                    TextField(
+              controller: controller,
+              focusNode: focusNode,
+              onSubmitted: (_) => onFieldSubmitted(),
+              onChanged: (text) {
+                // Typing past the settled label un-picks the row until a
+                // fresh option is chosen — a half-edited name must never
+                // silently keep the old slug on the wire.
+                if (row.key != null &&
+                    text != _labelFor(row.key!, dhivehi: dhivehi)) {
+                  setState(() => row.key = null);
+                  _emit();
+                }
+              },
+              decoration: InputDecoration(
+                hintText: l10n.splitSearchHint,
+                // The ref's colour chip, kept as the picked row's dot.
+                prefixIcon: Icon(
+                  row.key == null
+                      ? Icons.search_rounded
+                      : Icons.circle_rounded,
+                  size: row.key == null ? 20 : 14,
+                  color: row.key == null
+                      ? theme.colorScheme.onSurfaceVariant
+                      : colors.fg,
+                ),
+              ),
+            ),
+            optionsViewBuilder: (context, onSelected, options) =>
+                Align(
+              alignment: AlignmentDirectional.topStart,
+              child: Material(
+                elevation: 4,
+                borderRadius: BorderRadius.circular(Corner.tile),
+                clipBehavior: Clip.antiAlias,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(
+                    maxHeight: 224,
+                    maxWidth: 320,
                   ),
-                )
-              : null,
-          child: Text(l10n.save),
+                  child: ListView(
+                    padding: const EdgeInsets.symmetric(vertical: Gap.xs),
+                    shrinkWrap: true,
+                    children: [
+                      for (final key in options)
+                        InkWell(
+                          onTap: () => onSelected(key),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: Gap.md,
+                              vertical: Gap.sm + 2,
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.circle_rounded,
+                                  size: 12,
+                                  color: tintColors(
+                                    _tintFor(key),
+                                    theme.brightness,
+                                  ).fg,
+                                ),
+                                const SizedBox(width: Gap.sm),
+                                Expanded(
+                                  child: Text(
+                                    _labelFor(key, dhivehi: dhivehi),
+                                    style: theme.textTheme.bodyMedium,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
         ),
+        const SizedBox(width: Gap.sm),
+        _amountField(context, row),
+        _deleteButton(context, index),
       ],
     );
   }
-}
 
-class _CategoryChip extends StatelessWidget {
-  const _CategoryChip({required this.label, required this.tint});
-
-  final String label;
-  final ManfaaTint tint;
-
-  @override
-  Widget build(BuildContext context) {
+  /// The row's money box — shared by the settled (chip) and picking
+  /// (autocomplete) halves so the two states line up to the pixel.
+  Widget _amountField(BuildContext context, _DraftRow row) {
     final theme = Theme.of(context);
-    final colors = tintColors(tint, theme.brightness);
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: colors.bg,
-        borderRadius: BorderRadius.circular(Corner.tile),
-      ),
-      child: Text(
-        label,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: theme.textTheme.labelMedium?.copyWith(
-          color: colors.fg,
-          fontWeight: FontWeight.w700,
+    return SizedBox(
+      width: 116,
+      child: TextField(
+        controller: row.amount,
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        textDirection: TextDirection.ltr,
+        onChanged: (_) {
+          setState(() {});
+          _emit();
+        },
+        style: theme.textTheme.bodyLarge?.copyWith(
+          fontFeatures: const [FontFeature.tabularFigures()],
+        ),
+        decoration: InputDecoration(
+          hintText: '0.00',
+          prefixText: 'MVR ',
+          prefixStyle: theme.textTheme.labelLarge?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+          errorText: row.amountInvalid ? '' : null,
+          errorStyle: const TextStyle(height: 0, fontSize: 0),
         ),
       ),
     );
   }
-}
 
-class _MismatchNotice extends StatelessWidget {
-  const _MismatchNotice({required this.difference});
-
-  final String difference;
-
-  @override
-  Widget build(BuildContext context) {
+  Widget _deleteButton(BuildContext context, int index) {
     final theme = Theme.of(context);
-    final l10n = context.l10n;
-    final colors = toneSurface(ToneSurface.pending, theme.brightness);
-
-    return Container(
-      padding: const EdgeInsets.all(Gap.md),
-      decoration: BoxDecoration(
-        color: colors.background,
-        borderRadius: BorderRadius.circular(Corner.tile),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            l10n.splitMismatchTitle,
-            style: theme.textTheme.titleSmall?.copyWith(
-              color: colors.foreground,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            l10n.splitMismatchBody(difference),
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: colors.foreground,
-            ),
-          ),
-        ],
-      ),
+    return IconButton(
+      onPressed: () => _removeRow(index),
+      tooltip: context.l10n.splitRemoveLine,
+      icon: const Icon(Icons.delete_outline_rounded, size: 20),
+      color: theme.colorScheme.onSurfaceVariant,
+      padding: const EdgeInsets.only(top: 14),
+      visualDensity: VisualDensity.compact,
     );
   }
 }
