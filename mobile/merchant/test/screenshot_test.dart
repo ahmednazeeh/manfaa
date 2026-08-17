@@ -355,19 +355,25 @@ class _ShotApi extends MerchantApi {
   }) async => SettlementPreviewData.fromJson(_shotPreview);
 
   @override
-  Future<SettlementPage> settlements({int page = 1}) async =>
-      SettlementPage.fromJson({
-        'data': [
-          _shotSettlement(41, 'ST-2026-00041', 2750, '2026-08-01T09:00:00+00:00'),
-          _shotSettlement(38, 'ST-2026-00038', 3210, '2026-07-18T09:00:00+00:00'),
-        ],
-        'meta': const {'current_page': 1, 'last_page': 1, 'total': 2},
-      });
+  Future<SettlementPage> settlements({
+    int page = 1,
+  }) async => SettlementPage.fromJson({
+    'data': [
+      _shotSettlement(41, 'ST-2026-00041', 2750, '2026-08-01T09:00:00+00:00'),
+      _shotSettlement(38, 'ST-2026-00038', 3210, '2026-07-18T09:00:00+00:00'),
+    ],
+    'meta': const {'current_page': 1, 'last_page': 1, 'total': 2},
+  });
 
   @override
   Future<MerchantSettlement> settlement(int id) async =>
       MerchantSettlement.fromJson(
-        _shotSettlement(id, 'ST-2026-000$id', 2750, '2026-08-01T09:00:00+00:00'),
+        _shotSettlement(
+          id,
+          'ST-2026-000$id',
+          2750,
+          '2026-08-01T09:00:00+00:00',
+        ),
       );
 
   @override
@@ -471,27 +477,24 @@ class _ShotApi extends MerchantApi {
   @override
   Future<List<ProductCategory>> productCategories() async =>
       categoriesJson != null
-          ? [
-              for (final json in categoriesJson!)
-                ProductCategory.fromJson(json),
-            ]
-          : [
-              for (final (i, spec) in const [
-                ('fruits', 'Fruits', 'rate', '2.00'),
-                ('veggies', 'Veggies', 'rate', '2.00'),
-                ('tobacco', 'Tobacco', 'excluded', null),
-              ].indexed)
-                ProductCategory.fromJson({
-                  'id': i + 1,
-                  'slug': spec.$1,
-                  'name_en': spec.$2,
-                  'name_dv': null,
-                  'mode': spec.$3,
-                  'cashback_rate_percent': spec.$4,
-                  'active': true,
-                  'sort': i,
-                }),
-            ];
+      ? [for (final json in categoriesJson!) ProductCategory.fromJson(json)]
+      : [
+          for (final (i, spec) in const [
+            ('fruits', 'Fruits', 'rate', '2.00'),
+            ('veggies', 'Veggies', 'rate', '2.00'),
+            ('tobacco', 'Tobacco', 'excluded', null),
+          ].indexed)
+            ProductCategory.fromJson({
+              'id': i + 1,
+              'slug': spec.$1,
+              'name_en': spec.$2,
+              'name_dv': null,
+              'mode': spec.$3,
+              'cashback_rate_percent': spec.$4,
+              'active': true,
+              'sort': i,
+            }),
+        ];
 
   // ---- MR5: the More estate ------------------------------------------------
 
@@ -579,16 +582,27 @@ class _ShotApi extends MerchantApi {
   @override
   Future<List<MerchantStaff>> staff() async => [
     for (final json in [
-      _staffRow(1, 'Ahmed Nazeeh', 'nazeeh@tropicalmart.mv',
-          _ownerRoleSummary),
-      _staffRow(2, 'Mariyam Shifa', 'shifa@tropicalmart.mv',
-          _cashierRoleSummary),
-      _staffRow(3, 'Ali Sameeh', 'sameeh@tropicalmart.mv',
-          _managerRoleSummary),
-      _staffRow(4, 'Fathimath Aisha', 'aisha@tropicalmart.mv',
-          _supportRoleSummary),
-      _staffRow(5, 'Hassan Rameez', 'hassan@tropicalmart.mv',
-          _cashierRoleSummary, active: false),
+      _staffRow(1, 'Ahmed Nazeeh', 'nazeeh@tropicalmart.mv', _ownerRoleSummary),
+      _staffRow(
+        2,
+        'Mariyam Shifa',
+        'shifa@tropicalmart.mv',
+        _cashierRoleSummary,
+      ),
+      _staffRow(3, 'Ali Sameeh', 'sameeh@tropicalmart.mv', _managerRoleSummary),
+      _staffRow(
+        4,
+        'Fathimath Aisha',
+        'aisha@tropicalmart.mv',
+        _supportRoleSummary,
+      ),
+      _staffRow(
+        5,
+        'Hassan Rameez',
+        'hassan@tropicalmart.mv',
+        _cashierRoleSummary,
+        active: false,
+      ),
     ])
       MerchantStaff.fromJson(json),
   ];
@@ -616,12 +630,24 @@ class _ShotApi extends MerchantApi {
         'is_owner': false,
         'is_system': true,
         'permissions': [
-          'credits.create', 'credits.custom_rate', 'customers.lookup',
-          'transactions.view', 'transactions.amend', 'transactions.cancel',
-          'rate.view', 'promotions.view', 'product_categories.view',
-          'settlements.view', 'settlements.preview', 'settlements.create',
-          'settlements.receipt_add', 'wallet.view', 'profile.view',
-          'branches.view', 'branches.edit', 'staff.view',
+          'credits.create',
+          'credits.custom_rate',
+          'customers.lookup',
+          'transactions.view',
+          'transactions.amend',
+          'transactions.cancel',
+          'rate.view',
+          'promotions.view',
+          'product_categories.view',
+          'settlements.view',
+          'settlements.preview',
+          'settlements.create',
+          'settlements.receipt_add',
+          'wallet.view',
+          'profile.view',
+          'branches.view',
+          'branches.edit',
+          'staff.view',
         ],
         'staff_count': 1,
       },
@@ -633,9 +659,14 @@ class _ShotApi extends MerchantApi {
         'is_owner': false,
         'is_system': true,
         'permissions': [
-          'credits.create', 'customers.lookup', 'transactions.view',
-          'rate.view', 'promotions.view', 'product_categories.view',
-          'profile.view', 'branches.view',
+          'credits.create',
+          'customers.lookup',
+          'transactions.view',
+          'rate.view',
+          'promotions.view',
+          'product_categories.view',
+          'profile.view',
+          'branches.view',
         ],
         'staff_count': 2,
       },
@@ -647,7 +678,9 @@ class _ShotApi extends MerchantApi {
         'is_owner': false,
         'is_system': false,
         'permissions': [
-          'customers.lookup', 'transactions.view', 'rate.view',
+          'customers.lookup',
+          'transactions.view',
+          'rate.view',
           'promotions.view',
         ],
         'staff_count': 1,
@@ -664,35 +697,58 @@ class _ShotApi extends MerchantApi {
             'slug': 'till',
             'label': 'Till',
             'permissions': [
-              {'slug': 'credits.create', 'label': 'Credit a customer',
-                'group': 'till'},
-              {'slug': 'credits.custom_rate',
+              {
+                'slug': 'credits.create',
+                'label': 'Credit a customer',
+                'group': 'till',
+              },
+              {
+                'slug': 'credits.custom_rate',
                 'label': 'Set a custom cashback rate on a sale',
-                'group': 'till'},
-              {'slug': 'customers.lookup', 'label': 'Look up a customer',
-                'group': 'till'},
-              {'slug': 'transactions.view', 'label': 'View transactions',
-                'group': 'till'},
+                'group': 'till',
+              },
+              {
+                'slug': 'customers.lookup',
+                'label': 'Look up a customer',
+                'group': 'till',
+              },
+              {
+                'slug': 'transactions.view',
+                'label': 'View transactions',
+                'group': 'till',
+              },
             ],
           },
           {
             'slug': 'money',
             'label': 'Money',
             'permissions': [
-              {'slug': 'settlements.view', 'label': 'View settlements',
-                'group': 'money'},
-              {'slug': 'wallet.view', 'label': 'View the wallet',
-                'group': 'money'},
+              {
+                'slug': 'settlements.view',
+                'label': 'View settlements',
+                'group': 'money',
+              },
+              {
+                'slug': 'wallet.view',
+                'label': 'View the wallet',
+                'group': 'money',
+              },
             ],
           },
           {
             'slug': 'account',
             'label': 'Account',
             'permissions': [
-              {'slug': 'staff.view', 'label': 'View staff accounts',
-                'group': 'account'},
-              {'slug': 'roles.manage', 'label': 'Create and edit roles',
-                'group': 'account'},
+              {
+                'slug': 'staff.view',
+                'label': 'View staff accounts',
+                'group': 'account',
+              },
+              {
+                'slug': 'roles.manage',
+                'label': 'Create and edit roles',
+                'group': 'account',
+              },
             ],
           },
         ],
@@ -721,19 +777,22 @@ class _ShotApi extends MerchantApi {
         'id': 5,
         'name': 'Tropical Mart — Villimalé',
         'address': 'Ameenee Magu, Villimalé',
-        'lat': 4.1725071, 'lng': 73.4882079,
+        'lat': 4.1725071,
+        'lng': 73.4882079,
       },
       {
         'id': 6,
         'name': 'Tropical Mart — Velana Airport',
         'address': 'Velana International Airport, Hulhulé',
-        'lat': 4.1917701, 'lng': 73.5290022,
+        'lat': 4.1917701,
+        'lng': 73.5290022,
       },
       {
         'id': 7,
         'name': 'Tropical Mart — Maamigili',
         'address': 'Maamigili, Raa Atoll',
-        'lat': null, 'lng': null,
+        'lat': null,
+        'lng': null,
       },
     ])
       MerchantBranch.fromJson(json),
@@ -895,10 +954,13 @@ void main() {
     Map<String, dynamic>? walletJson,
     List<Map<String, dynamic>>? categoriesJson,
     Future<void> Function(WidgetTester tester)? drive,
+    // The phone frame the app shipped on; tabletShot passes the MR7 slate.
+    Size size = const Size(390, 844),
+    double dpr = 3.0,
   }) async {
-    await tester.binding.setSurfaceSize(const Size(390, 844));
-    tester.view.devicePixelRatio = 3.0;
-    tester.view.physicalSize = const Size(390 * 3, 844 * 3);
+    await tester.binding.setSurfaceSize(size);
+    tester.view.devicePixelRatio = dpr;
+    tester.view.physicalSize = size * dpr;
     tester.platformDispatcher.platformBrightnessTestValue = b;
 
     final store = MemorySecretStore();
@@ -1057,8 +1119,8 @@ void main() {
   );
   testWidgets(
     'settlements light',
-    (t) => shot(t, 'settlements_light', Brightness.light,
-        drive: driveSettlements),
+    (t) =>
+        shot(t, 'settlements_light', Brightness.light, drive: driveSettlements),
   );
   testWidgets(
     'settlements dark',
@@ -1067,8 +1129,12 @@ void main() {
   );
   testWidgets(
     'settlement preview light',
-    (t) => shot(t, 'settlement_preview_light', Brightness.light,
-        drive: drivePayScreen),
+    (t) => shot(
+      t,
+      'settlement_preview_light',
+      Brightness.light,
+      drive: drivePayScreen,
+    ),
   );
   testWidgets(
     'wallet light',
@@ -1410,6 +1476,139 @@ void main() {
   );
   testWidgets(
     'promotions light',
-    (t) => shot(t, 'promotions_light', Brightness.light, drive: drivePromotions),
+    (t) =>
+        shot(t, 'promotions_light', Brightness.light, drive: drivePromotions),
+  );
+
+  // ---- MR7: the tablet surface ---------------------------------------------
+  // A 1280×800 @2x landscape slate (the common 10" Android footprint):
+  // ≥840dp window ⇒ the left rail shell; ≥840dp content ⇒ the Dashboard and
+  // Credit two-column layouts. No refs exist for tablet — these goldens ARE
+  // the eye-check surface.
+
+  Future<void> tabletShot(
+    WidgetTester tester,
+    String name,
+    Brightness b, {
+    Future<void> Function(WidgetTester tester)? drive,
+  }) => shot(
+    tester,
+    name,
+    b,
+    size: const Size(1280, 800),
+    dpr: 2.0,
+    drive: drive,
+  );
+
+  testWidgets(
+    'tablet dashboard light',
+    (t) => tabletShot(t, 'tablet_dashboard_light', Brightness.light),
+  );
+  testWidgets(
+    'tablet credit light',
+    (t) => tabletShot(
+      t,
+      'tablet_credit_light',
+      Brightness.light,
+      drive: driveCredit,
+    ),
+  );
+  testWidgets(
+    'tablet more light',
+    (t) =>
+        tabletShot(t, 'tablet_more_light', Brightness.light, drive: driveMore),
+  );
+
+  // ---- MR7: the two-pane estates (agent B) ----------------------------------
+  // Selection taps run AT the tablet size, so they exercise the expanded
+  // split (right pane, not sheet). Branches stays on its hint pane — the
+  // editor's map tiles would need the network.
+
+  testWidgets(
+    'tablet transactions light',
+    (t) => tabletShot(
+      t,
+      'tablet_transactions_light',
+      Brightness.light,
+      drive: (tester) async {
+        await driveTransactions(tester);
+        await tester.tap(find.text('INV-1004'));
+        await tester.pumpAndSettle();
+      },
+    ),
+  );
+  testWidgets(
+    'tablet settlements light',
+    (t) => tabletShot(
+      t,
+      'tablet_settlements_light',
+      Brightness.light,
+      drive: (tester) async {
+        await driveSettlements(tester);
+        // The recent list sits below the fold on the 800dp slate — reach
+        // it, select, then jump back so the shot leads with the hero and
+        // the pane's status story side by side.
+        await tester.scrollUntilVisible(
+          find.text('ST-2026-00041'),
+          160,
+          scrollable: find.byType(Scrollable).first,
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('ST-2026-00041').first);
+        await tester.pumpAndSettle();
+        tester
+            .state<ScrollableState>(find.byType(Scrollable).first)
+            .position
+            .jumpTo(0);
+        await tester.pumpAndSettle();
+      },
+    ),
+  );
+  testWidgets(
+    'tablet employees light',
+    (t) => tabletShot(
+      t,
+      'tablet_employees_light',
+      Brightness.light,
+      drive: (tester) async {
+        await driveEmployees(tester);
+        await tester.tap(find.text('Mariyam Shifa'));
+        await tester.pumpAndSettle();
+      },
+    ),
+  );
+  testWidgets(
+    'tablet roles light',
+    (t) => tabletShot(
+      t,
+      'tablet_roles_light',
+      Brightness.light,
+      drive: (tester) async {
+        await driveRoles(tester);
+        await tester.tap(find.text('Add role'));
+        await tester.pumpAndSettle();
+      },
+    ),
+  );
+  testWidgets(
+    'tablet branches light',
+    (t) => tabletShot(
+      t,
+      'tablet_branches_light',
+      Brightness.light,
+      drive: driveBranches,
+    ),
+  );
+  testWidgets(
+    'tablet promotions light',
+    // The hint pane, NOT the open builder: the builder's Starts row renders
+    // DateTime.now(), which would make the golden's bytes drift every run.
+    // The builder pane itself was eye-checked when this shot was built.
+    (t) => tabletShot(
+      t,
+      'tablet_promotions_light',
+      Brightness.light,
+      drive: drivePromotions,
+    ),
   );
 }

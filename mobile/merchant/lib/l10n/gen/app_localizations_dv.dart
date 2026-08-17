@@ -2409,4 +2409,46 @@ class AppLocalizationsDv extends AppLocalizations {
   String promoCostTier(String from, String to, String feeFrom, String feeTo) {
     return '$from އިން $to އަށް މަތިކުރެއްވުމުން ފީ ޓިއަރ $feeFrom އިން $feeTo އަށް ބަދަލުވެއެވެ.';
   }
+
+  @override
+  String get paneTxHintTitle => 'ވިޔަފާރިއެއް ހިޔާރުކުރައްވާ';
+
+  @override
+  String get paneTxHintBody =>
+      'ލިސްޓުން ވިޔަފާރިއަކަށް ފިއްތެވުމުން އޭގެ ފުރިހަމަ ތަފްސީލު މިތަނުން ފެންނާނެއެވެ — އިސްލާހުކުރެއްވޭ މުއްދަތުގައި އިސްލާހުވެސް މިތަނުންނެވެ.';
+
+  @override
+  String get paneSettlementHintTitle => 'ސެޓްލްމަންޓެއް ހިޔާރުކުރައްވާ';
+
+  @override
+  String get paneSettlementHintBody =>
+      'ލިސްޓުން ސެޓްލްމަންޓަކަށް ފިއްތެވުމުން އޭގެ ހާލަތާއި، ލައިންތަކާއި ފައިސާދެއްކުންތައް މިތަނުން ފެންނާނެއެވެ.';
+
+  @override
+  String get paneEmployeesHintTitle => 'މުވައްޒަފަކު ހިޔާރުކުރައްވާ';
+
+  @override
+  String get paneEmployeesHintBody =>
+      'މުވައްޒަފަކަށް ފިއްތެވުމުން ރޯލް ނުވަތަ އެކްޓިވް ހާލަތު ބަދަލުކުރެއްވޭނެއެވެ؛ ނުވަތަ އައު އެކައުންޓެއް އިތުރުކުރައްވާ.';
+
+  @override
+  String get paneRolesHintTitle => 'ރޯލެއް ހިޔާރުކުރައްވާ';
+
+  @override
+  String get paneRolesHintBody =>
+      'ރޯލަކަށް ފިއްތެވުމުން ނަމާއި ހުއްދަތައް ބަދަލުކުރެއްވޭނެއެވެ؛ ނުވަތަ އައު ރޯލެއް ހައްދަވާ.';
+
+  @override
+  String get paneBranchesHintTitle => 'ބްރާންޗެއް ހިޔާރުކުރައްވާ';
+
+  @override
+  String get paneBranchesHintBody =>
+      'ބްރާންޗަކަށް ފިއްތެވުމުން ތަފްސީލާއި ޕިން ބަދަލުކުރެއްވޭނެއެވެ؛ ނުވަތަ އައު ތަނެއް އިތުރުކުރައްވާ.';
+
+  @override
+  String get panePromoHintTitle => 'ޕްރޮމޯޝަނެއް ޑްރާފްޓްކުރައްވާ';
+
+  @override
+  String get panePromoHintBody =>
+      'ބިލްޑަރ ހުޅުވޭނީ މިތަނުންނެވެ. ޝާއިޢުކުރެއްވި ޕްރޮމޯޝަނެއް ބަދަލެއް ނުކުރެވޭނެ — ޑްރާފްޓެއް ބަދަލުކުރެއްވޭނެއެވެ.';
 }

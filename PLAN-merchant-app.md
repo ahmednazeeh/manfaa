@@ -178,11 +178,16 @@ via the polymorphic device_tokens path the customer app already exercises
   Promotions replaced the coming-soon routes — per-round notes below)
 - MR6 Release — DONE 2026-08-17 (Android; iOS waits on the APNs/.p8 +
   Apple developer account track)
-- **MR7 Tablet optimisation — IN FLIGHT** (workflow running 2026-08-17)
-- MR8 Owner on-device feedback round — queued next (§MR8: promo timezone
-  bug, branch map grey screen, dashboard staleness, split-editor rework,
-  hidden eligible amount under split, tab reset, staff password
-  reset/edit, in-app legal + close-store, admin approval flow design)
+- MR7 Tablet optimisation — DONE 2026-08-17 (adaptive shell: 640dp rail
+  on medium, house-styled NavigationRail ≥840dp with identical kTabs
+  gating; two-column till; 4-across dashboard; two-pane transactions /
+  settlements / employees / roles / branches / promotions; scanner-gun
+  Enter path tested; ZERO phone goldens changed — shipped v1.0.0 pixels
+  untouched; 9 tablet goldens eye-checked; suites green: merchant 101,
+  core 102, ui 3, customer 35)
+- **MR8 Owner feedback round — IN FLIGHT** (admin-approval flow split
+  out to its own designed round, MR9)
+
 - WL merchant.manfaa.app landing — SHIPPED 2026-08-17 (landing + split
   auth panels + real-Dashboard mockup; also retired the METRONIC template
   logo the auth cards had been shipping). Only the APK card remains,
@@ -410,9 +415,25 @@ is additive. Customer app stays phone-only (owner call).
       the rail shell; house-styled _NavRail in shell.dart, same kTabs
       items list. Adopted by Dashboard/Credit/More; estates screens adopt
       the same wrapper in their half.)
-- [ ] Two-pane estates where a list drives a detail: Transactions
+- [x] Two-pane estates where a list drives a detail: Transactions
       (list | amend/detail), Settlements (list | detail/receipts),
-      More → Employees/Roles/Branches (list | editor).
+      More → Employees/Roles/Branches (list | editor). (2026-08-17:
+      ≥840dp CONTENT width only; phones byte-identical. Transactions:
+      selectable tiles | detail pane with the same-window amend form
+      inline + the cancel dialog; Settlements: overview | the detail
+      body shared with the /settlements/:id route (receipt flow
+      included; the PAY flow stays a pushed route — a half pane would
+      cramp it); Employees/Roles/Branches AND Promotions: the phone's
+      bottom-sheet editors seated in the right pane via callbacks
+      instead of route pops, same fields/guards/delegation locks;
+      empty selection renders a quiet PaneHint. Selection survives
+      rail navigation (session StateProviders / branch-kept state).
+      Remaining single-column screens (wallet, profile, profile edit,
+      cashback) adopted ContentRail + bottomClearanceOf. Goldens:
+      tablet_{transactions,settlements,employees,roles,branches,
+      promotions}_light, eye-checked; contract tests in
+      tablet_test.dart; every pre-existing phone golden verified
+      byte-identical.)
 - [x] Till on tablet: Credit screen as two columns ≥840dp — identify +
       amounts left, split editor + cost preview + CTA right (the counter
       use-case this round exists for). (2026-08-17. Phone column

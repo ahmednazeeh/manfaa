@@ -5,6 +5,7 @@ import 'package:manfaa_core/manfaa_core.dart';
 import 'package:manfaa_ui/manfaa_ui.dart';
 
 import '../../app/app.dart';
+import '../../widgets/adaptive.dart';
 import '../../widgets/tx_format.dart';
 import '../money/money_providers.dart';
 
@@ -24,54 +25,58 @@ class WalletScreen extends ConsumerWidget {
     return Scaffold(
       body: SafeArea(
         bottom: false,
+        // MR7: a ledger is a single column at any size — the shared ~640dp
+        // rail centers it on tablets; phones render exactly as shipped.
         child: RefreshIndicator(
           onRefresh: () async => ref.invalidate(walletProvider),
-          child: ListView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.fromLTRB(
-              Gap.xl,
-              Gap.sm,
-              Gap.xl,
-              Gap.navClearance,
-            ),
-            children: [
-              Row(
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.arrow_back_rounded),
-                    onPressed: () => context.canPop()
-                        ? context.pop()
-                        : context.go('/dashboard'),
-                  ),
-                  Text(
-                    l10n.walletScreenTitle,
-                    style: theme.textTheme.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ],
+          child: ContentRail(
+            child: ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: EdgeInsets.fromLTRB(
+                Gap.xl,
+                Gap.sm,
+                Gap.xl,
+                bottomClearanceOf(context),
               ),
-              const SizedBox(height: Gap.md),
-              wallet.when(
-                loading: () =>
-                    const SkeletonBox(height: 120, radius: Corner.card),
-                error: (error, _) => _WalletError(
-                  message: error is MobileApiException &&
-                          error.message.isNotEmpty
-                      ? error.message
-                      : l10n.errorGeneric,
-                  onRetry: () => ref.invalidate(walletProvider),
-                ),
-                data: (wallet) => Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
                   children: [
-                    _BalanceHero(wallet: wallet),
-                    const SizedBox(height: Gap.md),
-                    _Movements(wallet: wallet),
+                    IconButton(
+                      icon: const Icon(Icons.arrow_back_rounded),
+                      onPressed: () => context.canPop()
+                          ? context.pop()
+                          : context.go('/dashboard'),
+                    ),
+                    Text(
+                      l10n.walletScreenTitle,
+                      style: theme.textTheme.headlineSmall?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
                   ],
                 ),
-              ),
-            ],
+                const SizedBox(height: Gap.md),
+                wallet.when(
+                  loading: () =>
+                      const SkeletonBox(height: 120, radius: Corner.card),
+                  error: (error, _) => _WalletError(
+                    message:
+                        error is MobileApiException && error.message.isNotEmpty
+                        ? error.message
+                        : l10n.errorGeneric,
+                    onRetry: () => ref.invalidate(walletProvider),
+                  ),
+                  data: (wallet) => Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _BalanceHero(wallet: wallet),
+                      const SizedBox(height: Gap.md),
+                      _Movements(wallet: wallet),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -243,10 +248,7 @@ class _WalletError extends StatelessWidget {
         children: [
           Text(message, textAlign: TextAlign.center),
           const SizedBox(height: Gap.md),
-          OutlinedButton(
-            onPressed: onRetry,
-            child: Text(context.l10n.retry),
-          ),
+          OutlinedButton(onPressed: onRetry, child: Text(context.l10n.retry)),
         ],
       ),
     );

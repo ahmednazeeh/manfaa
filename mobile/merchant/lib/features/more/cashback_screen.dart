@@ -5,6 +5,7 @@ import 'package:manfaa_ui/manfaa_ui.dart';
 
 import '../../app/app.dart';
 import '../../app/providers.dart';
+import '../../widgets/adaptive.dart';
 import '../../widgets/merchant_brand.dart';
 import '../../widgets/tx_format.dart';
 import '../settlements/settlement_widgets.dart' show ToneBanner;
@@ -55,47 +56,51 @@ class _CashbackSettingsScreenState
     return Scaffold(
       body: SafeArea(
         bottom: false,
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(
-            Gap.xl,
-            Gap.sm,
-            Gap.xl,
-            Gap.navClearance,
+        // MR7: a settings column at any size — the shared ~640dp rail
+        // centers it on tablets; phones render exactly as shipped.
+        child: ContentRail(
+          child: ListView(
+            padding: EdgeInsets.fromLTRB(
+              Gap.xl,
+              Gap.sm,
+              Gap.xl,
+              bottomClearanceOf(context),
+            ),
+            children: [
+              MerchantDetailTopBar(initials: initials),
+              const SizedBox(height: Gap.md),
+              Text(
+                l10n.cashbackTitle,
+                style: theme.textTheme.headlineMedium?.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: Gap.xs),
+              Text(
+                l10n.cashbackSubtitle,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: Gap.lg),
+              if (showRate) ...[
+                _RateSection(
+                  canEdit: session.can('rate.update'),
+                  lastChange: _lastChange,
+                  onChanged: (change) => setState(() => _lastChange = change),
+                ),
+                const SizedBox(height: Gap.md),
+              ],
+              if (showRules) ...[
+                _RulesSection(
+                  canCreate: session.can('product_categories.create'),
+                  canEdit: session.can('product_categories.edit'),
+                ),
+                const SizedBox(height: Gap.md),
+              ],
+              if (showEarning) const _EarningSection(),
+            ],
           ),
-          children: [
-            MerchantDetailTopBar(initials: initials),
-            const SizedBox(height: Gap.md),
-            Text(
-              l10n.cashbackTitle,
-              style: theme.textTheme.headlineMedium?.copyWith(
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-            const SizedBox(height: Gap.xs),
-            Text(
-              l10n.cashbackSubtitle,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
-            const SizedBox(height: Gap.lg),
-            if (showRate) ...[
-              _RateSection(
-                canEdit: session.can('rate.update'),
-                lastChange: _lastChange,
-                onChanged: (change) => setState(() => _lastChange = change),
-              ),
-              const SizedBox(height: Gap.md),
-            ],
-            if (showRules) ...[
-              _RulesSection(
-                canCreate: session.can('product_categories.create'),
-                canEdit: session.can('product_categories.edit'),
-              ),
-              const SizedBox(height: Gap.md),
-            ],
-            if (showEarning) const _EarningSection(),
-          ],
         ),
       ),
     );

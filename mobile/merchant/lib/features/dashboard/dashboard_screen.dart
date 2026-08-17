@@ -6,6 +6,7 @@ import 'package:manfaa_ui/manfaa_ui.dart';
 
 import '../../app/app.dart';
 import '../../app/providers.dart';
+import '../../widgets/adaptive.dart';
 import '../../widgets/merchant_brand.dart';
 import '../money/money_providers.dart';
 import '../push/push_registrar.dart';
@@ -36,9 +37,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     // Push permission is asked HERE — signed in, the outstanding hero on
     // screen, the value obvious — never on first launch (PushRegistrar's
     // docblock). Same timing pattern as the customer app's Home.
-    Future.microtask(
-      () => ref.read(pushRegistrarProvider).ensureRegistered(),
-    );
+    Future.microtask(() => ref.read(pushRegistrarProvider).ensureRegistered());
   }
 
   @override
@@ -54,39 +53,56 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     return Scaffold(
       body: SafeArea(
         bottom: false,
-        child: RefreshIndicator(
-          onRefresh: () async => invalidateMoney(ref),
-          child: ListView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.fromLTRB(
-              Gap.xl,
-              Gap.lg,
-              Gap.xl,
-              Gap.navClearance,
-            ),
-            children: [
-              MerchantTopBar(initials: initials),
-              const SizedBox(height: Gap.lg),
-              ...home.when(
-                loading: () => const [
-                  SkeletonBox(height: 108, radius: Corner.card),
-                  SizedBox(height: Gap.md),
-                  SkeletonBox(height: 96, radius: Corner.card),
-                  SizedBox(height: Gap.md),
-                  SkeletonBox(height: 200, radius: Corner.card),
-                ],
-                error: (error, _) => [
-                  _ErrorBlock(
-                    message: error is MobileApiException
-                        ? error.message
-                        : l10n.errorGeneric,
-                    onRetry: () => ref.invalidate(homeProvider),
+        // Content width, not window width: at ≥840dp of CONTENT the cards
+        // reflow into two columns (the shell's rail has already taken its
+        // 96dp by the time these constraints arrive).
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final expanded = constraints.maxWidth >= kExpandedMinWidth;
+            return RefreshIndicator(
+              onRefresh: () async => invalidateMoney(ref),
+              child: ContentRail(
+                maxWidth: expanded ? kWideContentWidth : kContentRailWidth,
+                child: ListView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: EdgeInsets.fromLTRB(
+                    Gap.xl,
+                    Gap.lg,
+                    Gap.xl,
+                    bottomClearanceOf(context),
                   ),
-                ],
-                data: (home) => _blocks(context, ref, session, home),
+                  children: [
+                    MerchantTopBar(initials: initials),
+                    const SizedBox(height: Gap.lg),
+                    ...home.when(
+                      loading: () => const [
+                        SkeletonBox(height: 108, radius: Corner.card),
+                        SizedBox(height: Gap.md),
+                        SkeletonBox(height: 96, radius: Corner.card),
+                        SizedBox(height: Gap.md),
+                        SkeletonBox(height: 200, radius: Corner.card),
+                      ],
+                      error: (error, _) => [
+                        _ErrorBlock(
+                          message: error is MobileApiException
+                              ? error.message
+                              : l10n.errorGeneric,
+                          onRetry: () => ref.invalidate(homeProvider),
+                        ),
+                      ],
+                      data: (home) => _blocks(
+                        context,
+                        ref,
+                        session,
+                        home,
+                        expanded: expanded,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ],
-          ),
+            );
+          },
         ),
       ),
     );
@@ -96,10 +112,56 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     BuildContext context,
     WidgetRef ref,
     MerchantSession session,
-    MerchantHome home,
-  ) {
-    final l10n = context.l10n;
+    MerchantHome home, {
+    required bool expanded,
+  }) {
     final outstanding = home.outstanding;
+
+    if (expanded) {
+      // Two balanced card columns under the full-width hero + banner; the
+      // ageing buckets go 4-across. Same blocks, same permission gates —
+      // only the flow changes.
+      final left = <Widget>[
+        if (outstanding != null) ...[
+          _PayableBreakdown(outstanding: outstanding),
+          const SizedBox(height: Gap.md),
+        ],
+        if (session.can('credits.create')) ...[
+          _creditCta(context),
+          const SizedBox(height: Gap.md),
+        ],
+      ];
+      final right = <Widget>[
+        if (session.can('wallet.view')) ...[
+          const _WalletCard(),
+          const SizedBox(height: Gap.md),
+        ],
+        TodayStrip(today: home.today),
+        const SizedBox(height: Gap.md),
+      ];
+
+      return [
+        if (outstanding != null) ...[
+          _OutstandingHero(
+            outstanding: outstanding,
+            canSettle: session.can('settlements.create'),
+          ),
+          const SizedBox(height: Gap.md),
+          if (session.can('settlements.preview') && outstanding.total.count > 0)
+            const _DeadlineBanner(),
+          _BucketsGrid(outstanding: outstanding, columns: 4),
+          const SizedBox(height: Gap.md),
+        ],
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(child: Column(children: left)),
+            const SizedBox(width: Gap.md),
+            Expanded(child: Column(children: right)),
+          ],
+        ),
+      ];
+    }
 
     return [
       // The money blocks exist only when the server chose to show them —
@@ -123,45 +185,49 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       ],
       TodayStrip(today: home.today),
       const SizedBox(height: Gap.md),
-      if (session.can('credits.create'))
-        ManfaaCard(
-          onTap: () => context.go('/credit'),
-          child: Row(
-            children: [
-              const IconTile(
-                Icons.person_add_alt_rounded,
-                tint: ManfaaTint.green,
-                size: 48,
-                iconSize: 24,
-              ),
-              const SizedBox(width: Gap.md),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      l10n.creditCtaTitle,
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      l10n.creditCtaBody,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color:
-                                Theme.of(context).colorScheme.onSurfaceVariant,
-                          ),
-                    ),
-                  ],
-                ),
-              ),
-              Icon(
-                Icons.chevron_right_rounded,
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
-            ],
-          ),
-        ),
+      if (session.can('credits.create')) _creditCta(context),
     ];
+  }
+
+  Widget _creditCta(BuildContext context) {
+    final l10n = context.l10n;
+
+    return ManfaaCard(
+      onTap: () => context.go('/credit'),
+      child: Row(
+        children: [
+          const IconTile(
+            Icons.person_add_alt_rounded,
+            tint: ManfaaTint.green,
+            size: 48,
+            iconSize: 24,
+          ),
+          const SizedBox(width: Gap.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  l10n.creditCtaTitle,
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  l10n.creditCtaBody,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Icon(
+            Icons.chevron_right_rounded,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -268,12 +334,15 @@ class _DeadlineBanner extends ConsumerWidget {
   }
 }
 
-/// The 2×2 ageing grid (0–5 / 6–10 / 11–15 / Overdue), each cell the
-/// server's own bucket sum and count — never recomputed here.
+/// The ageing grid (0–5 / 6–10 / 11–15 / Overdue), each cell the server's
+/// own bucket sum and count — never recomputed here. 2×2 on phones
+/// (Dashboard.png); the expanded dashboard lays the same four cells
+/// 4-across ([columns]).
 class _BucketsGrid extends StatelessWidget {
-  const _BucketsGrid({required this.outstanding});
+  const _BucketsGrid({required this.outstanding, this.columns = 2});
 
   final MerchantOutstanding outstanding;
+  final int columns;
 
   @override
   Widget build(BuildContext context) {
@@ -293,45 +362,40 @@ class _BucketsGrid extends StatelessWidget {
       );
     }
 
+    final cells = [
+      cell('0_5', l10n.bucket05, Icons.trending_up_rounded, ManfaaTint.green),
+      cell(
+        '6_10',
+        l10n.bucket610,
+        Icons.arrow_forward_rounded,
+        ManfaaTint.blue,
+      ),
+      cell('11_15', l10n.bucket1115, Icons.schedule_rounded, ManfaaTint.amber),
+      cell(
+        'overdue',
+        l10n.bucketOverdue,
+        Icons.error_outline_rounded,
+        ManfaaTint.coral,
+      ),
+    ];
+
+    Widget row(List<Widget> rowCells) => Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (final (i, c) in rowCells.indexed) ...[
+          if (i > 0) const SizedBox(width: Gap.md),
+          c,
+        ],
+      ],
+    );
+
+    if (columns >= 4) return row(cells);
+
     return Column(
       children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            cell(
-              '0_5',
-              l10n.bucket05,
-              Icons.trending_up_rounded,
-              ManfaaTint.green,
-            ),
-            const SizedBox(width: Gap.md),
-            cell(
-              '6_10',
-              l10n.bucket610,
-              Icons.arrow_forward_rounded,
-              ManfaaTint.blue,
-            ),
-          ],
-        ),
+        row(cells.sublist(0, 2)),
         const SizedBox(height: Gap.md),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            cell(
-              '11_15',
-              l10n.bucket1115,
-              Icons.schedule_rounded,
-              ManfaaTint.amber,
-            ),
-            const SizedBox(width: Gap.md),
-            cell(
-              'overdue',
-              l10n.bucketOverdue,
-              Icons.error_outline_rounded,
-              ManfaaTint.coral,
-            ),
-          ],
-        ),
+        row(cells.sublist(2)),
       ],
     );
   }

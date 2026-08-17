@@ -117,8 +117,7 @@ class TintedInitialAvatar extends StatelessWidget {
       _tints[index % _tints.length],
       Theme.of(context).brightness,
     );
-    final initial =
-        name.isEmpty ? 'M' : name.characters.first.toUpperCase();
+    final initial = name.isEmpty ? 'M' : name.characters.first.toUpperCase();
 
     return Container(
       width: size,
@@ -235,6 +234,95 @@ class VioletCta extends StatelessWidget {
   }
 }
 
+/// MR7 — the expanded two-pane screens' EMPTY right pane: a quiet card that
+/// says what the pane is for, instead of a blank half. Shared by the
+/// estates, Transactions and Settlements so every hint speaks alike.
+class PaneHint extends StatelessWidget {
+  const PaneHint({
+    super.key,
+    required this.icon,
+    required this.title,
+    required this.body,
+  });
+
+  final IconData icon;
+  final String title;
+  final String body;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return ManfaaCard(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+          vertical: Gap.huge,
+          horizontal: Gap.lg,
+        ),
+        child: Column(
+          children: [
+            IconTile(icon, tint: ManfaaTint.violet, size: 56, iconSize: 26),
+            const SizedBox(height: Gap.md),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: theme.textTheme.titleMedium,
+            ),
+            const SizedBox(height: Gap.xs),
+            Text(
+              body,
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// MR7 — the expanded right pane's editor housing: the SAME widget the phone
+/// presents as a bottom sheet, seated in a card with a close affordance. The
+/// editors keep their own padding, fields, guards and wording — this is
+/// placement, not logic.
+class EditorPane extends StatelessWidget {
+  const EditorPane({super.key, required this.onClose, required this.child});
+
+  final VoidCallback onClose;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return ManfaaCard(
+      padding: const EdgeInsets.only(top: Gap.xs),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Align(
+            alignment: AlignmentDirectional.centerEnd,
+            child: Padding(
+              padding: const EdgeInsetsDirectional.only(end: Gap.xs),
+              child: IconButton(
+                tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
+                icon: Icon(
+                  Icons.close_rounded,
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+                onPressed: onClose,
+              ),
+            ),
+          ),
+          child,
+        ],
+      ),
+    );
+  }
+}
+
 /// Its outline sibling (the ref's "Roles" button).
 class VioletOutlineCta extends StatelessWidget {
   const VioletOutlineCta({
@@ -255,8 +343,9 @@ class VioletOutlineCta extends StatelessWidget {
     return OutlinedButton.icon(
       onPressed: onPressed,
       style: OutlinedButton.styleFrom(
-        foregroundColor:
-            dark ? const Color(0xFFB79CF6) : ManfaaColors.violetDeep,
+        foregroundColor: dark
+            ? const Color(0xFFB79CF6)
+            : ManfaaColors.violetDeep,
         side: BorderSide(
           color: dark ? ManfaaColors.violet : const Color(0xFFD9CEF9),
         ),

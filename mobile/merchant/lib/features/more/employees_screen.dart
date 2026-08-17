@@ -7,6 +7,7 @@ import 'package:manfaa_ui/manfaa_ui.dart';
 
 import '../../app/app.dart';
 import '../../app/providers.dart';
+import '../../widgets/adaptive.dart';
 import '../../widgets/merchant_brand.dart';
 import '../settlements/settlement_widgets.dart' show ToneBanner;
 import 'estate_widgets.dart';
@@ -33,6 +34,13 @@ class EmployeesScreen extends ConsumerStatefulWidget {
 class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
   var _query = '';
 
+  /// MR7 — the expanded list | editor split's right pane: the invite form,
+  /// or the account being edited (by id, so a refreshed list re-resolves
+  /// it). Local state on a shell-branch screen, so rail navigation away and
+  /// back keeps it. Phones never read these — they keep the sheets.
+  var _paneInvite = false;
+  int? _paneMemberId;
+
   /// Whether the SIGNED-IN account stands on the owner-flagged role — the
   /// staff list's own answer (matched by email; /merchant/me carries no
   /// role). Only an owner hands out the owner role (D5).
@@ -53,10 +61,8 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
       useRootNavigator: true, // over the floating nav bar
       isScrollControlled: true,
       showDragHandle: true,
-      builder: (_) => _InviteSheet(
-        roles: roles,
-        actorIsOwner: _actorIsOwner(staff),
-      ),
+      builder: (_) =>
+          _InviteSheet(roles: roles, actorIsOwner: _actorIsOwner(staff)),
     );
     if (result == null || !mounted) return;
 
@@ -102,8 +108,8 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
 
     final staff = ref.watch(staffProvider);
     final roles = canSeeRoles ? ref.watch(rolesProvider) : null;
-    final rolesReady = (roles?.valueOrNull ?? const <MerchantRole>[])
-        .isNotEmpty;
+    final rolesReady =
+        (roles?.valueOrNull ?? const <MerchantRole>[]).isNotEmpty;
 
     final name = session.merchantName ?? session.userName ?? 'M';
     final initials = name.isEmpty ? 'M' : name.characters.first.toUpperCase();
@@ -111,169 +117,275 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
     return Scaffold(
       body: SafeArea(
         bottom: false,
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(
-            Gap.xl,
-            Gap.sm,
-            Gap.xl,
-            Gap.navClearance,
-          ),
-          children: [
-            MerchantDetailTopBar(initials: initials),
-            const SizedBox(height: Gap.md),
-            Text(
-              l10n.employeesTitle,
-              style: theme.textTheme.headlineMedium?.copyWith(
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-            const SizedBox(height: Gap.xs),
-            Text(
-              l10n.employeesSubtitle,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
-            const SizedBox(height: Gap.lg),
-            staff.when(
-              loading: () =>
-                  const SkeletonBox(height: 320, radius: Corner.card),
-              error: (error, _) => SectionErrorCard(
-                error: error,
-                onRetry: () => ref.invalidate(staffProvider),
-              ),
-              data: (staff) {
-                final active = staff.where((m) => m.isActive).length;
-                final query = _query.trim().toLowerCase();
-                final filtered = query.isEmpty
-                    ? staff
-                    : [
-                        for (final member in staff)
-                          if (member.name.toLowerCase().contains(query) ||
-                              member.email.toLowerCase().contains(query))
-                            member,
-                      ];
+        // MR7: SCREEN layout reads CONTENT width (the rail shell's 96dp is
+        // already gone from these constraints). ≥840dp of content splits
+        // into list | editor — the phone's bottom sheets seated in the
+        // right pane, same fields, same guard sentences. Phones render
+        // the shipped column untouched.
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final expanded =
+                constraints.maxWidth >= kExpandedMinWidth &&
+                (canEdit || canInvite);
+            return ContentRail(
+              maxWidth: expanded ? kWideContentWidth : kContentRailWidth,
+              child: ListView(
+                padding: EdgeInsets.fromLTRB(
+                  Gap.xl,
+                  Gap.sm,
+                  Gap.xl,
+                  bottomClearanceOf(context),
+                ),
+                children: [
+                  MerchantDetailTopBar(initials: initials),
+                  const SizedBox(height: Gap.md),
+                  Text(
+                    l10n.employeesTitle,
+                    style: theme.textTheme.headlineMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: Gap.xs),
+                  Text(
+                    l10n.employeesSubtitle,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(height: Gap.lg),
+                  staff.when(
+                    loading: () =>
+                        const SkeletonBox(height: 320, radius: Corner.card),
+                    error: (error, _) => SectionErrorCard(
+                      error: error,
+                      onRetry: () => ref.invalidate(staffProvider),
+                    ),
+                    data: (staff) {
+                      final active = staff.where((m) => m.isActive).length;
+                      final query = _query.trim().toLowerCase();
+                      final filtered = query.isEmpty
+                          ? staff
+                          : [
+                              for (final member in staff)
+                                if (member.name.toLowerCase().contains(query) ||
+                                    member.email.toLowerCase().contains(query))
+                                  member,
+                            ];
 
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: StatTile(
-                            icon: Icons.group_outlined,
-                            tint: ManfaaTint.violet,
-                            label: l10n.totalEmployeesLabel,
-                            value: '${staff.length}',
-                          ),
-                        ),
-                        const SizedBox(width: Gap.md),
-                        Expanded(
-                          child: StatTile(
-                            icon: Icons.how_to_reg_outlined,
-                            tint: ManfaaTint.green,
-                            label: l10n.activeEmployeesLabel,
-                            value: '$active',
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: Gap.md),
-                    if (canInvite || canSeeRoles) ...[
-                      Row(
+                      final list = Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          if (canInvite)
-                            Expanded(
-                              child: VioletCta(
-                                icon: Icons.add_circle_outline_rounded,
-                                label: l10n.addEmployeeCta,
-                                onPressed:
-                                    rolesReady ? () => _invite(staff) : null,
+                          Row(
+                            children: [
+                              Expanded(
+                                child: StatTile(
+                                  icon: Icons.group_outlined,
+                                  tint: ManfaaTint.violet,
+                                  label: l10n.totalEmployeesLabel,
+                                  value: '${staff.length}',
+                                ),
                               ),
-                            ),
-                          if (canInvite && canSeeRoles)
-                            const SizedBox(width: Gap.md),
-                          if (canSeeRoles)
-                            Expanded(
-                              child: VioletOutlineCta(
-                                icon: Icons.local_police_outlined,
-                                label: l10n.rolesCta,
-                                onPressed: () => context.go('/more/roles'),
+                              const SizedBox(width: Gap.md),
+                              Expanded(
+                                child: StatTile(
+                                  icon: Icons.how_to_reg_outlined,
+                                  tint: ManfaaTint.green,
+                                  label: l10n.activeEmployeesLabel,
+                                  value: '$active',
+                                ),
                               ),
-                            ),
-                        ],
-                      ),
-                      // A `staff.invite` holder without `roles.view` has no
-                      // role to pick — say so instead of a dead button.
-                      if (canInvite && !canSeeRoles) ...[
-                        const SizedBox(height: Gap.sm),
-                        Text(
-                          l10n.staffNeedsRolesView,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant,
+                            ],
                           ),
-                        ),
-                      ],
-                      const SizedBox(height: Gap.md),
-                    ],
-                    EstateSearchField(
-                      hint: l10n.searchEmployeesHint,
-                      onChanged: (value) => setState(() => _query = value),
-                    ),
-                    const SizedBox(height: Gap.md),
-                    ManfaaCard(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: Gap.lg,
-                        vertical: Gap.xs,
-                      ),
-                      child: filtered.isEmpty
-                          ? Padding(
-                              padding: const EdgeInsets.all(Gap.lg),
-                              child: Text(
-                                l10n.employeesEmpty,
-                                textAlign: TextAlign.center,
-                                style: theme.textTheme.bodyMedium?.copyWith(
+                          const SizedBox(height: Gap.md),
+                          if (canInvite || canSeeRoles) ...[
+                            Row(
+                              children: [
+                                if (canInvite)
+                                  Expanded(
+                                    child: VioletCta(
+                                      icon: Icons.add_circle_outline_rounded,
+                                      label: l10n.addEmployeeCta,
+                                      onPressed: rolesReady
+                                          ? () => expanded
+                                                ? setState(() {
+                                                    _paneInvite = true;
+                                                    _paneMemberId = null;
+                                                  })
+                                                : _invite(staff)
+                                          : null,
+                                    ),
+                                  ),
+                                if (canInvite && canSeeRoles)
+                                  const SizedBox(width: Gap.md),
+                                if (canSeeRoles)
+                                  Expanded(
+                                    child: VioletOutlineCta(
+                                      icon: Icons.local_police_outlined,
+                                      label: l10n.rolesCta,
+                                      onPressed: () =>
+                                          context.go('/more/roles'),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                            // A `staff.invite` holder without `roles.view` has no
+                            // role to pick — say so instead of a dead button.
+                            if (canInvite && !canSeeRoles) ...[
+                              const SizedBox(height: Gap.sm),
+                              Text(
+                                l10n.staffNeedsRolesView,
+                                style: theme.textTheme.bodySmall?.copyWith(
                                   color: theme.colorScheme.onSurfaceVariant,
                                 ),
                               ),
-                            )
-                          : Column(
-                              children: [
-                                for (final (i, member)
-                                    in filtered.indexed) ...[
-                                  if (i > 0)
-                                    Divider(
-                                      height: 1,
-                                      color:
-                                          theme.colorScheme.outlineVariant,
-                                    ),
-                                  _StaffRow(
-                                    member: member,
-                                    index: i,
-                                    dhivehi: dhivehi,
-                                    isSelf:
-                                        member.email == session.userEmail,
-                                    onTap: canEdit
-                                        ? () => _edit(member, staff)
-                                        : null,
-                                  ),
-                                ],
-                              ],
+                            ],
+                            const SizedBox(height: Gap.md),
+                          ],
+                          EstateSearchField(
+                            hint: l10n.searchEmployeesHint,
+                            onChanged: (value) =>
+                                setState(() => _query = value),
+                          ),
+                          const SizedBox(height: Gap.md),
+                          ManfaaCard(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: Gap.lg,
+                              vertical: Gap.xs,
                             ),
-                    ),
-                    const SizedBox(height: Gap.lg),
-                    _PermissionsOverviewCard(
-                      staff: staff,
-                      dhivehi: dhivehi,
-                      canSeeRoles: canSeeRoles,
-                    ),
-                  ],
-                );
-              },
-            ),
-          ],
+                            child: filtered.isEmpty
+                                ? Padding(
+                                    padding: const EdgeInsets.all(Gap.lg),
+                                    child: Text(
+                                      l10n.employeesEmpty,
+                                      textAlign: TextAlign.center,
+                                      style: theme.textTheme.bodyMedium
+                                          ?.copyWith(
+                                            color: theme
+                                                .colorScheme
+                                                .onSurfaceVariant,
+                                          ),
+                                    ),
+                                  )
+                                : Column(
+                                    children: [
+                                      for (final (i, member)
+                                          in filtered.indexed) ...[
+                                        if (i > 0)
+                                          Divider(
+                                            height: 1,
+                                            color: theme
+                                                .colorScheme
+                                                .outlineVariant,
+                                          ),
+                                        _StaffRow(
+                                          member: member,
+                                          index: i,
+                                          dhivehi: dhivehi,
+                                          isSelf:
+                                              member.email == session.userEmail,
+                                          onTap: canEdit
+                                              ? () => expanded
+                                                    ? setState(() {
+                                                        _paneInvite = false;
+                                                        _paneMemberId =
+                                                            member.id;
+                                                      })
+                                                    : _edit(member, staff)
+                                              : null,
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                          ),
+                          const SizedBox(height: Gap.lg),
+                          _PermissionsOverviewCard(
+                            staff: staff,
+                            dhivehi: dhivehi,
+                            canSeeRoles: canSeeRoles,
+                          ),
+                        ],
+                      );
+
+                      if (!expanded) return list;
+                      return Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(child: list),
+                          const SizedBox(width: Gap.lg),
+                          Expanded(child: _pane(staff, rolesReady: rolesReady)),
+                        ],
+                      );
+                    },
+                  ),
+                ],
+              ),
+            );
+          },
         ),
       ),
+    );
+  }
+
+  /// The expanded right pane: the invite form, the selected account's
+  /// editor, or the quiet hint — the SAME sheet widgets phones open, with
+  /// completion wired to callbacks instead of route pops.
+  Widget _pane(List<MerchantStaff> staff, {required bool rolesReady}) {
+    final l10n = context.l10n;
+    final session = ref.read(sessionProvider);
+
+    if (_paneInvite && rolesReady) {
+      final roles = ref.read(rolesProvider).valueOrNull;
+      if (roles != null) {
+        return EditorPane(
+          onClose: () => setState(() => _paneInvite = false),
+          child: _InviteSheet(
+            key: const ValueKey('invite-pane'),
+            roles: roles,
+            actorIsOwner: _actorIsOwner(staff),
+            onFinished: (result) async {
+              setState(() => _paneInvite = false);
+              ref.invalidate(staffProvider);
+              // The ONE-TIME password handover keeps its modal dialog — a
+              // handover must be acknowledged at any width.
+              await showDialog<void>(
+                context: context,
+                barrierDismissible: false,
+                builder: (_) => _TempPasswordDialog(result: result),
+              );
+            },
+          ),
+        );
+      }
+    }
+
+    MerchantStaff? selected;
+    for (final member in staff) {
+      if (member.id == _paneMemberId) selected = member;
+    }
+    if (selected != null && session.can('staff.edit')) {
+      final member = selected;
+      return EditorPane(
+        onClose: () => setState(() => _paneMemberId = null),
+        child: _StaffEditSheet(
+          key: ValueKey('staff-${member.id}'),
+          member: member,
+          actorIsOwner: _actorIsOwner(staff),
+          actorEmail: session.userEmail,
+          activeOwnerCount: staff
+              .where((m) => (m.role?.isOwner ?? false) && m.isActive)
+              .length,
+          onFinished: (saved) {
+            setState(() => _paneMemberId = null);
+            if (saved) ref.invalidate(staffProvider);
+          },
+        ),
+      );
+    }
+
+    return PaneHint(
+      icon: Icons.group_outlined,
+      title: l10n.paneEmployeesHintTitle,
+      body: l10n.paneEmployeesHintBody,
     );
   }
 }
@@ -311,9 +423,7 @@ class _StaffRow extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    isSelf
-                        ? '${member.name} ${l10n.youMarker}'
-                        : member.name,
+                    isSelf ? '${member.name} ${l10n.youMarker}' : member.name,
                     style: theme.textTheme.titleSmall?.copyWith(
                       fontWeight: FontWeight.w700,
                     ),
@@ -340,8 +450,8 @@ class _StaffRow extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 SoftPill(
-                  label: member.role?.label(dhivehi: dhivehi) ??
-                      l10n.noRoleLabel,
+                  label:
+                      member.role?.label(dhivehi: dhivehi) ?? l10n.noRoleLabel,
                 ),
                 const SizedBox(height: Gap.xs),
                 StatusChip(
@@ -387,8 +497,7 @@ class _PermissionsOverviewCard extends StatelessWidget {
     // Real counts grouped by the role each account actually stands on.
     final counts = <String, int>{};
     for (final member in staff) {
-      final label =
-          member.role?.label(dhivehi: dhivehi) ?? l10n.noRoleLabel;
+      final label = member.role?.label(dhivehi: dhivehi) ?? l10n.noRoleLabel;
       counts[label] = (counts[label] ?? 0) + 1;
     }
     final line = [
@@ -466,10 +575,19 @@ bool mayAssignRole(
 /// authority nobody chose. Pops the [StaffInviteResult] — the caller owns
 /// the one-time password dialog.
 class _InviteSheet extends ConsumerStatefulWidget {
-  const _InviteSheet({required this.roles, required this.actorIsOwner});
+  const _InviteSheet({
+    super.key,
+    required this.roles,
+    required this.actorIsOwner,
+    this.onFinished,
+  });
 
   final List<MerchantRole> roles;
   final bool actorIsOwner;
+
+  /// MR7 — set when the form lives inline in the expanded editor pane:
+  /// completion calls back instead of popping a sheet route.
+  final void Function(StaffInviteResult result)? onFinished;
 
   @override
   ConsumerState<_InviteSheet> createState() => _InviteSheetState();
@@ -499,13 +617,19 @@ class _InviteSheetState extends ConsumerState<_InviteSheet> {
       _error = null;
     });
     try {
-      final result = await ref.read(apiProvider).inviteStaff(
+      final result = await ref
+          .read(apiProvider)
+          .inviteStaff(
             name: _name.text.trim(),
             email: _email.text.trim(),
             merchantRoleId: roleId,
           );
       if (!mounted) return;
-      Navigator.of(context).pop(result);
+      if (widget.onFinished != null) {
+        widget.onFinished!(result);
+      } else {
+        Navigator.of(context).pop(result);
+      }
     } on MobileApiException catch (e) {
       if (mounted) setState(() => _error = e.message);
     } catch (_) {
@@ -527,7 +651,8 @@ class _InviteSheetState extends ConsumerState<_InviteSheet> {
       (role) =>
           !mayAssignRole(session, role, actorIsOwner: widget.actorIsOwner),
     );
-    final canSubmit = _name.text.trim().isNotEmpty &&
+    final canSubmit =
+        _name.text.trim().isNotEmpty &&
         _email.text.trim().isNotEmpty &&
         _roleId != null &&
         !_busy;
@@ -662,8 +787,8 @@ class _RoleOption extends StatelessWidget {
           decoration: BoxDecoration(
             color: selected
                 ? (theme.brightness == Brightness.dark
-                    ? ManfaaColors.violet.withValues(alpha: 0.12)
-                    : const Color(0xFFF4F1FE))
+                      ? ManfaaColors.violet.withValues(alpha: 0.12)
+                      : const Color(0xFFF4F1FE))
                 : Colors.transparent,
             borderRadius: BorderRadius.circular(Corner.control),
             border: Border.all(
@@ -690,7 +815,8 @@ class _RoleOption extends StatelessWidget {
                   ),
                 ),
               ),
-              if (!enabled) Icon(Icons.lock_outline_rounded, size: 16, color: muted),
+              if (!enabled)
+                Icon(Icons.lock_outline_rounded, size: 16, color: muted),
             ],
           ),
         ),
@@ -818,9 +944,7 @@ class _TempPasswordDialogState extends State<_TempPasswordDialog> {
       ),
       actions: [
         FilledButton(
-          onPressed: _acknowledged
-              ? () => Navigator.of(context).pop()
-              : null,
+          onPressed: _acknowledged ? () => Navigator.of(context).pop() : null,
           style: FilledButton.styleFrom(
             minimumSize: const Size(0, 44),
             padding: const EdgeInsets.symmetric(horizontal: Gap.lg),
@@ -839,16 +963,22 @@ class _TempPasswordDialogState extends State<_TempPasswordDialog> {
 /// handed out. Pops `true` after a landed save.
 class _StaffEditSheet extends ConsumerStatefulWidget {
   const _StaffEditSheet({
+    super.key,
     required this.member,
     required this.actorIsOwner,
     required this.actorEmail,
     required this.activeOwnerCount,
+    this.onFinished,
   });
 
   final MerchantStaff member;
   final bool actorIsOwner;
   final String? actorEmail;
   final int activeOwnerCount;
+
+  /// MR7 — set when the form lives inline in the expanded editor pane:
+  /// completion calls back instead of popping a sheet route.
+  final void Function(bool saved)? onFinished;
 
   @override
   ConsumerState<_StaffEditSheet> createState() => _StaffEditSheetState();
@@ -861,6 +991,14 @@ class _StaffEditSheetState extends ConsumerState<_StaffEditSheet> {
   String? _error;
 
   bool get _isSelf => widget.member.email == widget.actorEmail;
+
+  void _finish(bool saved) {
+    if (widget.onFinished != null) {
+      widget.onFinished!(saved);
+    } else {
+      Navigator.of(context).pop(saved);
+    }
+  }
 
   bool get _isOwnerAccount => widget.member.role?.isOwner ?? false;
 
@@ -875,7 +1013,7 @@ class _StaffEditSheetState extends ConsumerState<_StaffEditSheet> {
     final roleChanged = _roleId != widget.member.role?.id;
     final activeChanged = _active != widget.member.isActive;
     if (!roleChanged && !activeChanged) {
-      Navigator.of(context).pop(false);
+      _finish(false);
       return;
     }
 
@@ -884,7 +1022,9 @@ class _StaffEditSheetState extends ConsumerState<_StaffEditSheet> {
       _error = null;
     });
     try {
-      await ref.read(apiProvider).updateStaff(
+      await ref
+          .read(apiProvider)
+          .updateStaff(
             widget.member.id,
             merchantRoleId: roleChanged ? _roleId : null,
             isActive: activeChanged ? _active : null,
@@ -893,7 +1033,7 @@ class _StaffEditSheetState extends ConsumerState<_StaffEditSheet> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(l10n.staffSaved)));
-      Navigator.of(context).pop(true);
+      _finish(true);
     } on MobileApiException catch (e) {
       // The guards answer as sentences (last active owner, self-targeting)
       // and the delegation family as coded refusals — either way the
@@ -922,13 +1062,13 @@ class _StaffEditSheetState extends ConsumerState<_StaffEditSheet> {
     final roleLockReason = _isLastActiveOwner
         ? l10n.staffLastOwnerLocked
         : _isSelf && _isOwnerAccount
-            ? l10n.staffSelfDemoteLocked
-            : null;
+        ? l10n.staffSelfDemoteLocked
+        : null;
     final activeLockReason = _isLastActiveOwner
         ? l10n.staffLastOwnerLocked
         : _isSelf
-            ? l10n.staffSelfActiveLocked
-            : null;
+        ? l10n.staffSelfActiveLocked
+        : null;
 
     return Padding(
       padding: EdgeInsets.only(
@@ -982,7 +1122,8 @@ class _StaffEditSheetState extends ConsumerState<_StaffEditSheet> {
                   role: role,
                   dhivehi: dhivehi,
                   selected: _roleId == role.id,
-                  enabled: roleLockReason == null &&
+                  enabled:
+                      roleLockReason == null &&
                       mayAssignRole(
                         session,
                         role,
@@ -1011,8 +1152,9 @@ class _StaffEditSheetState extends ConsumerState<_StaffEditSheet> {
                       const SizedBox(height: 2),
                       Text(
                         activeLockReason ?? l10n.employeeActiveHint,
-                        style:
-                            theme.textTheme.bodySmall?.copyWith(color: muted),
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: muted,
+                        ),
                       ),
                     ],
                   ),

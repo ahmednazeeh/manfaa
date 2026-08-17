@@ -5,6 +5,7 @@ import 'package:manfaa_ui/manfaa_ui.dart';
 
 import '../../app/app.dart';
 import '../../app/providers.dart';
+import '../../widgets/adaptive.dart';
 import '../../widgets/merchant_brand.dart';
 import '../../widgets/tx_format.dart';
 import '../settlements/settlement_widgets.dart' show ToneBanner;
@@ -36,6 +37,11 @@ class _PromotionsScreenState extends ConsumerState<PromotionsScreen> {
   PromotionCostPreview? _preview;
   var _actionBusy = false;
 
+  /// MR7 — whether the expanded list | builder split's right pane holds the
+  /// draft builder. Local state on a shell-branch screen, so rail
+  /// navigation away and back keeps it. Phones keep the bottom sheet.
+  var _builderOpen = false;
+
   Future<void> _openBuilder() async {
     final result = await showModalBottomSheet<PromotionWriteResult>(
       context: context,
@@ -45,10 +51,10 @@ class _PromotionsScreenState extends ConsumerState<PromotionsScreen> {
       builder: (_) => _PromotionBuilderSheet(
         standingRate: ref.read(sessionProvider).can('rate.view')
             ? ref
-                .read(rateSettingsProvider)
-                .valueOrNull
-                ?.current
-                ?.cashbackRatePercent
+                  .read(rateSettingsProvider)
+                  .valueOrNull
+                  ?.current
+                  ?.cashbackRatePercent
             : null,
       ),
     );
@@ -98,9 +104,7 @@ class _PromotionsScreenState extends ConsumerState<PromotionsScreen> {
     try {
       final result = await ref.read(apiProvider).publishPromotion(promotion.id);
       if (!mounted) return;
-      messenger.showSnackBar(
-        SnackBar(content: Text(l10n.promotionPublished)),
-      );
+      messenger.showSnackBar(SnackBar(content: Text(l10n.promotionPublished)));
       setState(() => _preview = result.costPreview);
       ref.invalidate(promotionsProvider);
     } on MobileApiException catch (e) {
@@ -125,9 +129,7 @@ class _PromotionsScreenState extends ConsumerState<PromotionsScreen> {
     } on MobileApiException catch (e) {
       messenger.showSnackBar(SnackBar(content: Text(e.message)));
     } catch (_) {
-      messenger.showSnackBar(
-        SnackBar(content: Text(l10n.cancelDraftFailed)),
-      );
+      messenger.showSnackBar(SnackBar(content: Text(l10n.cancelDraftFailed)));
     } finally {
       if (mounted) setState(() => _actionBusy = false);
     }
@@ -162,85 +164,154 @@ class _PromotionsScreenState extends ConsumerState<PromotionsScreen> {
     return Scaffold(
       body: SafeArea(
         bottom: false,
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(
-            Gap.xl,
-            Gap.sm,
-            Gap.xl,
-            Gap.navClearance,
-          ),
-          children: [
-            MerchantDetailTopBar(initials: initials),
-            const SizedBox(height: Gap.md),
-            Text(
-              l10n.promotionsTitle,
-              style: theme.textTheme.headlineMedium?.copyWith(
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-            const SizedBox(height: Gap.xs),
-            Text(
-              l10n.promotionsSubtitle,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
-            const SizedBox(height: Gap.lg),
-            if (canDraft) ...[
-              VioletCta(
-                icon: Icons.add_circle_outline_rounded,
-                label: l10n.newPromotionCta,
-                onPressed: _openBuilder,
-              ),
-              const SizedBox(height: Gap.md),
-            ],
-            if (preview != null) ...[
-              _CostPreviewBanner(preview: preview),
-              const SizedBox(height: Gap.md),
-            ],
-            promotions.when(
-              loading: () =>
-                  const SkeletonBox(height: 280, radius: Corner.card),
-              error: (error, _) => SectionErrorCard(
-                error: error,
-                onRetry: () => ref.invalidate(promotionsProvider),
-              ),
-              data: (promotions) => promotions.isEmpty
-                  ? ManfaaCard(
-                      child: Text(
-                        l10n.promotionsEmpty,
-                        textAlign: TextAlign.center,
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                    )
-                  : Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        for (final (i, promotion)
-                            in promotions.indexed) ...[
-                          if (i > 0) const SizedBox(height: Gap.md),
-                          _PromotionCard(
-                            promotion: promotion,
-                            branchNames: branchNames,
-                            busy: _actionBusy,
-                            onPublish:
-                                canPublish && promotion.status == 'draft'
-                                    ? () => _publish(promotion)
-                                    : null,
-                            onCancel:
-                                canCancel && promotion.status == 'draft'
-                                    ? () => _cancel(promotion)
-                                    : null,
+        // MR7: SCREEN layout reads CONTENT width (the rail shell's 96dp is
+        // already gone from these constraints). ≥840dp of content splits
+        // into list | builder for `promotions.create` holders — the
+        // phone's bottom sheet seated in the right pane, same validation,
+        // same server cost picture. Phones render the shipped column
+        // untouched.
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final expanded =
+                constraints.maxWidth >= kExpandedMinWidth && canDraft;
+
+            final board = <Widget>[
+              if (canDraft) ...[
+                VioletCta(
+                  icon: Icons.add_circle_outline_rounded,
+                  label: l10n.newPromotionCta,
+                  onPressed: expanded
+                      ? () => setState(() => _builderOpen = true)
+                      : _openBuilder,
+                ),
+                const SizedBox(height: Gap.md),
+              ],
+              if (preview != null) ...[
+                _CostPreviewBanner(preview: preview),
+                const SizedBox(height: Gap.md),
+              ],
+              promotions.when(
+                loading: () =>
+                    const SkeletonBox(height: 280, radius: Corner.card),
+                error: (error, _) => SectionErrorCard(
+                  error: error,
+                  onRetry: () => ref.invalidate(promotionsProvider),
+                ),
+                data: (promotions) => promotions.isEmpty
+                    ? ManfaaCard(
+                        child: Text(
+                          l10n.promotionsEmpty,
+                          textAlign: TextAlign.center,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
                           ),
+                        ),
+                      )
+                    : Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          for (final (i, promotion) in promotions.indexed) ...[
+                            if (i > 0) const SizedBox(height: Gap.md),
+                            _PromotionCard(
+                              promotion: promotion,
+                              branchNames: branchNames,
+                              busy: _actionBusy,
+                              onPublish:
+                                  canPublish && promotion.status == 'draft'
+                                  ? () => _publish(promotion)
+                                  : null,
+                              onCancel: canCancel && promotion.status == 'draft'
+                                  ? () => _cancel(promotion)
+                                  : null,
+                            ),
+                          ],
                         ],
+                      ),
+              ),
+            ];
+
+            return ContentRail(
+              maxWidth: expanded ? kWideContentWidth : kContentRailWidth,
+              child: ListView(
+                padding: EdgeInsets.fromLTRB(
+                  Gap.xl,
+                  Gap.sm,
+                  Gap.xl,
+                  bottomClearanceOf(context),
+                ),
+                children: [
+                  MerchantDetailTopBar(initials: initials),
+                  const SizedBox(height: Gap.md),
+                  Text(
+                    l10n.promotionsTitle,
+                    style: theme.textTheme.headlineMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: Gap.xs),
+                  Text(
+                    l10n.promotionsSubtitle,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(height: Gap.lg),
+                  if (!expanded)
+                    ...board
+                  else
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: board,
+                          ),
+                        ),
+                        const SizedBox(width: Gap.lg),
+                        Expanded(child: _pane()),
                       ],
                     ),
-            ),
-          ],
+                ],
+              ),
+            );
+          },
         ),
       ),
+    );
+  }
+
+  /// The expanded right pane: the draft builder, or the quiet hint.
+  Widget _pane() {
+    final l10n = context.l10n;
+
+    if (_builderOpen) {
+      return EditorPane(
+        onClose: () => setState(() => _builderOpen = false),
+        child: _PromotionBuilderSheet(
+          key: const ValueKey('promo-builder'),
+          standingRate: ref.read(sessionProvider).can('rate.view')
+              ? ref
+                    .read(rateSettingsProvider)
+                    .valueOrNull
+                    ?.current
+                    ?.cashbackRatePercent
+              : null,
+          onFinished: (result) {
+            setState(() {
+              _builderOpen = false;
+              _preview = result.costPreview;
+            });
+            ref.invalidate(promotionsProvider);
+          },
+        ),
+      );
+    }
+
+    return PaneHint(
+      icon: Icons.campaign_outlined,
+      title: l10n.panePromoHintTitle,
+      body: l10n.panePromoHintBody,
     );
   }
 }
@@ -305,10 +376,7 @@ class _CostPreviewBanner extends StatelessWidget {
           : Icons.info_outline_rounded,
       title: promo.allInPercent != null
           ? l10n.promoCostTitle(trimRatePercent(promo.allInPercent!))
-          : l10n.promoCostBody(
-              trimRatePercent(promo.cashbackRatePercent),
-              '—',
-            ),
+          : l10n.promoCostBody(trimRatePercent(promo.cashbackRatePercent), '—'),
       body: parts.isEmpty ? null : parts.join(' '),
     );
   }
@@ -334,9 +402,9 @@ class _PromotionCard extends StatelessWidget {
     return switch (promotion.status) {
       'draft' => (l10n.promoStatusDraft, StatusTone.pending),
       'published' when promotion.isLive => (
-          l10n.promoStatusLive,
-          StatusTone.confirmed,
-        ),
+        l10n.promoStatusLive,
+        StatusTone.confirmed,
+      ),
       'published' => (l10n.promoStatusPublished, StatusTone.paid),
       'ended' => (l10n.promoStatusEnded, StatusTone.closed),
       'cancelled' => (l10n.promoStatusCancelled, StatusTone.closed),
@@ -355,23 +423,23 @@ class _PromotionCard extends StatelessWidget {
     final branchLine = promotion.branchId == null
         ? l10n.promoAllBranches
         : branchNames?[promotion.branchId] ??
-            l10n.promoBranchFallback(promotion.branchId!);
+              l10n.promoBranchFallback(promotion.branchId!);
 
     Widget detail(IconData icon, String text) => Padding(
-          padding: const EdgeInsets.only(top: Gap.xs),
-          child: Row(
-            children: [
-              Icon(icon, size: 16, color: muted),
-              const SizedBox(width: Gap.sm),
-              Expanded(
-                child: Text(
-                  text,
-                  style: theme.textTheme.bodySmall?.copyWith(color: muted),
-                ),
-              ),
-            ],
+      padding: const EdgeInsets.only(top: Gap.xs),
+      child: Row(
+        children: [
+          Icon(icon, size: 16, color: muted),
+          const SizedBox(width: Gap.sm),
+          Expanded(
+            child: Text(
+              text,
+              style: theme.textTheme.bodySmall?.copyWith(color: muted),
+            ),
           ),
-        );
+        ],
+      ),
+    );
 
     return ManfaaCard(
       child: Column(
@@ -408,13 +476,10 @@ class _PromotionCard extends StatelessWidget {
                               promotion.platformFeePercent != null
                           ? l10n.promoYouPay(
                               trimRatePercent(promotion.allInPercent!),
-                              trimRatePercent(
-                                promotion.platformFeePercent!,
-                              ),
+                              trimRatePercent(promotion.platformFeePercent!),
                             )
                           : l10n.promoYouPayDash,
-                      style:
-                          theme.textTheme.bodySmall?.copyWith(color: muted),
+                      style: theme.textTheme.bodySmall?.copyWith(color: muted),
                     ),
                   ],
                 ),
@@ -460,8 +525,7 @@ class _PromotionCard extends StatelessWidget {
                     // constraint — bound it.
                     style: OutlinedButton.styleFrom(
                       minimumSize: const Size(0, 44),
-                      padding:
-                          const EdgeInsets.symmetric(horizontal: Gap.lg),
+                      padding: const EdgeInsets.symmetric(horizontal: Gap.lg),
                     ),
                     child: Text(l10n.cancelDraftCta),
                   ),
@@ -473,8 +537,7 @@ class _PromotionCard extends StatelessWidget {
                       backgroundColor: ManfaaColors.violet,
                       foregroundColor: Colors.white,
                       minimumSize: const Size(0, 44),
-                      padding:
-                          const EdgeInsets.symmetric(horizontal: Gap.lg),
+                      padding: const EdgeInsets.symmetric(horizontal: Gap.lg),
                     ),
                     child: Text(l10n.publishCta),
                   ),
@@ -494,11 +557,15 @@ class _PromotionCard extends StatelessWidget {
 /// MVR amounts parsed to integer laari. The window is picked in Maldives
 /// wall time and travels with the explicit +05:00 offset.
 class _PromotionBuilderSheet extends ConsumerStatefulWidget {
-  const _PromotionBuilderSheet({this.standingRate});
+  const _PromotionBuilderSheet({super.key, this.standingRate, this.onFinished});
 
   /// The standing rate as the API states it, or null when unknown (unset,
   /// or the account lacks `rate.view` — the server still enforces).
   final String? standingRate;
+
+  /// MR7 — set when the builder lives inline in the expanded pane:
+  /// completion calls back instead of popping a sheet route.
+  final void Function(PromotionWriteResult result)? onFinished;
 
   @override
   ConsumerState<_PromotionBuilderSheet> createState() =>
@@ -552,8 +619,13 @@ class _PromotionBuilderSheetState
       initialTime: TimeOfDay.fromDateTime(initial),
     );
     if (time == null || !mounted) return;
-    final picked =
-        DateTime(date.year, date.month, date.day, time.hour, time.minute);
+    final picked = DateTime(
+      date.year,
+      date.month,
+      date.day,
+      time.hour,
+      time.minute,
+    );
     setState(() {
       if (starts) {
         _startsAt = picked;
@@ -574,7 +646,9 @@ class _PromotionBuilderSheetState
       _error = null;
     });
     try {
-      final result = await ref.read(apiProvider).createPromotion(
+      final result = await ref
+          .read(apiProvider)
+          .createPromotion(
             // PLAN §1 wire format: the rate leaves as the exact 2-decimal
             // percent string the bp above was parsed from.
             cashbackRatePercent: bpToPercentString(rateBp),
@@ -588,7 +662,11 @@ class _PromotionBuilderSheetState
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(l10n.draftCreated)));
-      Navigator.of(context).pop(result);
+      if (widget.onFinished != null) {
+        widget.onFinished!(result);
+      } else {
+        Navigator.of(context).pop(result);
+      }
     } on MobileApiException catch (e) {
       // rate_not_priced and the domain's window/boost prose both arrive as
       // sentences — render them where the form is.
@@ -621,84 +699,78 @@ class _PromotionBuilderSheetState
     final rateError = trimmed.isEmpty
         ? null
         : bp == null
-            ? l10n.customRateFormat
-            : bp < _minBp || bp > _maxBp
-                ? l10n.rateBoundsHint(formatBp(_minBp), formatBp(_maxBp))
-                : standingBp != null && bp <= standingBp
-                    ? l10n.promoMustBoost(
-                        trimRatePercent(widget.standingRate!),
-                      )
-                    : null;
+        ? l10n.customRateFormat
+        : bp < _minBp || bp > _maxBp
+        ? l10n.rateBoundsHint(formatBp(_minBp), formatBp(_maxBp))
+        : standingBp != null && bp <= standingBp
+        ? l10n.promoMustBoost(trimRatePercent(widget.standingRate!))
+        : null;
     final validBp = rateError == null ? bp : null;
 
     final endsAt = _endsAt;
-    final windowError =
-        endsAt != null && !endsAt.isAfter(_startsAt)
-            ? l10n.promoWindowOrderError
-            : null;
+    final windowError = endsAt != null && !endsAt.isAfter(_startsAt)
+        ? l10n.promoWindowOrderError
+        : null;
 
     final minText = _minPurchase.text.trim();
     final minLaari = minText.isEmpty ? null : parseMvrToLaari(minText);
-    final minError =
-        minText.isNotEmpty && (minLaari == null || minLaari < 0)
-            ? l10n.promoAmountInvalid
-            : null;
+    final minError = minText.isNotEmpty && (minLaari == null || minLaari < 0)
+        ? l10n.promoAmountInvalid
+        : null;
 
     final capText = _cap.text.trim();
     final capLaari = capText.isEmpty ? null : parseMvrToLaari(capText);
-    final capError =
-        capText.isNotEmpty && (capLaari == null || capLaari < 1)
-            ? l10n.promoAmountInvalid
-            : null;
+    final capError = capText.isNotEmpty && (capLaari == null || capLaari < 1)
+        ? l10n.promoAmountInvalid
+        : null;
 
-    final canSubmit = validBp != null &&
+    final canSubmit =
+        validBp != null &&
         endsAt != null &&
         windowError == null &&
         minError == null &&
         capError == null &&
         !_busy;
 
-    Widget whenRow(String label, String value, VoidCallback onTap) =>
-        InkWell(
+    Widget whenRow(String label, String value, VoidCallback onTap) => InkWell(
+      borderRadius: BorderRadius.circular(Corner.control),
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(
+          horizontal: Gap.md,
+          vertical: Gap.md,
+        ),
+        decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(Corner.control),
-          onTap: onTap,
-          child: Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: Gap.md,
-              vertical: Gap.md,
-            ),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(Corner.control),
-              border: Border.all(color: theme.colorScheme.outlineVariant),
-            ),
-            child: Row(
-              children: [
-                Icon(Icons.event_rounded, size: 18, color: muted),
-                const SizedBox(width: Gap.md),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        label,
-                        style: theme.textTheme.bodySmall
-                            ?.copyWith(color: muted),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        value,
-                        style: theme.textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ],
+          border: Border.all(color: theme.colorScheme.outlineVariant),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.event_rounded, size: 18, color: muted),
+            const SizedBox(width: Gap.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: theme.textTheme.bodySmall?.copyWith(color: muted),
                   ),
-                ),
-                Icon(Icons.edit_calendar_outlined, size: 18, color: muted),
-              ],
+                  const SizedBox(height: 2),
+                  Text(
+                    value,
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
-        );
+            Icon(Icons.edit_calendar_outlined, size: 18, color: muted),
+          ],
+        ),
+      ),
+    );
 
     return Padding(
       padding: EdgeInsets.only(
@@ -727,8 +799,9 @@ class _PromotionBuilderSheetState
               const SizedBox(height: Gap.sm),
               TextField(
                 controller: _rate,
-                keyboardType:
-                    const TextInputType.numberWithOptions(decimal: true),
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
                 textDirection: TextDirection.ltr,
                 onChanged: (_) => setState(() => _error = null),
                 decoration: InputDecoration(
@@ -758,9 +831,7 @@ class _PromotionBuilderSheetState
               Text(
                 windowError ?? l10n.promoWindowHint,
                 style: theme.textTheme.bodySmall?.copyWith(
-                  color: windowError != null
-                      ? theme.colorScheme.error
-                      : muted,
+                  color: windowError != null ? theme.colorScheme.error : muted,
                 ),
               ),
               const SizedBox(height: Gap.lg),
@@ -768,8 +839,9 @@ class _PromotionBuilderSheetState
               const SizedBox(height: Gap.sm),
               TextField(
                 controller: _minPurchase,
-                keyboardType:
-                    const TextInputType.numberWithOptions(decimal: true),
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
                 textDirection: TextDirection.ltr,
                 onChanged: (_) => setState(() {}),
                 decoration: InputDecoration(
@@ -782,8 +854,9 @@ class _PromotionBuilderSheetState
               const SizedBox(height: Gap.sm),
               TextField(
                 controller: _cap,
-                keyboardType:
-                    const TextInputType.numberWithOptions(decimal: true),
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
                 textDirection: TextDirection.ltr,
                 onChanged: (_) => setState(() {}),
                 decoration: InputDecoration(

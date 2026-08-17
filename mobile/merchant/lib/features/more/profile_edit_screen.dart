@@ -8,6 +8,7 @@ import 'package:manfaa_ui/manfaa_ui.dart';
 
 import '../../app/app.dart';
 import '../../app/providers.dart';
+import '../../widgets/adaptive.dart';
 import '../setup/setup_common.dart';
 import 'more_providers.dart';
 import 'more_widgets.dart';
@@ -221,324 +222,341 @@ class _ProfileEditScreenState extends ConsumerState<ProfileEditScreen> {
     return Scaffold(
       body: SafeArea(
         bottom: false,
-        child: ListView(
-          // navClearance, not xxl: this page is pushed on the BRANCH
-          // navigator, so the shell's floating nav bar (extendBody) still
-          // overlays it — without the clearance the Save button scrolls to
-          // rest underneath the bar, exactly the layering trap the estate's
-          // sheets already dodge via the root navigator.
-          padding: const EdgeInsets.fromLTRB(
-            Gap.xl,
-            Gap.sm,
-            Gap.xl,
-            Gap.navClearance,
-          ),
-          children: [
-            Row(
-              children: [
-                IconButton(
-                  icon: const Icon(Icons.arrow_back_rounded),
-                  onPressed: _busy ? null : () => Navigator.of(context).pop(),
-                ),
-                const SizedBox(width: Gap.xs),
-                Expanded(
-                  child: Text(
-                    l10n.editProfileTitle,
-                    style: theme.textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ),
-              ],
+        // MR7: a form is a single column at any size — the shared ~640dp
+        // rail centers it on tablets; phones render exactly as shipped.
+        child: ContentRail(
+          child: ListView(
+            // bottomClearanceOf = navClearance under the bar, not xxl: this
+            // page is pushed on the BRANCH navigator, so the shell's floating
+            // nav bar (extendBody) still overlays it — without the clearance
+            // the Save button scrolls to rest underneath the bar, exactly the
+            // layering trap the estate's sheets already dodge via the root
+            // navigator. Under the rail shell there is no bar to clear.
+            padding: EdgeInsets.fromLTRB(
+              Gap.xl,
+              Gap.sm,
+              Gap.xl,
+              bottomClearanceOf(context),
             ),
-            const SizedBox(height: Gap.md),
-            // ---- logo -----------------------------------------------------
-            ManfaaCard(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
                 children: [
-                  Text(l10n.storeLogoLabel, style: theme.textTheme.titleMedium),
-                  const SizedBox(height: Gap.md),
-                  Row(
-                    children: [
-                      _logoPreview != null
-                          ? ClipOval(
-                              child: SizedBox(
-                                width: 72,
-                                height: 72,
-                                child: Image.memory(
-                                  _logoPreview!,
-                                  fit: BoxFit.cover,
-                                ),
-                              ),
-                            )
-                          : StoreLogoAvatar(
-                              name: widget.profile.name,
-                              logoUrl: _logoUrl,
-                              size: 72,
-                            ),
-                      const SizedBox(width: Gap.lg),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            OutlinedButton.icon(
-                              onPressed: _uploadingLogo || _busy
-                                  ? null
-                                  : _pickLogo,
-                              icon: const Icon(
-                                Icons.photo_library_rounded,
-                                size: 18,
-                              ),
-                              label: Text(
-                                _logoUrl != null || _logoPreview != null
-                                    ? l10n.replaceLogo
-                                    : l10n.chooseLogo,
-                              ),
-                            ),
-                            const SizedBox(height: Gap.sm),
-                            if (_uploadingLogo)
-                              Row(
-                                children: [
-                                  const SizedBox(
-                                    width: 14,
-                                    height: 14,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                    ),
-                                  ),
-                                  const SizedBox(width: Gap.sm),
-                                  Text(
-                                    l10n.logoUploading,
-                                    style: theme.textTheme.bodySmall?.copyWith(
-                                      color: muted,
-                                    ),
-                                  ),
-                                ],
-                              )
-                            else
-                              Text(
-                                l10n.logoHint,
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  color: muted,
-                                ),
-                              ),
-                          ],
-                        ),
-                      ),
-                    ],
+                  IconButton(
+                    icon: const Icon(Icons.arrow_back_rounded),
+                    onPressed: _busy ? null : () => Navigator.of(context).pop(),
                   ),
-                  if (_logoError != null) ...[
-                    const SizedBox(height: Gap.sm),
-                    Text(
-                      _logoError!,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.error,
+                  const SizedBox(width: Gap.xs),
+                  Expanded(
+                    child: Text(
+                      l10n.editProfileTitle,
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w800,
                       ),
                     ),
-                  ],
+                  ),
                 ],
               ),
-            ),
-            const SizedBox(height: Gap.md),
-            // ---- identity + contacts -------------------------------------
-            ManfaaCard(
-              padding: const EdgeInsets.all(Gap.xl),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(l10n.storeNameLabel, style: theme.textTheme.labelLarge),
-                  const SizedBox(height: Gap.sm),
-                  TextField(
-                    controller: _name,
-                    onChanged: (_) => setState(() => _nameError = null),
-                    decoration: InputDecoration(
-                      prefixIcon: const Icon(Icons.storefront_outlined),
-                      errorText: _nameError,
+              const SizedBox(height: Gap.md),
+              // ---- logo -----------------------------------------------------
+              ManfaaCard(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      l10n.storeLogoLabel,
+                      style: theme.textTheme.titleMedium,
                     ),
-                  ),
-                  const SizedBox(height: Gap.xs),
-                  Text(
-                    l10n.storeNameHint,
-                    style: theme.textTheme.bodySmall?.copyWith(color: muted),
-                  ),
-                  const SizedBox(height: Gap.lg),
-                  Text(
-                    l10n.storeNameDvLabel,
-                    style: theme.textTheme.labelLarge,
-                  ),
-                  const SizedBox(height: Gap.sm),
-                  TextField(
-                    controller: _nameDv,
-                    textDirection: TextDirection.rtl,
-                    decoration: const InputDecoration(
-                      prefixIcon: Icon(Icons.translate_rounded),
-                    ),
-                  ),
-                  const SizedBox(height: Gap.xl),
-                  Text(l10n.categoryLabel, style: theme.textTheme.labelLarge),
-                  const SizedBox(height: Gap.xs),
-                  Text(
-                    retiredHeld ? l10n.categoryRetiredHint : l10n.categoryHint,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: retiredHeld ? ManfaaColors.pendingAmber : muted,
-                    ),
-                  ),
-                  const SizedBox(height: Gap.md),
-                  Wrap(
-                    spacing: Gap.sm,
-                    runSpacing: Gap.sm,
-                    children: [
-                      if (extraSlug != null)
-                        SelectChip(
-                          label: extraSlug,
-                          selected: _category == extraSlug,
-                          onTap: () => setState(() => _category = extraSlug),
-                        ),
-                      for (final option in served)
-                        SelectChip(
-                          label: option.label(dhivehi: dhivehi),
-                          selected: option.slug == _category,
-                          onTap: () => setState(() => _category = option.slug),
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: Gap.xl),
-                  Text(l10n.channelLabel, style: theme.textTheme.labelLarge),
-                  const SizedBox(height: Gap.md),
-                  for (final (channel, label, hint) in [
-                    ('in_store', l10n.channelInStore, l10n.channelInStoreHint),
-                    ('online', l10n.channelOnline, l10n.channelOnlineHint),
-                    ('both', l10n.channelBoth, l10n.channelBothHint),
-                  ]) ...[
-                    SelectRow(
-                      label: label,
-                      hint: hint,
-                      selected: _channel == channel,
-                      onTap: () => setState(() => _channel = channel),
-                    ),
-                    const SizedBox(height: Gap.sm),
-                  ],
-                  const SizedBox(height: Gap.md),
-                  Text(
-                    l10n.contactEmailLabel,
-                    style: theme.textTheme.labelLarge,
-                  ),
-                  const SizedBox(height: Gap.sm),
-                  TextField(
-                    controller: _contactEmail,
-                    keyboardType: TextInputType.emailAddress,
-                    autocorrect: false,
-                    textDirection: TextDirection.ltr,
-                    decoration: const InputDecoration(
-                      prefixIcon: Icon(Icons.mail_outline_rounded),
-                    ),
-                  ),
-                  const SizedBox(height: Gap.lg),
-                  Text(
-                    l10n.contactPhoneLabel,
-                    style: theme.textTheme.labelLarge,
-                  ),
-                  const SizedBox(height: Gap.sm),
-                  TextField(
-                    controller: _contactPhone,
-                    keyboardType: TextInputType.phone,
-                    textDirection: TextDirection.ltr,
-                    decoration: const InputDecoration(
-                      prefixIcon: Icon(Icons.call_outlined),
-                    ),
-                  ),
-                  const SizedBox(height: Gap.lg),
-                  Text(
-                    l10n.supportPhoneLabel,
-                    style: theme.textTheme.labelLarge,
-                  ),
-                  const SizedBox(height: Gap.xs),
-                  InkWell(
-                    borderRadius: BorderRadius.circular(Corner.tile),
-                    onTap: () => setState(() => _supportSame = !_supportSame),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: Gap.xs),
-                      child: Row(
-                        children: [
-                          SizedBox(
-                            width: 24,
-                            height: 24,
-                            child: Checkbox(
-                              value: _supportSame,
-                              activeColor: ManfaaColors.violet,
-                              onChanged: (checked) => setState(
-                                () => _supportSame = checked ?? true,
+                    const SizedBox(height: Gap.md),
+                    Row(
+                      children: [
+                        _logoPreview != null
+                            ? ClipOval(
+                                child: SizedBox(
+                                  width: 72,
+                                  height: 72,
+                                  child: Image.memory(
+                                    _logoPreview!,
+                                    fit: BoxFit.cover,
+                                  ),
+                                ),
+                              )
+                            : StoreLogoAvatar(
+                                name: widget.profile.name,
+                                logoUrl: _logoUrl,
+                                size: 72,
                               ),
-                            ),
-                          ),
-                          const SizedBox(width: Gap.sm),
-                          Expanded(
-                            child: Text(
-                              l10n.supportSameAsContact,
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                color: muted,
+                        const SizedBox(width: Gap.lg),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              OutlinedButton.icon(
+                                onPressed: _uploadingLogo || _busy
+                                    ? null
+                                    : _pickLogo,
+                                icon: const Icon(
+                                  Icons.photo_library_rounded,
+                                  size: 18,
+                                ),
+                                label: Text(
+                                  _logoUrl != null || _logoPreview != null
+                                      ? l10n.replaceLogo
+                                      : l10n.chooseLogo,
+                                ),
                               ),
-                            ),
+                              const SizedBox(height: Gap.sm),
+                              if (_uploadingLogo)
+                                Row(
+                                  children: [
+                                    const SizedBox(
+                                      width: 14,
+                                      height: 14,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    ),
+                                    const SizedBox(width: Gap.sm),
+                                    Text(
+                                      l10n.logoUploading,
+                                      style: theme.textTheme.bodySmall
+                                          ?.copyWith(color: muted),
+                                    ),
+                                  ],
+                                )
+                              else
+                                Text(
+                                  l10n.logoHint,
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: muted,
+                                  ),
+                                ),
+                            ],
                           ),
-                        ],
+                        ),
+                      ],
+                    ),
+                    if (_logoError != null) ...[
+                      const SizedBox(height: Gap.sm),
+                      Text(
+                        _logoError!,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.error,
+                        ),
                       ),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(height: Gap.md),
+              // ---- identity + contacts -------------------------------------
+              ManfaaCard(
+                padding: const EdgeInsets.all(Gap.xl),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      l10n.storeNameLabel,
+                      style: theme.textTheme.labelLarge,
                     ),
-                  ),
-                  if (!_supportSame) ...[
                     const SizedBox(height: Gap.sm),
                     TextField(
-                      controller: _supportPhone,
+                      controller: _name,
+                      onChanged: (_) => setState(() => _nameError = null),
+                      decoration: InputDecoration(
+                        prefixIcon: const Icon(Icons.storefront_outlined),
+                        errorText: _nameError,
+                      ),
+                    ),
+                    const SizedBox(height: Gap.xs),
+                    Text(
+                      l10n.storeNameHint,
+                      style: theme.textTheme.bodySmall?.copyWith(color: muted),
+                    ),
+                    const SizedBox(height: Gap.lg),
+                    Text(
+                      l10n.storeNameDvLabel,
+                      style: theme.textTheme.labelLarge,
+                    ),
+                    const SizedBox(height: Gap.sm),
+                    TextField(
+                      controller: _nameDv,
+                      textDirection: TextDirection.rtl,
+                      decoration: const InputDecoration(
+                        prefixIcon: Icon(Icons.translate_rounded),
+                      ),
+                    ),
+                    const SizedBox(height: Gap.xl),
+                    Text(l10n.categoryLabel, style: theme.textTheme.labelLarge),
+                    const SizedBox(height: Gap.xs),
+                    Text(
+                      retiredHeld
+                          ? l10n.categoryRetiredHint
+                          : l10n.categoryHint,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: retiredHeld ? ManfaaColors.pendingAmber : muted,
+                      ),
+                    ),
+                    const SizedBox(height: Gap.md),
+                    Wrap(
+                      spacing: Gap.sm,
+                      runSpacing: Gap.sm,
+                      children: [
+                        if (extraSlug != null)
+                          SelectChip(
+                            label: extraSlug,
+                            selected: _category == extraSlug,
+                            onTap: () => setState(() => _category = extraSlug),
+                          ),
+                        for (final option in served)
+                          SelectChip(
+                            label: option.label(dhivehi: dhivehi),
+                            selected: option.slug == _category,
+                            onTap: () =>
+                                setState(() => _category = option.slug),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: Gap.xl),
+                    Text(l10n.channelLabel, style: theme.textTheme.labelLarge),
+                    const SizedBox(height: Gap.md),
+                    for (final (channel, label, hint) in [
+                      (
+                        'in_store',
+                        l10n.channelInStore,
+                        l10n.channelInStoreHint,
+                      ),
+                      ('online', l10n.channelOnline, l10n.channelOnlineHint),
+                      ('both', l10n.channelBoth, l10n.channelBothHint),
+                    ]) ...[
+                      SelectRow(
+                        label: label,
+                        hint: hint,
+                        selected: _channel == channel,
+                        onTap: () => setState(() => _channel = channel),
+                      ),
+                      const SizedBox(height: Gap.sm),
+                    ],
+                    const SizedBox(height: Gap.md),
+                    Text(
+                      l10n.contactEmailLabel,
+                      style: theme.textTheme.labelLarge,
+                    ),
+                    const SizedBox(height: Gap.sm),
+                    TextField(
+                      controller: _contactEmail,
+                      keyboardType: TextInputType.emailAddress,
+                      autocorrect: false,
+                      textDirection: TextDirection.ltr,
+                      decoration: const InputDecoration(
+                        prefixIcon: Icon(Icons.mail_outline_rounded),
+                      ),
+                    ),
+                    const SizedBox(height: Gap.lg),
+                    Text(
+                      l10n.contactPhoneLabel,
+                      style: theme.textTheme.labelLarge,
+                    ),
+                    const SizedBox(height: Gap.sm),
+                    TextField(
+                      controller: _contactPhone,
                       keyboardType: TextInputType.phone,
                       textDirection: TextDirection.ltr,
                       decoration: const InputDecoration(
-                        prefixIcon: Icon(Icons.support_agent_rounded),
+                        prefixIcon: Icon(Icons.call_outlined),
                       ),
                     ),
+                    const SizedBox(height: Gap.lg),
+                    Text(
+                      l10n.supportPhoneLabel,
+                      style: theme.textTheme.labelLarge,
+                    ),
+                    const SizedBox(height: Gap.xs),
+                    InkWell(
+                      borderRadius: BorderRadius.circular(Corner.tile),
+                      onTap: () => setState(() => _supportSame = !_supportSame),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: Gap.xs),
+                        child: Row(
+                          children: [
+                            SizedBox(
+                              width: 24,
+                              height: 24,
+                              child: Checkbox(
+                                value: _supportSame,
+                                activeColor: ManfaaColors.violet,
+                                onChanged: (checked) => setState(
+                                  () => _supportSame = checked ?? true,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: Gap.sm),
+                            Expanded(
+                              child: Text(
+                                l10n.supportSameAsContact,
+                                style: theme.textTheme.bodyMedium?.copyWith(
+                                  color: muted,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    if (!_supportSame) ...[
+                      const SizedBox(height: Gap.sm),
+                      TextField(
+                        controller: _supportPhone,
+                        keyboardType: TextInputType.phone,
+                        textDirection: TextDirection.ltr,
+                        decoration: const InputDecoration(
+                          prefixIcon: Icon(Icons.support_agent_rounded),
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: Gap.lg),
+                    Text(l10n.websiteLabel, style: theme.textTheme.labelLarge),
+                    const SizedBox(height: Gap.sm),
+                    TextField(
+                      controller: _website,
+                      keyboardType: TextInputType.url,
+                      autocorrect: false,
+                      textDirection: TextDirection.ltr,
+                      decoration: const InputDecoration(
+                        hintText: 'teaplus.mv',
+                        prefixIcon: Icon(Icons.language_rounded),
+                      ),
+                    ),
+                    const SizedBox(height: Gap.xl),
+                    Text(l10n.termsTitle, style: theme.textTheme.labelLarge),
+                    const SizedBox(height: Gap.sm),
+                    TextField(
+                      controller: _terms,
+                      maxLines: 4,
+                      decoration: InputDecoration(
+                        hintText: l10n.termsPlaceholder,
+                      ),
+                    ),
+                    const SizedBox(height: Gap.xs),
+                    Text(
+                      l10n.termsGuidance,
+                      style: theme.textTheme.bodySmall?.copyWith(color: muted),
+                    ),
                   ],
-                  const SizedBox(height: Gap.lg),
-                  Text(l10n.websiteLabel, style: theme.textTheme.labelLarge),
-                  const SizedBox(height: Gap.sm),
-                  TextField(
-                    controller: _website,
-                    keyboardType: TextInputType.url,
-                    autocorrect: false,
-                    textDirection: TextDirection.ltr,
-                    decoration: const InputDecoration(
-                      hintText: 'teaplus.mv',
-                      prefixIcon: Icon(Icons.language_rounded),
-                    ),
-                  ),
-                  const SizedBox(height: Gap.xl),
-                  Text(l10n.termsTitle, style: theme.textTheme.labelLarge),
-                  const SizedBox(height: Gap.sm),
-                  TextField(
-                    controller: _terms,
-                    maxLines: 4,
-                    decoration: InputDecoration(
-                      hintText: l10n.termsPlaceholder,
-                    ),
-                  ),
-                  const SizedBox(height: Gap.xs),
-                  Text(
-                    l10n.termsGuidance,
-                    style: theme.textTheme.bodySmall?.copyWith(color: muted),
-                  ),
-                ],
+                ),
               ),
-            ),
-            const SizedBox(height: Gap.lg),
-            FilledButton(
-              onPressed: _busy || _uploadingLogo ? null : _save,
-              child: _busy
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : Text(l10n.saveProfile),
-            ),
-          ],
+              const SizedBox(height: Gap.lg),
+              FilledButton(
+                onPressed: _busy || _uploadingLogo ? null : _save,
+                child: _busy
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : Text(l10n.saveProfile),
+              ),
+            ],
+          ),
         ),
       ),
     );

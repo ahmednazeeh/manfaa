@@ -6,6 +6,7 @@ import 'package:manfaa_ui/manfaa_ui.dart';
 import '../../app/app.dart';
 import '../../app/providers.dart';
 import '../../l10n/gen/app_localizations.dart';
+import '../../widgets/adaptive.dart';
 import '../../widgets/merchant_brand.dart';
 import 'more_providers.dart';
 import 'more_widgets.dart';
@@ -87,60 +88,64 @@ class MoreScreen extends ConsumerWidget {
     return Scaffold(
       body: SafeArea(
         bottom: false,
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(
-            Gap.xl,
-            Gap.lg,
-            Gap.xl,
-            Gap.navClearance,
-          ),
-          children: [
-            MerchantTopBar(initials: initials),
-            const SizedBox(height: Gap.lg),
-            Text(
-              l10n.moreTitle,
-              style: theme.textTheme.headlineMedium?.copyWith(
-                fontWeight: FontWeight.w800,
-              ),
+        // MR7: a menu is a single column at any size — the shared ~640dp
+        // rail centers it on tablets; phones render exactly as shipped.
+        child: ContentRail(
+          child: ListView(
+            padding: EdgeInsets.fromLTRB(
+              Gap.xl,
+              Gap.lg,
+              Gap.xl,
+              bottomClearanceOf(context),
             ),
-            const SizedBox(height: Gap.xs),
-            Text(
-              l10n.moreSubtitle,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
-            const SizedBox(height: Gap.lg),
-            _IdentityCard(
-              name: name,
-              logoUrl: logoUrl,
-              verified: session.merchantStatus == 'active',
-              canViewProfile: session.can('profile.view'),
-            ),
-            const SizedBox(height: Gap.lg),
-            if (rows.isNotEmpty) ...[
-              ManfaaCard(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: Gap.lg,
-                  vertical: Gap.xs,
+            children: [
+              MerchantTopBar(initials: initials),
+              const SizedBox(height: Gap.lg),
+              Text(
+                l10n.moreTitle,
+                style: theme.textTheme.headlineMedium?.copyWith(
+                  fontWeight: FontWeight.w800,
                 ),
-                child: Column(
-                  children: [
-                    for (final (i, row) in rows.indexed) ...[
-                      if (i > 0)
-                        Divider(
-                          height: 1,
-                          color: theme.colorScheme.outlineVariant,
-                        ),
-                      _MenuRowTile(row: row),
-                    ],
-                  ],
+              ),
+              const SizedBox(height: Gap.xs),
+              Text(
+                l10n.moreSubtitle,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
                 ),
               ),
               const SizedBox(height: Gap.lg),
+              _IdentityCard(
+                name: name,
+                logoUrl: logoUrl,
+                verified: session.merchantStatus == 'active',
+                canViewProfile: session.can('profile.view'),
+              ),
+              const SizedBox(height: Gap.lg),
+              if (rows.isNotEmpty) ...[
+                ManfaaCard(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: Gap.lg,
+                    vertical: Gap.xs,
+                  ),
+                  child: Column(
+                    children: [
+                      for (final (i, row) in rows.indexed) ...[
+                        if (i > 0)
+                          Divider(
+                            height: 1,
+                            color: theme.colorScheme.outlineVariant,
+                          ),
+                        _MenuRowTile(row: row),
+                      ],
+                    ],
+                  ),
+                ),
+                const SizedBox(height: Gap.lg),
+              ],
+              _LogOutCard(l10n: l10n),
             ],
-            _LogOutCard(l10n: l10n),
-          ],
+          ),
         ),
       ),
     );
@@ -340,4 +345,3 @@ class _LogOutCard extends ConsumerWidget {
     );
   }
 }
-

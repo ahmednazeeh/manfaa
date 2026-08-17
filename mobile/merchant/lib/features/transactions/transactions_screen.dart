@@ -6,8 +6,11 @@ import 'package:manfaa_ui/manfaa_ui.dart';
 import '../../app/app.dart';
 import '../../app/providers.dart';
 import '../../l10n/gen/app_localizations.dart';
+import '../../widgets/adaptive.dart';
 import '../../widgets/merchant_brand.dart';
 import '../../widgets/tx_format.dart';
+import '../more/estate_widgets.dart' show PaneHint;
+import '../settlements/settlement_widgets.dart' show MoneyRow;
 import 'paged.dart';
 
 /// The Transactions tab (MR2): every credited sale, cursor-paged newest
@@ -32,6 +35,11 @@ const kTransactionStates = [
 ];
 
 final txStateFilterProvider = StateProvider<String?>((_) => null);
+
+/// MR7 — which sale the expanded master-detail pane is showing. Session
+/// state, deliberately NOT autoDispose: rail navigation away and back keeps
+/// the selection exactly as left. Phones never read it.
+final txSelectedProvider = StateProvider<int?>((_) => null);
 
 final txPagerProvider =
     StateNotifierProvider.autoDispose<
@@ -100,10 +108,106 @@ class TransactionsScreen extends ConsumerWidget {
     final filter = ref.watch(txStateFilterProvider);
     final header = _header(context, ref);
 
+    return Scaffold(
+      body: SafeArea(
+        bottom: false,
+        // MR7: SCREEN layout reads CONTENT width — the rail shell's 96dp is
+        // already gone from these constraints. ≥840dp of content splits into
+        // list | detail (the phone's inline actions move to the pane);
+        // below it, the shipped phone column renders untouched.
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final expanded =
+                constraints.maxWidth >= kExpandedMinWidth &&
+                state.loaded &&
+                state.error == null &&
+                state.items.isNotEmpty;
+            final selectedId = expanded ? ref.watch(txSelectedProvider) : null;
+            final body = _list(
+              context,
+              ref,
+              l10n,
+              state,
+              filter,
+              // Expanded: the header leaves the list and spans BOTH panes,
+              // so the brand row stays full-width like every sibling screen
+              // and the detail pane starts below it, not at the window top.
+              expanded ? const <Widget>[] : header,
+              expanded: expanded,
+              selectedId: selectedId,
+            );
+            if (!expanded) return ContentRail(child: body);
+
+            MerchantTransaction? selected;
+            for (final item in state.items) {
+              if (item.id == selectedId) selected = item;
+            }
+            return ContentRail(
+              maxWidth: kWideContentWidth,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Padding(
+                    padding: const EdgeInsetsDirectional.fromSTEB(
+                      Gap.xl,
+                      Gap.lg,
+                      Gap.xl,
+                      0,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: header,
+                    ),
+                  ),
+                  Expanded(
+                    child: Row(
+                      children: [
+                        Expanded(child: body),
+                        Expanded(
+                          // Keyed by the sale, so switching selection resets
+                          // the pane's own state (an open amend form).
+                          child: _TxDetailPane(
+                            key: ValueKey(selected?.id),
+                            transaction: selected,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _list(
+    BuildContext context,
+    WidgetRef ref,
+    AppLocalizations l10n,
+    PagedState<MerchantTransaction> state,
+    String? filter,
+    List<Widget> header, {
+    required bool expanded,
+    required int? selectedId,
+  }) {
+    // Value-identical to the shipped const padding on phones (the clearance
+    // helper answers navClearance under the bottom bar); the expanded list
+    // tightens its pane-facing edge instead, and drops the top inset — the
+    // extracted header above the split already ends in its own gap.
+    final pagePadding = EdgeInsetsDirectional.fromSTEB(
+      Gap.xl,
+      expanded ? 0 : Gap.lg,
+      expanded ? Gap.sm : Gap.xl,
+      bottomClearanceOf(context),
+    );
+
     Widget body;
     if (!state.loaded) {
       body = ListView(
-        padding: _pagePadding,
+        padding: pagePadding,
         children: [
           ...header,
           for (var i = 0; i < 5; i++) ...[
@@ -114,7 +218,7 @@ class TransactionsScreen extends ConsumerWidget {
       );
     } else if (state.error != null) {
       body = ListView(
-        padding: _pagePadding,
+        padding: pagePadding,
         children: [
           ...header,
           const SizedBox(height: Gap.xl),
@@ -146,7 +250,7 @@ class TransactionsScreen extends ConsumerWidget {
       body = RefreshIndicator(
         onRefresh: () => ref.read(txPagerProvider.notifier).refresh(),
         child: ListView(
-          padding: _pagePadding,
+          padding: pagePadding,
           children: [
             ...header,
             const SizedBox(height: Gap.xl),
@@ -192,7 +296,7 @@ class TransactionsScreen extends ConsumerWidget {
             return false;
           },
           child: ListView.builder(
-            padding: _pagePadding,
+            padding: pagePadding,
             itemCount:
                 header.length +
                 state.items.length +
@@ -212,9 +316,19 @@ class TransactionsScreen extends ConsumerWidget {
                   ),
                 );
               }
+              final transaction = state.items[i];
               return Padding(
                 padding: const EdgeInsets.only(bottom: Gap.md),
-                child: TransactionTile(transaction: state.items[i]),
+                child: expanded
+                    ? TransactionTile(
+                        transaction: transaction,
+                        selected: transaction.id == selectedId,
+                        showActions: false,
+                        onTap: () =>
+                            ref.read(txSelectedProvider.notifier).state =
+                                transaction.id,
+                      )
+                    : TransactionTile(transaction: transaction),
               );
             },
           ),
@@ -222,16 +336,9 @@ class TransactionsScreen extends ConsumerWidget {
       );
     }
 
-    return Scaffold(body: SafeArea(bottom: false, child: body));
+    return body;
   }
 }
-
-const _pagePadding = EdgeInsets.fromLTRB(
-  Gap.xl,
-  Gap.lg,
-  Gap.xl,
-  Gap.navClearance,
-);
 
 class _FilterChip extends StatelessWidget {
   const _FilterChip({
@@ -279,25 +386,41 @@ class _FilterChip extends StatelessWidget {
   }
 }
 
+/// The state's icon + tint, shared by the list tile and the MR7 detail pane
+/// so a sale wears the same face on both sides of the split.
+(IconData, ManfaaTint) _txFace(String state) => switch (state) {
+  'tracked' ||
+  'awaiting_validation' => (Icons.schedule_rounded, ManfaaTint.amber),
+  'payable_unfunded' => (Icons.account_balance_rounded, ManfaaTint.amber),
+  'confirmed' => (Icons.check_rounded, ManfaaTint.green),
+  'paid' => (Icons.account_balance_rounded, ManfaaTint.blue),
+  'on_hold' => (Icons.pause_circle_outline_rounded, ManfaaTint.coral),
+  'reversed' => (Icons.replay_rounded, ManfaaTint.neutral),
+  'written_off' => (Icons.money_off_rounded, ManfaaTint.coral),
+  _ => (Icons.receipt_long_outlined, ManfaaTint.neutral),
+};
+
 /// One credited sale, ss-era card language: invoice + date leading, the
 /// eligible amount + state chip trailing, reason + backdated qualifiers
 /// under, and the correction actions inside the API's window only.
+///
+/// MR7: on the expanded master-detail the SAME tile becomes the list side —
+/// tappable ([onTap]), highlightable ([selected]) and with the correction
+/// buttons handed to the detail pane ([showActions] false). Phones pass
+/// none of these, so the shipped card renders byte-identically.
 class TransactionTile extends ConsumerWidget {
-  const TransactionTile({super.key, required this.transaction});
+  const TransactionTile({
+    super.key,
+    required this.transaction,
+    this.onTap,
+    this.selected = false,
+    this.showActions = true,
+  });
 
   final MerchantTransaction transaction;
-
-  (IconData, ManfaaTint) _tile() => switch (transaction.state) {
-    'tracked' ||
-    'awaiting_validation' => (Icons.schedule_rounded, ManfaaTint.amber),
-    'payable_unfunded' => (Icons.account_balance_rounded, ManfaaTint.amber),
-    'confirmed' => (Icons.check_rounded, ManfaaTint.green),
-    'paid' => (Icons.account_balance_rounded, ManfaaTint.blue),
-    'on_hold' => (Icons.pause_circle_outline_rounded, ManfaaTint.coral),
-    'reversed' => (Icons.replay_rounded, ManfaaTint.neutral),
-    'written_off' => (Icons.money_off_rounded, ManfaaTint.coral),
-    _ => (Icons.receipt_long_outlined, ManfaaTint.neutral),
-  };
+  final VoidCallback? onTap;
+  final bool selected;
+  final bool showActions;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -305,17 +428,23 @@ class TransactionTile extends ConsumerWidget {
     final theme = Theme.of(context);
     final muted = theme.colorScheme.onSurfaceVariant;
     final session = ref.watch(sessionProvider);
-    final (icon, tint) = _tile();
+    final (icon, tint) = _txFace(transaction.state);
     final reason = transactionReasonLabel(l10n, transaction.reasonCode);
 
     // The same window the API enforces; drawing is additionally gated on
     // the role's own slugs (server enforces regardless).
     final correctable =
         transaction.state == 'awaiting_validation' && !transaction.backdated;
-    final canAmend = correctable && session.can('transactions.amend');
-    final canCancel = correctable && session.can('transactions.cancel');
+    final canAmend =
+        showActions && correctable && session.can('transactions.amend');
+    final canCancel =
+        showActions && correctable && session.can('transactions.cancel');
 
     return ManfaaCard(
+      onTap: onTap,
+      color: selected
+          ? theme.colorScheme.secondaryContainer.withValues(alpha: 0.55)
+          : null,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -459,15 +588,21 @@ String describeCorrectionError(AppLocalizations l10n, Object error) {
 /// The amend sheet: one eligible field for a single-rate sale; per-line
 /// fields when the sale was split — the eligible amount IS their sum, so
 /// there is no second figure to disagree (web parity).
+///
+/// MR7: with [onClose] set the SAME form lives inline in the expanded
+/// detail pane instead of a bottom sheet — closing calls back instead of
+/// popping a route. Phones pass nothing and keep the sheet behaviour.
 class AmendSheet extends ConsumerStatefulWidget {
   const AmendSheet({
     super.key,
     required this.transaction,
     required this.onDone,
+    this.onClose,
   });
 
   final MerchantTransaction transaction;
   final VoidCallback onDone;
+  final VoidCallback? onClose;
 
   @override
   ConsumerState<AmendSheet> createState() => _AmendSheetState();
@@ -546,7 +681,11 @@ class _AmendSheetState extends ConsumerState<AmendSheet> {
                 : null,
           );
       if (!mounted) return;
-      Navigator.of(context).pop();
+      if (widget.onClose != null) {
+        widget.onClose!();
+      } else {
+        Navigator.of(context).pop();
+      }
       widget.onDone();
       rootMessengerKey.currentState?.showSnackBar(
         SnackBar(content: Text(l10n.amendDone)),
@@ -666,7 +805,9 @@ class _AmendSheetState extends ConsumerState<AmendSheet> {
             mainAxisAlignment: MainAxisAlignment.end,
             children: [
               TextButton(
-                onPressed: _busy ? null : () => Navigator.of(context).pop(),
+                onPressed: _busy
+                    ? null
+                    : (widget.onClose ?? () => Navigator.of(context).pop()),
                 child: Text(l10n.cancel),
               ),
               const SizedBox(width: Gap.sm),
@@ -842,6 +983,182 @@ class _CancelDialogState extends ConsumerState<CancelDialog> {
               : Text(l10n.cancelSubmit),
         ),
       ],
+    );
+  }
+}
+
+/// MR7 — the expanded master-detail's right half: the selected sale's full
+/// story plus the SAME corrections the phone offers, in the same window,
+/// behind the same slugs. Amending opens the [AmendSheet] form inline;
+/// cancelling keeps the phone's confirm dialog (a destructive confirm is a
+/// dialog at any width). Empty selection renders the quiet hint panel.
+class _TxDetailPane extends ConsumerStatefulWidget {
+  const _TxDetailPane({super.key, required this.transaction});
+
+  final MerchantTransaction? transaction;
+
+  @override
+  ConsumerState<_TxDetailPane> createState() => _TxDetailPaneState();
+}
+
+class _TxDetailPaneState extends ConsumerState<_TxDetailPane> {
+  var _amendOpen = false;
+
+  void _openCancel(MerchantTransaction transaction) {
+    showDialog<void>(
+      context: context,
+      builder: (_) => CancelDialog(
+        transaction: transaction,
+        onDone: () => ref.read(txPagerProvider.notifier).refresh(),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    final transaction = widget.transaction;
+
+    return ListView(
+      // Zero top: the pane sits under the extracted full-width header, so
+      // its first card tops out level with the list's first tile.
+      padding: EdgeInsetsDirectional.fromSTEB(
+        Gap.sm,
+        0,
+        Gap.xl,
+        bottomClearanceOf(context),
+      ),
+      children: transaction == null
+          ? [
+              PaneHint(
+                icon: Icons.receipt_long_outlined,
+                title: l10n.paneTxHintTitle,
+                body: l10n.paneTxHintBody,
+              ),
+            ]
+          : [
+              _detailCard(context, transaction),
+              if (_amendOpen) ...[
+                const SizedBox(height: Gap.md),
+                ManfaaCard(
+                  padding: EdgeInsets.zero,
+                  child: AmendSheet(
+                    transaction: transaction,
+                    onDone: () => ref.read(txPagerProvider.notifier).refresh(),
+                    onClose: () => setState(() => _amendOpen = false),
+                  ),
+                ),
+              ],
+            ],
+    );
+  }
+
+  Widget _detailCard(BuildContext context, MerchantTransaction transaction) {
+    final l10n = context.l10n;
+    final theme = Theme.of(context);
+    final muted = theme.colorScheme.onSurfaceVariant;
+    final session = ref.watch(sessionProvider);
+    final (icon, tint) = _txFace(transaction.state);
+    final reason = transactionReasonLabel(l10n, transaction.reasonCode);
+
+    // The SAME window + slug gates the phone tile draws its buttons from.
+    final correctable =
+        transaction.state == 'awaiting_validation' && !transaction.backdated;
+    final canAmend = correctable && session.can('transactions.amend');
+    final canCancel = correctable && session.can('transactions.cancel');
+
+    return ManfaaCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              IconTile(icon, tint: tint, size: 48, iconSize: 24),
+              const SizedBox(width: Gap.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      transaction.invoiceNo,
+                      textDirection: TextDirection.ltr,
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      formatIsoDisplay(transaction.occurredAt),
+                      style: theme.textTheme.bodySmall?.copyWith(color: muted),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: Gap.sm),
+              StatusChip(
+                label: transactionStateLabel(l10n, transaction.state),
+                tone: transactionStateTone(transaction.state),
+              ),
+            ],
+          ),
+          const Divider(height: Gap.xl),
+          MoneyRow(
+            label: l10n.eligibleLabel,
+            laari: transaction.eligibleLaari,
+            emphasized: true,
+          ),
+          MoneyRow(label: l10n.todayCashback, laari: transaction.cashbackLaari),
+          if (transaction.backdated || reason != null) ...[
+            const SizedBox(height: Gap.sm),
+            Wrap(
+              spacing: Gap.sm,
+              runSpacing: Gap.xs,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                if (transaction.backdated)
+                  StatusChip(
+                    label: l10n.backdatedChip,
+                    tone: StatusTone.attention,
+                  ),
+                if (reason != null)
+                  Text(
+                    reason,
+                    style: theme.textTheme.bodySmall?.copyWith(color: muted),
+                  ),
+              ],
+            ),
+          ],
+          if (canAmend || canCancel) ...[
+            const SizedBox(height: Gap.md),
+            Align(
+              alignment: AlignmentDirectional.centerEnd,
+              child: Wrap(
+                alignment: WrapAlignment.end,
+                spacing: Gap.xs,
+                children: [
+                  if (canAmend)
+                    TextButton.icon(
+                      onPressed: () => setState(() => _amendOpen = !_amendOpen),
+                      icon: const Icon(Icons.edit_outlined, size: 17),
+                      label: Text(l10n.amendAction),
+                    ),
+                  if (canCancel)
+                    TextButton.icon(
+                      onPressed: () => _openCancel(transaction),
+                      style: TextButton.styleFrom(
+                        foregroundColor: theme.colorScheme.error,
+                      ),
+                      icon: const Icon(Icons.undo_rounded, size: 17),
+                      label: Text(l10n.cancelAction),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 }

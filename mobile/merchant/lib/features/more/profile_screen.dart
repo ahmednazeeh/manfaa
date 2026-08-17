@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../app/app.dart';
 import '../../app/providers.dart';
+import '../../widgets/adaptive.dart';
 import '../../widgets/merchant_brand.dart';
 import 'more_providers.dart';
 import 'more_widgets.dart';
@@ -48,58 +49,63 @@ class ProfileScreen extends ConsumerWidget {
     return Scaffold(
       body: SafeArea(
         bottom: false,
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(
-            Gap.xl,
-            Gap.sm,
-            Gap.xl,
-            Gap.navClearance,
-          ),
-          children: [
-            MerchantDetailTopBar(initials: initials),
-            const SizedBox(height: Gap.md),
-            Text(
-              l10n.profileScreenTitle,
-              style: theme.textTheme.headlineMedium?.copyWith(
-                fontWeight: FontWeight.w800,
-              ),
+        // MR7: a profile is a single column at any size — the shared ~640dp
+        // rail centers it on tablets; phones render exactly as shipped.
+        child: ContentRail(
+          child: ListView(
+            padding: EdgeInsets.fromLTRB(
+              Gap.xl,
+              Gap.sm,
+              Gap.xl,
+              bottomClearanceOf(context),
             ),
-            const SizedBox(height: Gap.xs),
-            Text(
-              l10n.profileScreenSubtitle,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
-            const SizedBox(height: Gap.lg),
-            ...profile.when(
-              loading: () => const [
-                SkeletonBox(height: 120, radius: Corner.card),
-                SizedBox(height: Gap.md),
-                SkeletonBox(height: 360, radius: Corner.card),
-              ],
-              error: (error, _) => [
-                ManfaaCard(
-                  child: Column(
-                    children: [
-                      Text(
-                        error is MobileApiException
-                            ? error.message
-                            : l10n.errorGeneric,
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: Gap.md),
-                      OutlinedButton(
-                        onPressed: () => ref.invalidate(profileProvider),
-                        child: Text(l10n.retry),
-                      ),
-                    ],
-                  ),
+            children: [
+              MerchantDetailTopBar(initials: initials),
+              const SizedBox(height: Gap.md),
+              Text(
+                l10n.profileScreenTitle,
+                style: theme.textTheme.headlineMedium?.copyWith(
+                  fontWeight: FontWeight.w800,
                 ),
-              ],
-              data: (profile) => _blocks(context, ref, session, profile, setup),
-            ),
-          ],
+              ),
+              const SizedBox(height: Gap.xs),
+              Text(
+                l10n.profileScreenSubtitle,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: Gap.lg),
+              ...profile.when(
+                loading: () => const [
+                  SkeletonBox(height: 120, radius: Corner.card),
+                  SizedBox(height: Gap.md),
+                  SkeletonBox(height: 360, radius: Corner.card),
+                ],
+                error: (error, _) => [
+                  ManfaaCard(
+                    child: Column(
+                      children: [
+                        Text(
+                          error is MobileApiException
+                              ? error.message
+                              : l10n.errorGeneric,
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: Gap.md),
+                        OutlinedButton(
+                          onPressed: () => ref.invalidate(profileProvider),
+                          child: Text(l10n.retry),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+                data: (profile) =>
+                    _blocks(context, ref, session, profile, setup),
+              ),
+            ],
+          ),
         ),
       ),
     );

@@ -259,6 +259,89 @@ void main() {
     },
   );
 
+  // ---- MR7: hardware keyboard / barcode gun ------------------------------
+
+  testWidgets(
+    'scanner-gun Enter walks the till: code Enter lands focus on the '
+    'invoice field, and Enter on the completed form submits',
+    (tester) async {
+      final api = await pumpTill(tester);
+
+      // The gun types six digits — the lookup fires on the sixth — then
+      // sends Enter, which must carry focus on to the invoice field.
+      await enterCode(tester, '374230');
+      expect(find.text('Ahmed Nazeeh'), findsOneWidget);
+      final lookupsAfterCode = api.lookups;
+
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pumpAndSettle();
+      expect(api.lookups, lookupsAfterCode); // verified — no redundant call
+      expect(
+        tester.widget<TextField>(field(1)).focusNode?.hasFocus,
+        isTrue,
+      );
+
+      // An INCOMPLETE form stays quiet on Enter — nothing is sent.
+      await tester.enterText(field(1), 'INV-77');
+      await tester.pumpAndSettle();
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pumpAndSettle();
+      expect(api.credits, isEmpty);
+
+      // Completed (eligible filled), Enter submits — no tap anywhere.
+      await tester.enterText(field(2), '250');
+      await tester.pumpAndSettle();
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pumpAndSettle();
+      expect(api.credits, hasLength(1));
+      expect(api.credits.single['invoice_no'], 'INV-77');
+      expect(find.text('Cashback recorded'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'Enter in the code entry retries a failed lookup; a short code stays '
+    'quiet',
+    (tester) async {
+      final api = await pumpTill(tester);
+
+      // Five digits + Enter: no lookup fires (a gun misfire, a fat finger).
+      await enterCode(tester, '37423');
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pumpAndSettle();
+      expect(api.lookups, 0);
+
+      // The network eats the sixth-digit lookup → the failed notice.
+      api.failLookups = true;
+      await enterCode(tester, '374230');
+      expect(api.lookups, 1);
+      expect(find.text('Ahmed Nazeeh'), findsNothing);
+
+      // Enter — the gun scans again — refires the lookup and lands it.
+      api.failLookups = false;
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pumpAndSettle();
+      expect(api.lookups, 2);
+      expect(find.text('Ahmed Nazeeh'), findsOneWidget);
+    },
+  );
+
+  testWidgets('the till holds at 1.3 text scale (no overflow)', (
+    tester,
+  ) async {
+    tester.platformDispatcher.textScaleFactorTestValue = 1.3;
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    await pumpTill(tester);
+
+    await enterCode(tester, '374230');
+    await tester.enterText(field(1), 'INV-1001');
+    await tester.enterText(field(2), '1,000.00');
+    await tester.pumpAndSettle();
+    // Any RenderFlex overflow would have failed the test by here; the form
+    // still stands and the CTA still submits.
+    expect(find.text('Ahmed Nazeeh'), findsOneWidget);
+  });
+
   testWidgets(
     'offline, a credit queues with a visible banner; the drain clears it '
     'and replays the ORIGINAL key',
@@ -339,6 +422,11 @@ class _TillApi extends MerchantApi {
   final credits = <Map<String, Object?>>[];
   final creditKeys = <String>[];
 
+  /// MR7 keyboard tests: how many lookups fired, and whether the next one
+  /// should fail like a dead network.
+  var lookups = 0;
+  var failLookups = false;
+
   @override
   Future<MerchantMe> me() async {
     final me = MerchantMe.fromJson({
@@ -372,9 +460,13 @@ class _TillApi extends MerchantApi {
   });
 
   @override
-  Future<CustomerLookup> lookupCustomer(String code) async => code == '374230'
-      ? CustomerLookup(valid: true, name: 'Ahmed Nazeeh')
-      : CustomerLookup(valid: false);
+  Future<CustomerLookup> lookupCustomer(String code) async {
+    lookups++;
+    if (failLookups) throw MobileApiException.network();
+    return code == '374230'
+        ? CustomerLookup(valid: true, name: 'Ahmed Nazeeh')
+        : CustomerLookup(valid: false);
+  }
 
   @override
   Future<MerchantRate> merchantRate() async => MerchantRate.fromJson(const {

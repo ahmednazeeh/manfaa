@@ -2381,4 +2381,46 @@ class AppLocalizationsEn extends AppLocalizations {
   String promoCostTier(String from, String to, String feeFrom, String feeTo) {
     return 'Boosting from $from to $to moves your fee tier from $feeFrom to $feeTo.';
   }
+
+  @override
+  String get paneTxHintTitle => 'Select a sale';
+
+  @override
+  String get paneTxHintBody =>
+      'Tap a sale in the list to read its full detail — corrections stay available while the sale can still be amended.';
+
+  @override
+  String get paneSettlementHintTitle => 'Select a settlement';
+
+  @override
+  String get paneSettlementHintBody =>
+      'Tap a settlement in the list to read its status, lines and payments here.';
+
+  @override
+  String get paneEmployeesHintTitle => 'Select an employee';
+
+  @override
+  String get paneEmployeesHintBody =>
+      'Tap a person to change their role or active state, or add a new account.';
+
+  @override
+  String get paneRolesHintTitle => 'Select a role';
+
+  @override
+  String get paneRolesHintBody =>
+      'Tap a role to edit its name and permissions, or create a new one.';
+
+  @override
+  String get paneBranchesHintTitle => 'Select a branch';
+
+  @override
+  String get paneBranchesHintBody =>
+      'Tap a branch to edit its details and pin, or add a new location.';
+
+  @override
+  String get panePromoHintTitle => 'Draft a promotion';
+
+  @override
+  String get panePromoHintBody =>
+      'The builder opens here. A published promotion cannot be changed — drafts can.';
 }

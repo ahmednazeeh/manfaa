@@ -4213,6 +4213,78 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Boosting from {from} to {to} moves your fee tier from {feeFrom} to {feeTo}.'**
   String promoCostTier(String from, String to, String feeFrom, String feeTo);
+
+  /// MR7 expanded two-pane: the empty detail pane on the Transactions screen
+  ///
+  /// In en, this message translates to:
+  /// **'Select a sale'**
+  String get paneTxHintTitle;
+
+  /// No description provided for @paneTxHintBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Tap a sale in the list to read its full detail — corrections stay available while the sale can still be amended.'**
+  String get paneTxHintBody;
+
+  /// MR7 expanded two-pane: the empty detail pane on the Settlements tab
+  ///
+  /// In en, this message translates to:
+  /// **'Select a settlement'**
+  String get paneSettlementHintTitle;
+
+  /// No description provided for @paneSettlementHintBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Tap a settlement in the list to read its status, lines and payments here.'**
+  String get paneSettlementHintBody;
+
+  /// MR7 expanded two-pane: the empty editor pane on Manage Employees
+  ///
+  /// In en, this message translates to:
+  /// **'Select an employee'**
+  String get paneEmployeesHintTitle;
+
+  /// No description provided for @paneEmployeesHintBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Tap a person to change their role or active state, or add a new account.'**
+  String get paneEmployeesHintBody;
+
+  /// MR7 expanded two-pane: the empty editor pane on Roles
+  ///
+  /// In en, this message translates to:
+  /// **'Select a role'**
+  String get paneRolesHintTitle;
+
+  /// No description provided for @paneRolesHintBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Tap a role to edit its name and permissions, or create a new one.'**
+  String get paneRolesHintBody;
+
+  /// MR7 expanded two-pane: the empty editor pane on Manage Branches
+  ///
+  /// In en, this message translates to:
+  /// **'Select a branch'**
+  String get paneBranchesHintTitle;
+
+  /// No description provided for @paneBranchesHintBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Tap a branch to edit its details and pin, or add a new location.'**
+  String get paneBranchesHintBody;
+
+  /// MR7 expanded two-pane: the empty builder pane on Promotions
+  ///
+  /// In en, this message translates to:
+  /// **'Draft a promotion'**
+  String get panePromoHintTitle;
+
+  /// No description provided for @panePromoHintBody.
+  ///
+  /// In en, this message translates to:
+  /// **'The builder opens here. A published promotion cannot be changed — drafts can.'**
+  String get panePromoHintBody;
 }
 
 class _AppLocalizationsDelegate

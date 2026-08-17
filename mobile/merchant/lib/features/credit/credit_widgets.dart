@@ -108,18 +108,22 @@ class _ModeButton extends StatelessWidget {
 }
 
 /// Six OTP-style digit boxes over one real (invisible) TextField, so the
-/// soft keyboard, paste, and widget tests all speak to a normal field.
+/// soft keyboard, paste, hardware keyboards and widget tests all speak to a
+/// normal field. [onSubmitted] is the Enter a USB/BT barcode gun sends after
+/// its digits (MR7) — the screen decides what Enter means.
 class CodeBoxes extends StatelessWidget {
   const CodeBoxes({
     super.key,
     required this.controller,
     required this.focusNode,
     required this.onChanged,
+    this.onSubmitted,
   });
 
   final TextEditingController controller;
   final FocusNode focusNode;
   final ValueChanged<String> onChanged;
+  final ValueChanged<String>? onSubmitted;
 
   @override
   Widget build(BuildContext context) {
@@ -179,6 +183,7 @@ class CodeBoxes extends StatelessWidget {
                 controller: controller,
                 focusNode: focusNode,
                 keyboardType: TextInputType.number,
+                textInputAction: TextInputAction.done,
                 inputFormatters: [
                   FilteringTextInputFormatter.digitsOnly,
                   LengthLimitingTextInputFormatter(6),
@@ -191,6 +196,7 @@ class CodeBoxes extends StatelessWidget {
                   counterText: '',
                 ),
                 onChanged: onChanged,
+                onSubmitted: onSubmitted,
               ),
             ),
           ],

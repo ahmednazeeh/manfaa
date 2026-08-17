@@ -7,6 +7,7 @@ import 'package:manfaa_ui/manfaa_ui.dart';
 
 import '../../app/app.dart';
 import '../../app/providers.dart';
+import '../../widgets/adaptive.dart';
 import '../../widgets/merchant_brand.dart';
 import '../settlements/settlement_widgets.dart' show ToneBanner;
 import 'estate_widgets.dart';
@@ -41,7 +42,50 @@ class _BranchesScreenState extends ConsumerState<BranchesScreen> {
 
   var _query = '';
 
-  Future<void> _openEditor(BuildContext context, {MerchantBranch? existing}) async {
+  /// MR7 — the expanded list | editor split's right pane: open with a
+  /// branch id to edit, open with null to add. Local state on a
+  /// shell-branch screen, so rail navigation away and back keeps it.
+  /// Phones keep the bottom sheet instead.
+  var _paneOpen = false;
+  int? _paneBranchId;
+
+  /// The expanded pane's completion — same follow-up as the sheet's pop.
+  void _onPaneFinished(bool saved) {
+    setState(() => _paneOpen = false);
+    if (saved) ref.invalidate(branchesProvider);
+  }
+
+  Widget _pane(List<MerchantBranch> branches) {
+    final l10n = context.l10n;
+
+    if (_paneOpen) {
+      MerchantBranch? editing;
+      for (final branch in branches) {
+        if (branch.id == _paneBranchId) editing = branch;
+      }
+      if (_paneBranchId == null || editing != null) {
+        return EditorPane(
+          onClose: () => setState(() => _paneOpen = false),
+          child: _BranchSheet(
+            key: ValueKey('branch-${editing?.id ?? 'new'}'),
+            existing: editing,
+            onFinished: _onPaneFinished,
+          ),
+        );
+      }
+    }
+
+    return PaneHint(
+      icon: Icons.storefront_outlined,
+      title: l10n.paneBranchesHintTitle,
+      body: l10n.paneBranchesHintBody,
+    );
+  }
+
+  Future<void> _openEditor(
+    BuildContext context, {
+    MerchantBranch? existing,
+  }) async {
     final saved = await showModalBottomSheet<bool>(
       context: context,
       useRootNavigator: true, // over the floating nav bar
@@ -98,9 +142,7 @@ class _BranchesScreenState extends ConsumerState<BranchesScreen> {
         ),
       );
     } catch (_) {
-      messenger.showSnackBar(
-        SnackBar(content: Text(l10n.branchDeleteFailed)),
-      );
+      messenger.showSnackBar(SnackBar(content: Text(l10n.branchDeleteFailed)));
     }
   }
 
@@ -122,106 +164,146 @@ class _BranchesScreenState extends ConsumerState<BranchesScreen> {
     return Scaffold(
       body: SafeArea(
         bottom: false,
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(
-            Gap.xl,
-            Gap.sm,
-            Gap.xl,
-            Gap.navClearance,
-          ),
-          children: [
-            MerchantDetailTopBar(initials: initials),
-            const SizedBox(height: Gap.md),
-            Text(
-              l10n.branchesTitle,
-              style: theme.textTheme.headlineMedium?.copyWith(
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-            const SizedBox(height: Gap.xs),
-            Text(
-              l10n.branchesSubtitle,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
-            const SizedBox(height: Gap.lg),
-            branches.when(
-              loading: () =>
-                  const SkeletonBox(height: 320, radius: Corner.card),
-              error: (error, _) => SectionErrorCard(
-                error: error,
-                onRetry: () => ref.invalidate(branchesProvider),
-              ),
-              data: (branches) {
-                final pinned = branches.where((b) => b.pinned).length;
-                final query = _query.trim().toLowerCase();
-                final filtered = query.isEmpty
-                    ? branches
-                    : [
-                        for (final branch in branches)
-                          if (branch.name.toLowerCase().contains(query) ||
-                              (branch.address ?? '')
-                                  .toLowerCase()
-                                  .contains(query))
-                            branch,
-                      ];
+        // MR7: SCREEN layout reads CONTENT width (the rail shell's 96dp is
+        // already gone from these constraints). ≥840dp of content splits
+        // into list | editor — the phone's bottom sheet seated in the
+        // right pane, same fields, same pin picker. Phones render the
+        // shipped column untouched.
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final expanded =
+                constraints.maxWidth >= kExpandedMinWidth &&
+                (canCreate || canEdit);
+            return ContentRail(
+              maxWidth: expanded ? kWideContentWidth : kContentRailWidth,
+              child: ListView(
+                padding: EdgeInsets.fromLTRB(
+                  Gap.xl,
+                  Gap.sm,
+                  Gap.xl,
+                  bottomClearanceOf(context),
+                ),
+                children: [
+                  MerchantDetailTopBar(initials: initials),
+                  const SizedBox(height: Gap.md),
+                  Text(
+                    l10n.branchesTitle,
+                    style: theme.textTheme.headlineMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: Gap.xs),
+                  Text(
+                    l10n.branchesSubtitle,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(height: Gap.lg),
+                  branches.when(
+                    loading: () =>
+                        const SkeletonBox(height: 320, radius: Corner.card),
+                    error: (error, _) => SectionErrorCard(
+                      error: error,
+                      onRetry: () => ref.invalidate(branchesProvider),
+                    ),
+                    data: (branches) {
+                      final pinned = branches.where((b) => b.pinned).length;
+                      final query = _query.trim().toLowerCase();
+                      final filtered = query.isEmpty
+                          ? branches
+                          : [
+                              for (final branch in branches)
+                                if (branch.name.toLowerCase().contains(query) ||
+                                    (branch.address ?? '')
+                                        .toLowerCase()
+                                        .contains(query))
+                                  branch,
+                            ];
 
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    // The ref's stat strip, from REAL fields: total and the
-                    // pin split (there is no active flag to count).
-                    _StatStrip(
-                      total: branches.length,
-                      pinned: pinned,
-                      unpinned: branches.length - pinned,
-                    ),
-                    const SizedBox(height: Gap.md),
-                    if (canCreate) ...[
-                      VioletCta(
-                        icon: Icons.add_circle_outline_rounded,
-                        label: l10n.addBranchCta,
-                        onPressed: () => _openEditor(context),
-                      ),
-                      const SizedBox(height: Gap.md),
-                    ],
-                    EstateSearchField(
-                      hint: l10n.searchBranchesHint,
-                      onChanged: (value) => setState(() => _query = value),
-                    ),
-                    const SizedBox(height: Gap.md),
-                    if (filtered.isEmpty)
-                      ManfaaCard(
-                        child: Text(
-                          l10n.branchesEmpty,
-                          textAlign: TextAlign.center,
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant,
+                      final list = Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          // The ref's stat strip, from REAL fields: total and the
+                          // pin split (there is no active flag to count).
+                          _StatStrip(
+                            total: branches.length,
+                            pinned: pinned,
+                            unpinned: branches.length - pinned,
                           ),
-                        ),
-                      )
-                    else
-                      for (final (i, branch) in filtered.indexed) ...[
-                        if (i > 0) const SizedBox(height: Gap.md),
-                        _BranchCard(
-                          branch: branch,
-                          number: branches.indexOf(branch) + 1,
-                          tint: _tints[branches.indexOf(branch) % _tints.length],
-                          onEdit: canEdit
-                              ? () =>
-                                  _openEditor(context, existing: branch)
-                              : null,
-                          onDelete: canDelete
-                              ? () => _confirmDelete(branch)
-                              : null,
-                        ),
-                      ],
-                  ],
-                );
-              },
-            ),
-          ],
+                          const SizedBox(height: Gap.md),
+                          if (canCreate) ...[
+                            VioletCta(
+                              icon: Icons.add_circle_outline_rounded,
+                              label: l10n.addBranchCta,
+                              onPressed: () => expanded
+                                  ? setState(() {
+                                      _paneOpen = true;
+                                      _paneBranchId = null;
+                                    })
+                                  : _openEditor(context),
+                            ),
+                            const SizedBox(height: Gap.md),
+                          ],
+                          EstateSearchField(
+                            hint: l10n.searchBranchesHint,
+                            onChanged: (value) =>
+                                setState(() => _query = value),
+                          ),
+                          const SizedBox(height: Gap.md),
+                          if (filtered.isEmpty)
+                            ManfaaCard(
+                              child: Text(
+                                l10n.branchesEmpty,
+                                textAlign: TextAlign.center,
+                                style: theme.textTheme.bodyMedium?.copyWith(
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                            )
+                          else
+                            for (final (i, branch) in filtered.indexed) ...[
+                              if (i > 0) const SizedBox(height: Gap.md),
+                              _BranchCard(
+                                branch: branch,
+                                number: branches.indexOf(branch) + 1,
+                                tint:
+                                    _tints[branches.indexOf(branch) %
+                                        _tints.length],
+                                onEdit: canEdit
+                                    ? () => expanded
+                                          ? setState(() {
+                                              _paneOpen = true;
+                                              _paneBranchId = branch.id;
+                                            })
+                                          : _openEditor(
+                                              context,
+                                              existing: branch,
+                                            )
+                                    : null,
+                                onDelete: canDelete
+                                    ? () => _confirmDelete(branch)
+                                    : null,
+                              ),
+                            ],
+                        ],
+                      );
+
+                      if (!expanded) return list;
+                      return Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(child: list),
+                          const SizedBox(width: Gap.lg),
+                          Expanded(child: _pane(branches)),
+                        ],
+                      );
+                    },
+                  ),
+                ],
+              ),
+            );
+          },
         ),
       ),
     );
@@ -246,44 +328,43 @@ class _StatStrip extends StatelessWidget {
     final theme = Theme.of(context);
 
     Widget cell(String label, String value, Color dot) => Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
             children: [
-              Row(
-                children: [
-                  Container(
-                    width: 8,
-                    height: 8,
-                    decoration:
-                        BoxDecoration(color: dot, shape: BoxShape.circle),
-                  ),
-                  const SizedBox(width: Gap.xs + 2),
-                  Flexible(
-                    child: Text(
-                      label,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ],
+              Container(
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(color: dot, shape: BoxShape.circle),
               ),
-              const SizedBox(height: 2),
-              Padding(
-                padding: const EdgeInsetsDirectional.only(start: 14),
+              const SizedBox(width: Gap.xs + 2),
+              Flexible(
                 child: Text(
-                  value,
-                  textDirection: TextDirection.ltr,
-                  style: theme.textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.w800,
+                  label,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
                   ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
             ],
           ),
-        );
+          const SizedBox(height: 2),
+          Padding(
+            padding: const EdgeInsetsDirectional.only(start: 14),
+            child: Text(
+              value,
+              textDirection: TextDirection.ltr,
+              style: theme.textTheme.headlineSmall?.copyWith(
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
 
     return ManfaaCard(
       child: Row(
@@ -337,7 +418,8 @@ class _BranchCard extends StatelessWidget {
                 child: Text(
                   text,
                   textDirection: direction,
-                  textAlign: direction == TextDirection.ltr &&
+                  textAlign:
+                      direction == TextDirection.ltr &&
                           Directionality.of(context) == TextDirection.rtl
                       ? TextAlign.right
                       : null,
@@ -360,15 +442,11 @@ class _BranchCard extends StatelessWidget {
             width: 40,
             height: 40,
             alignment: Alignment.center,
-            decoration:
-                BoxDecoration(color: colors.bg, shape: BoxShape.circle),
+            decoration: BoxDecoration(color: colors.bg, shape: BoxShape.circle),
             child: Text(
               '$number',
               textDirection: TextDirection.ltr,
-              style: TextStyle(
-                fontWeight: FontWeight.w800,
-                color: colors.fg,
-              ),
+              style: TextStyle(fontWeight: FontWeight.w800, color: colors.fg),
             ),
           ),
           const SizedBox(width: Gap.md),
@@ -392,10 +470,9 @@ class _BranchCard extends StatelessWidget {
                       : Icons.location_off_outlined,
                   branch.pinned
                       ? '${branch.lat!.toStringAsFixed(5)}, '
-                          '${branch.lng!.toStringAsFixed(5)}'
+                            '${branch.lng!.toStringAsFixed(5)}'
                       : l10n.branchNotPinned,
-                  direction:
-                      branch.pinned ? TextDirection.ltr : null,
+                  direction: branch.pinned ? TextDirection.ltr : null,
                 ),
               ],
             ),
@@ -409,10 +486,7 @@ class _BranchCard extends StatelessWidget {
                 if (onEdit != null)
                   PopupMenuItem(value: 'edit', child: Text(l10n.edit)),
                 if (onDelete != null)
-                  PopupMenuItem(
-                    value: 'delete',
-                    child: Text(l10n.deleteLabel),
-                  ),
+                  PopupMenuItem(value: 'delete', child: Text(l10n.deleteLabel)),
               ],
             ),
         ],
@@ -425,9 +499,13 @@ class _BranchCard extends StatelessWidget {
 /// setup location step's drag-under-a-fixed-pin picker, reused. Pops `true`
 /// after a landed save.
 class _BranchSheet extends ConsumerStatefulWidget {
-  const _BranchSheet({this.existing});
+  const _BranchSheet({super.key, this.existing, this.onFinished});
 
   final MerchantBranch? existing;
+
+  /// MR7 — set when the editor lives inline in the expanded pane:
+  /// completion calls back instead of popping a sheet route.
+  final void Function(bool saved)? onFinished;
 
   @override
   ConsumerState<_BranchSheet> createState() => _BranchSheetState();
@@ -439,8 +517,9 @@ class _BranchSheetState extends ConsumerState<_BranchSheet> {
   static const _fallbackCenter = LatLng(4.1755, 73.5093);
 
   late final _name = TextEditingController(text: widget.existing?.name ?? '');
-  late final _address =
-      TextEditingController(text: widget.existing?.address ?? '');
+  late final _address = TextEditingController(
+    text: widget.existing?.address ?? '',
+  );
 
   /// Whether the branch HAS a pin — toggled off by "remove pin"; the map
   /// only renders while true, so the sheet stays honest about what will be
@@ -498,12 +577,14 @@ class _BranchSheetState extends ConsumerState<_BranchSheet> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            existing == null ? l10n.branchAdded : l10n.branchSaved,
-          ),
+          content: Text(existing == null ? l10n.branchAdded : l10n.branchSaved),
         ),
       );
-      Navigator.of(context).pop(true);
+      if (widget.onFinished != null) {
+        widget.onFinished!(true);
+      } else {
+        Navigator.of(context).pop(true);
+      }
     } on MobileApiException catch (e) {
       if (mounted) setState(() => _error = e.message);
     } catch (_) {
@@ -554,10 +635,7 @@ class _BranchSheetState extends ConsumerState<_BranchSheet> {
                 ),
               ),
               const SizedBox(height: Gap.lg),
-              Text(
-                l10n.branchAddressLabel,
-                style: theme.textTheme.labelLarge,
-              ),
+              Text(l10n.branchAddressLabel, style: theme.textTheme.labelLarge),
               const SizedBox(height: Gap.sm),
               TextField(
                 controller: _address,
@@ -598,8 +676,9 @@ class _BranchSheetState extends ConsumerState<_BranchSheet> {
                         FlutterMap(
                           options: MapOptions(
                             initialCenter: _center,
-                            initialZoom:
-                                widget.existing?.pinned == true ? 17 : 15,
+                            initialZoom: widget.existing?.pinned == true
+                                ? 17
+                                : 15,
                             onPositionChanged: (camera, _) =>
                                 setState(() => _center = camera.center),
                           ),

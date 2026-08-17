@@ -7,6 +7,7 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import '../../app/app.dart';
 import '../../app/providers.dart';
 import '../../l10n/gen/app_localizations.dart';
+import '../../widgets/adaptive.dart';
 import '../../widgets/merchant_brand.dart';
 import '../../widgets/tx_format.dart';
 import '../setup/rate_step.dart'
@@ -80,6 +81,7 @@ class _CreditScreenState extends ConsumerState<CreditScreen> {
   _Lookup? _lookup;
 
   final _invoice = TextEditingController();
+  final _invoiceFocus = FocusNode();
   final _eligible = TextEditingController();
   final _sale = TextEditingController();
 
@@ -119,6 +121,7 @@ class _CreditScreenState extends ConsumerState<CreditScreen> {
     _code.dispose();
     _codeFocus.dispose();
     _invoice.dispose();
+    _invoiceFocus.dispose();
     _eligible.dispose();
     _sale.dispose();
     _override.dispose();
@@ -155,6 +158,32 @@ class _CreditScreenState extends ConsumerState<CreditScreen> {
     _code.text = code;
     setState(() => _mode = CodeMode.enter);
     _onCodeChanged(code);
+  }
+
+  /// Enter in the code entry — a hardware keyboard's ⏎, and exactly what a
+  /// USB/BT barcode gun sends after its digits. A verified code walks focus
+  /// on to the invoice field; anything else with six digits (re)fires the
+  /// lookup, so a failed check retries on the gun's next Enter. Fewer than
+  /// six digits stays quiet.
+  void _onCodeSubmitted(String value) {
+    if (value.length != 6) return;
+    final lookup = _lookup;
+    if (lookup != null &&
+        lookup.code == value &&
+        lookup.phase == _LookupPhase.found) {
+      _invoiceFocus.requestFocus();
+      return;
+    }
+    if (lookup == null || lookup.phase != _LookupPhase.checking) {
+      _fireLookup(value);
+    }
+  }
+
+  /// Enter on any of the form's text fields: submit when the form is
+  /// complete, stay quiet when it is not — the [_submittable] gate is the
+  /// same one the CTA button stands on.
+  void _submitFromKeyboard() {
+    if (_submittable) _submit();
   }
 
   // ------------------------------------------------------------ compose
@@ -326,107 +355,156 @@ class _CreditScreenState extends ConsumerState<CreditScreen> {
 
     final result = _result;
 
+    final resultCard = result == null
+        ? null
+        : CreditResultCard(
+            result: result.$1,
+            customerName: result.$2,
+            categories: categories,
+            onReset: () => setState(() => _result = null),
+          );
+
+    // The compose-state pieces, shared by both layouts. IDENTIFY: who and
+    // what (mode row + code boxes + invoice/date/amounts). ACT: how it
+    // prices and the CTA (split editor + cost preview + notes + submit).
+    List<Widget> identify() => [
+      _buildCustomerCard(l10n, theme, queue),
+      const SizedBox(height: Gap.md),
+      _buildFormCard(l10n, theme, rateAsync, activeCategories),
+    ];
+
+    List<Widget> act() => [
+      if (_splitEnabled) ...[
+        SplitEditorCard(
+          rows: _splitRows,
+          categories: activeCategories,
+          eligibleLaari: _eligibleInvalid ? null : _eligibleLaari,
+          onRowsChanged: (rows) => setState(() => _splitRows = rows),
+        ),
+        const SizedBox(height: Gap.md),
+      ],
+      _buildPreviewCard(l10n, theme, rateAsync, activeCategories),
+      if (_backdatedWarning) ...[
+        const SizedBox(height: Gap.md),
+        _buildBackdatedNotice(l10n, theme),
+      ],
+      if (_error != null) ...[
+        const SizedBox(height: Gap.md),
+        _buildErrorNotice(l10n, theme, _error!),
+      ],
+      const SizedBox(height: Gap.md),
+      const PendingNote(),
+      const SizedBox(height: Gap.lg),
+      FilledButton(
+        onPressed: _submittable ? _submit : null,
+        child: _busy
+            ? const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.receipt_long_outlined, size: 20),
+                  const SizedBox(width: Gap.sm),
+                  Text(l10n.creditCta),
+                ],
+              ),
+      ),
+    ];
+
     return Scaffold(
       body: SafeArea(
         bottom: false,
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(
-            Gap.xl,
-            Gap.lg,
-            Gap.xl,
-            Gap.navClearance,
-          ),
-          children: [
-            MerchantTopBar(
-              initials: initials.isEmpty
-                  ? 'M'
-                  : initials.characters.first.toUpperCase(),
-            ),
-            const SizedBox(height: Gap.lg),
-            Text(
-              l10n.creditTitle,
-              style: theme.textTheme.headlineMedium?.copyWith(
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-            const SizedBox(height: Gap.xs),
-            Text(
-              l10n.creditSubtitle,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
-            const SizedBox(height: Gap.lg),
-            if (queue.pendingCount > 0) ...[
-              QueueBanner(
-                count: queue.pendingCount,
-                onSync: () => ref.read(creditQueueProvider.notifier).drain(),
-              ),
-              const SizedBox(height: Gap.md),
-            ],
-            if (queue.parked.isNotEmpty) ...[
-              NeedsAttentionCard(
-                entries: queue.parked,
-                onRetry: (entry) => ref
-                    .read(creditQueueProvider.notifier)
-                    .retryParked(entry.key),
-                onDiscard: (entry) =>
-                    ref.read(creditQueueProvider.notifier).discard(entry.key),
-              ),
-              const SizedBox(height: Gap.md),
-            ],
-            if (result != null)
-              CreditResultCard(
-                result: result.$1,
-                customerName: result.$2,
-                categories: categories,
-                onReset: () => setState(() => _result = null),
-              )
-            else ...[
-              _buildCustomerCard(l10n, theme, queue),
-              const SizedBox(height: Gap.md),
-              _buildFormCard(l10n, theme, rateAsync, activeCategories),
-              if (_splitEnabled) ...[
-                const SizedBox(height: Gap.md),
-                SplitEditorCard(
-                  rows: _splitRows,
-                  categories: activeCategories,
-                  eligibleLaari: _eligibleInvalid ? null : _eligibleLaari,
-                  onRowsChanged: (rows) => setState(() => _splitRows = rows),
+        // Content width (the rail's 96dp is already gone from these
+        // constraints): ≥840dp puts identify left and act right — the
+        // counter layout this round exists for. Phones keep the shipped
+        // single column untouched.
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final expanded = constraints.maxWidth >= kExpandedMinWidth;
+            return ContentRail(
+              maxWidth: expanded ? kWideContentWidth : kContentRailWidth,
+              child: ListView(
+                padding: EdgeInsets.fromLTRB(
+                  Gap.xl,
+                  Gap.lg,
+                  Gap.xl,
+                  bottomClearanceOf(context),
                 ),
-              ],
-              const SizedBox(height: Gap.md),
-              _buildPreviewCard(l10n, theme, rateAsync, activeCategories),
-              if (_backdatedWarning) ...[
-                const SizedBox(height: Gap.md),
-                _buildBackdatedNotice(l10n, theme),
-              ],
-              if (_error != null) ...[
-                const SizedBox(height: Gap.md),
-                _buildErrorNotice(l10n, theme, _error!),
-              ],
-              const SizedBox(height: Gap.md),
-              const PendingNote(),
-              const SizedBox(height: Gap.lg),
-              FilledButton(
-                onPressed: _submittable ? _submit : null,
-                child: _busy
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.receipt_long_outlined, size: 20),
-                          const SizedBox(width: Gap.sm),
-                          Text(l10n.creditCta),
-                        ],
-                      ),
+                children: [
+                  MerchantTopBar(
+                    initials: initials.isEmpty
+                        ? 'M'
+                        : initials.characters.first.toUpperCase(),
+                  ),
+                  const SizedBox(height: Gap.lg),
+                  Text(
+                    l10n.creditTitle,
+                    style: theme.textTheme.headlineMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: Gap.xs),
+                  Text(
+                    l10n.creditSubtitle,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(height: Gap.lg),
+                  if (queue.pendingCount > 0) ...[
+                    QueueBanner(
+                      count: queue.pendingCount,
+                      onSync: () =>
+                          ref.read(creditQueueProvider.notifier).drain(),
+                    ),
+                    const SizedBox(height: Gap.md),
+                  ],
+                  if (queue.parked.isNotEmpty) ...[
+                    NeedsAttentionCard(
+                      entries: queue.parked,
+                      onRetry: (entry) => ref
+                          .read(creditQueueProvider.notifier)
+                          .retryParked(entry.key),
+                      onDiscard: (entry) => ref
+                          .read(creditQueueProvider.notifier)
+                          .discard(entry.key),
+                    ),
+                    const SizedBox(height: Gap.md),
+                  ],
+                  if (resultCard != null)
+                    // The recorded answer reads as one card either way; on
+                    // the wide canvas it keeps the single-column rail width.
+                    expanded
+                        ? Center(
+                            child: ConstrainedBox(
+                              constraints: const BoxConstraints(
+                                maxWidth: kContentRailWidth,
+                              ),
+                              child: resultCard,
+                            ),
+                          )
+                        : resultCard
+                  else if (expanded)
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(child: Column(children: identify())),
+                        const SizedBox(width: Gap.lg),
+                        Expanded(child: Column(children: act())),
+                      ],
+                    )
+                  else ...[
+                    ...identify(),
+                    const SizedBox(height: Gap.md),
+                    ...act(),
+                  ],
+                ],
               ),
-            ],
-          ],
+            );
+          },
         ),
       ),
     );
@@ -482,6 +560,7 @@ class _CreditScreenState extends ConsumerState<CreditScreen> {
                   controller: _code,
                   focusNode: _codeFocus,
                   onChanged: _onCodeChanged,
+                  onSubmitted: _onCodeSubmitted,
                 ),
                 const SizedBox(height: Gap.md),
                 _buildLookupState(l10n, theme),
@@ -698,8 +777,11 @@ class _CreditScreenState extends ConsumerState<CreditScreen> {
           const SizedBox(height: Gap.sm),
           TextField(
             controller: _invoice,
+            focusNode: _invoiceFocus,
             maxLength: 64,
+            textInputAction: TextInputAction.done,
             onChanged: (_) => setState(() => _error = null),
+            onSubmitted: (_) => _submitFromKeyboard(),
             decoration: const InputDecoration(
               hintText: 'INV-1001',
               counterText: '',
@@ -774,6 +856,7 @@ class _CreditScreenState extends ConsumerState<CreditScreen> {
             controller: _eligible,
             invalid: _eligibleInvalid,
             onChanged: (_) => setState(() => _error = null),
+            onSubmitted: (_) => _submitFromKeyboard(),
           ),
           const SizedBox(height: 6),
           Text(
@@ -793,6 +876,7 @@ class _CreditScreenState extends ConsumerState<CreditScreen> {
             controller: _sale,
             invalid: _saleInvalid,
             onChanged: (_) => setState(() => _error = null),
+            onSubmitted: (_) => _submitFromKeyboard(),
           ),
           const SizedBox(height: 6),
           Text(
@@ -1262,11 +1346,13 @@ class _MvrField extends StatelessWidget {
     required this.controller,
     required this.invalid,
     required this.onChanged,
+    this.onSubmitted,
   });
 
   final TextEditingController controller;
   final bool invalid;
   final ValueChanged<String> onChanged;
+  final ValueChanged<String>? onSubmitted;
 
   @override
   Widget build(BuildContext context) {
@@ -1276,7 +1362,9 @@ class _MvrField extends StatelessWidget {
       controller: controller,
       keyboardType: const TextInputType.numberWithOptions(decimal: true),
       textDirection: TextDirection.ltr,
+      textInputAction: TextInputAction.done,
       onChanged: onChanged,
+      onSubmitted: onSubmitted,
       style: theme.textTheme.bodyLarge?.copyWith(
         fontFeatures: const [FontFeature.tabularFigures()],
       ),

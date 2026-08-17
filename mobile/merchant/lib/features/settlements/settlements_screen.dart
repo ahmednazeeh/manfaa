@@ -6,11 +6,20 @@ import 'package:manfaa_ui/manfaa_ui.dart';
 
 import '../../app/app.dart';
 import '../../app/providers.dart';
+import '../../widgets/adaptive.dart';
 import '../../widgets/merchant_brand.dart';
 import '../../widgets/tx_format.dart';
 import '../money/money_providers.dart';
+import '../more/estate_widgets.dart' show PaneHint;
+import 'settlement_detail_screen.dart' show SettlementDetailBody;
 import 'settlement_pay_screen.dart';
 import 'settlement_widgets.dart';
+
+/// MR7 — which settlement the expanded overview | detail split is showing.
+/// Session state, deliberately NOT autoDispose: rail navigation away and
+/// back keeps the selection exactly as left. Phones never read it — they
+/// push the detail route instead.
+final settlementsSelectionProvider = StateProvider<int?>((_) => null);
 
 /// The Settlements tab (MR3), drawn to Settlements.png: amount-due hero +
 /// Pay now, the discount banner, the payment-method selector (wallet with
@@ -39,39 +48,26 @@ class SettlementsScreen extends ConsumerWidget {
     final initials = name.isEmpty ? 'M' : name.characters.first.toUpperCase();
 
     // The domain's "nothing to settle" 422 is an empty board, not an error.
-    final emptyBoard = catalogue?.error is MobileApiException &&
+    final emptyBoard =
+        catalogue?.error is MobileApiException &&
         (catalogue!.error! as MobileApiException).status == 422;
 
     return Scaffold(
       body: SafeArea(
         bottom: false,
-        child: RefreshIndicator(
-          onRefresh: () async => invalidateMoney(ref),
-          child: ListView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.fromLTRB(
-              Gap.xl,
-              Gap.lg,
-              Gap.xl,
-              Gap.navClearance,
-            ),
-            children: [
-              MerchantTopBar(initials: initials),
-              const SizedBox(height: Gap.lg),
-              Text(
-                l10n.settlementsTitle,
-                style: theme.textTheme.headlineMedium?.copyWith(
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              const SizedBox(height: Gap.xs),
-              Text(
-                l10n.settlementsSubtitle,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
-              ),
-              const SizedBox(height: Gap.lg),
+        // MR7: SCREEN layout reads CONTENT width (the rail shell's 96dp is
+        // already gone from these constraints). ≥840dp of content splits
+        // into the tab's overview | the selected settlement's detail; the
+        // pay flow stays a pushed route — a half-width pane would cramp
+        // the receipt form. Phones render the shipped column untouched.
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final expanded = constraints.maxWidth >= kExpandedMinWidth;
+            final selectedId = expanded
+                ? ref.watch(settlementsSelectionProvider)
+                : null;
+
+            final board = <Widget>[
               if (canPreview && !emptyBoard) ...[
                 ...?priced?.when(
                   loading: () => const [
@@ -87,17 +83,86 @@ class SettlementsScreen extends ConsumerWidget {
                       },
                     ),
                   ],
-                  data: (preview) =>
-                      _payBlocks(context, ref, session, preview),
+                  data: (preview) => _payBlocks(context, ref, session, preview),
                 ),
                 const SizedBox(height: Gap.md),
               ] else if (emptyBoard) ...[
                 _EmptyBoard(),
                 const SizedBox(height: Gap.md),
               ],
-              const _RecentSettlements(),
-            ],
-          ),
+              _RecentSettlements(
+                onSelect: expanded
+                    ? (settlement) =>
+                          ref
+                                  .read(settlementsSelectionProvider.notifier)
+                                  .state =
+                              settlement.id
+                    : null,
+              ),
+            ];
+
+            return RefreshIndicator(
+              onRefresh: () async => invalidateMoney(ref),
+              child: ContentRail(
+                maxWidth: expanded ? kWideContentWidth : kContentRailWidth,
+                child: ListView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: EdgeInsets.fromLTRB(
+                    Gap.xl,
+                    Gap.lg,
+                    Gap.xl,
+                    bottomClearanceOf(context),
+                  ),
+                  children: [
+                    MerchantTopBar(initials: initials),
+                    const SizedBox(height: Gap.lg),
+                    Text(
+                      l10n.settlementsTitle,
+                      style: theme.textTheme.headlineMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: Gap.xs),
+                    Text(
+                      l10n.settlementsSubtitle,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                    const SizedBox(height: Gap.lg),
+                    if (!expanded)
+                      ...board
+                    else
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: board,
+                            ),
+                          ),
+                          const SizedBox(width: Gap.lg),
+                          Expanded(
+                            child: selectedId == null
+                                ? PaneHint(
+                                    icon: Icons.account_balance_outlined,
+                                    title: l10n.paneSettlementHintTitle,
+                                    body: l10n.paneSettlementHintBody,
+                                  )
+                                : SettlementDetailBody(
+                                    key: ValueKey(selectedId),
+                                    id: selectedId,
+                                    embedded: true,
+                                  ),
+                          ),
+                        ],
+                      ),
+                  ],
+                ),
+              ),
+            );
+          },
         ),
       ),
     );
@@ -117,7 +182,8 @@ class SettlementsScreen extends ConsumerWidget {
     final method = ref.watch(_methodProvider);
 
     final nothingDue = preview.amountDueLaari == 0;
-    final walletSufficient = wallet != null &&
+    final walletSufficient =
+        wallet != null &&
         wallet.balanceLaari >= preview.amountDueLaari &&
         session.can('wallet.settle');
     final canBank = session.can('settlements.create');
@@ -146,16 +212,10 @@ class SettlementsScreen extends ConsumerWidget {
         : (useWallet ? true : canBank);
 
     return [
-      _AmountDueHero(
-        preview: preview,
-        onPayNow: payEnabled ? startPay : null,
-      ),
+      _AmountDueHero(preview: preview, onPayNow: payEnabled ? startPay : null),
       const SizedBox(height: Gap.md),
       if (preview.discount != null) ...[
-        DiscountKeepBanner(
-          discount: preview.discount!,
-          dueAt: preview.dueAt,
-        ),
+        DiscountKeepBanner(discount: preview.discount!, dueAt: preview.dueAt),
         const SizedBox(height: Gap.md),
       ],
       if (catalogue != null && catalogue.buckets.length > 1) ...[
@@ -178,15 +238,13 @@ class SettlementsScreen extends ConsumerWidget {
           body: l10n.discountNudgeSaving(
             formatMoney(
               catalogue.discount!.discountLaari,
-              dhivehi:
-                  Localizations.localeOf(context).languageCode == 'dv',
+              dhivehi: Localizations.localeOf(context).languageCode == 'dv',
             ),
           ),
           action: OutlinedButton(
             style: OutlinedButton.styleFrom(minimumSize: const Size(0, 40)),
-            onPressed: () => ref
-                .read(settlementsPresetProvider.notifier)
-                .state = 'all',
+            onPressed: () =>
+                ref.read(settlementsPresetProvider.notifier).state = 'all',
             child: Text(l10n.settleEverythingCta),
           ),
         ),
@@ -217,9 +275,7 @@ class SettlementsScreen extends ConsumerWidget {
       const SizedBox(height: Gap.md),
       FilledButton(
         onPressed: payEnabled ? startPay : null,
-        style: FilledButton.styleFrom(
-          minimumSize: const Size.fromHeight(52),
-        ),
+        style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(52)),
         child: Text(
           nothingDue
               ? l10n.confirmNothingDueCta
@@ -249,7 +305,9 @@ class SettlementsScreen extends ConsumerWidget {
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: Text(
-          nothingDue ? l10n.confirmNothingDueCta : l10n.walletSettleConfirmTitle,
+          nothingDue
+              ? l10n.confirmNothingDueCta
+              : l10n.walletSettleConfirmTitle,
         ),
         content: Text(
           nothingDue
@@ -278,15 +336,17 @@ class SettlementsScreen extends ConsumerWidget {
     try {
       // The selection the PREVIEW priced goes through unchanged: settle-all
       // as the mode, a preset as exactly its ids.
-      final settlement = await ref.read(apiProvider).walletSettle(
+      final settlement = await ref
+          .read(apiProvider)
+          .walletSettle(
             settleAll: preset == 'all',
             transactionIds: preset == 'all' ? null : preview.transactionIds,
           );
       if (!context.mounted) return;
       invalidateMoney(ref);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l10n.settledOutrightTitle)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(l10n.settledOutrightTitle)));
       context.push('/settlements/${settlement.id}');
     } on MobileApiException catch (e) {
       if (!context.mounted) return;
@@ -407,8 +467,7 @@ class _PresetChips extends ConsumerWidget {
           selected: selected,
           onSelected: empty
               ? null
-              : (_) =>
-                  ref.read(settlementsPresetProvider.notifier).state = key,
+              : (_) => ref.read(settlementsPresetProvider.notifier).state = key,
           labelStyle: theme.textTheme.labelLarge?.copyWith(
             color: selected
                 ? theme.colorScheme.onSecondaryContainer
@@ -460,8 +519,8 @@ class _PaymentMethodCard extends ConsumerWidget {
     final theme = Theme.of(context);
     final l10n = context.l10n;
     final method = ref.watch(_methodProvider);
-    final insufficient = walletBalanceLaari != null &&
-        walletBalanceLaari! < amountDueLaari;
+    final insufficient =
+        walletBalanceLaari != null && walletBalanceLaari! < amountDueLaari;
 
     Widget option({
       required String key,
@@ -688,8 +747,12 @@ class _IncludedTransactions extends StatelessWidget {
 }
 
 /// Recent settlements — page 1 of the history, each row to its detail.
+/// MR7: with [onSelect] set (the expanded split), a row selects into the
+/// detail pane instead of pushing the route.
 class _RecentSettlements extends ConsumerWidget {
-  const _RecentSettlements();
+  const _RecentSettlements({this.onSelect});
+
+  final void Function(MerchantSettlement settlement)? onSelect;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -722,13 +785,13 @@ class _RecentSettlements extends ConsumerWidget {
                   )
                 : Column(
                     children: [
-                      for (final (index, settlement)
-                          in page.items.indexed) ...[
+                      for (final (index, settlement) in page.items.indexed) ...[
                         if (index > 0) const Divider(height: 1),
                         SettlementRow(
                           settlement: settlement,
-                          onTap: () =>
-                              context.push('/settlements/${settlement.id}'),
+                          onTap: () => onSelect != null
+                              ? onSelect!(settlement)
+                              : context.push('/settlements/${settlement.id}'),
                         ),
                       ],
                     ],
@@ -782,7 +845,8 @@ class _PreviewError extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
-    final message = error is MobileApiException &&
+    final message =
+        error is MobileApiException &&
             (error as MobileApiException).message.isNotEmpty
         ? (error as MobileApiException).message
         : l10n.settlePreviewFailed;

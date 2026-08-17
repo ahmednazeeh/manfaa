@@ -1219,5 +1219,35 @@
         "type": "String"
       }
     }
-  }
+  },
+  "paneTxHintTitle": "Select a sale",
+  "@paneTxHintTitle": {
+    "description": "MR7 expanded two-pane: the empty detail pane on the Transactions screen"
+  },
+  "paneTxHintBody": "Tap a sale in the list to read its full detail — corrections stay available while the sale can still be amended.",
+  "paneSettlementHintTitle": "Select a settlement",
+  "@paneSettlementHintTitle": {
+    "description": "MR7 expanded two-pane: the empty detail pane on the Settlements tab"
+  },
+  "paneSettlementHintBody": "Tap a settlement in the list to read its status, lines and payments here.",
+  "paneEmployeesHintTitle": "Select an employee",
+  "@paneEmployeesHintTitle": {
+    "description": "MR7 expanded two-pane: the empty editor pane on Manage Employees"
+  },
+  "paneEmployeesHintBody": "Tap a person to change their role or active state, or add a new account.",
+  "paneRolesHintTitle": "Select a role",
+  "@paneRolesHintTitle": {
+    "description": "MR7 expanded two-pane: the empty editor pane on Roles"
+  },
+  "paneRolesHintBody": "Tap a role to edit its name and permissions, or create a new one.",
+  "paneBranchesHintTitle": "Select a branch",
+  "@paneBranchesHintTitle": {
+    "description": "MR7 expanded two-pane: the empty editor pane on Manage Branches"
+  },
+  "paneBranchesHintBody": "Tap a branch to edit its details and pin, or add a new location.",
+  "panePromoHintTitle": "Draft a promotion",
+  "@panePromoHintTitle": {
+    "description": "MR7 expanded two-pane: the empty builder pane on Promotions"
+  },
+  "panePromoHintBody": "The builder opens here. A published promotion cannot be changed — drafts can."
 }

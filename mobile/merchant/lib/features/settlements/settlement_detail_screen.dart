@@ -7,6 +7,7 @@ import 'package:manfaa_ui/manfaa_ui.dart';
 import '../../app/app.dart';
 import '../../app/providers.dart';
 import '../../l10n/gen/app_localizations.dart';
+import '../../widgets/adaptive.dart';
 import '../../widgets/tx_format.dart';
 import '../money/money_providers.dart';
 import 'settlement_widgets.dart';
@@ -18,18 +19,47 @@ import 'settlement_widgets.dart';
 /// paying off a batch still owed money (a §7 partial's remainder, or an
 /// admin-built awaiting_payment batch): a further receipt, behind
 /// `settlements.receipt_add`.
-class SettlementDetailScreen extends ConsumerStatefulWidget {
+///
+/// MR7: the whole story lives in [SettlementDetailBody] so the Settlements
+/// tab's expanded detail pane renders the SAME blocks (embedded: no
+/// scaffold, no back button, the parent scrolls); this route keeps serving
+/// phones and deep links unchanged.
+class SettlementDetailScreen extends StatelessWidget {
   const SettlementDetailScreen({super.key, required this.id});
 
   final int id;
 
   @override
-  ConsumerState<SettlementDetailScreen> createState() =>
-      _SettlementDetailScreenState();
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: SafeArea(
+        bottom: false,
+        child: ContentRail(child: SettlementDetailBody(id: id)),
+      ),
+    );
+  }
 }
 
-class _SettlementDetailScreenState
-    extends ConsumerState<SettlementDetailScreen> {
+/// The settlement story itself — status, receipt flow, summary, lines,
+/// payments — usable as a routed page ([embedded] false, its own ListView)
+/// or as the expanded two-pane's right half ([embedded] true, a Column the
+/// surrounding scroll view owns).
+class SettlementDetailBody extends ConsumerStatefulWidget {
+  const SettlementDetailBody({
+    super.key,
+    required this.id,
+    this.embedded = false,
+  });
+
+  final int id;
+  final bool embedded;
+
+  @override
+  ConsumerState<SettlementDetailBody> createState() =>
+      _SettlementDetailBodyState();
+}
+
+class _SettlementDetailBodyState extends ConsumerState<SettlementDetailBody> {
   var _receiptOpen = false;
   var _busy = false;
   MobileApiException? _error;
@@ -41,7 +71,9 @@ class _SettlementDetailScreenState
       _error = null;
     });
     try {
-      await ref.read(apiProvider).addSettlementReceipt(
+      await ref
+          .read(apiProvider)
+          .addSettlementReceipt(
             id: widget.id,
             amountLaari: receipt.amountLaari,
             slipBytes: receipt.slipBytes,
@@ -51,9 +83,9 @@ class _SettlementDetailScreenState
       invalidateMoney(ref);
       ref.invalidate(settlementDetailProvider(widget.id));
       setState(() => _receiptOpen = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l10n.receiptAddedToast)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(l10n.receiptAddedToast)));
     } on MobileApiException catch (e) {
       if (!mounted) return;
       setState(() => _error = e);
@@ -68,30 +100,33 @@ class _SettlementDetailScreenState
     final l10n = context.l10n;
     final detail = ref.watch(settlementDetailProvider(widget.id));
 
-    return Scaffold(
-      body: SafeArea(
-        bottom: false,
-        child: detail.when(
-          loading: () => ListView(
-            padding: const EdgeInsets.all(Gap.xl),
-            children: const [
-              SkeletonBox(height: 40, radius: Corner.tile),
-              SizedBox(height: Gap.md),
-              SkeletonBox(height: 120, radius: Corner.card),
-              SizedBox(height: Gap.md),
-              SkeletonBox(height: 220, radius: Corner.card),
-            ],
-          ),
-          error: (error, _) => _NotFound(
-            message: error is MobileApiException &&
-                    error.status != 404 &&
-                    error.message.isNotEmpty
-                ? error.message
-                : l10n.settlementNotFound,
-          ),
-          data: (settlement) => _body(context, theme, l10n, settlement),
-        ),
-      ),
+    const skeletons = <Widget>[
+      SkeletonBox(height: 40, radius: Corner.tile),
+      SizedBox(height: Gap.md),
+      SkeletonBox(height: 120, radius: Corner.card),
+      SizedBox(height: Gap.md),
+      SkeletonBox(height: 220, radius: Corner.card),
+    ];
+
+    return detail.when(
+      loading: () => widget.embedded
+          ? const Column(children: skeletons)
+          : ListView(
+              padding: const EdgeInsets.all(Gap.xl),
+              children: skeletons,
+            ),
+      error: (error, _) {
+        final message =
+            error is MobileApiException &&
+                error.status != 404 &&
+                error.message.isNotEmpty
+            ? error.message
+            : l10n.settlementNotFound;
+        return widget.embedded
+            ? ManfaaCard(child: Text(message, textAlign: TextAlign.center))
+            : _NotFound(message: message);
+      },
+      data: (settlement) => _body(context, theme, l10n, settlement),
     );
   }
 
@@ -106,129 +141,137 @@ class _SettlementDetailScreenState
     final owes = settlement.remainingLaari;
     // A further receipt is accepted on an unsettled, submitted batch. While
     // one is under review the honest answer is "we are checking it".
-    final canPay = session.can('settlements.receipt_add') &&
+    final canPay =
+        session.can('settlements.receipt_add') &&
         owes > 0 &&
         (settlement.state == 'awaiting_payment' ||
             settlement.state == 'partially_settled');
 
+    final titleColumn = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          settlement.reference,
+          textDirection: TextDirection.ltr,
+          style: theme.textTheme.titleLarge?.copyWith(
+            fontWeight: FontWeight.w800,
+          ),
+          overflow: TextOverflow.ellipsis,
+        ),
+        Text(
+          l10n.detailCreated(formatBusinessDate(settlement.createdAt)),
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+      ],
+    );
+
+    final blocks = <Widget>[
+      Row(
+        children: [
+          if (!widget.embedded)
+            IconButton(
+              icon: const Icon(Icons.arrow_back_rounded),
+              onPressed: () =>
+                  context.canPop() ? context.pop() : context.go('/settlements'),
+            ),
+          Expanded(child: titleColumn),
+          StatusChip(
+            label: settlementStateLabel(l10n, settlement.state),
+            tone: settlementStateTone(settlement.state),
+          ),
+        ],
+      ),
+      const SizedBox(height: Gap.md),
+      _StatusStory(settlement: settlement),
+      if (status.code == 'rejected' && session.can('settlements.create')) ...[
+        const SizedBox(height: Gap.md),
+        FilledButton.icon(
+          onPressed: () => context.go('/settlements'),
+          icon: const Icon(Icons.add_rounded, size: 20),
+          label: Text(l10n.startNewSettlement),
+        ),
+      ],
+      if (canPay) ...[
+        const SizedBox(height: Gap.md),
+        ManfaaCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                settlement.state == 'awaiting_payment'
+                    ? l10n.statusAwaitingTitle
+                    : l10n.remainderTitle,
+                style: theme.textTheme.titleMedium,
+              ),
+              if (settlement.state == 'partially_settled') ...[
+                const SizedBox(height: 4),
+                Text(
+                  l10n.remainderBody(
+                    formatMoney(
+                      owes,
+                      dhivehi:
+                          Localizations.localeOf(context).languageCode == 'dv',
+                    ),
+                  ),
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+              const SizedBox(height: Gap.md),
+              PaymentInstructionsCard(
+                instructions: settlement.paymentInstructions,
+                amountDueLaari: owes,
+              ),
+              const SizedBox(height: Gap.lg),
+              if (_receiptOpen)
+                ReceiptForm(
+                  amountDueLaari: owes,
+                  submitLabel: l10n.submitSlipCta,
+                  busy: _busy,
+                  error: _error,
+                  onSubmit: _addReceipt,
+                )
+              else
+                FilledButton(
+                  onPressed: () => setState(() => _receiptOpen = true),
+                  child: Text(l10n.uploadReceiptCta),
+                ),
+            ],
+          ),
+        ),
+      ],
+      const SizedBox(height: Gap.md),
+      _SummaryCard(settlement: settlement),
+      if (settlement.lines.isNotEmpty) ...[
+        const SizedBox(height: Gap.md),
+        _LinesCard(settlement: settlement),
+      ],
+      if (settlement.payments.isNotEmpty) ...[
+        const SizedBox(height: Gap.md),
+        _PaymentsCard(settlement: settlement),
+      ],
+    ];
+
+    if (widget.embedded) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: blocks,
+      );
+    }
+
     return ListView(
-      padding: const EdgeInsets.fromLTRB(
+      padding: EdgeInsets.fromLTRB(
         Gap.xl,
         Gap.sm,
         Gap.xl,
-        Gap.navClearance,
+        // Value-identical to the shipped navClearance on phones; under the
+        // rail shell there is no bar to clear.
+        bottomClearanceOf(context),
       ),
-      children: [
-        Row(
-          children: [
-            IconButton(
-              icon: const Icon(Icons.arrow_back_rounded),
-              onPressed: () => context.canPop()
-                  ? context.pop()
-                  : context.go('/settlements'),
-            ),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    settlement.reference,
-                    textDirection: TextDirection.ltr,
-                    style: theme.textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.w800,
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  Text(
-                    l10n.detailCreated(
-                      formatBusinessDate(settlement.createdAt),
-                    ),
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            StatusChip(
-              label: settlementStateLabel(l10n, settlement.state),
-              tone: settlementStateTone(settlement.state),
-            ),
-          ],
-        ),
-        const SizedBox(height: Gap.md),
-        _StatusStory(settlement: settlement),
-        if (status.code == 'rejected' &&
-            session.can('settlements.create')) ...[
-          const SizedBox(height: Gap.md),
-          FilledButton.icon(
-            onPressed: () => context.go('/settlements'),
-            icon: const Icon(Icons.add_rounded, size: 20),
-            label: Text(l10n.startNewSettlement),
-          ),
-        ],
-        if (canPay) ...[
-          const SizedBox(height: Gap.md),
-          ManfaaCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  settlement.state == 'awaiting_payment'
-                      ? l10n.statusAwaitingTitle
-                      : l10n.remainderTitle,
-                  style: theme.textTheme.titleMedium,
-                ),
-                if (settlement.state == 'partially_settled') ...[
-                  const SizedBox(height: 4),
-                  Text(
-                    l10n.remainderBody(
-                      formatMoney(
-                        owes,
-                        dhivehi: Localizations.localeOf(context)
-                                .languageCode ==
-                            'dv',
-                      ),
-                    ),
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ],
-                const SizedBox(height: Gap.md),
-                PaymentInstructionsCard(
-                  instructions: settlement.paymentInstructions,
-                  amountDueLaari: owes,
-                ),
-                const SizedBox(height: Gap.lg),
-                if (_receiptOpen)
-                  ReceiptForm(
-                    amountDueLaari: owes,
-                    submitLabel: l10n.submitSlipCta,
-                    busy: _busy,
-                    error: _error,
-                    onSubmit: _addReceipt,
-                  )
-                else
-                  FilledButton(
-                    onPressed: () => setState(() => _receiptOpen = true),
-                    child: Text(l10n.uploadReceiptCta),
-                  ),
-              ],
-            ),
-          ),
-        ],
-        const SizedBox(height: Gap.md),
-        _SummaryCard(settlement: settlement),
-        if (settlement.lines.isNotEmpty) ...[
-          const SizedBox(height: Gap.md),
-          _LinesCard(settlement: settlement),
-        ],
-        if (settlement.payments.isNotEmpty) ...[
-          const SizedBox(height: Gap.md),
-          _PaymentsCard(settlement: settlement),
-        ],
-      ],
+      children: blocks,
     );
   }
 }
@@ -249,53 +292,53 @@ class _StatusStory extends StatelessWidget {
 
     final (tone, icon, title, body) = switch (status.code) {
       'verifying' => (
-          ToneSurface.info,
-          Icons.hourglass_top_rounded,
-          l10n.successVerifyingTitle,
-          l10n.statusVerifyingBody,
-        ),
+        ToneSurface.info,
+        Icons.hourglass_top_rounded,
+        l10n.successVerifyingTitle,
+        l10n.statusVerifyingBody,
+      ),
       'settled' => (
-          ToneSurface.confirmed,
-          Icons.verified_rounded,
-          l10n.statusSettledTitle,
-          null,
-        ),
+        ToneSurface.confirmed,
+        Icons.verified_rounded,
+        l10n.statusSettledTitle,
+        null,
+      ),
       'partially_settled' => (
-          ToneSurface.pending,
-          Icons.rule_rounded,
-          l10n.statusPartialTitle,
-          null,
-        ),
+        ToneSurface.pending,
+        Icons.rule_rounded,
+        l10n.statusPartialTitle,
+        null,
+      ),
       'awaiting_payment' => (
-          ToneSurface.pending,
-          Icons.account_balance_rounded,
-          l10n.statusAwaitingTitle,
-          l10n.statusAwaitingBody,
-        ),
+        ToneSurface.pending,
+        Icons.account_balance_rounded,
+        l10n.statusAwaitingTitle,
+        l10n.statusAwaitingBody,
+      ),
       'rejected' => (
-          ToneSurface.attention,
-          Icons.gpp_bad_outlined,
-          l10n.statusRejectedTitle,
-          l10n.statusRejectedBody,
-        ),
+        ToneSurface.attention,
+        Icons.gpp_bad_outlined,
+        l10n.statusRejectedTitle,
+        l10n.statusRejectedBody,
+      ),
       'cancelled' => (
-          ToneSurface.closed,
-          Icons.block_rounded,
-          l10n.statusCancelledTitle,
-          null,
-        ),
+        ToneSurface.closed,
+        Icons.block_rounded,
+        l10n.statusCancelledTitle,
+        null,
+      ),
       'draft' => (
-          ToneSurface.closed,
-          Icons.hourglass_empty_rounded,
-          l10n.statusDraftTitle,
-          null,
-        ),
+        ToneSurface.closed,
+        Icons.hourglass_empty_rounded,
+        l10n.statusDraftTitle,
+        null,
+      ),
       _ => (
-          ToneSurface.closed,
-          Icons.info_outline_rounded,
-          status.message,
-          null,
-        ),
+        ToneSurface.closed,
+        Icons.info_outline_rounded,
+        status.message,
+        null,
+      ),
     };
 
     final rejection = status.rejection;
@@ -619,9 +662,8 @@ class _NotFound extends StatelessWidget {
             Text(message, textAlign: TextAlign.center),
             const SizedBox(height: Gap.md),
             OutlinedButton(
-              onPressed: () => context.canPop()
-                  ? context.pop()
-                  : context.go('/settlements'),
+              onPressed: () =>
+                  context.canPop() ? context.pop() : context.go('/settlements'),
               child: Text(context.l10n.back),
             ),
           ],

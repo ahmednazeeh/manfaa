@@ -5,6 +5,7 @@ import 'package:manfaa_ui/manfaa_ui.dart';
 
 import '../../app/app.dart';
 import '../../app/providers.dart';
+import '../../widgets/adaptive.dart';
 import '../../widgets/merchant_brand.dart';
 import '../settlements/settlement_widgets.dart' show ToneBanner;
 import 'estate_widgets.dart';
@@ -21,9 +22,14 @@ import 'more_providers.dart';
 /// too: a slug the signed-in account does not hold is drawn disabled with
 /// the hint, never as a box that ticks and then 403s. The server enforces
 /// every rule again regardless.
-class RolesScreen extends ConsumerWidget {
+class RolesScreen extends ConsumerStatefulWidget {
   const RolesScreen({super.key});
 
+  @override
+  ConsumerState<RolesScreen> createState() => _RolesScreenState();
+}
+
+class _RolesScreenState extends ConsumerState<RolesScreen> {
   static const _tints = [
     ManfaaTint.violet,
     ManfaaTint.blue,
@@ -36,6 +42,13 @@ class RolesScreen extends ConsumerWidget {
     Icons.inventory_2_outlined,
     Icons.visibility_outlined,
   ];
+
+  /// MR7 — the expanded list | editor split's right pane: open with a role
+  /// id to edit, open with null to create. Local state on a shell-branch
+  /// screen, so rail navigation away and back keeps it. Phones keep the
+  /// bottom sheet instead.
+  var _paneOpen = false;
+  int? _paneRoleId;
 
   Future<void> _openEditor(
     BuildContext context,
@@ -56,8 +69,46 @@ class RolesScreen extends ConsumerWidget {
     }
   }
 
+  /// The expanded pane's completion — same follow-up as the sheet's pop.
+  void _onPaneFinished(bool saved) {
+    setState(() => _paneOpen = false);
+    if (saved) {
+      ref.invalidate(rolesProvider);
+      ref.invalidate(staffProvider);
+    }
+  }
+
+  Widget _pane(List<MerchantRole> roles) {
+    final l10n = context.l10n;
+
+    if (_paneOpen) {
+      MerchantRole? editing;
+      for (final role in roles) {
+        if (role.id == _paneRoleId) editing = role;
+      }
+      // A vanished id (deleted elsewhere) falls back to the hint; creating
+      // (_paneRoleId null) opens the editor blank.
+      if (_paneRoleId == null || editing != null) {
+        return EditorPane(
+          onClose: () => setState(() => _paneOpen = false),
+          child: _RoleEditorSheet(
+            key: ValueKey('role-${editing?.id ?? 'new'}'),
+            existing: editing,
+            onFinished: _onPaneFinished,
+          ),
+        );
+      }
+    }
+
+    return PaneHint(
+      icon: Icons.local_police_outlined,
+      title: l10n.paneRolesHintTitle,
+      body: l10n.paneRolesHintBody,
+    );
+  }
+
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     ref.watch(sessionTickProvider);
     final session = ref.watch(sessionProvider);
     final l10n = context.l10n;
@@ -73,79 +124,131 @@ class RolesScreen extends ConsumerWidget {
     return Scaffold(
       body: SafeArea(
         bottom: false,
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(
-            Gap.xl,
-            Gap.sm,
-            Gap.xl,
-            Gap.navClearance,
-          ),
-          children: [
-            MerchantDetailTopBar(initials: initials),
-            const SizedBox(height: Gap.md),
-            Text(
-              l10n.rolesTitle,
-              style: theme.textTheme.headlineMedium?.copyWith(
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-            const SizedBox(height: Gap.xs),
-            Text(
-              l10n.rolesSubtitle,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
-            const SizedBox(height: Gap.lg),
-            if (canManage) ...[
-              VioletCta(
-                icon: Icons.add_circle_outline_rounded,
-                label: l10n.addRoleCta,
-                onPressed: () => _openEditor(context, ref),
-              ),
-              const SizedBox(height: Gap.md),
-            ] else ...[
-              Text(
-                l10n.rolesReadOnlyHint,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
+        // MR7: SCREEN layout reads CONTENT width (the rail shell's 96dp is
+        // already gone from these constraints). ≥840dp of content splits
+        // into list | editor for `roles.manage` holders — the phone's
+        // bottom sheet seated in the right pane, same catalogue, same
+        // delegation locks. Phones render the shipped column untouched.
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final expanded =
+                constraints.maxWidth >= kExpandedMinWidth && canManage;
+            return ContentRail(
+              maxWidth: expanded ? kWideContentWidth : kContentRailWidth,
+              child: ListView(
+                padding: EdgeInsets.fromLTRB(
+                  Gap.xl,
+                  Gap.sm,
+                  Gap.xl,
+                  bottomClearanceOf(context),
                 ),
-              ),
-              const SizedBox(height: Gap.md),
-            ],
-            roles.when(
-              loading: () =>
-                  const SkeletonBox(height: 320, radius: Corner.card),
-              error: (error, _) => SectionErrorCard(
-                error: error,
-                onRetry: () => ref.invalidate(rolesProvider),
-              ),
-              data: (roles) => Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  for (final (i, role) in roles.indexed) ...[
-                    if (i > 0) const SizedBox(height: Gap.md),
-                    _RoleCard(
-                      role: role,
-                      dhivehi: dhivehi,
-                      icon: role.isOwner
-                          ? Icons.local_police_outlined
-                          : _icons[i % _icons.length],
-                      tint: role.isOwner
-                          ? ManfaaTint.green
-                          : _tints[i % _tints.length],
-                      // The owner role is frozen: renameable server-side,
-                      // but this screen offers no edit at all (task
-                      // reconciliation) — its card is information.
-                      onTap: canManage && !role.isOwner
-                          ? () => _openEditor(context, ref, existing: role)
-                          : null,
+                  MerchantDetailTopBar(initials: initials),
+                  const SizedBox(height: Gap.md),
+                  Text(
+                    l10n.rolesTitle,
+                    style: theme.textTheme.headlineMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
                     ),
+                  ),
+                  const SizedBox(height: Gap.xs),
+                  Text(
+                    l10n.rolesSubtitle,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(height: Gap.lg),
+                  // The CTA / read-only hint stays ABOVE the async list on
+                  // phones exactly as shipped; the expanded split moves it
+                  // into the list column so it heads the left pane.
+                  if (!expanded) ...[
+                    if (canManage) ...[
+                      VioletCta(
+                        icon: Icons.add_circle_outline_rounded,
+                        label: l10n.addRoleCta,
+                        onPressed: () => _openEditor(context, ref),
+                      ),
+                      const SizedBox(height: Gap.md),
+                    ] else ...[
+                      Text(
+                        l10n.rolesReadOnlyHint,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                      const SizedBox(height: Gap.md),
+                    ],
                   ],
+                  roles.when(
+                    loading: () =>
+                        const SkeletonBox(height: 320, radius: Corner.card),
+                    error: (error, _) => SectionErrorCard(
+                      error: error,
+                      onRetry: () => ref.invalidate(rolesProvider),
+                    ),
+                    data: (roles) {
+                      final list = Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          if (expanded) ...[
+                            VioletCta(
+                              icon: Icons.add_circle_outline_rounded,
+                              label: l10n.addRoleCta,
+                              onPressed: () => setState(() {
+                                _paneOpen = true;
+                                _paneRoleId = null;
+                              }),
+                            ),
+                            const SizedBox(height: Gap.md),
+                          ],
+                          for (final (i, role) in roles.indexed) ...[
+                            if (i > 0) const SizedBox(height: Gap.md),
+                            _RoleCard(
+                              role: role,
+                              dhivehi: dhivehi,
+                              icon: role.isOwner
+                                  ? Icons.local_police_outlined
+                                  : _icons[i % _icons.length],
+                              tint: role.isOwner
+                                  ? ManfaaTint.green
+                                  : _tints[i % _tints.length],
+                              // The owner role is frozen: renameable
+                              // server-side, but this screen offers no edit
+                              // at all (task reconciliation) — its card is
+                              // information.
+                              onTap: canManage && !role.isOwner
+                                  ? () => expanded
+                                        ? setState(() {
+                                            _paneOpen = true;
+                                            _paneRoleId = role.id;
+                                          })
+                                        : _openEditor(
+                                            context,
+                                            ref,
+                                            existing: role,
+                                          )
+                                  : null,
+                            ),
+                          ],
+                        ],
+                      );
+
+                      if (!expanded) return list;
+                      return Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(child: list),
+                          const SizedBox(width: Gap.lg),
+                          Expanded(child: _pane(roles)),
+                        ],
+                      );
+                    },
+                  ),
                 ],
               ),
-            ),
-          ],
+            );
+          },
         ),
       ),
     );
@@ -215,8 +318,7 @@ class _RoleCard extends StatelessWidget {
               ],
             ),
           ),
-          if (onTap != null)
-            Icon(Icons.chevron_right_rounded, color: muted),
+          if (onTap != null) Icon(Icons.chevron_right_rounded, color: muted),
         ],
       ),
     );
@@ -230,9 +332,13 @@ class _RoleCard extends StatelessWidget {
 /// every tick is a grant. Delete lives here too, with the in-use refusal
 /// told before AND rendered after. Pops `true` after any landed write.
 class _RoleEditorSheet extends ConsumerStatefulWidget {
-  const _RoleEditorSheet({this.existing});
+  const _RoleEditorSheet({super.key, this.existing, this.onFinished});
 
   final MerchantRole? existing;
+
+  /// MR7 — set when the editor lives inline in the expanded pane:
+  /// completion calls back instead of popping a sheet route.
+  final void Function(bool saved)? onFinished;
 
   @override
   ConsumerState<_RoleEditorSheet> createState() => _RoleEditorSheetState();
@@ -240,8 +346,9 @@ class _RoleEditorSheet extends ConsumerStatefulWidget {
 
 class _RoleEditorSheetState extends ConsumerState<_RoleEditorSheet> {
   late final _name = TextEditingController(text: widget.existing?.name ?? '');
-  late final _nameDv =
-      TextEditingController(text: widget.existing?.nameDv ?? '');
+  late final _nameDv = TextEditingController(
+    text: widget.existing?.nameDv ?? '',
+  );
   late final Set<String> _ticked = {...?widget.existing?.permissions};
   late final Set<String> _stored = {...?widget.existing?.permissions};
   var _busy = false;
@@ -259,6 +366,14 @@ class _RoleEditorSheetState extends ConsumerState<_RoleEditorSheet> {
   /// slug grants nothing).
   bool _mayTick(MerchantSession session, String slug) =>
       _stored.contains(slug) || session.can(slug);
+
+  void _finish(bool saved) {
+    if (widget.onFinished != null) {
+      widget.onFinished!(saved);
+    } else {
+      Navigator.of(context).pop(saved);
+    }
+  }
 
   Future<void> _save() async {
     final l10n = context.l10n;
@@ -295,7 +410,7 @@ class _RoleEditorSheetState extends ConsumerState<_RoleEditorSheet> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(l10n.roleSaved)));
-      Navigator.of(context).pop(true);
+      _finish(true);
     } on MobileApiException catch (e) {
       // permission_not_held, cannot_edit_own_role, role_cap_reached — the
       // server's sentence says which rule bit.
@@ -347,7 +462,7 @@ class _RoleEditorSheetState extends ConsumerState<_RoleEditorSheet> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(l10n.roleDeleted)));
-      Navigator.of(context).pop(true);
+      _finish(true);
     } on MobileApiException catch (e) {
       // role_in_use answers with the sentence naming the count.
       if (mounted) setState(() => _error = e.message);
@@ -368,9 +483,11 @@ class _RoleEditorSheetState extends ConsumerState<_RoleEditorSheet> {
     final editing = widget.existing != null;
     final deletable = editing && widget.existing!.staffCount == 0;
 
-    final anyLocked = catalogue.valueOrNull?.groups.any(
-          (group) => group.permissions
-              .any((permission) => !_mayTick(session, permission.slug)),
+    final anyLocked =
+        catalogue.valueOrNull?.groups.any(
+          (group) => group.permissions.any(
+            (permission) => !_mayTick(session, permission.slug),
+          ),
         ) ??
         false;
 
@@ -391,9 +508,7 @@ class _RoleEditorSheetState extends ConsumerState<_RoleEditorSheet> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                editing
-                    ? l10n.roleEditorEditTitle
-                    : l10n.roleEditorCreateTitle,
+                editing ? l10n.roleEditorEditTitle : l10n.roleEditorCreateTitle,
                 style: theme.textTheme.titleLarge?.copyWith(
                   fontWeight: FontWeight.w800,
                 ),
@@ -440,8 +555,7 @@ class _RoleEditorSheetState extends ConsumerState<_RoleEditorSheet> {
                     const SkeletonBox(height: 200, radius: Corner.tile),
                 error: (error, _) => SectionErrorCard(
                   error: error,
-                  onRetry: () =>
-                      ref.invalidate(permissionCatalogueProvider),
+                  onRetry: () => ref.invalidate(permissionCatalogueProvider),
                 ),
                 data: (catalogue) => Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -546,16 +660,9 @@ class _PermissionTick extends StatelessWidget {
             Checkbox(
               value: ticked,
               activeColor: ManfaaColors.violet,
-              onChanged: enabled
-                  ? (value) => onChanged(value ?? false)
-                  : null,
+              onChanged: enabled ? (value) => onChanged(value ?? false) : null,
             ),
-            Expanded(
-              child: Text(
-                label,
-                style: theme.textTheme.bodyMedium,
-              ),
-            ),
+            Expanded(child: Text(label, style: theme.textTheme.bodyMedium)),
             if (!enabled)
               Icon(
                 Icons.lock_outline_rounded,
