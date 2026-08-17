@@ -42,6 +42,8 @@ dependencies:
   firebase_messaging: ^16.5.0
 
 dev_dependencies:
+  flutter_launcher_icons: ^0.14.4
+  flutter_native_splash: ^2.4.8
   flutter_test:
     sdk: flutter
 
@@ -61,3 +63,20 @@ flutter:
     - family: MVWaheed
       fonts:
         - asset: assets/fonts/MVWaheed.otf
+
+# MR6 branding — the illustrative mark from the owner's Merchant App
+# Logo.png ref (storefront under the circular arrow), on the app canvas.
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "branding/icon-1024.png"
+  adaptive_icon_background: "#FFFFFF"
+  adaptive_icon_foreground: "branding/adaptive-foreground.png"
+  remove_alpha_ios: true
+
+flutter_native_splash:
+  color: "#F6F6F9"
+  image: branding/adaptive-foreground.png
+  android_12:
+    color: "#F6F6F9"
+    image: branding/adaptive-foreground.png

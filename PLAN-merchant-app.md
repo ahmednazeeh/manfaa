@@ -176,7 +176,10 @@ via the polymorphic device_tokens path the customer app already exercises
 - **MR5 More estate — SHIPPED 2026-08-17** (A-half: More shell + Profile
   + Cashback Settings; B-half same day: Employees/Roles/Branches/
   Promotions replaced the coming-soon routes — per-round notes below)
-- **MR6 Release — NEXT**
+- MR6 Release — DONE 2026-08-17 (Android; iOS waits on the APNs/.p8 +
+  Apple developer account track)
+- **MR7 Tablet optimisation — NEXT** (or the store-readiness items /
+  Firebase registration, owner's pick)
 - WL merchant.manfaa.app landing — SHIPPED 2026-08-17 (landing + split
   auth panels + real-Dashboard mockup; also retired the METRONIC template
   logo the auth cards had been shipping). Only the APK card remains,
@@ -371,16 +374,23 @@ harness goldens reviewed by EYE (light+dark, en+dv where layout-affecting)
       branches_light, promotions_light EYE-checked vs the refs.)
 
 ### MR6 — Release
-- [ ] Branding from Merchant App Logo.png: launcher icons + splash
+- [x] Branding from Merchant App Logo.png: launcher icons + splash
       (flutter_launcher_icons / flutter_native_splash), app label
-      "Manfaa Merchant".
-- [ ] NEW keystore `manfaa-merchant-release.jks` + key.properties
-      (separate key from customer — deliberate; back it up like the
-      customer one).
-- [ ] Download slot: `manfaa-merchant.apk` on the /app page (second card),
-      Cloudflare purge rule applies; set `MOBILE_MERCHANT_ANDROID_URL` /
-      admin App-releases gate values.
-- [ ] v1.0.0+1 build, on-device pass, commit + push.
+      "Manfaa Merchant". (2026-08-17: the illustrative storefront mark
+      extracted from the owner's logo file → branding/icon-1024.png +
+      adaptive-foreground; splash on the app canvas #F6F6F9.)
+- [x] NEW keystore `manfaa-merchant-release.jks` + key.properties
+      (separate key from customer — deliberate). (2026-08-17: jks +
+      key.properties copies live beside the customer's in /home/ubuntu,
+      chmod 600; OWNER: take an OFF-SERVER backup — losing this key
+      orphans every install.)
+- [x] Download slot: `manfaa-merchant.apk` on the /app page (second card),
+      Cloudflare purged; MOBILE_MERCHANT_ANDROID_* gates set in api/.env
+      and served by /api/mobile/v1/config. (2026-08-17.)
+- [x] v1.0.0+1 release APK built, signed with the merchant key
+      (verified: CN=Manfaa Merchant), live at
+      https://manfaa.app/app/manfaa-merchant.apk (78 MB, edge-fresh).
+      On-device pass = the owner's install. (2026-08-17.)
 
 ### MR7 — Tablet optimisation (merchant app only; owner-agreed 2026-08-17)
 
@@ -436,8 +446,8 @@ touches only apps/merchant.
       Entry step only: inside the signup wizard the panel disappears and
       the form stays clean. Today's login is a bare centered card on
       grey; that look retires.
-- [ ] After MR6 ships the APK: add the app download card
-      (manfaa-merchant.apk slot + Cloudflare purge rule applies).
+- [x] After MR6 ships the APK: the landing links the download
+      (2026-08-17).
 
 ## Store readiness (App Store / Play — from the 2026-08-17 approval review)
 

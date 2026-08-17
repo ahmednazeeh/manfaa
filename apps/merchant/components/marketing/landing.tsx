@@ -62,6 +62,18 @@ export function MerchantLanding() {
               <Link href="/login">{t('marketing.haveAccount')}</Link>
             </Button>
           </div>
+
+          {/* The WL follow-up that waited on MR6: the app is real now. */}
+          <a
+            href="https://manfaa.app/app/"
+            rel="noopener"
+            className="mt-1 inline-flex w-fit items-center gap-2 rounded-xl border border-border bg-background px-4 py-2.5 text-sm font-medium text-mono transition-colors hover:border-violet-600/40"
+          >
+            <span className="inline-flex size-7 items-center justify-center rounded-lg bg-violet-600/10 text-violet-600 dark:text-violet-400">
+              ⇩
+            </span>
+            {t('marketing.getApp')}
+          </a>
         </div>
 
         <MerchantPhone className="py-6" />
