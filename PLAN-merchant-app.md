@@ -176,7 +176,7 @@ via the polymorphic device_tokens path the customer app already exercises
 - **MR5 More estate — SHIPPED 2026-08-17** (A-half: More shell + Profile
   + Cashback Settings; B-half same day: Employees/Roles/Branches/
   Promotions replaced the coming-soon routes — per-round notes below)
-- MR6 Release — queued
+- **MR6 Release — NEXT**
 - WL merchant.manfaa.app landing — SHIPPED 2026-08-17 (landing + split
   auth panels + real-Dashboard mockup; also retired the METRONIC template
   logo the auth cards had been shipping). Only the APK card remains,
