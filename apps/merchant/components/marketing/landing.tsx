@@ -18,8 +18,8 @@ export function MerchantLanding() {
   const { t } = useTranslation();
 
   return (
-    <div className="flex min-h-screen flex-col bg-background">
-      <header className="container flex items-center justify-between gap-3 py-4">
+    <div className="flex min-h-screen w-full flex-col bg-background">
+      <header className="mx-auto flex w-full max-w-6xl items-center justify-between gap-3 px-5 py-4 sm:px-8">
         <div className="flex items-center gap-2">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
@@ -43,7 +43,7 @@ export function MerchantLanding() {
         </div>
       </header>
 
-      <main className="container grid grow items-center gap-10 py-10 lg:grid-cols-2 lg:gap-12 lg:py-14">
+      <main className="mx-auto grid w-full max-w-6xl grow items-center gap-10 px-5 py-10 sm:px-8 lg:grid-cols-2 lg:gap-12 lg:py-14">
         <div className="flex max-w-xl flex-col gap-6">
           <h1 className="text-3xl font-semibold leading-[1.12] text-mono sm:text-4xl">
             {t('marketing.headline')}
@@ -67,15 +67,17 @@ export function MerchantLanding() {
         <MerchantPhone className="py-6" />
       </main>
 
-      <footer className="container flex flex-wrap items-center justify-between gap-2 border-t border-border py-5 text-xs text-muted-foreground">
-        <span>© {new Date().getFullYear()} Manfaa</span>
-        <a
-          href="https://manfaa.app"
-          rel="noopener"
-          className="hover:text-foreground"
-        >
-          {t('marketing.forShoppers')}
-        </a>
+      <footer className="border-t border-border">
+        <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-2 px-5 py-5 text-xs text-muted-foreground sm:px-8">
+          <span>© {new Date().getFullYear()} Manfaa</span>
+          <a
+            href="https://manfaa.app"
+            rel="noopener"
+            className="hover:text-foreground"
+          >
+            {t('marketing.forShoppers')}
+          </a>
+        </div>
       </footer>
     </div>
   );
