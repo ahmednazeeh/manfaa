@@ -16,7 +16,7 @@ import { MerchantLanding } from '@/components/marketing/landing';
 export default async function HomePage() {
   const jar = await cookies();
 
-  if (jar.has('manfaa-session')) {
+  if (jar.has('manfaa-sid')) {
     redirect('/dashboard');
   }
 
