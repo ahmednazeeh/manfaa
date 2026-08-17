@@ -234,7 +234,15 @@ function Hero({ promoted }: { promoted: DiscoveryEntry | null }) {
           <h1 className="font-display font-dv-display text-3xl leading-[1.08] text-mono sm:text-4xl lg:text-5xl">
             <span className="block">{t('landing.heroTitleLead')}</span>
             <span className="block">{t('landing.heroTitleWhenYou')}</span>
-            <RotatingWords words={channels} className="text-brand" />
+            {/* The Rakuten treatment (owner call 2026-08-17): the changing
+                phrase rides a brand-colour highlight pill. The SOFT wash,
+                not the solid accent — the owner saw the solid block live
+                and called it too bright. The pill hugs each phrase; the
+                reserved box still never moves. */}
+            <RotatingWords
+              words={channels}
+              phraseClassName="rounded-2xl bg-brand-soft px-3 py-0.5 text-brand sm:px-3.5"
+            />
           </h1>
           <p className="text-sm/relaxed text-pretty text-muted-foreground sm:text-base/relaxed">
             {t('landing.heroSubtitle')}

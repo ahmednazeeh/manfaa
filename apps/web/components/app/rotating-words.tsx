@@ -35,9 +35,19 @@ const FADE_MS = 300;
 export function RotatingWords({
   words,
   className,
+  phraseClassName,
 }: {
   words: string[];
   className?: string;
+  /**
+   * Classes painted on the phrase itself — every invisible sizing run AND
+   * the visible one — so a highlight pill (padding, background) grows the
+   * reserved box identically and the metrics can never drift between what
+   * is measured and what is shown. The visible phrase shrinks to its own
+   * text (`justify-self-start w-fit`), so the pill hugs "dine in." instead
+   * of stretching to the width the longest phrase reserved.
+   */
+  phraseClassName?: string;
 }) {
   const [index, setIndex] = useState(0);
   const [shown, setShown] = useState(true);
@@ -73,7 +83,10 @@ export function RotatingWords({
         <span
           key={word}
           aria-hidden="true"
-          className="invisible col-start-1 row-start-1"
+          className={cn(
+            'invisible col-start-1 row-start-1 w-fit justify-self-start',
+            phraseClassName,
+          )}
         >
           {word}
         </span>
@@ -82,7 +95,8 @@ export function RotatingWords({
       <span
         aria-hidden="true"
         className={cn(
-          'col-start-1 row-start-1 transition-[opacity,transform] duration-300 ease-out motion-reduce:transition-none',
+          'col-start-1 row-start-1 w-fit justify-self-start transition-[opacity,transform] duration-300 ease-out motion-reduce:transition-none',
+          phraseClassName,
           shown ? 'translate-y-0 opacity-100' : '-translate-y-1 opacity-0',
         )}
       >
