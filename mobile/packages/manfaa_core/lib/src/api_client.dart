@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:dio/dio.dart';
 
 import 'errors.dart';
@@ -57,9 +59,15 @@ class ManfaaApi {
         await _get('/customer/me'),
       );
 
-  Future<HomeData> home() async => HomeData.fromJson(
-        await _get('/customer/home'),
-      );
+  Future<HomeData> home() async {
+    final data = HomeData.fromJson(await _get('/customer/home'));
+
+    // Keep the offline avatar cache honest: /home is the call every launch
+    // makes, so a picture changed on the website lands here first.
+    await session.setAvatarUrl(data.avatarUrl);
+
+    return data;
+  }
 
   /// Earnings history, cursor-paged (the list grows at the top).
   Future<CursorPage<TransactionEntry>> transactions({String? cursor}) =>
@@ -107,17 +115,31 @@ class ManfaaApi {
 
   /// The Discover landing feed. PUBLIC — no auth, served from the same
   /// origin outside /mobile/v1, cached 60s server-side and ETagged.
-  Future<DiscoverFeed> discover({double? lat, double? lng}) async {
+  Future<DiscoverFeed> discover({double? lat, double? lng, int? zone}) async {
     final data = await _run(
       () => dio.get<Map<String, dynamic>>(
         '${ApiEnv.publicBaseUrl}/discover',
-        queryParameters: {'lat': ?lat, 'lng': ?lng},
+        queryParameters: {'lat': ?lat, 'lng': ?lng, 'zone': ?zone},
       ),
     );
 
     return DiscoverFeed.fromJson(
       (data?['data'] as Map?)?.cast<String, dynamic>() ?? {},
     );
+  }
+
+  /// The islands the location picker offers (admin-drawn zones).
+  Future<List<ZoneEntry>> zones() async {
+    final data = await _run(
+      () => dio.get<Map<String, dynamic>>(
+        '${ApiEnv.publicBaseUrl}/discover/zones',
+      ),
+    );
+
+    return [
+      for (final item in (data?['data'] as List? ?? const []))
+        ZoneEntry.fromJson((item as Map).cast<String, dynamic>()),
+    ];
   }
 
   /// Directory search — name needle and/or curated category.
@@ -250,6 +272,7 @@ class ManfaaApi {
       token: payload['token'] as String? ?? '',
       customerCode: customer['customer_code']?.toString() ?? '',
       customerName: customer['name']?.toString() ?? '',
+      avatarUrl: customer['avatar_url'] as String?,
     );
   }
 
@@ -302,6 +325,37 @@ class ManfaaApi {
     return PayoutAccount.fromJson(
       (data?['data'] as Map?)?.cast<String, dynamic>() ?? {},
     );
+  }
+
+  // ---------------------------------------------------- profile picture
+
+  /// Upload or replace the profile picture. The bytes come from the OS
+  /// photo picker; the server validates type/size/dimensions and answers
+  /// the new content-addressed URL, which is cached in the session so every
+  /// avatar in the app repaints — offline included.
+  Future<String?> uploadAvatar({
+    required Uint8List bytes,
+    required String filename,
+  }) async {
+    final data = await _run(
+      () => dio.post<Map<String, dynamic>>(
+        '/customer/avatar',
+        data: FormData.fromMap({
+          'avatar': MultipartFile.fromBytes(bytes, filename: filename),
+        }),
+      ),
+    );
+
+    final url = (data?['data'] as Map?)?['avatar_url'] as String?;
+    await session.setAvatarUrl(url);
+
+    return url;
+  }
+
+  /// Remove the profile picture — back to initials everywhere.
+  Future<void> removeAvatar() async {
+    await _run(() => dio.delete<Map<String, dynamic>>('/customer/avatar'));
+    await session.setAvatarUrl(null);
   }
 
   Future<void> revokeDevice(int id) async =>

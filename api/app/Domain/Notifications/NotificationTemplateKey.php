@@ -20,6 +20,7 @@ namespace App\Domain\Notifications;
 enum NotificationTemplateKey: string
 {
     case CashbackEarned = 'cashback_earned';
+    case CashbackConfirmed = 'cashback_confirmed';
     case PayoutPaid = 'payout_paid';
 
     // Merchant-facing (M4). These reach the till app rather than a phone
@@ -34,6 +35,7 @@ enum NotificationTemplateKey: string
     {
         return match ($this) {
             self::CashbackEarned => 'Cashback earned',
+            self::CashbackConfirmed => 'Cashback confirmed',
             self::PayoutPaid => 'Payout paid',
             self::SettlementDue => 'Settlement due',
             self::SettlementAccepted => 'Settlement accepted',
@@ -46,6 +48,7 @@ enum NotificationTemplateKey: string
     {
         return match ($this) {
             self::CashbackEarned => 'The moment a store credits a sale. The highest-volume message on the platform — one per sale, per customer.',
+            self::CashbackConfirmed => 'When a sale\'s refund window closes (or a hold is released) and the pending cashback becomes confirmed. One per sale — skipped when it confirms in the same breath it was earned.',
             self::PayoutPaid => 'When a payout item is marked paid and the money is on its way to the customer\'s bank. One per customer per payout run.',
             self::SettlementDue => 'When a store creates a settlement and owes a transfer. Reaches staff who may see settlements.',
             self::SettlementAccepted => 'When Manfaa matches a store\'s transfer receipt and the settlement is paid off.',
@@ -65,6 +68,10 @@ enum NotificationTemplateKey: string
         return match ($this) {
             self::CashbackEarned => [
                 'amount' => 'The cashback earned, formatted with its currency',
+                'store' => 'The store name',
+            ],
+            self::CashbackConfirmed => [
+                'amount' => 'The cashback confirmed, formatted with its currency',
                 'store' => 'The store name',
             ],
             self::PayoutPaid => [
@@ -95,7 +102,7 @@ enum NotificationTemplateKey: string
     public function isForMerchantStaff(): bool
     {
         return match ($this) {
-            self::CashbackEarned, self::PayoutPaid => false,
+            self::CashbackEarned, self::CashbackConfirmed, self::PayoutPaid => false,
             self::SettlementDue, self::SettlementAccepted, self::SettlementRejected => true,
         };
     }
@@ -115,6 +122,7 @@ enum NotificationTemplateKey: string
     {
         return match ($this) {
             self::CashbackEarned => ['en' => 'Cashback earned', 'dv' => 'ކޭޝްބެކް ލިބިއްޖެ'],
+            self::CashbackConfirmed => ['en' => 'Cashback confirmed', 'dv' => 'ކޭޝްބެކް ކަށަވަރުވެއްޖެ'],
             self::PayoutPaid => ['en' => 'Payout sent', 'dv' => 'ފައިސާ ފޮނުވިއްޖެ'],
             self::SettlementDue => ['en' => 'Settlement due', 'dv' => 'ސެޓްލްމަންޓް ދައްކަންޖެހޭ'],
             self::SettlementAccepted => ['en' => 'Settlement accepted', 'dv' => 'ސެޓްލްމަންޓް ބަލައިގަނެވިއްޖެ'],

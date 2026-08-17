@@ -46,6 +46,8 @@ export const CustomerSchema = z.object({
   phone: z.string(),
   status: z.string(),
   kyc_status: z.string(),
+  /** Profile picture capability URL, null when none is set. */
+  avatar_url: z.string().nullish().default(null),
 });
 export type Customer = z.infer<typeof CustomerSchema>;
 
@@ -89,6 +91,40 @@ export function getCustomerMe(
   options: RequestOptions = {},
 ): Promise<CustomerResponse> {
   return apiFetch('/api/customer/auth/me', CustomerResponseSchema, {
+    signal: options.signal,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Profile picture
+// ---------------------------------------------------------------------------
+
+export const AvatarResponseSchema = dataWrapped(
+  z.object({ avatar_url: z.string().nullable() }),
+);
+export type AvatarResponse = z.infer<typeof AvatarResponseSchema>;
+
+/** POST /api/customer/avatar — multipart upload; replaces any existing one. */
+export function uploadCustomerAvatar(
+  file: File,
+  options: RequestOptions = {},
+): Promise<AvatarResponse> {
+  const body = new FormData();
+  body.append('avatar', file);
+
+  return apiFetch('/api/customer/avatar', AvatarResponseSchema, {
+    method: 'POST',
+    body,
+    signal: options.signal,
+  });
+}
+
+/** DELETE /api/customer/avatar — removes the picture; idempotent. */
+export function removeCustomerAvatar(
+  options: RequestOptions = {},
+): Promise<AvatarResponse> {
+  return apiFetch('/api/customer/avatar', AvatarResponseSchema, {
+    method: 'DELETE',
     signal: options.signal,
   });
 }

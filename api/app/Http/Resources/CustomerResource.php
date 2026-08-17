@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Domain\Customers\CustomerAvatar;
 use App\Models\Customer;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -23,6 +24,9 @@ class CustomerResource extends JsonResource
             'phone' => $this->maskedPhone(),
             'status' => $this->status,
             'kyc_status' => $this->kyc_status,
+            // Null until the customer sets a picture. Content-addressed
+            // (uuid per upload), so render it without cache-busting.
+            'avatar_url' => CustomerAvatar::url($this->resource),
         ];
     }
 

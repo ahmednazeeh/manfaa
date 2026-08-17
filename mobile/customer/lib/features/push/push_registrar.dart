@@ -1,6 +1,7 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -27,6 +28,8 @@ class PushRegistrar {
 
   final Ref _ref;
   bool _wired = false;
+  bool _tapsWired = false;
+  bool _foregroundWired = false;
 
   bool get _available => !kIsWeb && Firebase.apps.isNotEmpty;
 
@@ -103,11 +106,13 @@ class PushRegistrar {
   /// Notification taps land the user where the message points. The payload's
   /// `template` key is the API's contract (SendPushNotification sends it).
   void wireTapRouting(GoRouter router) {
-    if (!_available) return;
+    if (!_available || _tapsWired) return;
+    _tapsWired = true;
 
     void route(RemoteMessage message) {
       switch (message.data['template']) {
         case 'cashback_earned':
+        case 'cashback_confirmed':
         case 'payout_paid':
           router.go('/activity');
         default:
@@ -120,5 +125,51 @@ class PushRegistrar {
     }).catchError((_) {});
 
     FirebaseMessaging.onMessageOpenedApp.listen(route, onError: (_) {});
+  }
+
+  /// Foreground presentation, without which an OPEN app hears nothing.
+  ///
+  /// Android never shows a notification-payload message while the app is in
+  /// the foreground — FCM hands it to `onMessage` and stays silent, which is
+  /// exactly the "store credited me and my phone said nothing" report
+  /// (2026-08-17): the customer was looking at the app. Surfaced as a
+  /// SnackBar; iOS is told to keep its own system banner instead.
+  void wireForeground(GlobalKey<ScaffoldMessengerState> messenger) {
+    if (!_available || _foregroundWired) return;
+    _foregroundWired = true;
+
+    // iOS: let the system banner show in foreground, exactly as background.
+    FirebaseMessaging.instance
+        .setForegroundNotificationPresentationOptions(
+          alert: true,
+          badge: true,
+          sound: true,
+        )
+        .catchError((_) {});
+
+    FirebaseMessaging.onMessage.listen(
+      (message) {
+        // iOS already showed its banner via the options above.
+        if (defaultTargetPlatform == TargetPlatform.iOS) return;
+
+        final notification = message.notification;
+        if (notification == null) return;
+
+        final text = [notification.title, notification.body]
+            .whereType<String>()
+            .where((part) => part.trim().isNotEmpty)
+            .join(' — ');
+        if (text.isEmpty) return;
+
+        messenger.currentState?.showSnackBar(
+          SnackBar(
+            content: Text(text, maxLines: 3, overflow: TextOverflow.ellipsis),
+            duration: const Duration(seconds: 4),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      },
+      onError: (_) {},
+    );
   }
 }

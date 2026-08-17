@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Admin\ClaimsController as AdminClaimsController;
+use App\Http\Controllers\Customer\AvatarController;
 use App\Http\Controllers\Customer\BalanceController;
 use App\Http\Controllers\Customer\ClaimsController;
 use App\Http\Controllers\Customer\DiscoveryController;
@@ -8,6 +9,7 @@ use App\Http\Controllers\Customer\OtpAuthController;
 use App\Http\Controllers\Customer\PayoutAccountController;
 use App\Http\Controllers\Customer\PayoutsController;
 use App\Http\Controllers\Customer\TransactionsController;
+use App\Http\Controllers\CustomerAvatarController;
 use App\Http\Controllers\Devices\CustomerDevicesController;
 use Illuminate\Support\Facades\Route;
 
@@ -30,6 +32,16 @@ Route::prefix('customer')->middleware('auth:customer')->group(function () {
 
     Route::get('payout-account', [PayoutAccountController::class, 'show']);
     Route::post('payout-account', [PayoutAccountController::class, 'store']);
+
+    // Profile picture — set/replace and remove. The same two actions are
+    // mounted on the app in routes/api/mobile.php; reading the picture is
+    // the public capability URL at the bottom of this file. Throttled with
+    // its OWN key (see the keyed-throttle note in mobile.php): an unnamed
+    // throttle shares one per-IP bucket with every other unnamed throttle.
+    Route::post('avatar', [AvatarController::class, 'store'])
+        ->middleware('throttle:10,1,customer-avatar-upload');
+    Route::delete('avatar', [AvatarController::class, 'destroy'])
+        ->middleware('throttle:10,1,customer-avatar-remove');
 
     // Signed-in app devices, reachable from the WEBSITE with nothing but the
     // session — because the phone is what went missing. The same three
@@ -63,6 +75,7 @@ if (config('features.customer_claims')) {
 // with an internal-token exemption for the Next SSR origin — see
 // AppServiceProvider), dataset cached 60s in the service.
 Route::get('discover', [DiscoveryController::class, 'index'])->middleware('throttle:discovery');
+Route::get('discover/zones', [DiscoveryController::class, 'zones'])->middleware('throttle:discovery');
 
 // Storefront: paginated directory + per-slug store page. Same cache and
 // throttle discipline; the slug pattern is constrained so junk never reaches
@@ -71,3 +84,15 @@ Route::get('discover/merchants', [DiscoveryController::class, 'directory'])->mid
 Route::get('discover/merchants/{slug}', [DiscoveryController::class, 'show'])
     ->where('slug', '[a-z0-9-]{1,80}')
     ->middleware('throttle:discovery');
+
+// Customer profile pictures. No auth middleware ON PURPOSE: the uuid
+// filename segment is the authorisation — minted at upload, told only to
+// the account's own clients, dead on replace/remove. That is what lets one
+// URL render as a plain <img> on the website AND through the app's image
+// loader, which sends no bearer token. See CustomerAvatarController.
+// Throttle mirrors logos.php: generous, per-IP, keyed to its own bucket;
+// the response is immutable-cacheable so a real client fetches it once.
+Route::get('customers/{id}/avatar/{file}', CustomerAvatarController::class)
+    ->whereNumber('id')
+    ->where('file', '[0-9a-f-]{36}\.(?:jpg|png|webp)')
+    ->middleware('throttle:240,1,customer-avatar');

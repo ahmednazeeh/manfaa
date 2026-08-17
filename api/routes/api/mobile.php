@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Http\Controllers\Customer\AvatarController;
 use App\Http\Controllers\Devices\CustomerDevicesController;
 use App\Http\Controllers\Devices\CustomerPushTokenController;
 use App\Http\Controllers\Devices\MerchantDevicesController;
@@ -116,6 +117,16 @@ Route::prefix('mobile/v1')
                 // (the SIM-swap / stolen-token mitigation). The otp request
                 // carries its own shared SMS budget; the route throttle is a
                 // coarse backstop.
+                // Profile picture — the SAME controller the website mounts
+                // (routes/api/customer.php): one rule set, two doors.
+                // Reading the picture is the public capability URL in
+                // customer.php — the app's image loader sends no bearer
+                // token, so the URL itself must carry the authorisation.
+                Route::post('avatar', [AvatarController::class, 'store'])
+                    ->middleware('throttle:10,1,mobile-avatar-upload');
+                Route::delete('avatar', [AvatarController::class, 'destroy'])
+                    ->middleware('throttle:10,1,mobile-avatar-remove');
+
                 Route::get('payout-account', [PayoutAccountController::class, 'show']);
                 Route::post('payout-account/otp', [PayoutAccountController::class, 'requestOtp'])
                     ->middleware('throttle:10,1,mobile-payout-otp');

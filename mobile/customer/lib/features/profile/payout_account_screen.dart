@@ -31,31 +31,32 @@ class PayoutAccountScreen extends ConsumerWidget {
       appBar: AppBar(title: Text(l10n.payoutAccountTitle)),
       body: account.when(
         loading: () => ListView(
-          padding: const EdgeInsets.all(Gap.lg),
+          padding: const EdgeInsets.fromLTRB(Gap.lg, Gap.md, Gap.lg, Gap.huge),
           children: const [
-            SkeletonBox(height: 60, radius: Corner.control),
-            SizedBox(height: Gap.md),
-            SkeletonBox(height: 60, radius: Corner.control),
+            SkeletonBox(height: 60, width: 240),
+            SizedBox(height: Gap.lg),
+            SkeletonBox(height: 320, radius: Corner.card),
           ],
         ),
-        error: (e, _) => Center(
-          child: Padding(
-            padding: const EdgeInsets.all(Gap.huge),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  e is MobileApiException ? e.message : l10n.errorGeneric,
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: Gap.lg),
-                OutlinedButton(
-                  onPressed: () => ref.invalidate(payoutAccountProvider),
-                  child: Text(l10n.retry),
-                ),
-              ],
+        error: (e, _) => ListView(
+          padding: const EdgeInsets.fromLTRB(Gap.lg, Gap.md, Gap.lg, Gap.huge),
+          children: [
+            ManfaaCard(
+              child: Column(
+                children: [
+                  Text(
+                    e is MobileApiException ? e.message : l10n.errorGeneric,
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: Gap.lg),
+                  OutlinedButton(
+                    onPressed: () => ref.invalidate(payoutAccountProvider),
+                    child: Text(l10n.retry),
+                  ),
+                ],
+              ),
             ),
-          ),
+          ],
         ),
         data: (account) => _Form(account: account),
       ),
@@ -151,56 +152,76 @@ class _FormState extends ConsumerState<_Form> {
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final theme = Theme.of(context);
+    final muted = theme.colorScheme.onSurfaceVariant;
+    final infoTone = toneSurface(ToneSurface.info, theme.brightness);
 
     return ListView(
-      padding: const EdgeInsets.all(Gap.lg),
+      padding: const EdgeInsets.fromLTRB(Gap.lg, Gap.md, Gap.lg, Gap.huge),
       children: [
         Text(
           l10n.payoutAccountIntro,
-          style: theme.textTheme.bodyMedium
-              ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+          style: theme.textTheme.bodyMedium?.copyWith(color: muted),
         ),
         const SizedBox(height: Gap.lg),
-        Text(l10n.payoutBankLabel, style: theme.textTheme.labelLarge),
-        const SizedBox(height: Gap.sm),
-        // Locked once a code is out — the bank is part of what the code
-        // confirms, so it must not shift underneath the confirmation.
-        IgnorePointer(
-          ignoring: _busy || _codeSent,
-          child: Opacity(
-            opacity: _codeSent ? 0.6 : 1,
-            child: RadioGroup<String>(
-              groupValue: _bank,
-              onChanged: (v) => setState(() => _bank = v ?? _bank),
-              child: Column(
+
+        // The account details, one white card.
+        ManfaaCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
                 children: [
-                  for (final (value, label) in _banks)
-                    RadioListTile<String>(
-                      value: value,
-                      title: Text(label),
-                      contentPadding: EdgeInsets.zero,
-                    ),
+                  const IconTile(Icons.account_balance_rounded,
+                      tint: ManfaaTint.green, size: 40, iconSize: 20),
+                  const SizedBox(width: Gap.md),
+                  Text(l10n.payoutBankLabel,
+                      style: theme.textTheme.titleMedium),
                 ],
               ),
-            ),
+              const SizedBox(height: Gap.sm),
+              // Locked once a code is out — the bank is part of what the code
+              // confirms, so it must not shift underneath the confirmation.
+              IgnorePointer(
+                ignoring: _busy || _codeSent,
+                child: Opacity(
+                  opacity: _codeSent ? 0.6 : 1,
+                  child: RadioGroup<String>(
+                    groupValue: _bank,
+                    onChanged: (v) => setState(() => _bank = v ?? _bank),
+                    child: Column(
+                      children: [
+                        for (final (value, label) in _banks)
+                          RadioListTile<String>(
+                            value: value,
+                            title: Text(label),
+                            contentPadding: EdgeInsets.zero,
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: Gap.lg),
+              TextField(
+                controller: _accountNo,
+                enabled: !_codeSent,
+                keyboardType: TextInputType.number,
+                textDirection: TextDirection.ltr,
+                onChanged: (_) => setState(() {}),
+                decoration:
+                    InputDecoration(labelText: l10n.payoutAccountNoLabel),
+              ),
+              const SizedBox(height: Gap.md),
+              TextField(
+                controller: _accountName,
+                enabled: !_codeSent,
+                textCapitalization: TextCapitalization.words,
+                onChanged: (_) => setState(() {}),
+                decoration:
+                    InputDecoration(labelText: l10n.payoutAccountNameLabel),
+              ),
+            ],
           ),
-        ),
-        const SizedBox(height: Gap.md),
-        TextField(
-          controller: _accountNo,
-          enabled: !_codeSent,
-          keyboardType: TextInputType.number,
-          textDirection: TextDirection.ltr,
-          onChanged: (_) => setState(() {}),
-          decoration: InputDecoration(labelText: l10n.payoutAccountNoLabel),
-        ),
-        const SizedBox(height: Gap.md),
-        TextField(
-          controller: _accountName,
-          enabled: !_codeSent,
-          textCapitalization: TextCapitalization.words,
-          onChanged: (_) => setState(() {}),
-          decoration: InputDecoration(labelText: l10n.payoutAccountNameLabel),
         ),
         const SizedBox(height: Gap.lg),
 
@@ -208,34 +229,41 @@ class _FormState extends ConsumerState<_Form> {
         // visible: you cannot change the destination without proving the
         // phone.
         if (_codeSent) ...[
-          Card(
-            color:
-                toneSurface(ToneSurface.info, theme.brightness).background,
-            child: Padding(
-              padding: const EdgeInsets.all(Gap.lg),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(l10n.payoutOtpSent, style: theme.textTheme.bodyMedium),
-                  const SizedBox(height: Gap.md),
-                  TextField(
-                    controller: _code,
-                    keyboardType: TextInputType.number,
-                    maxLength: 6,
-                    autofocus: true,
-                    textAlign: TextAlign.center,
-                    textDirection: TextDirection.ltr,
-                    style: theme.textTheme.headlineSmall
-                        ?.copyWith(letterSpacing: 6),
-                    decoration:
-                        const InputDecoration(counterText: '', hintText: '••••••'),
-                    onChanged: (_) => setState(() {}),
-                  ),
-                ],
-              ),
+          ManfaaCard(
+            color: infoTone.background,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(Icons.sms_rounded,
+                        size: 20, color: infoTone.foreground),
+                    const SizedBox(width: Gap.md),
+                    Expanded(
+                      child: Text(l10n.payoutOtpSent,
+                          style: theme.textTheme.bodyMedium),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: Gap.md),
+                TextField(
+                  controller: _code,
+                  keyboardType: TextInputType.number,
+                  maxLength: 6,
+                  autofocus: true,
+                  textAlign: TextAlign.center,
+                  textDirection: TextDirection.ltr,
+                  style:
+                      theme.textTheme.headlineSmall?.copyWith(letterSpacing: 6),
+                  decoration:
+                      const InputDecoration(counterText: '', hintText: '••••••'),
+                  onChanged: (_) => setState(() {}),
+                ),
+              ],
             ),
           ),
-          const SizedBox(height: Gap.md),
+          const SizedBox(height: Gap.lg),
         ],
 
         if (_error != null) ...[
@@ -253,15 +281,28 @@ class _FormState extends ConsumerState<_Form> {
                   height: 20,
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
-              : Text(_codeSent ? l10n.payoutSaveAction : l10n.payoutSendCode),
+              : Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Flexible(
+                      child: Text(
+                        _codeSent ? l10n.payoutSaveAction : l10n.payoutSendCode,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const SizedBox(width: Gap.sm),
+                    const Icon(Icons.arrow_forward_rounded, size: 20),
+                  ],
+                ),
         ),
         Padding(
-          padding: const EdgeInsets.only(top: Gap.sm),
+          padding: const EdgeInsets.only(top: Gap.md),
           child: Text(
             l10n.payoutChangeEffective,
             textAlign: TextAlign.center,
-            style: theme.textTheme.bodySmall
-                ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+            style: theme.textTheme.bodySmall?.copyWith(color: muted),
           ),
         ),
       ],

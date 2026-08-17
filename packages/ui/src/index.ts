@@ -17,13 +17,20 @@ export { getDirection, useDirection, type Direction } from './direction';
 // live in the apps that use them — Tailwind does not scan this package.
 export {
   loadGoogleMaps,
+  type GGeocoder,
+  type GGeocoderAddressComponent,
+  type GGeocoderResult,
   type GInfoWindow,
   type GLatLng,
   type GLatLngBounds,
   type GLatLngLiteral,
+  type GListener,
   type GMap,
+  type GMapMouseEvent,
   type GMapsApi,
   type GMarker,
+  type GPolygon,
+  type GPolyline,
 } from './maps';
 
 // Single theming entry point for all three apps: light-first with dark mode.

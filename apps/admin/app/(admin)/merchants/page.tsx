@@ -20,6 +20,8 @@ import {
 } from '@/components/ui/table';
 import { PageHeader } from '@/components/admin/page-header';
 import { MerchantStatusBadge } from '@/components/admin/state-badge';
+import { FeaturedToggle } from '@/components/merchants/featured-toggle';
+import { MerchantSheet } from '@/components/merchants/merchant-sheet';
 import { NoticesSheet } from '@/components/merchants/notices-sheet';
 
 export default function MerchantsPage() {
@@ -31,8 +33,8 @@ export default function MerchantsPage() {
   return (
     <div className="flex flex-col">
       <PageHeader
-        title="Merchant standing"
-        description="Outstanding unfunded payables per merchant. Suspension at day 16 is automatic — it is the only credit control."
+        title="Merchants"
+        description="Standing, profile and controls per merchant. Suspension at day 16 is automatic — the only credit control; View opens the full record with the superadmin actions."
       />
 
       {query.isError ? (
@@ -51,18 +53,19 @@ export default function MerchantsPage() {
                   <TableRow>
                     <TableHead>Merchant</TableHead>
                     <TableHead>Status</TableHead>
+                    <TableHead className="text-center">Featured</TableHead>
                     <TableHead className="text-end">Open payables</TableHead>
                     <TableHead className="text-end">Outstanding</TableHead>
                     <TableHead className="text-end">Overdue</TableHead>
                     <TableHead>Oldest due</TableHead>
-                    <TableHead className="text-end">Notices</TableHead>
+                    <TableHead className="text-end">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {query.isPending ? (
                     Array.from({ length: 5 }).map((_, index) => (
                       <TableRow key={index}>
-                        <TableCell colSpan={7}>
+                        <TableCell colSpan={8}>
                           <Skeleton className="h-6 w-full" />
                         </TableCell>
                       </TableRow>
@@ -70,7 +73,7 @@ export default function MerchantsPage() {
                   ) : query.data.data.length === 0 ? (
                     <TableRow>
                       <TableCell
-                        colSpan={7}
+                        colSpan={8}
                         className="py-10 text-center text-muted-foreground"
                       >
                         No merchants found.
@@ -89,6 +92,9 @@ export default function MerchantsPage() {
                         </TableCell>
                         <TableCell>
                           <MerchantStatusBadge status={merchant.status} />
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <FeaturedToggle merchant={merchant} />
                         </TableCell>
                         <TableCell className="text-end">
                           {merchant.open_payable_count}
@@ -109,7 +115,10 @@ export default function MerchantsPage() {
                           {formatDateTime(merchant.oldest_due_at)}
                         </TableCell>
                         <TableCell className="text-end">
-                          <NoticesSheet merchant={merchant} />
+                          <div className="flex items-center justify-end gap-1.5">
+                            <MerchantSheet merchant={merchant} />
+                            <NoticesSheet merchant={merchant} />
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))

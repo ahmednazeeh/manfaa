@@ -44,11 +44,12 @@ class NotificationTemplatesController extends Controller
         $template = NotificationTemplate::query()->findOrFail($id);
 
         $validated = $request->validate([
-            // An SMS is billed per 160 characters (fewer once Thaana pushes
-            // it to unicode), so the ceiling is a real cost control, not a
-            // column width.
+            // An SMS is billed per 160 characters, so the ceiling is a real
+            // cost control, not a column width. Only the English body is
+            // editable: every notification sends English by decision
+            // (2026-08-17) — body_dv still exists as a column but is neither
+            // accepted nor read.
             'body_en' => ['sometimes', 'string', 'min:1', 'max:480'],
-            'body_dv' => ['sometimes', 'nullable', 'string', 'max:480'],
             'active' => ['sometimes', 'boolean'],
         ]);
 
@@ -79,15 +80,7 @@ class NotificationTemplatesController extends Controller
             'label' => $key->label(),
             'description' => $key->description(),
             'body_en' => $template->body_en,
-            'body_dv' => $template->body_dv,
             'active' => $template->active,
-            /**
-             * Which body actually goes out. Customers carry no language
-             * preference yet, so a written Dhivehi body wins and English is
-             * the fallback — stated here so the screen can say so rather
-             * than leaving an admin to guess which one they are editing.
-             */
-            'sends' => $template->sendsDhivehi() ? 'dv' : 'en',
             'variables' => collect($key->variables())
                 ->map(fn (string $description, string $token): array => [
                     'token' => $token,

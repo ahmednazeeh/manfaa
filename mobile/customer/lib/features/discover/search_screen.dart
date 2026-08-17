@@ -86,13 +86,24 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
         children: [
           Padding(
             padding: const EdgeInsets.all(Gap.lg),
-            child: TextField(
-              controller: _query,
-              autofocus: widget.category == null,
-              onChanged: _onChanged,
-              decoration: InputDecoration(
-                hintText: l10n.searchHint,
-                prefixIcon: const Icon(Icons.search_rounded),
+            // The Hero pairs with Discover's search icon: the tap morphs the
+            // small circle into this field.
+            child: Hero(
+              tag: 'discover-search',
+              child: Material(
+                type: MaterialType.transparency,
+                child: TextField(
+                  controller: _query,
+                  autofocus: widget.category == null,
+                  onChanged: _onChanged,
+                  decoration: InputDecoration(
+                    hintText: l10n.searchHint,
+                    prefixIcon: Icon(
+                      Icons.search_rounded,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
               ),
             ),
           ),
@@ -102,37 +113,58 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     );
   }
 
+  /// A centred hint state — the violet icon tile leading, like every other
+  /// empty state in the brand system.
+  Widget _hint(String message) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(Gap.huge),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const IconTile(Icons.search_rounded,
+                tint: ManfaaTint.violet, size: 56, iconSize: 28),
+            const SizedBox(height: Gap.lg),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _body(dynamic l10n) {
     if (_loading && _results == null) {
       return ListView(
         padding: const EdgeInsets.symmetric(horizontal: Gap.lg),
         children: const [
-          SkeletonBox(height: 68, radius: Corner.card),
+          SkeletonBox(height: 80, radius: Corner.card),
           SizedBox(height: Gap.sm),
-          SkeletonBox(height: 68, radius: Corner.card),
+          SkeletonBox(height: 80, radius: Corner.card),
         ],
       );
     }
 
     if (_error != null) {
-      return Center(child: Text(_error!));
-    }
-
-    final results = _results;
-    if (results == null) {
       return Center(
-        child: Text(
-          l10n.searchPrompt,
-          style: Theme.of(context)
-              .textTheme
-              .bodyMedium
-              ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
+        child: Padding(
+          padding: const EdgeInsets.all(Gap.huge),
+          child: Text(_error!, textAlign: TextAlign.center),
         ),
       );
     }
 
+    final results = _results;
+    if (results == null) {
+      return _hint(l10n.searchPrompt);
+    }
+
     if (results.stores.isEmpty) {
-      return Center(child: Text(l10n.searchEmpty));
+      return _hint(l10n.searchEmpty);
     }
 
     return ListView.separated(

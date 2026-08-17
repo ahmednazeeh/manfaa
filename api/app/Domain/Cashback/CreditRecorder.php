@@ -375,12 +375,9 @@ final readonly class CreditRecorder
                 // The service defers to afterCommit, so a sale that fails to
                 // commit never sends.
                 if (! $zeroed && $transaction->cashback_laari > 0) {
-                    $template = $this->notifications->template(NotificationTemplateKey::CashbackEarned);
-                    $dhivehi = $template?->sendsDhivehi() ?? false;
-
                     $this->notifications->send(NotificationTemplateKey::CashbackEarned, $customer, [
-                        'amount' => NotificationService::money((int) $transaction->cashback_laari, $dhivehi),
-                        'store' => (string) ($dhivehi && $merchant->name_dv !== null ? $merchant->name_dv : $merchant->name),
+                        'amount' => NotificationService::money((int) $transaction->cashback_laari),
+                        'store' => (string) $merchant->name,
                     ]);
                 }
 

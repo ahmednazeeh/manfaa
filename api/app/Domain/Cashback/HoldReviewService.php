@@ -6,6 +6,8 @@ namespace App\Domain\Cashback;
 
 use App\Domain\Adjustment\ReversalOutcome;
 use App\Domain\Adjustment\ReversalService;
+use App\Domain\Notifications\NotificationService;
+use App\Domain\Notifications\NotificationTemplateKey;
 use App\Models\AdminUser;
 use App\Models\Transaction;
 use Carbon\CarbonImmutable;
@@ -53,6 +55,7 @@ final readonly class HoldReviewService
     public function __construct(
         private TransitionService $transitions,
         private ReversalService $reversals,
+        private NotificationService $notifications,
     ) {}
 
     /**
@@ -195,6 +198,21 @@ final readonly class HoldReviewService
                     $meta,
                     clockStartAt: $resumeFrom,
                 );
+
+                // The customer's Pending just became Confirmed — the same
+                // moment the sweeper announces when a window closes. Only on
+                // the RELEASE-TO-CLOCK outcome: a release back to
+                // awaiting_validation confirms nothing yet, and the sweeper
+                // will speak when the window closes. Deferred to afterCommit
+                // inside the service, so a rolled-back release never sends.
+                $customer = $locked->customer;
+
+                if ($customer !== null && (int) $locked->cashback_laari > 0) {
+                    $this->notifications->send(NotificationTemplateKey::CashbackConfirmed, $customer, [
+                        'amount' => NotificationService::money((int) $locked->cashback_laari),
+                        'store' => (string) $locked->merchant?->name,
+                    ]);
+                }
             } else {
                 $this->transitions->transition(
                     $locked,

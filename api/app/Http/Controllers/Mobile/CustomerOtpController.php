@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Mobile;
 
+use App\Domain\Customers\CustomerAvatar;
 use App\Domain\Customers\InvalidOtpException;
 use App\Domain\Customers\InvalidSignupTokenException;
 use App\Domain\Customers\Msisdn;
@@ -181,6 +182,9 @@ final class CustomerOtpController extends Controller
                     'id' => $customer->getKey(),
                     'name' => $customer->name,
                     'customer_code' => $customer->customer_code,
+                    // Cached beside name/code on the device so the top bar
+                    // renders the picture offline. Null until one is set.
+                    'avatar_url' => CustomerAvatar::url($customer),
                 ],
             ],
         ], $created ? 201 : 200);

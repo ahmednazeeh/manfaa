@@ -87,13 +87,8 @@ final readonly class ItemResultService
         $customer = $item->customer;
 
         if ($customer !== null) {
-            $template = $this->notifications->template(NotificationTemplateKey::PayoutPaid);
-
             $this->notifications->send(NotificationTemplateKey::PayoutPaid, $customer, [
-                'amount' => NotificationService::money(
-                    (int) $item->amount_laari,
-                    $template?->sendsDhivehi() ?? false,
-                ),
+                'amount' => NotificationService::money((int) $item->amount_laari),
                 'reference' => (string) ($reference ?? ''),
             ]);
         }

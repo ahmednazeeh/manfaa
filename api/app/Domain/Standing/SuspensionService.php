@@ -18,12 +18,18 @@ use Illuminate\Support\Facades\DB;
 /**
  * Day 16 of the §7 clock and its reversal.
  *
- * Suspension is automatic — it is the only credit control, and a manual
- * suspension would make the exposure bound fictional. A merchant is overdue
- * when any payable_unfunded transaction sits past its due_at. Merchants have
- * no event table, so the status column is written directly; the merchant
+ * Suspension is automatic — it is the only CREDIT control, and a manual
+ * suspension can never substitute for it. A merchant is overdue when any
+ * payable_unfunded transaction sits past its due_at. Merchants have no
+ * event table, so the status column is written directly; the merchant
  * notice row is the recorded outcome. Suspension stops cashback CREATION —
  * ManualCreditService already refuses non-active merchants.
+ *
+ * Beside the automatic control sits suspendManually(): the superadmin's
+ * conduct lever (fraud, abuse, a store that must leave the shelves NOW),
+ * recorded in the same notice trail with {manual: true, reason, admin_id}.
+ * It runs the identical state machine — status write, discovery-cache drop,
+ * notice, webhook — so the two doors into 'suspended' cannot drift apart.
  *
  * Every status write here also drops the public discovery read model
  * (DiscoveryService::forgetMerchant). The storefront lists ACTIVE merchants
@@ -38,9 +44,10 @@ use Illuminate\Support\Facades\DB;
  * the merchant back to active on its own.
  *
  * Reinstatement is deliberately NARROWER than suspension. It only reverses
- * suspensions this service itself imposed — evidenced by a 'suspended'
- * notice newer than the last 'reinstated' one — so a status an admin set by
- * hand is never quietly undone. And a merchant with written-off debt never
+ * suspensions the AUTOMATIC control imposed — evidenced by a non-manual
+ * 'suspended' notice newer than the last 'reinstated' one — so a suspension
+ * an admin imposed by hand (suspendManually writes {manual: true}) is never
+ * quietly undone by the sweep. And a merchant with written-off debt never
  * auto-reinstates: the 90-day write-off clears the overdue query by moving
  * the rows to written_off, but the debt was defaulted on, not paid, and
  * suspension is the only credit control (§7). Bringing a defaulted merchant
@@ -105,13 +112,17 @@ final readonly class SuspensionService
             // it must not unlock the door it caused to be shut.
             ->whereDoesntHave('transactions', fn (Builder $query) => $query
                 ->where('state', TransactionState::WrittenOff->value))
-            // Only reverse our own automatic suspension: the latest
+            // Only reverse the AUTOMATIC suspension: the latest non-manual
             // 'suspended' notice must postdate the latest 'reinstated' one.
-            // A manual status change leaves no such notice and stays put.
+            // A manual suspension writes {manual: true} and is excluded, so
+            // a store a superadmin shut by hand — which typically has no
+            // overdue debt at all — is not reopened by the next half-hourly
+            // sweep. A raw status edit leaves no notice and stays put too.
             ->whereRaw(<<<'SQL'
                 COALESCE((
                     SELECT MAX(sent_at) FROM merchant_notices
                     WHERE merchant_id = merchants.id AND type = 'suspended'
+                      AND COALESCE((payload->>'manual')::boolean, false) = false
                 ), 'epoch'::timestamptz) > COALESCE((
                     SELECT MAX(sent_at) FROM merchant_notices
                     WHERE merchant_id = merchants.id AND type = 'reinstated'
@@ -177,6 +188,47 @@ final readonly class SuspensionService
         $this->webhooks->dispatch(WebhookEvents::MERCHANT_REINSTATED, [
             'merchant_id' => $merchant->id,
             'reinstated_at' => $now->toIso8601String(),
+        ]);
+    }
+
+    /**
+     * The manual suspension a superadmin imposes by hand — conduct, fraud,
+     * or anything else that must take a store off the shelves before any §7
+     * clock would. Mirrors reinstateManually(): the same status write, the
+     * same immediate discovery-cache drop, a notice in the same append-only
+     * trail carrying {manual: true, reason, admin_id}, and the same §9.3
+     * webhook the automatic control emits — with reason 'manual' so a till
+     * can tell the two apart.
+     *
+     * The {manual: true} flag is ALSO what keeps the automatic reinstate
+     * sweep's hands off: reinstate() ignores manual 'suspended' notices, so
+     * a store suspended by hand — which usually owes nothing overdue —
+     * only comes back through the deliberate admin reinstate action.
+     */
+    public function suspendManually(Merchant $merchant, string $reason, int $adminId): void
+    {
+        $now = CarbonImmutable::now('UTC');
+
+        $merchant->update(['status' => 'suspended']);
+
+        // The storefront advertises ACTIVE stores only — drop the cached
+        // shelves, rail counts and store page now, not 60 seconds from now.
+        DiscoveryService::forgetMerchant($merchant);
+
+        $this->notices->record($merchant->id, 'suspended', [
+            'manual' => true,
+            'reason' => $reason,
+            'admin_id' => $adminId,
+            'suspended_at' => $now->toIso8601String(),
+        ]);
+
+        // §9.3: tills stop advertising cashback on receipt, exactly as for
+        // the automatic day-16 suspension — the vendor cares that cashback
+        // stopped, not which door shut it.
+        $this->webhooks->dispatch(WebhookEvents::MERCHANT_SUSPENDED, [
+            'merchant_id' => $merchant->id,
+            'reason' => 'manual',
+            'suspended_at' => $now->toIso8601String(),
         ]);
     }
 

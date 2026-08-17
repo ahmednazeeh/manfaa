@@ -129,6 +129,41 @@ export function inStoreEntries(sections: DiscoverySections): DiscoveryEntry[] {
 }
 
 /**
+ * Category slugs that read as "somewhere you eat". The API has no dine-in
+ * CHANNEL, so the "Dine in" section is a category facet derived client-side.
+ * The set names the curated slugs that exist today (`restaurant`, `cafe`)
+ * plus the dining-ish slugs a future curated list would plausibly use — an
+ * unknown food slug degrades to "not in the dining shelf", never to an
+ * error.
+ */
+const DINING_SLUGS = new Set([
+  'restaurant',
+  'restaurants',
+  'cafe',
+  'cafes',
+  'coffee',
+  'bakery',
+  'dining',
+  'dine-in',
+  'food',
+  'food-and-drink',
+  'fast-food',
+]);
+
+/**
+ * The dine-in facet: every listed store whose curated category is a place
+ * you eat. Filtered over `recently_added` because that shelf carries the
+ * complete listed set (every shelf shares one SECTION_LIMIT cap server-side
+ * — today that cap comfortably exceeds the catalogue; if the platform ever
+ * outgrows it, this facet belongs in the API next to `in_store`/`online`).
+ */
+export function diningEntries(sections: DiscoverySections): DiscoveryEntry[] {
+  return sections.recently_added.filter(
+    (entry) => entry.category !== null && DINING_SLUGS.has(entry.category),
+  );
+}
+
+/**
  * Whether the platform has anything to show at all.
  *
  * `recently_added` alone would answer this, being the complete listed set —
@@ -302,8 +337,10 @@ export function MerchantCard({ entry }: { entry: DiscoveryEntry }) {
   );
 }
 
-/** Shelf/section heading with its optional "see all" link and actions. */
-function ShelfHeader({
+/** Shelf/section heading with its optional "see all" link and actions.
+ *  Exported for the landing page's "Near you" shell, which needs the
+ *  heading before it has any entries to hand StoreShelf. */
+export function ShelfHeader({
   icon: Icon,
   title,
   viewAllHref,

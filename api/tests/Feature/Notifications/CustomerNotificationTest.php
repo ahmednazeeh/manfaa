@@ -4,11 +4,17 @@ declare(strict_types=1);
 
 use App\Domain\Notifications\NotificationService;
 use App\Domain\Notifications\NotificationTemplateKey;
+use App\Domain\Standing\ValidationSweeper;
 use App\Jobs\SendCustomerSms;
 use App\Models\AdminUser;
 use App\Models\Customer;
+use App\Models\Merchant;
 use App\Models\NotificationTemplate;
+use App\Models\Transaction;
+use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
 
@@ -21,6 +27,10 @@ uses(TestCase::class, RefreshDatabase::class);
  */
 beforeEach(function () {
     $this->admin = AdminUser::factory()->create(['role' => 'superadmin']);
+});
+
+afterEach(function () {
+    Carbon::setTestNow();
 });
 
 it('seeds one template per moment in the catalogue, and no others', function () {
@@ -71,10 +81,10 @@ it('renders the tokens it knows and leaves a mistyped one visible', function () 
     ))->toBe('You earned MVR 9.60 at Island Mart, not {{ammount}}.');
 });
 
-it('writes money the way the template\'s own language writes it', function () {
-    // Never "MVR" inside a Thaana sentence, and the word follows the figure.
-    expect(NotificationService::money(123456, dhivehi: true))->toBe('1,234.56 ރުފިޔާ')
-        ->and(NotificationService::money(123456, dhivehi: false))->toBe('MVR 1,234.56');
+it('writes money in English, always', function () {
+    // Every notification body is English by decision (2026-08-17), so money
+    // is always "MVR" before the figure.
+    expect(NotificationService::money(123456))->toBe('MVR 1,234.56');
 });
 
 it('queues exactly one message for an active template', function () {
@@ -90,6 +100,57 @@ it('queues exactly one message for an active template', function () {
     Queue::assertPushed(SendCustomerSms::class, 1);
 });
 
+it('sends the English body even when a Dhivehi one is on file', function () {
+    // The 2026-08-17 decision: every notification goes out in English. The
+    // body_dv column survives, but nothing reads it any more.
+    Queue::fake();
+
+    NotificationTemplate::query()->where('key', 'payout_paid')->update([
+        'active' => true,
+        'body_en' => 'Paid {{amount}}. Ref {{reference}}.',
+        'body_dv' => 'މަންފާ އިން {{amount}} ލިބިއްޖެ.',
+    ]);
+
+    app(NotificationService::class)->send(
+        NotificationTemplateKey::PayoutPaid,
+        Customer::factory()->create(['phone' => '+9607712345']),
+        ['amount' => 'MVR 40.00', 'reference' => 'FT1'],
+    );
+
+    Queue::assertPushed(SendCustomerSms::class, function (SendCustomerSms $job): bool {
+        $body = (fn (): string => $this->body)->call($job);
+
+        return $body === 'Paid MVR 40.00. Ref FT1.';
+    });
+});
+
+it('tells the customer when their cashback is validated onto the clock', function () {
+    // The owner's 2026-08-17 ask: a message at the moment Pending becomes
+    // Confirmed. The sweeper is that moment for every windowed sale.
+    Queue::fake();
+
+    $occurredAt = CarbonImmutable::parse('2026-08-01T10:00:00+00:00');
+    Carbon::setTestNow($occurredAt);
+
+    $merchant = Merchant::factory()->create(['validation_window_days' => 1]);
+    $customer = Customer::factory()->create(['phone' => '+9607712345']);
+
+    Transaction::factory()->for($merchant)->for($customer)->create([
+        'state' => 'awaiting_validation',
+        'occurred_at' => $occurredAt,
+        'cashback_laari' => 750,
+    ]);
+
+    Carbon::setTestNow($occurredAt->addDay());
+    app(ValidationSweeper::class)->run();
+
+    Queue::assertPushed(SendCustomerSms::class, function (SendCustomerSms $job) use ($merchant): bool {
+        $body = (fn (): string => $this->body)->call($job);
+
+        return str_contains($body, 'MVR 7.50') && str_contains($body, (string) $merchant->name);
+    });
+});
+
 it('lets a superadmin rewrite the words and switch a template on', function () {
     $template = NotificationTemplate::query()->where('key', 'cashback_earned')->sole();
 
@@ -100,9 +161,10 @@ it('lets a superadmin rewrite the words and switch a template on', function () {
         ])
         ->assertOk()
         ->assertJsonPath('data.active', true)
-        // The screen is told which body actually goes out, rather than
-        // leaving an admin to guess which one they just edited.
-        ->assertJsonPath('data.sends', 'dv')
+        // English is the only body: no language indicator and no body_dv
+        // travel on the wire any more.
+        ->assertJsonMissingPath('data.sends')
+        ->assertJsonMissingPath('data.body_dv')
         ->assertJsonPath('data.variables.0.token', 'amount');
 
     expect($template->refresh()->body_en)->toBe('Nice one — {{amount}} back from {{store}}.')
@@ -124,4 +186,28 @@ it('refuses a body long enough to become several billed messages', function () {
         ->patchJson("/api/admin/notification-templates/{$id}", ['body_en' => str_repeat('a', 481)])
         ->assertStatus(422)
         ->assertJsonValidationErrors('body_en');
+});
+
+it('survives a poisoned template cache instead of eating the notification', function () {
+    // The 2026-08-17 incident: a serialized MODEL cached by one build came
+    // back as __PHP_Incomplete_Class under another, template() hit its own
+    // return type, and the payout-paid push died before dispatch. The cache
+    // now stores attributes; anything else in the slot is a miss.
+    $service = app(NotificationService::class);
+    $key = NotificationTemplateKey::PayoutPaid;
+
+    // Garbage of the exact hostile shape: an object, not an array.
+    Cache::put(
+        'notification_template:v1:'.$key->value,
+        new stdClass,
+        300,
+    );
+
+    $template = $service->template($key);
+
+    expect($template)->not->toBeNull()
+        ->and($template->getAttribute('key'))->toBe(NotificationTemplateKey::PayoutPaid);
+
+    // And the healed cache round-trips as a real model.
+    expect($service->template($key)?->body())->toBe($template->body());
 });

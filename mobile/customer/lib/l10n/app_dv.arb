@@ -7,8 +7,12 @@
   "tabProfile": "ޕްރޮފައިލް",
   "signInTitle": "ސައިން އިން",
   "signInSubtitle": "ރާއްޖޭގެ ފިހާރަތަކުން ކޭޝްބެކް ހޯއްދަވާ.",
+  "welcomeTitle": "މަރުޙަބާ",
+  "securityTitle": "ތިޔަބޭފުޅާގެ ރިވޯޑްތައް ރައްކާތެރި.",
+  "securityBody": "ޑޭޓާ ރައްކާތެރިކުރުމަށް ބޭންކް ފެންވަރުގެ އެންކްރިޕްޝަން ބޭނުންކުރަން.",
   "phoneLabel": "ފޯނު ނަންބަރު",
-  "phoneHint": "7XXXXXX",
+  "phoneHint": "7XXX XXXX",
+  "otpDeliveryNote": "ނަންބަރު ޔަޤީންކުރުމަށް OTP އެއް ފޮނުވާނަން.",
   "continueLabel": "ކުރިއަށް",
   "homeGreeting": "މަރުޙަބާ {name}",
   "@homeGreeting": {
@@ -21,6 +25,12 @@
   "yourCode": "ތިޔަބޭފުޅާގެ މަންފާ ކޯޑު",
   "showAtTill": "ކޭޝްބެކް ލިބުމަށް މި ކޯޑު ފިހާރައިގައި ދައްކަވާ.",
   "tapForFullscreen": "ފުލްސްކްރީނަށް ފިއްތަވާ",
+  "homeSubtitle": "މަރުޙަބާ! މިއޮތީ ތިޔަބޭފުޅާގެ ކޭޝްބެކް ޚުލާސާ.",
+  "homeCodeHint": "ކޭޝްބެކް ހޯއްދެވުމަށް ފިހާރައިގައި މި ކޯޑު ނުވަތަ QR ދައްކަވާ.",
+  "viewTransactions": "މުޢާމަލާތްތައް ބައްލަވާ",
+  "discoverOffersTitle": "އޮފާތައް ހޯއްދަވާ",
+  "discoverOffersBody": "ކައިރީގައި ހުރި އަދި ފީޗާޑް ކޭޝްބެކް މާޗަންޓުން ބައްލަވާ.",
+  "badgeNew": "އައު",
   "availableCashback": "ލިބެން ހުރި ކޭޝްބެކް",
   "confirmedHint": "ޔަޤީންވެ، ދެން އަންނަ ޕޭއައުޓަށް ތައްޔާރު.",
   "pendingLine": "{amount} މަޑުކުރެވިފައި — ފިހާރައިން ޔަޤީންކުރުމުން ލިބޭނެ.",
@@ -54,7 +64,17 @@
   "profileLanguage": "ބަސް",
   "languageEnglish": "English",
   "languageDhivehi": "ދިވެހި",
+  "profileTheme": "ބަލާ ގޮތް",
+  "themeSystem": "ސިސްޓަމް",
+  "themeLight": "އަލި",
+  "themeDark": "އަނދިރި",
   "profileDevices": "ސައިން އިން ކުރެވިފައިވާ ޑިވައިސްތައް",
+  "profilePhotoTitle": "ޕްރޮފައިލް ފޮޓޯ",
+  "profilePhotoEdit": "ޕްރޮފައިލް ފޮޓޯ ބަދަލުކުރައްވާ",
+  "choosePhoto": "ފޮޓޯއެއް ހޮއްވަވާ",
+  "removePhoto": "ފޮޓޯ ފޮހެލައްވާ",
+  "photoUpdated": "ޕްރޮފައިލް ފޮޓޯ އަޕްޑޭޓް ކުރެވިއްޖެ.",
+  "photoRemoved": "ޕްރޮފައިލް ފޮޓޯ ފޮހެލެވިއްޖެ.",
   "signOut": "ސައިން އައުޓް",
   "signOutConfirmTitle": "ސައިން އައުޓް ކުރައްވަނީތޯ؟",
   "signOutConfirmBody": "ކޯޑާއި ބެލެންސް ރައްކާތެރިކޮށް ހުންނާނެ — ކޮންމެ އިރަކުވެސް އަނބުރާ ސައިން އިން ކުރެއްވޭނެ.",
@@ -154,6 +174,7 @@
       }
     }
   },
+  "searchIsland": "ރަށް ހޯއްދަވާ",
   "shelfBoosted": "މިވަގުތު އިތުރުކުރެވިފައި",
   "shelfFeatured": "ޚާއްޞަ",
   "shelfNearby": "ކައިރީގައި",
@@ -249,7 +270,36 @@
   "payoutSaveAction": "އެކައުންޓް ސޭވްކުރޭ",
   "payoutAccountSaved": "ޕޭއައުޓް އެކައުންޓް އަޕްޑޭޓް ކުރެވިއްޖެ.",
   "payoutChangeEffective": "ބަދަލު އަސަރުކުރާނީ ދެން އަންނަ ޕޭއައުޓުން ފެށިގެން.",
+  "discoverSubtitle": "ކައިރީގައި ހުރި އަދި ޚާއްޞަ ކޭޝްބެކް އޮފާތައް ހޯއްދަވާ.",
+  "discoverLocation": "މާލެ، ދިވެހިރާއްޖެ",
+  "discoverSearchHint": "ފިހާރަ، ކެފޭ، ބޭސްފިހާރަ ހޯއްދަވާ…",
+  "featuredOffers": "ޚާއްޞަ އޮފާތައް",
+  "cashbackWord": "ކޭޝްބެކް",
+  "kmAway": "{km} ކިލޯމީޓަރު ދުރުގައި",
+  "@kmAway": {
+    "placeholders": {
+      "km": {
+        "type": "String"
+      }
+    }
+  },
   "notificationsTitle": "ނޮޓިފިކޭޝަން",
   "notificationsBody": "ކޭޝްބެކް ލިބުމުން އަދި ފައިސާ ދެއްކުމުން އެންގުން ލިބޭ.",
-  "a11yShowQr": "މަންފާ ކޯޑު ފުލްސްކްރީނުގައި ދައްކާ"
+  "a11yShowQr": "މަންފާ ކޯޑު ފުލްސްކްރީނުގައި ދައްކާ",
+  "nearMe": "އަހަރެން ކައިރީ",
+  "areaEverywhere": "މުޅި ރާއްޖެ",
+  "locationPickerTitle": "ވިޔަފާރި ކުރައްވަނީ ކޮންތާކު؟",
+  "locationDenied": "ލޮކޭޝަން ހުއްދަ ނުދެއްވި — ރަށެއް ޚިޔާރުކުރައްވާ.",
+  "locationFailed": "ލޮކޭޝަން ނުލިބުނު. ރަށެއް ޚިޔާރުކުރައްވާ.",
+  "zoneStoreCount": "{count, plural, =0{އަދި ފިހާރައެއް ނެތް} =1{1 ފިހާރަ} other{{count} ފިހާރަ}}",
+  "@zoneStoreCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "storeCall": "ގުޅުއްވާ",
+  "storeWebsite": "ވެބްސައިޓް",
+  "storeMap": "ޗާޓުގައި"
 }

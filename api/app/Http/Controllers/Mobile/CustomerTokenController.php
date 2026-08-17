@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Mobile;
 
+use App\Domain\Customers\CustomerAvatar;
 use App\Domain\Customers\Msisdn;
 use App\Domain\Mobile\MobileAudience;
 use App\Domain\Mobile\MobileTokenService;
@@ -98,6 +99,9 @@ final class CustomerTokenController extends Controller
                     'id' => $customer->getKey(),
                     'name' => $customer->name,
                     'customer_code' => $customer->customer_code,
+                    // Cached beside name/code on the device so the top bar
+                    // renders the picture offline. Null until one is set.
+                    'avatar_url' => CustomerAvatar::url($customer),
                 ],
             ],
         ], 201);

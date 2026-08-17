@@ -30,10 +30,10 @@ class PayoutDetailScreen extends ConsumerWidget {
       appBar: AppBar(title: Text(l10n.payoutDetailTitle)),
       body: detail.when(
         loading: () => ListView(
-          padding: const EdgeInsets.all(Gap.lg),
+          padding: const EdgeInsets.fromLTRB(Gap.lg, Gap.lg, Gap.lg, Gap.huge),
           children: const [
             SkeletonBox(height: 160, radius: Corner.card),
-            SizedBox(height: Gap.md),
+            SizedBox(height: Gap.lg),
             SkeletonBox(height: 220, radius: Corner.card),
           ],
         ),
@@ -74,68 +74,113 @@ class _Detail extends StatelessWidget {
     final theme = Theme.of(context);
     final payout = detail.payout;
 
+    final (label, tone) = switch (payout.status) {
+      'paid' => (l10n.payoutPaid, StatusTone.confirmed),
+      'sent' => (l10n.payoutSent, StatusTone.paid),
+      _ => (l10n.payoutFailed, StatusTone.attention),
+    };
+    final tint = switch (payout.status) {
+      'paid' => ManfaaTint.green,
+      'sent' => ManfaaTint.blue,
+      _ => ManfaaTint.coral,
+    };
+
     return ListView(
-      padding: const EdgeInsets.all(Gap.lg),
+      padding: const EdgeInsets.fromLTRB(Gap.lg, Gap.lg, Gap.lg, Gap.huge),
       children: [
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(Gap.xl),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                MoneyText(payout.amountLaari,
-                    style: theme.textTheme.displaySmall),
-                const SizedBox(height: Gap.lg),
-                _row(theme, l10n.payoutPeriodLabel,
-                    '${formatDayMonth(payout.periodStart)} – ${formatDayMonth(payout.periodEnd)}'),
-                if (payout.reference != null)
-                  _row(theme, l10n.payoutReferenceLabel, payout.reference!),
-                if (payout.accountMasked != null)
-                  _row(theme, l10n.payoutAccountLabel,
-                      '${payout.bank} ${payout.accountMasked}'),
-                if (payout.paidAt != null)
-                  _row(theme, l10n.payoutPaidAtLabel,
-                      formatDayMonth(payout.paidAt!)),
-              ],
-            ),
+        ManfaaCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  IconTile(Icons.account_balance_rounded, tint: tint),
+                  const Spacer(),
+                  StatusChip(label: label, tone: tone),
+                ],
+              ),
+              const SizedBox(height: Gap.lg),
+              MoneyText(
+                payout.amountLaari,
+                style: theme.textTheme.displaySmall
+                    ?.copyWith(color: theme.colorScheme.onSurface),
+              ),
+              const SizedBox(height: Gap.lg),
+              Divider(color: theme.colorScheme.outlineVariant),
+              const SizedBox(height: Gap.lg),
+              _row(theme, l10n.payoutPeriodLabel,
+                  '${formatDayMonth(payout.periodStart)} – ${formatDayMonth(payout.periodEnd)}'),
+              if (payout.reference != null)
+                _row(theme, l10n.payoutReferenceLabel, payout.reference!),
+              if (payout.accountMasked != null)
+                _row(theme, l10n.payoutAccountLabel,
+                    '${payout.bank} ${payout.accountMasked}'),
+              if (payout.paidAt != null)
+                _row(theme, l10n.payoutPaidAtLabel,
+                    formatDayMonth(payout.paidAt!)),
+            ],
           ),
         ),
         if (payout.status == 'failed') ...[
-          const SizedBox(height: Gap.md),
+          const SizedBox(height: Gap.lg),
           Builder(builder: (context) {
             final tone =
                 toneSurface(ToneSurface.attention, theme.brightness);
-            return Card(
+            return ManfaaCard(
               color: tone.background,
-              child: Padding(
-                padding: const EdgeInsets.all(Gap.lg),
-                child: Text(
-                  l10n.payoutFailedDetail,
-                  style: theme.textTheme.bodyMedium
-                      ?.copyWith(color: tone.foreground),
-                ),
+              padding: const EdgeInsets.all(Gap.lg),
+              child: Text(
+                l10n.payoutFailedDetail,
+                style: theme.textTheme.bodyMedium
+                    ?.copyWith(color: tone.foreground),
               ),
             );
           }),
         ],
-        const SizedBox(height: Gap.lg),
-        Text(
-          l10n.payoutCovered(detail.covered.length),
-          style: theme.textTheme.titleMedium,
-        ),
-        const SizedBox(height: Gap.sm),
-        Card(
+        const SizedBox(height: Gap.xl),
+        SectionHeader(l10n.payoutCovered(detail.covered.length)),
+        const SizedBox(height: Gap.md),
+        ManfaaCard(
+          padding: EdgeInsets.zero,
           child: Column(
             children: [
               for (final (index, purchase) in detail.covered.indexed) ...[
-                if (index > 0) const Divider(height: 1),
-                ListTile(
-                  title: Text(purchase.merchantName),
-                  subtitle: Text(formatDayMonth(purchase.occurredAt)),
-                  trailing: MoneyText(
-                    purchase.cashbackLaari,
-                    style: theme.textTheme.titleSmall
-                        ?.copyWith(color: ManfaaColors.confirmedGreen),
+                if (index > 0)
+                  Divider(
+                      height: 1, color: theme.colorScheme.outlineVariant),
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: Gap.lg, vertical: Gap.md),
+                  child: Row(
+                    children: [
+                      const IconTile(Icons.storefront_rounded,
+                          tint: ManfaaTint.green, size: 40, iconSize: 20),
+                      const SizedBox(width: Gap.md),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              purchase.merchantName,
+                              style: theme.textTheme.titleMedium,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              formatDayMonth(purchase.occurredAt),
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                  color: theme.colorScheme.onSurfaceVariant),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: Gap.sm),
+                      MoneyText(
+                        purchase.cashbackLaari,
+                        style: theme.textTheme.titleSmall
+                            ?.copyWith(color: ManfaaColors.confirmedGreen),
+                      ),
+                    ],
                   ),
                 ),
               ],

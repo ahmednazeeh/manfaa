@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Domain\MerchantSettings;
 
 use App\Domain\Mobile\MobileTokenService;
+use App\Models\AdminUser;
 use App\Models\Merchant;
 use App\Models\MerchantRole;
 use App\Models\MerchantUser;
@@ -75,9 +76,26 @@ final class StaffService
         return [$user, $tempPassword];
     }
 
-    public function update(MerchantUser $target, MerchantUser $actor, ?MerchantRole $role = null, ?bool $isActive = null): MerchantUser
+    /**
+     * The actor may be a MERCHANT USER (the panel's own staff screen) or an
+     * ADMIN USER (the superadmin merchant controls). The guards degrade
+     * correctly for an admin: `$target->is($actor)` is false across models,
+     * so the self-demotion/self-deactivation rules simply never bind — an
+     * admin is not any store's staff — while the last-active-owner guard
+     * applies to both, because a store with zero active owners is locked out
+     * of its settings whoever pulled the switch.
+     */
+    public function update(MerchantUser $target, MerchantUser|AdminUser $actor, ?MerchantRole $role = null, ?bool $isActive = null): MerchantUser
     {
         if ($role !== null) {
+            // Role assignment is the merchant's own delegation question
+            // (which of MY roles may I hand out) — it has no admin answer,
+            // so the admin surface only ever toggles is_active. Fail loud if
+            // that ever changes rather than inventing delegation semantics.
+            if (! $actor instanceof MerchantUser) {
+                throw new \InvalidArgumentException('Only a merchant user may assign merchant roles.');
+            }
+
             $this->roles->assertMayAssign($actor, $role);
         }
 

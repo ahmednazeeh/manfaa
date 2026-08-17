@@ -50,16 +50,22 @@ class SessionStore {
   static const _kToken = 'token';
   static const _kCode = 'customer_code';
   static const _kName = 'customer_name';
+  static const _kAvatar = 'avatar_url';
   static const _kLocale = 'locale';
   static const _kPush = 'push_enabled';
+  static const _kThemeMode = 'theme_mode';
 
   final SecretStore _store;
 
   String? _token;
   String? _customerCode;
   String? _customerName;
+  String? _avatarUrl;
   String _locale = 'en';
   bool _pushEnabled = true;
+  // Light-first by decision: a fresh install shows the light theme rather
+  // than inheriting a dark phone. Values: 'system' | 'light' | 'dark'.
+  String _themeMode = 'light';
 
   /// Bumped on every sign-in/out so the router can listen and redirect —
   /// including the guide's hard rule that ANY 401 means the session is over.
@@ -69,7 +75,17 @@ class SessionStore {
   String? get token => _token;
   String? get customerCode => _customerCode;
   String? get customerName => _customerName;
+
+  /// The profile picture URL, cached beside the name and code for the same
+  /// reason they are: the top bar must render offline. Content-addressed
+  /// server-side (a new uuid URL per upload), so it never goes stale — a
+  /// changed picture is a changed URL.
+  String? get avatarUrl => _avatarUrl;
   String get locale => _locale;
+
+  /// The theme mode the user picked: 'system', 'light', or 'dark'. Survives
+  /// sign-out for the same reason locale does — a preference, not a secret.
+  String get themeMode => _themeMode;
 
   /// Whether this device WANTS push. Distinct from the OS permission: a user
   /// who turned notifications off here should stay off even if the system
@@ -81,8 +97,10 @@ class SessionStore {
     _token = await _store.read(_kToken);
     _customerCode = await _store.read(_kCode);
     _customerName = await _store.read(_kName);
+    _avatarUrl = await _store.read(_kAvatar);
     _locale = await _store.read(_kLocale) ?? 'en';
     _pushEnabled = (await _store.read(_kPush)) != 'false';
+    _themeMode = await _store.read(_kThemeMode) ?? 'light';
   }
 
   Future<void> setPushEnabled(bool enabled) async {
@@ -90,17 +108,45 @@ class SessionStore {
     await _store.write(_kPush, enabled ? 'true' : 'false');
   }
 
+  Future<void> setThemeMode(String mode) async {
+    _themeMode = mode;
+    await _store.write(_kThemeMode, mode);
+    revision.value++;
+  }
+
   Future<void> saveSession({
     required String token,
     required String customerCode,
     required String customerName,
+    String? avatarUrl,
   }) async {
     await _store.write(_kToken, token);
     await _store.write(_kCode, customerCode);
     await _store.write(_kName, customerName);
+    if (avatarUrl != null && avatarUrl.isNotEmpty) {
+      await _store.write(_kAvatar, avatarUrl);
+    } else {
+      await _store.delete(_kAvatar);
+    }
     _token = token;
     _customerCode = customerCode;
     _customerName = customerName;
+    _avatarUrl = (avatarUrl?.isEmpty ?? true) ? null : avatarUrl;
+    revision.value++;
+  }
+
+  /// Update the cached picture alone — after an upload/remove, or when a
+  /// fresh /home shows the picture changed on another surface. Bumps
+  /// [revision] so anything painting the avatar repaints.
+  Future<void> setAvatarUrl(String? url) async {
+    final normalized = (url?.isEmpty ?? true) ? null : url;
+    if (normalized == _avatarUrl) return;
+    if (normalized == null) {
+      await _store.delete(_kAvatar);
+    } else {
+      await _store.write(_kAvatar, normalized);
+    }
+    _avatarUrl = normalized;
     revision.value++;
   }
 
@@ -116,9 +162,11 @@ class SessionStore {
     await _store.delete(_kToken);
     await _store.delete(_kCode);
     await _store.delete(_kName);
+    await _store.delete(_kAvatar);
     _token = null;
     _customerCode = null;
     _customerName = null;
+    _avatarUrl = null;
     revision.value++;
   }
 }

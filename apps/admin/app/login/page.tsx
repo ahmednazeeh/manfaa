@@ -27,6 +27,7 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
+import { ManfaaLogo } from '@/components/shell/manfaa-logo';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -60,8 +61,9 @@ export default function LoginPage() {
     <div className="flex min-h-screen w-full items-center justify-center bg-muted/40 p-5">
       <Card className="w-full max-w-sm">
         <CardHeader className="flex-col items-start gap-1 pt-6">
-          <CardTitle className="text-lg">
-            Manfaa <span className="text-muted-foreground">Admin</span>
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <ManfaaLogo />
+            <span className="font-semibold text-muted-foreground">Admin</span>
           </CardTitle>
           <CardDescription>
             Sign in with your admin account to continue.

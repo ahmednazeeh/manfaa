@@ -78,7 +78,7 @@ final class NotificationService
                 SendCustomerSms::dispatch($phone, $body, $key->value, $customer->id);
             }
 
-            $this->push($key, $customer, $body, $template->sendsDhivehi());
+            $this->push($key, $customer, $body);
         });
     }
 
@@ -95,16 +95,13 @@ final class NotificationService
      * are excluded — their tokens are destroyed on deactivation anyway, but
      * the query should not depend on that having happened.
      *
-     * @param  array<string, string>|callable(NotificationTemplate): array<string, string>  $variables
-     *                                                                                                  A callable when a value depends on the template's LANGUAGE — money
-     *                                                                                                  is written "MVR 500.00" in English and "500.00 ރުފިޔާ" in Dhivehi,
-     *                                                                                                  and the template is not resolved until after the commit.
+     * @param  array<string, string>  $variables  token => already-rendered text
      * @param  ?callable(): bool  $when  asked against COMMITTED state
      */
     public function sendToMerchantStaff(
         NotificationTemplateKey $key,
         Merchant $merchant,
-        array|callable $variables,
+        array $variables,
         Permission $required,
         ?callable $when = null,
     ): void {
@@ -124,10 +121,7 @@ final class NotificationService
                 return;
             }
 
-            $body = self::render(
-                $template->body(),
-                is_callable($variables) ? $variables($template) : $variables,
-            );
+            $body = self::render($template->body(), $variables);
 
             if (trim($body) === '') {
                 return;
@@ -143,7 +137,7 @@ final class NotificationService
                 ->filter(fn (MerchantUser $user): bool => $user->can($required));
 
             foreach ($recipients as $user) {
-                $this->push($key, $user, $body, $template->sendsDhivehi());
+                $this->push($key, $user, $body);
             }
         });
     }
@@ -183,17 +177,14 @@ final class NotificationService
     /**
      * Queue one push per registered device, after the transaction commits.
      *
-     * The TITLE is localised per device from the code catalogue; the BODY is
-     * the template's own language, exactly as the SMS would be. Full
-     * per-device body language would mean re-rendering the money inside the
-     * variables, which the CALLER formats — see NotificationService::money —
-     * so it waits until customers carry a language preference and that
-     * decision moves.
+     * The TITLE is localised per device from the code catalogue — that is
+     * the device's own app-language choice; the BODY is always English,
+     * exactly as the SMS is (decision 2026-08-17: Dhivehi bodies are gone).
      *
      * The trailing "— Manfaa" is stripped: iOS and Android already print the
      * app's name above the body, and a push gets about two lines.
      */
-    private function push(NotificationTemplateKey $key, Model $recipient, string $body, bool $dhivehi): void
+    private function push(NotificationTemplateKey $key, Model $recipient, string $body): void
     {
         $body = self::stripSignature($body);
 
@@ -212,7 +203,7 @@ final class NotificationService
             ->get();
 
         foreach ($devices as $device) {
-            $title = $key->pushTitle()[$device->sendsDhivehi() || $dhivehi ? 'dv' : 'en'];
+            $title = $key->pushTitle()[$device->sendsDhivehi() ? 'dv' : 'en'];
 
             SendPushNotification::dispatch($device->getKey(), $title, $body, $key->value);
         }
@@ -254,26 +245,44 @@ final class NotificationService
      */
     public function template(NotificationTemplateKey $key): ?NotificationTemplate
     {
-        return Cache::remember(
-            self::CACHE_PREFIX.$key->value,
-            self::CACHE_TTL_SECONDS,
-            fn (): ?NotificationTemplate => NotificationTemplate::query()->where('key', $key->value)->first(),
-        );
+        // The cache holds the ATTRIBUTES, never the Eloquent object: a
+        // serialized model written by one build can come back as
+        // __PHP_Incomplete_Class under another, and that exact failure
+        // silently ate the payout-paid push on 2026-08-17. An array
+        // deserializes under any build; anything unexpected in the slot is
+        // treated as a miss and overwritten rather than trusted.
+        $cacheKey = self::CACHE_PREFIX.$key->value;
+
+        $attributes = Cache::get($cacheKey);
+
+        if (! is_array($attributes) && $attributes !== null) {
+            Cache::forget($cacheKey); // poisoned by an older build — drop it
+            $attributes = null;
+        }
+
+        if ($attributes === null) {
+            $template = NotificationTemplate::query()->where('key', $key->value)->first();
+            // `[]` marks a real "no such template" so absence is cached too.
+            Cache::put($cacheKey, $template?->getAttributes() ?? [], self::CACHE_TTL_SECONDS);
+
+            return $template;
+        }
+
+        if ($attributes === []) {
+            return null;
+        }
+
+        return (new NotificationTemplate)->newFromBuilder($attributes);
     }
 
     /**
-     * Money as the template's own language writes it: "1,234.56 ރުފިޔާ" for a
-     * Dhivehi body, "MVR 1,234.56" for an English one.
-     *
-     * The word goes AFTER the figure in Dhivehi and before it in English —
-     * the same rule the panels follow — and never "MVR" in a Thaana
-     * sentence.
+     * Money as an English notification writes it: "MVR 1,234.56". Every
+     * notification body is English (decision 2026-08-17), so this no longer
+     * asks which language the template speaks.
      */
-    public static function money(int $laari, bool $dhivehi): string
+    public static function money(int $laari): string
     {
-        $amount = Laari::of($laari)->formatMvr();
-
-        return $dhivehi ? $amount.' ރުފިޔާ' : 'MVR '.$amount;
+        return 'MVR '.Laari::of($laari)->formatMvr();
     }
 
     public static function forget(NotificationTemplateKey $key): void

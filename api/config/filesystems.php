@@ -70,6 +70,22 @@ return [
             'report' => false,
         ],
 
+        // Customer profile pictures. Same construction as `logos`: no `url`,
+        // `serve` off, its own root outside storage/app/public — no path
+        // reaches an avatar file directly. Serving goes through
+        // CustomerAvatarController, whose URL carries the uuid filename as
+        // an unguessable token (capability URL) so the customer's own
+        // clients — web <img>, the app's plain image loader — can render it
+        // without an auth header while strangers cannot enumerate it. See
+        // App\Domain\Customers\CustomerAvatar.
+        'avatars' => [
+            'driver' => 'local',
+            'root' => storage_path('app/avatars'),
+            'serve' => false,
+            'throw' => false,
+            'report' => false,
+        ],
+
         // Uploaded icons for the superadmin-curated store categories. These
         // ARE public — the category rail is the storefront's navigation —
         // but they are served through StoreCategoryIconController like the

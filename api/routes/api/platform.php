@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Admin\AdminUsersController;
+use App\Http\Controllers\Admin\AppReleasesController;
 use App\Http\Controllers\Admin\PlatformBankAccountsController;
 use App\Http\Controllers\Admin\PlatformFeeTiersController;
 use App\Http\Controllers\Admin\PlatformSettingsController;
@@ -27,6 +28,14 @@ Route::prefix('admin')->middleware('auth:admin')->group(function () {
 
     Route::get('platform/settings', [PlatformSettingsController::class, 'index']);
     Route::patch('platform/settings/{key}', [PlatformSettingsController::class, 'update']);
+
+    // Mobile release gates (min/latest build, store URL per app+platform),
+    // served to the apps by the public /api/mobile/v1/config endpoint.
+    // Same gating as the typed settings above: any admin — raising the
+    // minimum build is an emergency lever, and an emergency does not wait
+    // for a superadmin.
+    Route::get('platform/app-releases', [AppReleasesController::class, 'index']);
+    Route::put('platform/app-releases', [AppReleasesController::class, 'update']);
 
     Route::middleware(EnsureSuperadmin::class)->group(function () {
         Route::get('admins', [AdminUsersController::class, 'index']);

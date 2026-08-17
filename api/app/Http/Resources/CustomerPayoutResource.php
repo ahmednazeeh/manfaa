@@ -41,8 +41,12 @@ class CustomerPayoutResource extends JsonResource
             'failure_reason' => $this->failure_reason,
             'bank' => $this->bank,
             'account_masked' => self::maskAccount($this->account),
-            // What the customer's bank statement shows against the credit.
-            'reference' => $this->batch?->reference,
+            // What the customer's bank statement shows against the credit:
+            // the transfer reference the admin recorded at mark-paid. The
+            // batch-creation reference stopped being collected (3122d40),
+            // so the item's own bank_reference is the truth; the batch one
+            // remains only as a legacy fallback.
+            'reference' => $this->bank_reference ?? $this->batch?->reference,
             'period_start' => $this->batch?->period_start?->toDateString(),
             'period_end' => $this->batch?->period_end?->toDateString(),
             'transaction_count' => $this->whenCounted('transactions'),

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Mobile;
 
+use App\Domain\Platform\AppReleaseConfig;
 use App\Http\Controllers\Controller;
 use App\Http\Responses\CacheableJson;
 use Carbon\CarbonImmutable;
@@ -22,7 +23,9 @@ use Symfony\Component\HttpFoundation\Response;
  * ships that credits the wrong rate or stores its token badly, raising
  * `minimum_build` is the only lever that stops it talking to this API, and a
  * lever added after the fact cannot reach the builds already out there. It
- * ships before the first release or it is worthless.
+ * ships before the first release or it is worthless. The lever now lives in
+ * the admin panel (AppReleaseConfig): saved overrides win, config/mobile.php
+ * env defaults answer until the first save.
  *
  * `server_time` is here for the till: a tablet with a wrong clock would
  * otherwise date a sale into or out of its refund window (M5), and the app
@@ -37,15 +40,29 @@ final class ConfigController extends Controller
      */
     private const int CACHE_SECONDS = 300;
 
-    public function __invoke(Request $request): Response
+    public function __invoke(Request $request, AppReleaseConfig $releases): Response
     {
+        // Admin-saved overrides where they exist, config/mobile.php env
+        // defaults otherwise — same keys, same types, same order as when
+        // this read config() directly, because the installed apps parse
+        // this exact shape. store_url travels as a string ('' when unset),
+        // never null, as it always has.
+        $apps = [];
+
+        foreach ($releases->all() as $app => $platforms) {
+            foreach ($platforms as $platform => $flags) {
+                $apps[$app][$platform] = [
+                    'minimum_build' => $flags['minimum_build'],
+                    'latest_build' => $flags['latest_build'],
+                    'store_url' => (string) ($flags['store_url'] ?? ''),
+                ];
+            }
+        }
+
         $response = response()->json([
             'data' => [
                 'currency' => 'MVR',
-                'apps' => [
-                    'customer' => config('mobile.customer'),
-                    'merchant' => config('mobile.merchant'),
-                ],
+                'apps' => $apps,
                 // Server-owned feature switches, so an app can hide a screen
                 // the API will refuse. `customer_claims` is off by decision
                 // (config/features.php, 2026-08-14): customers contact the

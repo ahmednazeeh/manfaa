@@ -15,6 +15,7 @@ use App\Models\MerchantRate;
 use App\Models\Promotion;
 use App\Models\StoreCategory;
 use App\Models\StoreOffer;
+use App\Models\Zone;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Cache;
 
@@ -68,7 +69,11 @@ final class DiscoveryService
     // positional pairs only the nearby maths ever read. A v7 value left in
     // the cache would feed nulls to that maths and positional arrays to a
     // client expecting objects, so this bump is load-bearing, not hygiene.
-    public const string CACHE_KEY = 'discovery:entries:v8';
+    // v9: entries gained `zone_ids` — the islands this store has a branch
+    // on — so the zone filter is an array check at request time. A v8 value
+    // would make every store vanish under any zone filter, so the bump is
+    // load-bearing.
+    public const string CACHE_KEY = 'discovery:entries:v9';
 
     // v4: store detail gained category_rates (Task #25).
     // v5: it gained the store's support number and website — a v4 value
@@ -126,10 +131,20 @@ final class DiscoveryService
     /**
      * @return array{featured: list<array<string, mixed>>, increased: list<array<string, mixed>>, nearby: list<array<string, mixed>>, in_store: list<array<string, mixed>>, online: list<array<string, mixed>>, recently_added: list<array<string, mixed>>, top_cashback: list<array<string, mixed>>, categories: list<array{slug: string, name_en: string, name_dv: string|null, icon: string|null, icon_url: string|null, merchant_count: int}>, offers: list<array<string, mixed>>}
      */
-    public function sections(?float $lat, ?float $lng): array
+    public function sections(?float $lat, ?float $lng, ?int $zoneId = null): array
     {
         $dataset = $this->cachedDataset();
         $entries = $dataset['entries'];
+
+        // The island filter: every shelf narrows to stores with a branch in
+        // the picked zone. Mutually exclusive with Near me by design — the
+        // picker offers one or the other.
+        if ($zoneId !== null) {
+            $entries = array_values(array_filter(
+                $entries,
+                fn (array $e): bool => in_array($zoneId, $e['zone_ids'] ?? [], true),
+            ));
+        }
 
         $hasCoords = $lat !== null && $lng !== null;
 
@@ -231,6 +246,41 @@ final class DiscoveryService
      * by name substring and exact category, paginated in memory over the full
      * (small, bounded) matching set so `total` is exact.
      *
+     * The islands the location picker offers. Store counts come from the
+     * cached entry dataset — the same listing rules the shelves obey — so a
+     * suspended store never inflates an island's count; the zone rows ride
+     * the same 60-second horizon via the entries cache plus one tiny query.
+     *
+     * @return list<array{id: int, name: string, name_dv: ?string, store_count: int}>
+     */
+    public function zones(): array
+    {
+        $entries = $this->cachedDataset()['entries'];
+
+        $counts = [];
+
+        foreach ($entries as $entry) {
+            foreach ($entry['zone_ids'] ?? [] as $zoneId) {
+                $counts[$zoneId] = ($counts[$zoneId] ?? 0) + 1;
+            }
+        }
+
+        return Zone::query()
+            // The admin-arranged order (added order by default) — the app's
+            // island picker mirrors this list verbatim.
+            ->orderBy('sort_order')
+            ->orderBy('id')
+            ->get(['id', 'name', 'name_dv'])
+            ->map(fn (Zone $zone): array => [
+                'id' => $zone->id,
+                'name' => $zone->name,
+                'name_dv' => $zone->name_dv,
+                'store_count' => $counts[$zone->id] ?? 0,
+            ])
+            ->all();
+    }
+
+    /**
      * Cache discipline: the UNFILTERED dataset is the same 60-second cached
      * read model the sections use. Filtered lookups run straight SQL every
      * time instead — a cache keyed on caller-supplied `q` would let any
@@ -604,7 +654,7 @@ final class DiscoveryService
             ->whereIn('merchant_id', $merchants->pluck('id'))
             ->whereNotNull('lat')
             ->whereNotNull('lng')
-            ->get(['merchant_id', 'lat', 'lng'])
+            ->get(['merchant_id', 'lat', 'lng', 'zone_id'])
             ->groupBy('merchant_id');
 
         $entries = [];
@@ -652,6 +702,14 @@ final class DiscoveryService
                         'lat' => (float) $b->lat,
                         'lng' => (float) $b->lng,
                     ])
+                    ->all(),
+                // The islands this store sits on — write-time assignments,
+                // so the zone filter never runs geometry per request.
+                'zone_ids' => $branches->get($merchant->id, collect())
+                    ->pluck('zone_id')
+                    ->filter()
+                    ->unique()
+                    ->values()
                     ->all(),
             ];
         }

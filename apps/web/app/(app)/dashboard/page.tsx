@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { AvatarEditor } from '@/components/app/avatar-editor';
 import { useLayout } from '@/components/app-layout/context';
 import {
   Toolbar,
@@ -51,6 +52,7 @@ export default function DashboardPage() {
             {t('dashboard.greeting', { name: me.name })}
           </ToolbarDescription>
         </ToolbarHeading>
+        <AvatarEditor me={me} />
       </Toolbar>
 
       {isPending && <LoadingBlock lines={4} />}

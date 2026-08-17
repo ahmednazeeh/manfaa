@@ -3,6 +3,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:manfaa_ui/manfaa_ui.dart';
 
+import '../features/push/push_registrar.dart';
 import '../l10n/gen/app_localizations.dart';
 import 'providers.dart';
 import 'router.dart';
@@ -11,6 +12,11 @@ import 'router.dart';
 extension L10nX on BuildContext {
   AppLocalizations get l10n => AppLocalizations.of(this);
 }
+
+/// Root messenger, so a push arriving while the app is OPEN can surface as a
+/// SnackBar from anywhere — there is no Scaffold in scope where FCM's
+/// foreground stream lands.
+final rootMessengerKey = GlobalKey<ScaffoldMessengerState>();
 
 class ManfaaApp extends ConsumerWidget {
   const ManfaaApp({super.key});
@@ -21,14 +27,22 @@ class ManfaaApp extends ConsumerWidget {
     final router = ref.watch(routerProvider);
     final dhivehi = locale.languageCode == 'dv';
 
+    // Idempotent (each guards itself): taps route to the screen the message
+    // is about, and foreground messages surface instead of being swallowed.
+    ref.read(pushRegistrarProvider)
+      ..wireTapRouting(router)
+      ..wireForeground(rootMessengerKey);
+
     return MaterialApp.router(
       title: 'Manfaa',
+      scaffoldMessengerKey: rootMessengerKey,
       routerConfig: router,
       theme: manfaaTheme(brightness: Brightness.light, dhivehi: dhivehi),
       darkTheme: manfaaTheme(brightness: Brightness.dark, dhivehi: dhivehi),
-      // Light-first (owner preference) but the dark palette ships from day
-      // one — following the system is the modern default.
-      themeMode: ThemeMode.system,
+      // Light-first (owner preference), dark shipped from day one, and the
+      // choice is the USER'S — persisted, not dictated by the phone. Default
+      // is light so a dark device no longer forces the dark look on anyone.
+      themeMode: ref.watch(themeModeProvider),
       locale: locale,
       supportedLocales: const [Locale('en'), Locale('dv')],
       localizationsDelegates: const [

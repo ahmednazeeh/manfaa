@@ -34,13 +34,28 @@ class DiscoveryController extends Controller
             // Coordinates travel as a pair or not at all.
             'lat' => ['nullable', 'required_with:lng', 'numeric', 'between:-90,90'],
             'lng' => ['nullable', 'required_with:lat', 'numeric', 'between:-180,180'],
+            // The island filter — the picker's alternative to Near me.
+            'zone' => ['nullable', 'integer', 'min:1'],
         ]);
 
         $lat = isset($validated['lat']) ? (float) $validated['lat'] : null;
         $lng = isset($validated['lng']) ? (float) $validated['lng'] : null;
+        $zone = isset($validated['zone']) ? (int) $validated['zone'] : null;
 
         return CacheableJson::respond($request, response()->json([
-            'data' => $discovery->sections($lat, $lng),
+            'data' => $discovery->sections($lat, $lng, $zone),
+        ]));
+    }
+
+    /**
+     * The islands the location picker offers: id, names, and how many listed
+     * stores each carries — zero-store zones stay listed (a fresh zone is
+     * not an error), the client decides how to render them.
+     */
+    public function zones(Request $request, DiscoveryService $discovery): Response
+    {
+        return CacheableJson::respond($request, response()->json([
+            'data' => $discovery->zones(),
         ]));
     }
 

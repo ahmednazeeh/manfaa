@@ -6,6 +6,7 @@ import 'package:manfaa_ui/manfaa_ui.dart';
 
 import '../../app/app.dart';
 import '../../app/providers.dart';
+import '../home/home_screen.dart' show initialsFor;
 import 'paged.dart';
 
 /// Activity (R3): the web's Transactions and Payouts pages merged into one
@@ -35,30 +36,65 @@ class ActivityScreen extends ConsumerStatefulWidget {
 class _ActivityScreenState extends ConsumerState<ActivityScreen> {
   var _segment = 0;
 
+  /// The brand header — top bar, bold title, segmented control — rendered as
+  /// the leading items of whichever scroll view the current state shows, so
+  /// the tab screen leads with [ManfaaTopBar] like Home and Profile do.
+  List<Widget> _header(BuildContext context) {
+    final l10n = context.l10n;
+    final theme = Theme.of(context);
+    final name = ref.watch(sessionProvider).customerName ?? '';
+
+    return [
+      ManfaaTopBar(
+        initials: initialsFor(name),
+        avatarUrl: ref.watch(avatarUrlProvider),
+        onAvatarTap: () => context.go('/profile'),
+      ),
+      const SizedBox(height: Gap.lg),
+      Text(l10n.tabActivity, style: theme.textTheme.headlineSmall),
+      const SizedBox(height: Gap.lg),
+      SegmentedButton<int>(
+        segments: [
+          ButtonSegment(value: 0, label: Text(l10n.segmentEarned)),
+          ButtonSegment(value: 1, label: Text(l10n.segmentPaidOut)),
+        ],
+        selected: {_segment},
+        onSelectionChanged: (s) => setState(() => _segment = s.first),
+      ),
+      const SizedBox(height: Gap.lg),
+    ];
+  }
+
   @override
   Widget build(BuildContext context) {
-    final l10n = context.l10n;
+    final header = _header(context);
 
     return Scaffold(
-      appBar: AppBar(title: Text(l10n.tabActivity)),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(Gap.lg, 0, Gap.lg, Gap.md),
-            child: SegmentedButton<int>(
-              segments: [
-                ButtonSegment(value: 0, label: Text(l10n.segmentEarned)),
-                ButtonSegment(value: 1, label: Text(l10n.segmentPaidOut)),
-              ],
-              selected: {_segment},
-              onSelectionChanged: (s) => setState(() => _segment = s.first),
-            ),
-          ),
-          Expanded(
-            child: _segment == 0 ? const _EarnedList() : const _PaidList(),
-          ),
-        ],
+      body: SafeArea(
+        bottom: false,
+        child: _segment == 0
+            ? _EarnedList(header: header)
+            : _PaidList(header: header),
       ),
+    );
+  }
+}
+
+/// The tab screen's scroll padding — content clears the floating nav bar.
+const _pagePadding = EdgeInsets.fromLTRB(Gap.lg, Gap.md, Gap.lg, Gap.navClearance);
+
+/// A non-paged state (skeleton, error, empty) with the header on top.
+class _StaticList extends StatelessWidget {
+  const _StaticList({required this.header, required this.children});
+
+  final List<Widget> header;
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: _pagePadding,
+      children: [...header, ...children],
     );
   }
 }
@@ -66,6 +102,7 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
 /// Fires loadMore when the scroll nears the end — the cursor walk.
 class _InfiniteList extends StatelessWidget {
   const _InfiniteList({
+    required this.header,
     required this.count,
     required this.builder,
     required this.onRefresh,
@@ -73,6 +110,7 @@ class _InfiniteList extends StatelessWidget {
     required this.footerLoading,
   });
 
+  final List<Widget> header;
   final int count;
   final Widget Function(BuildContext, int) builder;
   final Future<void> Function() onRefresh;
@@ -88,22 +126,31 @@ class _InfiniteList extends StatelessWidget {
           if (n.metrics.extentAfter < 400) onEndReached();
           return false;
         },
-        child: ListView.separated(
-          padding: const EdgeInsets.fromLTRB(Gap.lg, 0, Gap.lg, Gap.xxl),
-          itemCount: count + (footerLoading ? 1 : 0),
-          separatorBuilder: (_, _) => const SizedBox(height: Gap.sm),
-          itemBuilder: (context, index) => index >= count
-              ? const Center(
-                  child: Padding(
-                    padding: EdgeInsets.all(Gap.lg),
-                    child: SizedBox(
-                      width: 22,
-                      height: 22,
-                      child: CircularProgressIndicator(strokeWidth: 2.5),
-                    ),
+        child: ListView.builder(
+          padding: _pagePadding,
+          itemCount: header.length + count + (footerLoading ? 1 : 0),
+          itemBuilder: (context, index) {
+            if (index < header.length) return header[index];
+
+            final i = index - header.length;
+            if (i >= count) {
+              return const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(Gap.lg),
+                  child: SizedBox(
+                    width: 22,
+                    height: 22,
+                    child: CircularProgressIndicator(strokeWidth: 2.5),
                   ),
-                )
-              : builder(context, index),
+                ),
+              );
+            }
+
+            return Padding(
+              padding: const EdgeInsets.only(bottom: Gap.md),
+              child: builder(context, i),
+            );
+          },
         ),
       ),
     );
@@ -111,17 +158,20 @@ class _InfiniteList extends StatelessWidget {
 }
 
 class _EarnedList extends ConsumerWidget {
-  const _EarnedList();
+  const _EarnedList({required this.header});
+
+  final List<Widget> header;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(earnedPagerProvider);
     final l10n = context.l10n;
 
-    if (!state.loaded) return const _ListSkeleton();
+    if (!state.loaded) return _ListSkeleton(header: header);
 
     if (state.error != null) {
       return _ErrorRetry(
+        header: header,
         message: state.error!.isEmpty ? l10n.errorGeneric : state.error!,
         onRetry: () => ref.read(earnedPagerProvider.notifier).refresh(),
       );
@@ -129,13 +179,16 @@ class _EarnedList extends ConsumerWidget {
 
     if (state.items.isEmpty) {
       return _EmptyState(
+        header: header,
         icon: Icons.storefront_rounded,
+        tint: ManfaaTint.coral,
         title: l10n.emptyEarnedTitle,
         body: l10n.emptyEarnedBody,
       );
     }
 
     return _InfiniteList(
+      header: header,
       count: state.items.length,
       onRefresh: () => ref.read(earnedPagerProvider.notifier).refresh(),
       onEndReached: () => ref.read(earnedPagerProvider.notifier).loadMore(),
@@ -181,80 +234,107 @@ class _EarnedTile extends StatelessWidget {
     };
   }
 
+  /// The leading icon tile follows money semantics: amber while pending,
+  /// green once confirmed, blue when paid out, quiet when closed.
+  (IconData, ManfaaTint) _tile() {
+    return switch (entry.status) {
+      'pending' => (Icons.schedule_rounded, ManfaaTint.amber),
+      'confirmed' => (Icons.check_rounded, ManfaaTint.green),
+      'paid' => (Icons.account_balance_rounded, ManfaaTint.blue),
+      'reversed' => (Icons.replay_rounded, ManfaaTint.neutral),
+      _ => (Icons.error_outline_rounded, ManfaaTint.coral),
+    };
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final muted = theme.colorScheme.onSurfaceVariant;
     final (label, tone) = _status(context);
+    final (icon, tint) = _tile();
     final reason = _reason(context);
     final struck = entry.status == 'reversed' || entry.status == 'unpaid';
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(Gap.lg),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    entry.merchantName,
-                    style: theme.textTheme.titleMedium,
-                    overflow: TextOverflow.ellipsis,
-                  ),
+    // §10: pending money reads muted — only confirmed money is green, and
+    // the two never merge into one figure anywhere.
+    final amountColor = switch (entry.status) {
+      'confirmed' => ManfaaColors.confirmedGreen,
+      'paid' => theme.colorScheme.onSurface,
+      _ => muted,
+    };
+
+    return ManfaaCard(
+      padding: const EdgeInsets.all(Gap.lg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              IconTile(icon, tint: tint),
+              const SizedBox(width: Gap.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      entry.merchantName,
+                      style: theme.textTheme.titleMedium,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      formatDayMonth(entry.occurredAt),
+                      style: theme.textTheme.bodySmall?.copyWith(color: muted),
+                    ),
+                  ],
                 ),
-                MoneyText(
-                  entry.cashbackLaari,
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    color: struck
-                        ? theme.colorScheme.onSurfaceVariant
-                        : ManfaaColors.confirmedGreen,
-                    decoration: struck ? TextDecoration.lineThrough : null,
+              ),
+              const SizedBox(width: Gap.sm),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  MoneyText(
+                    entry.cashbackLaari,
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      color: amountColor,
+                      decoration: struck ? TextDecoration.lineThrough : null,
+                    ),
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: Gap.xs),
-            Row(
-              children: [
-                StatusChip(label: label, tone: tone),
-                const SizedBox(width: Gap.sm),
-                Expanded(
-                  child: Text(
-                    formatDayMonth(entry.occurredAt),
-                    style: theme.textTheme.bodySmall
-                        ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-                  ),
-                ),
-              ],
-            ),
-            if (reason != null) ...[
-              const SizedBox(height: Gap.sm),
-              Text(
-                reason,
-                style: theme.textTheme.bodySmall
-                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                  const SizedBox(height: Gap.xs),
+                  StatusChip(label: label, tone: tone),
+                ],
               ),
             ],
+          ),
+          if (reason != null) ...[
+            const SizedBox(height: Gap.md),
+            Text(
+              reason,
+              style: theme.textTheme.bodySmall?.copyWith(color: muted),
+            ),
           ],
-        ),
+        ],
       ),
     );
   }
 }
 
 class _PaidList extends ConsumerWidget {
-  const _PaidList();
+  const _PaidList({required this.header});
+
+  final List<Widget> header;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(paidPagerProvider);
     final l10n = context.l10n;
 
-    if (!state.loaded) return const _ListSkeleton();
+    if (!state.loaded) return _ListSkeleton(header: header);
 
     if (state.error != null) {
       return _ErrorRetry(
+        header: header,
         message: state.error!.isEmpty ? l10n.errorGeneric : state.error!,
         onRetry: () => ref.read(paidPagerProvider.notifier).refresh(),
       );
@@ -262,13 +342,16 @@ class _PaidList extends ConsumerWidget {
 
     if (state.items.isEmpty) {
       return _EmptyState(
+        header: header,
         icon: Icons.account_balance_rounded,
+        tint: ManfaaTint.blue,
         title: l10n.emptyPaidTitle,
         body: l10n.emptyPaidBody,
       );
     }
 
     return _InfiniteList(
+      header: header,
       count: state.items.length,
       onRefresh: () => ref.read(paidPagerProvider.notifier).refresh(),
       onEndReached: () => ref.read(paidPagerProvider.notifier).loadMore(),
@@ -287,6 +370,7 @@ class _PayoutTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final theme = Theme.of(context);
+    final muted = theme.colorScheme.onSurfaceVariant;
 
     final (label, tone) = switch (entry.status) {
       'paid' => (l10n.payoutPaid, StatusTone.confirmed),
@@ -294,46 +378,59 @@ class _PayoutTile extends StatelessWidget {
       _ => (l10n.payoutFailed, StatusTone.attention),
     };
 
-    return Card(
-      child: InkWell(
-        borderRadius: BorderRadius.circular(Corner.card),
-        onTap: () => context.push('/activity/payout/${entry.id}'),
-        child: Padding(
-          padding: const EdgeInsets.all(Gap.lg),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+    // Tile tint mirrors the chip: green once landed, blue in flight,
+    // coral when the transfer needs attention.
+    final tint = switch (entry.status) {
+      'paid' => ManfaaTint.green,
+      'sent' => ManfaaTint.blue,
+      _ => ManfaaTint.coral,
+    };
+
+    return ManfaaCard(
+      onTap: () => context.push('/activity/payout/${entry.id}'),
+      padding: const EdgeInsets.all(Gap.lg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
             children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: MoneyText(
+              IconTile(Icons.account_balance_rounded, tint: tint),
+              const SizedBox(width: Gap.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    MoneyText(
                       entry.amountLaari,
-                      style: theme.textTheme.titleLarge,
+                      style: theme.textTheme.titleLarge
+                          ?.copyWith(color: theme.colorScheme.onSurface),
                     ),
-                  ),
-                  StatusChip(label: label, tone: tone),
-                ],
-              ),
-              const SizedBox(height: Gap.xs),
-              Text(
-                l10n.payoutPeriod(
-                  formatDayMonth(entry.periodStart),
-                  formatDayMonth(entry.periodEnd),
+                    const SizedBox(height: 2),
+                    Text(
+                      l10n.payoutPeriod(
+                        formatDayMonth(entry.periodStart),
+                        formatDayMonth(entry.periodEnd),
+                      ),
+                      style: theme.textTheme.bodySmall?.copyWith(color: muted),
+                    ),
+                  ],
                 ),
-                style: theme.textTheme.bodySmall
-                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
               ),
-              if (entry.status == 'failed') ...[
-                const SizedBox(height: Gap.sm),
-                Text(
-                  l10n.payoutFailedNote,
-                  style: theme.textTheme.bodySmall
-                      ?.copyWith(color: ManfaaColors.rose700),
-                ),
-              ],
+              const SizedBox(width: Gap.sm),
+              StatusChip(label: label, tone: tone),
+              const SizedBox(width: Gap.xs),
+              Icon(Icons.chevron_right_rounded, color: muted),
             ],
           ),
-        ),
+          if (entry.status == 'failed') ...[
+            const SizedBox(height: Gap.md),
+            Text(
+              l10n.payoutFailedNote,
+              style: theme.textTheme.bodySmall
+                  ?.copyWith(color: theme.colorScheme.error),
+            ),
+          ],
+        ],
       ),
     );
   }
@@ -341,12 +438,16 @@ class _PayoutTile extends StatelessWidget {
 
 class _EmptyState extends StatelessWidget {
   const _EmptyState({
+    required this.header,
     required this.icon,
+    required this.tint,
     required this.title,
     required this.body,
   });
 
+  final List<Widget> header;
   final IconData icon;
+  final ManfaaTint tint;
   final String title;
   final String body;
 
@@ -354,65 +455,82 @@ class _EmptyState extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(Gap.huge),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 56, color: ManfaaColors.rose400),
-            const SizedBox(height: Gap.lg),
-            Text(title, style: theme.textTheme.titleLarge),
-            const SizedBox(height: Gap.sm),
-            Text(
-              body,
-              textAlign: TextAlign.center,
-              style: theme.textTheme.bodyMedium
-                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-            ),
-          ],
+    return _StaticList(
+      header: header,
+      children: [
+        ManfaaCard(
+          padding: const EdgeInsets.all(Gap.huge),
+          child: Column(
+            children: [
+              IconTile(icon, tint: tint, size: 64, iconSize: 30),
+              const SizedBox(height: Gap.lg),
+              Text(
+                title,
+                textAlign: TextAlign.center,
+                style: theme.textTheme.titleLarge,
+              ),
+              const SizedBox(height: Gap.sm),
+              Text(
+                body,
+                textAlign: TextAlign.center,
+                style: theme.textTheme.bodyMedium
+                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+              ),
+            ],
+          ),
         ),
-      ),
+      ],
     );
   }
 }
 
 class _ErrorRetry extends StatelessWidget {
-  const _ErrorRetry({required this.message, required this.onRetry});
+  const _ErrorRetry({
+    required this.header,
+    required this.message,
+    required this.onRetry,
+  });
 
+  final List<Widget> header;
   final String message;
   final VoidCallback onRetry;
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(Gap.huge),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(message, textAlign: TextAlign.center),
-            const SizedBox(height: Gap.lg),
-            OutlinedButton(onPressed: onRetry, child: Text(context.l10n.retry)),
-          ],
+    return _StaticList(
+      header: header,
+      children: [
+        ManfaaCard(
+          child: Column(
+            children: [
+              Text(message, textAlign: TextAlign.center),
+              const SizedBox(height: Gap.lg),
+              OutlinedButton(
+                onPressed: onRetry,
+                child: Text(context.l10n.retry),
+              ),
+            ],
+          ),
         ),
-      ),
+      ],
     );
   }
 }
 
 class _ListSkeleton extends StatelessWidget {
-  const _ListSkeleton();
+  const _ListSkeleton({required this.header});
+
+  final List<Widget> header;
 
   @override
   Widget build(BuildContext context) {
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(Gap.lg, 0, Gap.lg, Gap.lg),
+    return _StaticList(
+      header: header,
       children: const [
         SkeletonBox(height: 92, radius: Corner.card),
-        SizedBox(height: Gap.sm),
+        SizedBox(height: Gap.md),
         SkeletonBox(height: 92, radius: Corner.card),
-        SizedBox(height: Gap.sm),
+        SizedBox(height: Gap.md),
         SkeletonBox(height: 92, radius: Corner.card),
       ],
     );

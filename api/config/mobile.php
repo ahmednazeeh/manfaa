@@ -19,9 +19,11 @@ return [
     | to the API, and it has to be in place before the first release rather
     | than added once a build is already in the field.
     |
-    | Env-backed so the gate can be raised without a code deploy. NOTE: this
-    | project must never run `config:cache` (it bakes a stale .env), so these
-    | are read live.
+    | These env values are the DEFAULTS. The admin panel can override every
+    | one of them (App\Domain\Platform\AppReleaseConfig, stored in
+    | platform_settings) — an override wins the moment it is saved, and the
+    | env value answers until then. NOTE: this project must never run
+    | `config:cache` (it bakes a stale .env), so these are read live.
     |
     */
 

@@ -59,6 +59,7 @@ class CustomerMe {
     required this.customerCode,
     required this.phone,
     required this.hasPayoutAccount,
+    this.avatarUrl,
   });
 
   factory CustomerMe.fromJson(Map<String, dynamic> json) => CustomerMe(
@@ -67,6 +68,7 @@ class CustomerMe {
         customerCode: _s(json['customer_code']),
         phone: _s(json['phone']),
         hasPayoutAccount: json['has_payout_account'] as bool? ?? false,
+        avatarUrl: json['avatar_url'] as String?,
       );
 
   final int id;
@@ -74,6 +76,9 @@ class CustomerMe {
   final String customerCode;
   final String phone;
   final bool hasPayoutAccount;
+
+  /// Null until the customer sets a profile picture.
+  final String? avatarUrl;
 }
 
 /// GET /customer/home — the whole first screen in one response.
@@ -88,6 +93,7 @@ class HomeData {
     required this.payoutWindowStart,
     required this.payoutWindowEnd,
     required this.hasPayoutAccount,
+    this.avatarUrl,
   });
 
   factory HomeData.fromJson(Map<String, dynamic> json) {
@@ -99,6 +105,7 @@ class HomeData {
     return HomeData(
       customerName: _s(customer['name']),
       customerCode: _s(customer['customer_code']),
+      avatarUrl: customer['avatar_url'] as String?,
       confirmedLaari: _laari(balance['confirmed_laari']),
       pendingLaari: _laari(balance['pending_laari']),
       paidThisMonthLaari: _laari(balance['paid_this_month_laari']),
@@ -111,6 +118,9 @@ class HomeData {
 
   final String customerName;
   final String customerCode;
+
+  /// Null until the customer sets a profile picture — the top bar's circle.
+  final String? avatarUrl;
 
   /// §10, carried into the client type system: confirmed and pending are
   /// SEPARATE fields and nothing here offers a sum.
@@ -533,15 +543,53 @@ class StorePage {
 }
 
 class StoreBranch {
-  StoreBranch({required this.name, required this.address});
+  StoreBranch({
+    required this.name,
+    required this.address,
+    required this.lat,
+    required this.lng,
+  });
 
   factory StoreBranch.fromJson(Map<String, dynamic> json) => StoreBranch(
         name: _s(json['name']),
         address: json['address'] as String?,
+        lat: switch (json['lat']) { final num v => v.toDouble(), _ => null },
+        lng: switch (json['lng']) { final num v => v.toDouble(), _ => null },
       );
 
   final String name;
   final String? address;
+
+  /// Null when the merchant has not pinned this branch on the map.
+  final double? lat;
+  final double? lng;
+
+  bool get pinned => lat != null && lng != null;
+}
+
+/// An island zone from GET /discover/zones — the location picker's unit.
+class ZoneEntry {
+  ZoneEntry({
+    required this.id,
+    required this.name,
+    required this.nameDv,
+    required this.storeCount,
+  });
+
+  factory ZoneEntry.fromJson(Map<String, dynamic> json) => ZoneEntry(
+        id: json['id'] as int? ?? 0,
+        name: _s(json['name']),
+        nameDv: json['name_dv'] as String?,
+        storeCount: json['store_count'] as int? ?? 0,
+      );
+
+  final int id;
+  final String name;
+  final String? nameDv;
+  final int storeCount;
+
+  String displayName(bool dhivehi) =>
+      dhivehi && (nameDv?.isNotEmpty ?? false) ? nameDv! : name;
 }
 
 /// GET /api/discover/merchants — the searchable directory (offset-paged on

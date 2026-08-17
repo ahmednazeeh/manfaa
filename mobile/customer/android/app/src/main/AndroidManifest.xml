@@ -1,4 +1,14 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Near me: coarse is enough to sort islands; fine lets the OS give the
+         best fix it already has. Asked at first use of "Near me", never at
+         launch. -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
+    <!-- Android 13+: notifications are OFF until this runtime permission is
+         granted, and the permission cannot even be REQUESTED unless it is
+         declared here. Without it, FCM "delivers" and the phone shows
+         nothing (2026-08-17: "no FCM notification for cashback"). -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <application
         android:label="Manfaa"
         android:name="${applicationName}"

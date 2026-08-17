@@ -59,26 +59,31 @@ class _BootScreenState extends ConsumerState<BootScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
 
+    // A calm splash: the coral mark over the app name on the canvas, and a
+    // quiet spinner well below — nothing competes with the brand lockup.
     return Scaffold(
-      backgroundColor: scheme.surface,
       body: Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            const ManfaaMark(size: 56),
+            const SizedBox(height: Gap.lg),
             Text(
               context.l10n.appTitle,
-              style: Theme.of(context).textTheme.displaySmall?.copyWith(
-                    color: ManfaaColors.rose600,
-                    fontWeight: FontWeight.w800,
-                  ),
+              style: theme.textTheme.headlineSmall?.copyWith(
+                color: theme.colorScheme.onSurface,
+              ),
             ),
-            const SizedBox(height: Gap.xxl),
-            const SizedBox(
-              width: 28,
-              height: 28,
-              child: CircularProgressIndicator(strokeWidth: 3),
+            const SizedBox(height: Gap.huge),
+            SizedBox(
+              width: 24,
+              height: 24,
+              child: CircularProgressIndicator(
+                strokeWidth: 2.5,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
             ),
           ],
         ),
@@ -107,8 +112,10 @@ class UpdateRequiredScreen extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Icon(Icons.system_update_alt_rounded,
-                size: 56, color: ManfaaColors.rose600),
+            const Center(
+              child: IconTile(Icons.system_update_alt_rounded,
+                  tint: ManfaaTint.coral, size: 64, iconSize: 30),
+            ),
             const SizedBox(height: Gap.xxl),
             Text(l10n.updateRequiredTitle,
                 style: theme.textTheme.headlineMedium,
@@ -121,10 +128,11 @@ class UpdateRequiredScreen extends StatelessWidget {
             if (storeUrl.isNotEmpty) ...[
               const SizedBox(height: Gap.xxl),
               // url_launcher lands with the release round; until then the
-              // store link is at least visible and copyable.
+              // store link is at least visible and copyable. Links wear the
+              // violet accent.
               SelectableText(storeUrl,
                   style: theme.textTheme.bodyMedium
-                      ?.copyWith(color: ManfaaColors.infoSky),
+                      ?.copyWith(color: ManfaaColors.violet),
                   textAlign: TextAlign.center),
             ],
           ],

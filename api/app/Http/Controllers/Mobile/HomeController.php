@@ -6,6 +6,7 @@ namespace App\Http\Controllers\Mobile;
 
 use App\Domain\Cashback\TransactionState;
 use App\Domain\Customers\BalanceQuery;
+use App\Domain\Customers\CustomerAvatar;
 use App\Domain\Customers\PayoutWindow;
 use App\Domain\MerchantAccess\Permission;
 use App\Domain\Payout\EligibilityQuery;
@@ -58,6 +59,10 @@ final class HomeController extends Controller
                     'name' => $customer->name,
                     // The code and its QR are the app's whole job at a till.
                     'customer_code' => $customer->customer_code,
+                    // Null until a picture is set; the top bar's circle.
+                    // Content-addressed, so a change also changes this
+                    // response's ETag and the app repaints on next resume.
+                    'avatar_url' => CustomerAvatar::url($customer),
                 ],
                 'balance' => [
                     'currency' => 'MVR',

@@ -896,14 +896,12 @@ export const NotificationTemplateSchema = z.object({
   label: z.string(),
   /** When it fires, in the words of someone deciding whether to enable it. */
   description: z.string(),
-  body_en: z.string(),
-  body_dv: z.string().nullable(),
-  active: z.boolean(),
   /**
-   * Which body actually goes out. Customers carry no language preference
-   * yet, so a written Dhivehi body wins and English is the fallback.
+   * The one and only body: every notification sends English by decision
+   * (2026-08-17). Dhivehi bodies are gone from the wire entirely.
    */
-  sends: z.enum(['en', 'dv']),
+  body_en: z.string(),
+  active: z.boolean(),
   /** Read from the code catalogue, so it lists what is really substituted. */
   variables: z.array(z.object({ token: z.string(), description: z.string() })),
   updated_at: z.string().nullable(),
@@ -938,7 +936,6 @@ export function listNotificationTemplates(
 
 export interface UpdateNotificationTemplateInput {
   body_en?: string;
-  body_dv?: string | null;
   active?: boolean;
 }
 

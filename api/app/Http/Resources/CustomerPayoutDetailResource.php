@@ -36,7 +36,9 @@ class CustomerPayoutDetailResource extends JsonResource
             'failure_reason' => $this->failure_reason,
             'bank' => $this->bank,
             'account_masked' => CustomerPayoutResource::maskAccount($this->account),
-            'reference' => $this->batch?->reference,
+            // The transfer reference recorded at mark-paid; the batch-level
+            // one is legacy fallback (no longer collected, 3122d40).
+            'reference' => $this->bank_reference ?? $this->batch?->reference,
             'period_start' => $this->batch?->period_start?->toDateString(),
             'period_end' => $this->batch?->period_end?->toDateString(),
             'paid_at' => $this->state->value === 'paid'

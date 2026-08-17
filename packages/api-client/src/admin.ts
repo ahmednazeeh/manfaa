@@ -6,6 +6,7 @@ import {
   ClaimStateSchema,
   dataWrapped,
   FeePercentInputSchema,
+  MerchantChannelSchema,
   MerchantStatusSchema,
   paginated,
   PayoutBatchSchema,
@@ -23,8 +24,9 @@ import {
  * merchant standing and notices, reconciliation runs, the payout batch
  * lifecycle (Phase 1), the claims queue and promotions read model (Phase 3),
  * and the platform settings domain — platform bank accounts, the §4 fee tier
- * schedule, typed platform settings, and superadmin-only admin account
- * management. All amounts sent and received are integer laari; all RATES
+ * schedule, typed platform settings, superadmin-only admin account
+ * management, and island zoning (polygon CRUD with server-side branch
+ * assignment). All amounts sent and received are integer laari; all RATES
  * travel as 2-decimal percent strings (PLAN §1 wire format) — basis points
  * are the API's internal representation and never appear in a body.
  */
@@ -218,6 +220,8 @@ export const MerchantStandingSchema = z.object({
    * is exhaustive OVER is the same one the database constrains.
    */
   status: MerchantStatusSchema,
+  /** Storefront "featured" shelf placement — editorial, admin-set. */
+  featured: z.boolean(),
   open_payable_count: z.number().int(),
   outstanding_laari: z.number().int(),
   overdue_laari: z.number().int(),
@@ -239,6 +243,34 @@ export function listAdminMerchants(
   return apiFetch('/api/admin/merchants', MerchantStandingListResponseSchema, {
     signal: options.signal,
   });
+}
+
+export const MerchantFeaturedResponseSchema = dataWrapped(
+  z.object({
+    id: z.number().int(),
+    featured: z.boolean(),
+  }),
+);
+export type MerchantFeaturedResponse = z.infer<
+  typeof MerchantFeaturedResponseSchema
+>;
+
+/**
+ * PUT /api/admin/merchants/{merchant}/featured — flips the store's placement
+ * on the public "featured" shelf. The server drops the discovery cache on a
+ * real change, so the storefront follows immediately rather than after the
+ * 60-second TTL. Idempotent: re-sending the value already held answers 200.
+ */
+export function setAdminMerchantFeatured(
+  merchantId: number,
+  featured: boolean,
+  options: RequestOptions = {},
+): Promise<MerchantFeaturedResponse> {
+  return apiFetch(
+    `/api/admin/merchants/${merchantId}/featured`,
+    MerchantFeaturedResponseSchema,
+    { method: 'PUT', body: { featured }, signal: options.signal },
+  );
 }
 
 export const MerchantNoticeTypeSchema = z.enum([
@@ -276,6 +308,221 @@ export function listAdminMerchantNotices(
     `/api/admin/merchants/${merchantId}/notices`,
     MerchantNoticeListResponseSchema,
     { signal: options.signal },
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Merchant detail + superadmin controls
+// ---------------------------------------------------------------------------
+
+export const AdminMerchantBranchSchema = z.object({
+  id: z.number().int(),
+  name: z.string(),
+  address: z.string().nullable(),
+  lat: z.number().nullable(),
+  lng: z.number().nullable(),
+  /** Resolved from the pin at write time (ZoneAssigner); null = unzoned. */
+  zone: z
+    .object({ id: z.number().int(), name: z.string().nullable() })
+    .nullable(),
+});
+export type AdminMerchantBranch = z.infer<typeof AdminMerchantBranchSchema>;
+
+export const AdminMerchantStaffSchema = z.object({
+  id: z.number().int(),
+  name: z.string(),
+  email: z.string(),
+  /** The store's own role object — names are the store's words, not ours. */
+  role: z
+    .object({
+      id: z.number().int(),
+      name: z.string(),
+      name_dv: z.string().nullable(),
+      is_owner: z.boolean(),
+    })
+    .nullable(),
+  is_active: z.boolean(),
+  created_at: z.string().nullable(),
+});
+export type AdminMerchantStaff = z.infer<typeof AdminMerchantStaffSchema>;
+
+export const AdminMerchantDetailSchema = z.object({
+  id: z.number().int(),
+  name: z.string(),
+  name_dv: z.string().nullable(),
+  slug: z.string(),
+  status: MerchantStatusSchema,
+  featured: z.boolean(),
+  category: z.string().nullable(),
+  channel: MerchantChannelSchema,
+  eligibility_basis: z.string().nullable(),
+  contact_email: z.string().nullable(),
+  contact_phone: z.string().nullable(),
+  support_phone: z.string().nullable(),
+  website_url: z.string().nullable(),
+  logo_url: z.string().nullable(),
+  /** PLAN §1 wire format: 2-decimal percent string; null = no live rate. */
+  cashback_rate_percent: z.string().nullable(),
+  created_at: z.string().nullable(),
+  submitted_at: z.string().nullable(),
+  approved_at: z.string().nullable(),
+  standing: z.object({
+    open_payable_count: z.number().int(),
+    outstanding_laari: z.number().int(),
+    overdue_laari: z.number().int(),
+    oldest_due_at: z.string().nullable(),
+  }),
+  branches: z.array(AdminMerchantBranchSchema),
+  staff: z.array(AdminMerchantStaffSchema),
+});
+export type AdminMerchantDetail = z.infer<typeof AdminMerchantDetailSchema>;
+
+export const AdminMerchantDetailResponseSchema = dataWrapped(
+  AdminMerchantDetailSchema,
+);
+export type AdminMerchantDetailResponse = z.infer<
+  typeof AdminMerchantDetailResponseSchema
+>;
+
+/** GET /api/admin/merchants/{merchant} — the full record for the detail drawer. */
+export function getAdminMerchant(
+  merchantId: number,
+  options: RequestOptions = {},
+): Promise<AdminMerchantDetailResponse> {
+  return apiFetch(
+    `/api/admin/merchants/${merchantId}`,
+    AdminMerchantDetailResponseSchema,
+    { signal: options.signal },
+  );
+}
+
+export const UpdateAdminMerchantRequestSchema = z.object({
+  name: z.string().min(2).max(120).optional(),
+  name_dv: z.string().max(120).nullable().optional(),
+  category: z.string().max(80).nullable().optional(),
+  channel: MerchantChannelSchema.optional(),
+  eligibility_basis: z.string().max(2000).nullable().optional(),
+  contact_email: z.string().max(255).nullable().optional(),
+  contact_phone: z.string().max(32).nullable().optional(),
+  support_phone: z.string().max(32).nullable().optional(),
+  website_url: z.string().max(255).nullable().optional(),
+});
+export type UpdateAdminMerchantRequest = z.infer<
+  typeof UpdateAdminMerchantRequestSchema
+>;
+
+/**
+ * PATCH /api/admin/merchants/{merchant} — superadmin edit over the public
+ * profile, validated exactly like the merchant's own settings save. The
+ * server drops the discovery read model, so the storefront reflects the
+ * change immediately. Answers the fresh detail record.
+ */
+export function updateAdminMerchant(
+  merchantId: number,
+  body: UpdateAdminMerchantRequest,
+  options: RequestOptions = {},
+): Promise<AdminMerchantDetailResponse> {
+  return apiFetch(
+    `/api/admin/merchants/${merchantId}`,
+    AdminMerchantDetailResponseSchema,
+    { method: 'PATCH', body, signal: options.signal },
+  );
+}
+
+export const MerchantStatusChangeResponseSchema = dataWrapped(
+  z.object({
+    id: z.number().int(),
+    status: MerchantStatusSchema,
+  }),
+);
+export type MerchantStatusChangeResponse = z.infer<
+  typeof MerchantStatusChangeResponseSchema
+>;
+
+/**
+ * POST /api/admin/merchants/{merchant}/suspend — superadmin-only manual
+ * suspension (conduct/fraud), beside the §7 clock's automatic credit
+ * control. The reason lands in the append-only notice trail and the store
+ * vanishes from the public feed immediately. 409 unless the store is active.
+ */
+export function suspendAdminMerchant(
+  merchantId: number,
+  body: { reason: string },
+  options: RequestOptions = {},
+): Promise<MerchantStatusChangeResponse> {
+  return apiFetch(
+    `/api/admin/merchants/${merchantId}/suspend`,
+    MerchantStatusChangeResponseSchema,
+    { method: 'POST', body, signal: options.signal },
+  );
+}
+
+/**
+ * POST /api/admin/merchants/{merchant}/reinstate — superadmin-only manual
+ * reinstatement, the only path back for a manually suspended store or one
+ * whose defaulted debt was written off. 409 unless the store is suspended.
+ */
+export function reinstateAdminMerchant(
+  merchantId: number,
+  body: { note: string },
+  options: RequestOptions = {},
+): Promise<MerchantStatusChangeResponse> {
+  return apiFetch(
+    `/api/admin/merchants/${merchantId}/reinstate`,
+    MerchantStatusChangeResponseSchema,
+    { method: 'POST', body, signal: options.signal },
+  );
+}
+
+export const AdminStaffResetPasswordResponseSchema = z.object({
+  data: AdminMerchantStaffSchema,
+  /** Returned exactly once — only the hash survives server-side. */
+  temp_password: z.string(),
+});
+export type AdminStaffResetPasswordResponse = z.infer<
+  typeof AdminStaffResetPasswordResponseSchema
+>;
+
+/**
+ * POST /api/admin/merchants/{merchant}/staff/{user}/reset-password —
+ * superadmin-only. The server generates a strong temporary password,
+ * returns it exactly once, and kills everything the old one unlocked:
+ * live panel sessions, every merchant-app token, the remember-me cookie.
+ */
+export function resetAdminMerchantStaffPassword(
+  merchantId: number,
+  userId: number,
+  options: RequestOptions = {},
+): Promise<AdminStaffResetPasswordResponse> {
+  return apiFetch(
+    `/api/admin/merchants/${merchantId}/staff/${userId}/reset-password`,
+    AdminStaffResetPasswordResponseSchema,
+    { method: 'POST', signal: options.signal },
+  );
+}
+
+export const AdminMerchantStaffResponseSchema = dataWrapped(
+  AdminMerchantStaffSchema,
+);
+export type AdminMerchantStaffResponse = z.infer<
+  typeof AdminMerchantStaffResponseSchema
+>;
+
+/**
+ * PATCH /api/admin/merchants/{merchant}/staff/{user} — superadmin
+ * activate/deactivate. Deactivation destroys the account's app tokens; the
+ * last active owner is refused with a 422 (suspend the merchant instead).
+ */
+export function setAdminMerchantStaffActive(
+  merchantId: number,
+  userId: number,
+  isActive: boolean,
+  options: RequestOptions = {},
+): Promise<AdminMerchantStaffResponse> {
+  return apiFetch(
+    `/api/admin/merchants/${merchantId}/staff/${userId}`,
+    AdminMerchantStaffResponseSchema,
+    { method: 'PATCH', body: { is_active: isActive }, signal: options.signal },
   );
 }
 
@@ -971,6 +1218,65 @@ export function updateAdminPlatformSetting(
 }
 
 // ---------------------------------------------------------------------------
+// App release gates
+// ---------------------------------------------------------------------------
+
+/**
+ * The release gate for one app on one platform: the oldest build the API
+ * keeps serving, the newest build available, and where an out-of-date
+ * install is sent. Served to the apps by the public /api/mobile/v1/config;
+ * this admin surface edits what that endpoint answers.
+ */
+export const AppReleaseFlagsSchema = z.object({
+  minimum_build: z.number().int(),
+  latest_build: z.number().int(),
+  store_url: z.string().nullable(),
+});
+export type AppReleaseFlags = z.infer<typeof AppReleaseFlagsSchema>;
+
+/**
+ * app ("customer", "merchant", …) => platform ("ios" | "android") => flags.
+ * The server derives the app list from its config, so new apps appear here
+ * without a client change.
+ */
+export const AppReleasesSchema = z.record(
+  z.string(),
+  z.record(z.string(), AppReleaseFlagsSchema),
+);
+export type AppReleases = z.infer<typeof AppReleasesSchema>;
+
+export const AppReleasesResponseSchema = z.object({
+  data: AppReleasesSchema,
+});
+export type AppReleasesResponse = z.infer<typeof AppReleasesResponseSchema>;
+
+/** GET /api/admin/platform/app-releases — effective flags (override or env default). */
+export function getAdminAppReleases(
+  options: RequestOptions = {},
+): Promise<AppReleasesResponse> {
+  return apiFetch('/api/admin/platform/app-releases', AppReleasesResponseSchema, {
+    signal: options.signal,
+  });
+}
+
+/**
+ * PUT /api/admin/platform/app-releases — writes the FULL flag set (every
+ * app, both platforms) and answers it back. 422 when a latest build sits
+ * below its minimum, a build is not a positive integer, or a store URL is
+ * not a URL.
+ */
+export function updateAdminAppReleases(
+  body: AppReleases,
+  options: RequestOptions = {},
+): Promise<AppReleasesResponse> {
+  return apiFetch('/api/admin/platform/app-releases', AppReleasesResponseSchema, {
+    method: 'PUT',
+    body,
+    signal: options.signal,
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Admin users (superadmin only)
 // ---------------------------------------------------------------------------
 
@@ -1062,6 +1368,112 @@ export function updateAdminUser(
   return apiFetch(`/api/admin/admins/${id}`, AdminUserResponseSchema, {
     method: 'PATCH',
     body,
+    signal: options.signal,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Island zoning
+// ---------------------------------------------------------------------------
+
+export const ZonePointSchema = z.object({
+  lat: z.number(),
+  lng: z.number(),
+});
+export type ZonePoint = z.infer<typeof ZonePointSchema>;
+
+/**
+ * One island zone: a closed polygon ring drawn by an admin. Every merchant
+ * branch whose pin falls inside is assigned server-side on every zone write
+ * — `branch_count` is that assignment, read back.
+ */
+export const ZoneSchema = z.object({
+  id: z.number(),
+  name: z.string(),
+  name_dv: z.string().nullable(),
+  polygon: z.array(ZonePointSchema),
+  branch_count: z.number(),
+  /** Position in the admin-arranged list (added order until edited). */
+  sort_order: z.number(),
+});
+export type Zone = z.infer<typeof ZoneSchema>;
+
+export const ZoneListResponseSchema = z.object({
+  data: z.array(ZoneSchema),
+});
+export type ZoneListResponse = z.infer<typeof ZoneListResponseSchema>;
+
+export const ZoneResponseSchema = dataWrapped(ZoneSchema);
+export type ZoneResponse = z.infer<typeof ZoneResponseSchema>;
+
+export interface ZoneInput {
+  /** Required and non-empty — the client resolves a name BEFORE submitting. */
+  name: string;
+  name_dv?: string | null;
+  /** The ring's vertices in order, 3 to 500 points. */
+  polygon: ZonePoint[];
+}
+
+/** GET /api/admin/zones — every zone in the arranged order, with branch counts. */
+export function listZones(
+  options: RequestOptions = {},
+): Promise<ZoneListResponse> {
+  return apiFetch('/api/admin/zones', ZoneListResponseSchema, {
+    signal: options.signal,
+  });
+}
+
+/**
+ * PUT /api/admin/zones/order — the COMPLETE id list in display order. The
+ * app's island picker mirrors this arrangement. 422 unless every zone
+ * appears exactly once. Answers the reordered list.
+ */
+export function reorderZones(
+  ids: number[],
+  options: RequestOptions = {},
+): Promise<ZoneListResponse> {
+  return apiFetch('/api/admin/zones/order', ZoneListResponseSchema, {
+    method: 'PUT',
+    body: { ids },
+    signal: options.signal,
+  });
+}
+
+/** POST /api/admin/zones — 201; reassigns every pinned branch. */
+export function createZone(
+  body: ZoneInput,
+  options: RequestOptions = {},
+): Promise<ZoneResponse> {
+  return apiFetch('/api/admin/zones', ZoneResponseSchema, {
+    method: 'POST',
+    body,
+    signal: options.signal,
+  });
+}
+
+/** PUT /api/admin/zones/{id} — full replace; reassigns every pinned branch. */
+export function updateZone(
+  id: number,
+  body: ZoneInput,
+  options: RequestOptions = {},
+): Promise<ZoneResponse> {
+  return apiFetch(`/api/admin/zones/${id}`, ZoneResponseSchema, {
+    method: 'PUT',
+    body,
+    signal: options.signal,
+  });
+}
+
+/**
+ * DELETE /api/admin/zones/{id} — 204. Branches inside the deleted zone are
+ * released and re-offered to the remaining zones where polygons overlap.
+ */
+export async function deleteZone(
+  id: number,
+  options: RequestOptions = {},
+): Promise<void> {
+  await apiFetch(`/api/admin/zones/${id}`, z.undefined(), {
+    method: 'DELETE',
     signal: options.signal,
   });
 }

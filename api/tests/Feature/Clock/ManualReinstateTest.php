@@ -19,10 +19,21 @@ it('rejects unauthenticated access to the manual reinstate endpoint', function (
         ->assertUnauthorized();
 });
 
+it('reserves manual reinstatement for superadmins', function () {
+    $merchant = Merchant::factory()->suspended()->create();
+
+    // A plain admin may read the standing screen but not reopen a store.
+    $this->actingAs(AdminUser::factory()->create(), 'admin')
+        ->postJson("/api/admin/merchants/{$merchant->id}/reinstate", ['note' => 'Debt settled.'])
+        ->assertForbidden();
+
+    expect($merchant->refresh()->status)->toBe('suspended');
+});
+
 it('requires a note', function () {
     $merchant = Merchant::factory()->suspended()->create();
 
-    $this->actingAs(AdminUser::factory()->create(), 'admin')
+    $this->actingAs(AdminUser::factory()->create(['role' => 'superadmin']), 'admin')
         ->postJson("/api/admin/merchants/{$merchant->id}/reinstate")
         ->assertStatus(422)
         ->assertJsonValidationErrors('note');
@@ -32,7 +43,7 @@ it('requires a note', function () {
 
 it('reinstates a suspended merchant and records a manual, note-carrying notice', function () {
     $merchant = Merchant::factory()->suspended()->create();
-    $admin = AdminUser::factory()->create();
+    $admin = AdminUser::factory()->create(['role' => 'superadmin']);
 
     $this->actingAs($admin, 'admin')
         ->postJson("/api/admin/merchants/{$merchant->id}/reinstate", ['note' => 'Debt settled out of band; approved by finance.'])
@@ -52,7 +63,7 @@ it('reinstates a suspended merchant and records a manual, note-carrying notice',
 it('refuses to reinstate a merchant that is not suspended', function () {
     $merchant = Merchant::factory()->create();
 
-    $this->actingAs(AdminUser::factory()->create(), 'admin')
+    $this->actingAs(AdminUser::factory()->create(['role' => 'superadmin']), 'admin')
         ->postJson("/api/admin/merchants/{$merchant->id}/reinstate", ['note' => 'x'])
         ->assertStatus(409);
 
@@ -75,7 +86,7 @@ it('is the only path back after write-off: the automatic sweep keeps skipping, t
 
     // The deliberate admin action is the path back (PLAN.md open policy —
     // manual-only until decided).
-    $admin = AdminUser::factory()->create();
+    $admin = AdminUser::factory()->create(['role' => 'superadmin']);
     $this->actingAs($admin, 'admin')
         ->postJson("/api/admin/merchants/{$merchant->id}/reinstate", ['note' => 'Defaulted balance recovered via legal settlement.'])
         ->assertOk();
@@ -96,7 +107,7 @@ it('drops the storefront read model so the store reappears at once', function ()
     Cache::put(DiscoveryService::CACHE_KEY, ['entries' => [], 'categories' => []], 60);
     Cache::put(DiscoveryService::STORE_CACHE_PREFIX.$merchant->slug, ['name' => 'stale'], 60);
 
-    $this->actingAs(AdminUser::factory()->create(), 'admin')
+    $this->actingAs(AdminUser::factory()->create(['role' => 'superadmin']), 'admin')
         ->postJson("/api/admin/merchants/{$merchant->id}/reinstate", ['note' => 'Debt settled out of band.'])
         ->assertOk();
 

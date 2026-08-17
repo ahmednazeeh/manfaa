@@ -55,9 +55,14 @@ function UserMenu() {
         <button
           type="button"
           aria-label={t('common.accountMenu')}
-          className="size-9 rounded-full border border-border bg-muted text-sm font-semibold text-secondary-foreground inline-flex items-center justify-center shrink-0 cursor-pointer hover:bg-primary/10"
+          className="size-9 rounded-full border border-border bg-muted text-sm font-semibold text-secondary-foreground inline-flex items-center justify-center shrink-0 cursor-pointer hover:bg-primary/10 overflow-hidden"
         >
-          {initial}
+          {me.avatar_url ? (
+            // eslint-disable-next-line @next/next/no-img-element -- capability URL on the API origin
+            <img src={me.avatar_url} alt="" className="size-full object-cover" />
+          ) : (
+            initial
+          )}
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-56">

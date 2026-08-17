@@ -28,6 +28,16 @@ export interface GLatLngBounds {
   isEmpty(): boolean;
 }
 
+/** Handle a listener registration returns; remove() detaches it. */
+export interface GListener {
+  remove(): void;
+}
+
+/** The event a map click hands its listener. */
+export interface GMapMouseEvent {
+  latLng: GLatLng | null;
+}
+
 export interface GMap {
   getCenter(): GLatLng | undefined;
   setCenter(c: GLatLngLiteral): void;
@@ -35,7 +45,11 @@ export interface GMap {
   getZoom(): number | undefined;
   setZoom(z: number): void;
   fitBounds(bounds: GLatLngBounds, padding?: number): void;
-  addListener(event: string, handler: () => void): void;
+  setOptions(options: Record<string, unknown>): void;
+  addListener(
+    event: string,
+    handler: (event: GMapMouseEvent) => void,
+  ): GListener;
 }
 
 /**
@@ -60,11 +74,50 @@ interface GAutocomplete {
   getPlace(): { geometry?: { location?: GLatLng } };
 }
 
+export interface GPolygon {
+  setMap(map: GMap | null): void;
+  getPath(): { getArray(): GLatLng[] };
+  setOptions(options: Record<string, unknown>): void;
+}
+
+/**
+ * An open line — the zones page's in-progress ring. (Google REMOVED the
+ * DrawingManager in Maps JS v3.65, so polygon drawing is composed from map
+ * clicks, vertex markers and this polyline instead.)
+ */
+export interface GPolyline {
+  setMap(map: GMap | null): void;
+}
+
+export interface GGeocoderAddressComponent {
+  long_name: string;
+  short_name: string;
+  types: string[];
+}
+
+export interface GGeocoderResult {
+  formatted_address: string;
+  types: string[];
+  address_components: GGeocoderAddressComponent[];
+}
+
+/** Promise form only — the callback signature is legacy surface we skip. */
+export interface GGeocoder {
+  geocode(request: {
+    location: GLatLngLiteral;
+  }): Promise<{ results: GGeocoderResult[] }>;
+}
+
 export interface GMapsApi {
   Map: new (el: HTMLElement, opts: Record<string, unknown>) => GMap;
   Marker: new (opts: Record<string, unknown>) => GMarker;
   InfoWindow: new (opts?: Record<string, unknown>) => GInfoWindow;
   LatLngBounds: new () => GLatLngBounds;
+  Polygon: new (opts: Record<string, unknown>) => GPolygon;
+  Polyline: new (opts: Record<string, unknown>) => GPolyline;
+  Geocoder: new () => GGeocoder;
+  /** Symbol paths for classic Marker icons (the drawing dots). */
+  SymbolPath: { CIRCLE: number };
   /**
    * Optional because Places is a separate library: the map itself is usable
    * even when the search box cannot be built, so callers guard rather than
@@ -100,8 +153,17 @@ let mapsPromise: Promise<GMapsApi> | null = null;
  * in one and fails in the next with nothing in the diff to explain it (D8).
  * The first caller's key wins for the lifetime of the page; the API can only
  * be loaded once, so a second key could not take effect anyway.
+ *
+ * `libraries` works the same way: the script tag is built once, from the
+ * FIRST caller's list, so a page whose components need different libraries
+ * must ask for the union up front. The default stays `['places']` — the
+ * merchant pin-drop and customer store map predate the parameter and keep
+ * loading exactly what they always did.
  */
-export function loadGoogleMaps(apiKey: string): Promise<GMapsApi> {
+export function loadGoogleMaps(
+  apiKey: string,
+  libraries: readonly string[] = ['places'],
+): Promise<GMapsApi> {
   if (typeof window === 'undefined') {
     return Promise.reject(new Error('Maps can only load in the browser.'));
   }
@@ -123,7 +185,9 @@ export function loadGoogleMaps(apiKey: string): Promise<GMapsApi> {
     script.src =
       'https://maps.googleapis.com/maps/api/js?key=' +
       encodeURIComponent(apiKey) +
-      '&libraries=places&callback=' +
+      '&libraries=' +
+      encodeURIComponent(libraries.join(',')) +
+      '&callback=' +
       READY_CALLBACK +
       '&loading=async';
     script.async = true;

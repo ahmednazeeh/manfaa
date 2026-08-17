@@ -14,10 +14,12 @@ import {
   LoaderCircle,
   Map as MapIcon,
   MapPin,
+  Percent,
   Search,
   Sparkles,
   Store,
   TrendingUp,
+  UtensilsCrossed,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -30,6 +32,7 @@ import { Input } from '@/components/ui/input';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { ErrorBlock, LoadingBlock } from '@/components/app/async-states';
 import {
+  diningEntries,
   DiscoverySection,
   inStoreEntries,
   mappableEntries,
@@ -71,6 +74,8 @@ const FACET_VIEWS = [
   'recent',
   'in-store',
   'online',
+  'dining',
+  'top-cashback',
   'nearby',
 ] as const;
 
@@ -357,6 +362,18 @@ function FacetSection({
       icon: Globe,
       title: t('discover.online'),
       entries: data.online,
+    },
+    // A CATEGORY facet, not a channel: derived client-side (see
+    // diningEntries) because the API has no dine-in shelf.
+    dining: {
+      icon: UtensilsCrossed,
+      title: t('discover.dineIn'),
+      entries: diningEntries(data),
+    },
+    'top-cashback': {
+      icon: Percent,
+      title: t('discover.topCashback'),
+      entries: data.top_cashback,
     },
     nearby: {
       icon: MapPin,

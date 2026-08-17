@@ -16,7 +16,10 @@ import '../../app/providers.dart';
 ///
 /// ONE flow serves sign-in and signup — the server decides which after the
 /// code proves possession, so the screen never asks "do you have an
-/// account?", a question people get wrong. No password exists anywhere.
+/// account?", a question people get wrong. No password exists anywhere, so
+/// the brand mockup's password/Google fields are deliberately omitted; the
+/// mockup's LOOK (hero, big welcome, styled phone field, ink action, the
+/// security note) is kept.
 ///
 /// Error handling follows the contract: KNOWN codes render localized
 /// sentences (en/dv); an unknown code renders the server's own prose
@@ -193,36 +196,77 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
     final l10n = context.l10n;
     final theme = Theme.of(context);
 
+    final (heading, sub) = switch (_step) {
+      _Step.phone => (l10n.welcomeTitle, l10n.signInSubtitle),
+      _Step.code => (l10n.codeTitle, l10n.codeSentTo(_normalizedPhone)),
+      _Step.name => (l10n.nameTitle, l10n.nameSubtitle),
+    };
+
     return Scaffold(
       body: SafeArea(
         child: ListView(
-          padding: const EdgeInsets.all(Gap.xxl),
+          padding: const EdgeInsets.fromLTRB(Gap.xxl, Gap.lg, Gap.xxl, Gap.xxl),
           children: [
-            const SizedBox(height: Gap.huge),
-            Text(
-              l10n.appTitle,
-              style: theme.textTheme.displaySmall?.copyWith(
-                color: ManfaaColors.rose600,
-                fontWeight: FontWeight.w800,
-              ),
+            const ManfaaWordmark(),
+            const SizedBox(height: Gap.xl),
+            const _AuthHero(),
+            const SizedBox(height: Gap.xl),
+            Row(
+              children: [
+                Flexible(
+                  child: Text(heading, style: theme.textTheme.headlineSmall),
+                ),
+                if (_step == _Step.phone) ...[
+                  const SizedBox(width: Gap.sm),
+                  const Text('👋', style: TextStyle(fontSize: 26)),
+                ],
+              ],
             ),
-            const SizedBox(height: Gap.sm),
+            const SizedBox(height: Gap.xs),
             Text(
-              l10n.signInSubtitle,
+              sub,
+              textDirection: _step == _Step.code ? TextDirection.ltr : null,
               style: theme.textTheme.bodyLarge
                   ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
             ),
-            const SizedBox(height: Gap.huge),
-            ...switch (_step) {
-              _Step.phone => _phoneStep(l10n, theme),
-              _Step.code => _codeStep(l10n, theme),
-              _Step.name => _nameStep(l10n, theme),
-            },
+            const SizedBox(height: Gap.xl),
+            ManfaaCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: switch (_step) {
+                  _Step.phone => _phoneStep(l10n, theme),
+                  _Step.code => _codeStep(l10n, theme),
+                  _Step.name => _nameStep(l10n, theme),
+                },
+              ),
+            ),
+            if (_step == _Step.phone) ...[
+              const SizedBox(height: Gap.xl),
+              const _SecurityNote(),
+            ],
           ],
         ),
       ),
     );
   }
+
+  Widget _primary(String label, VoidCallback? onPressed) => FilledButton(
+        onPressed: onPressed,
+        child: _busy
+            ? _spinner()
+            : Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Flexible(
+                    child: Text(label,
+                        maxLines: 1, overflow: TextOverflow.ellipsis),
+                  ),
+                  const SizedBox(width: Gap.sm),
+                  const Icon(Icons.arrow_forward_rounded, size: 20),
+                ],
+              ),
+      );
 
   List<Widget> _phoneStep(dynamic l10n, ThemeData theme) => [
         Text(l10n.phoneLabel, style: theme.textTheme.labelLarge),
@@ -230,27 +274,41 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
         TextField(
           controller: _phone,
           keyboardType: TextInputType.phone,
-          // Digits are LTR in both languages.
           textDirection: TextDirection.ltr,
-          decoration: InputDecoration(hintText: l10n.phoneHint),
+          style: theme.textTheme.titleMedium,
+          decoration: InputDecoration(
+            hintText: l10n.phoneHint,
+            prefixIcon: Padding(
+              padding: const EdgeInsets.only(left: 16, right: 12),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text('🇲🇻', style: TextStyle(fontSize: 20)),
+                  const SizedBox(width: 8),
+                  Text('+960',
+                      textDirection: TextDirection.ltr,
+                      style: theme.textTheme.titleMedium),
+                  const SizedBox(width: 10),
+                  Container(
+                      width: 1,
+                      height: 24,
+                      color: theme.colorScheme.outlineVariant),
+                ],
+              ),
+            ),
+            prefixIconConstraints:
+                const BoxConstraints(minWidth: 0, minHeight: 0),
+          ),
         ),
+        const SizedBox(height: Gap.sm),
+        Text(l10n.otpDeliveryNote,
+            style: theme.textTheme.bodySmall
+                ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
         const SizedBox(height: Gap.lg),
-        FilledButton(
-          onPressed: _busy ? null : _requestCode,
-          child: _busy ? _spinner() : Text(l10n.continueLabel),
-        ),
+        _primary(l10n.continueLabel, _busy ? null : _requestCode),
       ];
 
   List<Widget> _codeStep(dynamic l10n, ThemeData theme) => [
-        Text(l10n.codeTitle, style: theme.textTheme.titleLarge),
-        const SizedBox(height: Gap.xs),
-        Text(
-          l10n.codeSentTo(_normalizedPhone),
-          textDirection: TextDirection.ltr,
-          style: theme.textTheme.bodyMedium
-              ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-        ),
-        const SizedBox(height: Gap.lg),
         TextField(
           controller: _code,
           keyboardType: TextInputType.number,
@@ -260,45 +318,39 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
           textAlign: TextAlign.center,
           style: theme.textTheme.headlineMedium
               ?.copyWith(letterSpacing: 8, fontWeight: FontWeight.w700),
-          decoration: InputDecoration(counterText: '', hintText: '••••••'),
+          decoration: const InputDecoration(counterText: '', hintText: '••••••'),
         ),
         const SizedBox(height: Gap.lg),
-        FilledButton(
-          onPressed: _busy ? null : _verify,
-          child: _busy ? _spinner() : Text(l10n.verifyLabel),
-        ),
-        const SizedBox(height: Gap.md),
-        TextButton(
-          onPressed: _busy || _resendIn > 0 ? null : _requestCode,
-          child: Text(
-            _resendIn > 0
-                ? l10n.resendCountdown(_resendIn)
-                : l10n.resendCode,
-          ),
-        ),
-        TextButton(
-          onPressed: _busy
-              ? null
-              : () {
-                  _resendTimer?.cancel();
-                  setState(() {
-                    _resendIn = 0;
-                    _step = _Step.phone;
-                  });
-                },
-          child: Text(l10n.back),
+        _primary(l10n.verifyLabel, _busy ? null : _verify),
+        const SizedBox(height: Gap.xs),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            TextButton(
+              onPressed: _busy
+                  ? null
+                  : () {
+                      _resendTimer?.cancel();
+                      setState(() {
+                        _resendIn = 0;
+                        _step = _Step.phone;
+                      });
+                    },
+              child: Text(l10n.back),
+            ),
+            TextButton(
+              onPressed: _busy || _resendIn > 0 ? null : _requestCode,
+              child: Text(
+                _resendIn > 0 ? l10n.resendCountdown(_resendIn) : l10n.resendCode,
+              ),
+            ),
+          ],
         ),
       ];
 
   List<Widget> _nameStep(dynamic l10n, ThemeData theme) => [
-        Text(l10n.nameTitle, style: theme.textTheme.titleLarge),
-        const SizedBox(height: Gap.xs),
-        Text(
-          l10n.nameSubtitle,
-          style: theme.textTheme.bodyMedium
-              ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-        ),
-        const SizedBox(height: Gap.lg),
+        Text(l10n.nameLabel, style: theme.textTheme.labelLarge),
+        const SizedBox(height: Gap.sm),
         TextField(
           controller: _name,
           autofocus: true,
@@ -306,10 +358,8 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
           decoration: InputDecoration(hintText: l10n.nameLabel),
         ),
         const SizedBox(height: Gap.lg),
-        FilledButton(
-          onPressed: _busy ? null : _register,
-          child: _busy ? _spinner() : Text(l10n.finishLabel),
-        ),
+        _primary(l10n.finishLabel, _busy ? null : _register),
+        const SizedBox(height: Gap.xs),
         TextButton(
           onPressed: _busy
               ? null
@@ -326,4 +376,104 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
         height: 20,
         child: CircularProgressIndicator(strokeWidth: 2),
       );
+}
+
+/// A light, playful hero standing in for the mockup's 3D wallet — a soft
+/// violet panel with floating "coin" badges. Pure widgets, no asset.
+class _AuthHero extends StatelessWidget {
+  const _AuthHero();
+
+  @override
+  Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      height: 128,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(Corner.card),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: dark
+              ? [const Color(0xFF241D3A), const Color(0xFF181B24)]
+              : [ManfaaColors.violetSoft, const Color(0xFFF3EEFE)],
+        ),
+      ),
+      child: Stack(
+        children: [
+          Positioned(
+            left: 24,
+            top: 34,
+            child: ManfaaMark(size: 64, color: ManfaaColors.coral),
+          ),
+          const Positioned(top: 26, right: 40, child: _Coin(size: 46)),
+          const Positioned(bottom: 24, right: 96, child: _Coin(size: 30)),
+          Positioned(
+            bottom: 30,
+            right: 30,
+            child: Container(
+              width: 54,
+              height: 54,
+              decoration: BoxDecoration(
+                color: ManfaaColors.violet.withValues(alpha: dark ? 0.35 : 0.16),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: const Icon(Icons.percent_rounded,
+                  color: ManfaaColors.violet, size: 26),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _Coin extends StatelessWidget {
+  const _Coin({required this.size});
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: ManfaaColors.amber,
+        shape: BoxShape.circle,
+        boxShadow: const [
+          BoxShadow(color: Color(0x33000000), blurRadius: 8, offset: Offset(0, 3)),
+        ],
+      ),
+      child: Icon(Icons.percent_rounded, color: Colors.white, size: size * 0.5),
+    );
+  }
+}
+
+class _SecurityNote extends StatelessWidget {
+  const _SecurityNote();
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    final theme = Theme.of(context);
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const IconTile(Icons.verified_user_rounded,
+            tint: ManfaaTint.green, size: 40, iconSize: 20),
+        const SizedBox(width: Gap.md),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(l10n.securityTitle, style: theme.textTheme.titleMedium),
+              const SizedBox(height: 2),
+              Text(l10n.securityBody,
+                  style: theme.textTheme.bodySmall
+                      ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
 }

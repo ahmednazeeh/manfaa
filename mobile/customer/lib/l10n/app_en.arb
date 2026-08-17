@@ -7,8 +7,12 @@
   "tabProfile": "Profile",
   "signInTitle": "Sign in",
   "signInSubtitle": "Earn cashback at stores across the Maldives.",
+  "welcomeTitle": "Welcome back",
+  "securityTitle": "Your rewards are secure.",
+  "securityBody": "We use bank-grade encryption to protect your data.",
   "phoneLabel": "Phone number",
-  "phoneHint": "7XXXXXX",
+  "phoneHint": "7XXX XXXX",
+  "otpDeliveryNote": "We'll send you an OTP to verify your number.",
   "continueLabel": "Continue",
   "homeGreeting": "Hi {name}",
   "@homeGreeting": {
@@ -21,6 +25,12 @@
   "yourCode": "Your Manfaa code",
   "showAtTill": "Show this at the till to earn cashback.",
   "tapForFullscreen": "Tap for fullscreen",
+  "homeSubtitle": "Welcome back! Here's your cashback overview.",
+  "homeCodeHint": "Show this code or the QR at the till to earn cashback.",
+  "viewTransactions": "View transactions",
+  "discoverOffersTitle": "Discover offers",
+  "discoverOffersBody": "Explore nearby and featured cashback merchants.",
+  "badgeNew": "New",
   "availableCashback": "Available cashback",
   "confirmedHint": "Confirmed and ready for your next payout.",
   "pendingLine": "{amount} pending — becomes available once the store confirms.",
@@ -54,7 +64,17 @@
   "profileLanguage": "Language",
   "languageEnglish": "English",
   "languageDhivehi": "ދިވެހި",
+  "profileTheme": "Appearance",
+  "themeSystem": "System",
+  "themeLight": "Light",
+  "themeDark": "Dark",
   "profileDevices": "Signed-in devices",
+  "profilePhotoTitle": "Profile picture",
+  "profilePhotoEdit": "Change profile picture",
+  "choosePhoto": "Choose photo",
+  "removePhoto": "Remove photo",
+  "photoUpdated": "Profile picture updated.",
+  "photoRemoved": "Profile picture removed.",
   "signOut": "Sign out",
   "signOutConfirmTitle": "Sign out?",
   "signOutConfirmBody": "Your code and balance stay safe — sign back in any time.",
@@ -154,6 +174,7 @@
       }
     }
   },
+  "searchIsland": "Search islands",
   "shelfBoosted": "Boosted right now",
   "shelfFeatured": "Featured",
   "shelfNearby": "Near you",
@@ -249,7 +270,36 @@
   "payoutSaveAction": "Save account",
   "payoutAccountSaved": "Payout account updated.",
   "payoutChangeEffective": "A change applies from your next payout.",
+  "discoverSubtitle": "Find nearby and featured cashback offers.",
+  "discoverLocation": "Malé, Maldives",
+  "discoverSearchHint": "Search stores, cafés, pharmacies…",
+  "featuredOffers": "Featured offers",
+  "cashbackWord": "Cashback",
+  "kmAway": "{km} km away",
+  "@kmAway": {
+    "placeholders": {
+      "km": {
+        "type": "String"
+      }
+    }
+  },
   "notificationsTitle": "Notifications",
   "notificationsBody": "Get told when you earn cashback and when you're paid.",
-  "a11yShowQr": "Show your Manfaa code fullscreen"
+  "a11yShowQr": "Show your Manfaa code fullscreen",
+  "nearMe": "Near me",
+  "areaEverywhere": "All of Maldives",
+  "locationPickerTitle": "Where are you shopping?",
+  "locationDenied": "Location permission was refused — pick an island instead.",
+  "locationFailed": "Couldn't get your location. Pick an island instead.",
+  "zoneStoreCount": "{count, plural, =0{No stores yet} =1{1 store} other{{count} stores}}",
+  "@zoneStoreCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "storeCall": "Call",
+  "storeWebsite": "Website",
+  "storeMap": "On the map"
 }

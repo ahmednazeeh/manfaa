@@ -132,7 +132,8 @@ it('queues merchant.reinstated on a manual admin reinstatement', function () {
     $merchant = Merchant::factory()->suspended()->create();
     whEmissionEndpoint($merchant, [WebhookEvents::MERCHANT_REINSTATED]);
 
-    $this->actingAs(AdminUser::factory()->create(), 'admin')
+    // Manual reinstatement is superadmin-only (EnsureSuperadmin on the route).
+    $this->actingAs(AdminUser::factory()->create(['role' => 'superadmin']), 'admin')
         ->postJson("/api/admin/merchants/{$merchant->id}/reinstate", ['note' => 'Paid out of band.'])
         ->assertOk();
 

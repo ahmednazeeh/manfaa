@@ -1,18 +1,28 @@
 'use client';
 
+import { useEffect, useRef } from 'react';
 import Link from 'next/link';
 import type { DiscoveryEntry, DiscoverySections } from '@manfaa/api-client';
 import {
   Banknote,
   Clock,
   Globe,
+  Handshake,
+  LoaderCircle,
+  MapPin,
   Percent,
   QrCode,
+  ReceiptText,
+  Repeat,
   ShoppingBag,
+  SlidersHorizontal,
   Sparkles,
   Store,
+  TicketPercent,
   TrendingUp,
   UserRoundPlus,
+  Users,
+  UtensilsCrossed,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -23,21 +33,26 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { CashbackDemo } from '@/components/app/cashback-demo';
-import { CustomerBanner } from '@/components/app/customer-banner';
 import {
   CategoryRail,
   CategoryRailSkeleton,
 } from '@/components/app/category-rail';
+import { CustomerBanner } from '@/components/app/customer-banner';
 import {
+  diningEntries,
   hasListedStores,
   inStoreEntries,
+  ShelfHeader,
   StoreShelf,
+  useLocationRequest,
+  type LocationRequest,
 } from '@/components/app/discovery';
+import { FeaturedOffers } from '@/components/app/featured-offers';
 import { PublicFooter, PublicHeader } from '@/components/app/public-header';
 import { RotatingWords } from '@/components/app/rotating-words';
-import { StoreSearch } from '@/components/app/store-search';
-import { useStoreName } from '@/components/app/store-labels';
 import { StoreAvatar } from '@/components/app/store-avatar';
+import { useStoreName } from '@/components/app/store-labels';
+import { StoreSearch } from '@/components/app/store-search';
 
 /**
  * Public landing page (manfaa.app) — the reason to open the app before
@@ -46,17 +61,22 @@ import { StoreAvatar } from '@/components/app/store-avatar';
  * upgrades to a "Dashboard" button when a customer session cookie is
  * already present.
  *
- * Shape, top to bottom: the category rail (the storefront's navigation),
- * the hero, how-it-works, the store shelves, then the marketplace teaser.
- * How-it-works sits directly under the hero on purpose — a visitor who has
- * just read the headline is asking "how does this work?", and the answer
- * belongs on screen before the shelves start competing for attention.
+ * Shape, top to bottom: the hero, how-it-works, real-money, search + the
+ * category rail (the storefront's navigation), the curated offer banners,
+ * the store shelves, then the evergreen tail — why-Manfaa, the marketplace
+ * teaser and the merchant chapter (the full ForMerchants pitch for
+ * visitors, the one-line MerchantCta band for members). How-it-works sits
+ * directly under the hero on purpose — a visitor who has just read the
+ * headline is asking "how does this work?", and the answer belongs on
+ * screen before the shelves start competing for attention. Signed in, the
+ * pitch sections give way to the personal banner and the storefront leads.
  *
  * Everything between the rail and the teaser is data-driven and disappears
  * cleanly when there is no data — with ONE live store the page must still
  * read as finished, so a shelf never renders empty, the rail never offers a
  * filter that leads nowhere, and the hero never becomes a carousel with one
- * slide in it.
+ * slide in it. (A shelf with entries always renders, though, even when its
+ * stores all appear on other shelves too — see Shelves.)
  *
  * Authed visitors (the same silent me-probe the header uses; react-query
  * dedupes the request) never see a "Create account" CTA anywhere on this
@@ -83,7 +103,10 @@ function PrimaryCta({ className }: { className?: string }) {
     <Button
       size="lg"
       asChild
-      className={cn('bg-brand text-brand-foreground hover:bg-brand/90', className)}
+      className={cn(
+        'bg-brand text-brand-foreground hover:bg-brand/90',
+        className,
+      )}
     >
       {me ? (
         <Link href="/dashboard">{t('landing.openDashboard')}</Link>
@@ -277,34 +300,116 @@ function AllEmptyBlock() {
 }
 
 /**
- * The store shelves.
+ * The "Near you" shelf — the one shelf whose emptiness depends on a
+ * PERMISSION, not on the catalogue, so it cannot follow the plain
+ * render-when-non-empty rule the others do.
  *
- * A shelf renders only if it puts at least one store on the page that no
- * shelf above it already has. That single rule is what keeps a sparse
- * platform looking deliberate: with one live store, "Featured" shows it
- * once and "Recently added", "In store" and "Online" stand down rather than
- * printing the same card four times under four headings. The facets those
- * shelves would have offered are not lost — they are exactly the entry
- * points in the category rail above, and each one still opens its own view
- * of the directory.
+ * The section never asks for location on page load. It renders as a shell
+ * with a "Use my location" button, and geolocation runs only from that
+ * press — except when the browser reports the permission as ALREADY granted
+ * (see LandingPage's silent adoption), in which case the fix is fetched
+ * without a prompt and the shelf simply appears populated. Denied or
+ * unavailable, the section hides entirely; granted but genuinely empty
+ * (nothing within the API's radius), it hides too — an honest storefront
+ * never keeps a heading with nothing under it.
  */
-function Shelves({ sections }: { sections: DiscoverySections }) {
+function NearMeShelf({
+  sections,
+  location,
+  refetching,
+}: {
+  sections: DiscoverySections;
+  location: LocationRequest;
+  /** True while the coord-scoped refetch is still showing coord-less data. */
+  refetching: boolean;
+}) {
+  const { t } = useTranslation();
+  const { geo, requestLocation } = location;
+
+  if (geo.kind === 'denied' || geo.kind === 'unavailable') {
+    return null;
+  }
+
+  if (geo.kind === 'granted' && !refetching) {
+    // StoreShelf renders nothing when the granted fix found no stores.
+    return (
+      <StoreShelf
+        icon={MapPin}
+        title={t('discover.nearby')}
+        entries={sections.nearby.slice(0, SHELF_LIMIT)}
+        viewAllHref="/discover?view=nearby"
+      />
+    );
+  }
+
+  const busy =
+    geo.kind === 'locating' || (geo.kind === 'granted' && refetching);
+
+  return (
+    <section className="flex flex-col gap-3">
+      <ShelfHeader icon={MapPin} title={t('discover.nearby')} />
+      <Card>
+        <CardContent className="flex flex-col items-center gap-3 p-6 text-center sm:flex-row sm:justify-between sm:text-start">
+          <p className="text-sm text-muted-foreground">
+            {t('discover.nearbyAskLocation')}
+          </p>
+          <Button
+            variant="outline"
+            size="sm"
+            className="shrink-0"
+            onClick={requestLocation}
+            disabled={busy}
+          >
+            {busy ? (
+              <>
+                <LoaderCircle className="animate-spin" />
+                {t('discover.locating')}
+              </>
+            ) : (
+              <>
+                <MapPin />
+                {t('discover.useMyLocation')}
+              </>
+            )}
+          </Button>
+        </CardContent>
+      </Card>
+    </section>
+  );
+}
+
+/**
+ * The store shelves — every facet of the storefront, each rendered whenever
+ * it has at least one store, even when the same store appears on several of
+ * them (owner decision 2026-08-17, overruling the old renders-only-if-it-
+ * adds-a-new-store dedup: a landing with one shelf read as "too simple",
+ * and a store repeating under Featured, In store and Dine in reads as a
+ * storefront, not a bug).
+ *
+ * Order is the owner's: Featured, Boosted, Near you, In store, Online,
+ * Dine in, New stores, Highest cashback. "Near you" is the one special
+ * case (permission-gated — see NearMeShelf); "Dine in" is a client-derived
+ * category facet (see diningEntries). Each shelf is a SHELF_LIMIT teaser
+ * whose "view all" opens the same facet full-width on /discover.
+ */
+function Shelves({
+  sections,
+  location,
+  refetching,
+}: {
+  sections: DiscoverySections;
+  location: LocationRequest;
+  refetching: boolean;
+}) {
   const { t } = useTranslation();
 
-  const candidates: Array<{
+  const shelves: Array<{
     key: string;
     icon: LucideIcon;
     title: string;
     entries: DiscoveryEntry[];
     viewAllHref: string;
   }> = [
-    {
-      key: 'boosted',
-      icon: TrendingUp,
-      title: t('discover.increased'),
-      entries: sections.increased,
-      viewAllHref: '/discover?view=boosted',
-    },
     {
       key: 'featured',
       icon: Sparkles,
@@ -313,19 +418,15 @@ function Shelves({ sections }: { sections: DiscoverySections }) {
       viewAllHref: '/discover?view=featured',
     },
     {
-      key: 'top-cashback',
-      icon: Percent,
-      title: t('discover.topCashback'),
-      entries: sections.top_cashback,
-      viewAllHref: '/discover?view=top-cashback',
+      key: 'boosted',
+      icon: TrendingUp,
+      title: t('discover.increased'),
+      entries: sections.increased,
+      viewAllHref: '/discover?view=boosted',
     },
-    {
-      key: 'recent',
-      icon: Clock,
-      title: t('discover.newStores'),
-      entries: sections.recently_added,
-      viewAllHref: '/discover?view=recent',
-    },
+  ];
+
+  const afterNearby: typeof shelves = [
     {
       key: 'in-store',
       icon: Store,
@@ -340,43 +441,50 @@ function Shelves({ sections }: { sections: DiscoverySections }) {
       entries: sections.online,
       viewAllHref: '/discover?view=online',
     },
+    {
+      key: 'dining',
+      icon: UtensilsCrossed,
+      title: t('discover.dineIn'),
+      entries: diningEntries(sections),
+      viewAllHref: '/discover?view=dining',
+    },
+    {
+      key: 'recent',
+      icon: Clock,
+      title: t('discover.newStores'),
+      entries: sections.recently_added,
+      viewAllHref: '/discover?view=recent',
+    },
+    {
+      key: 'top-cashback',
+      icon: Percent,
+      title: t('discover.topCashback'),
+      entries: sections.top_cashback,
+      viewAllHref: '/discover?view=top-cashback',
+    },
   ];
 
-  const alreadyShown = new Set<string>();
-  const shelves = [];
-
-  for (const candidate of candidates) {
-    const entries = candidate.entries.slice(0, SHELF_LIMIT);
-
-    if (
-      entries.length === 0 ||
-      entries.every((entry) => alreadyShown.has(entry.slug))
-    ) {
-      continue;
-    }
-
-    for (const entry of entries) {
-      alreadyShown.add(entry.slug);
-    }
-
-    shelves.push({ ...candidate, entries });
-  }
-
-  if (shelves.length === 0) {
-    return null;
-  }
+  // StoreShelf itself renders nothing for an empty list, so an empty facet
+  // costs no markup — the wrapper's gap only separates shelves that exist.
+  const shelf = (entry: (typeof shelves)[number]) => (
+    <StoreShelf
+      key={entry.key}
+      icon={entry.icon}
+      title={entry.title}
+      entries={entry.entries.slice(0, SHELF_LIMIT)}
+      viewAllHref={entry.viewAllHref}
+    />
+  );
 
   return (
     <div className="container flex flex-col gap-10 pb-14">
-      {shelves.map((shelf) => (
-        <StoreShelf
-          key={shelf.key}
-          icon={shelf.icon}
-          title={shelf.title}
-          entries={shelf.entries}
-          viewAllHref={shelf.viewAllHref}
-        />
-      ))}
+      {shelves.map(shelf)}
+      <NearMeShelf
+        sections={sections}
+        location={location}
+        refetching={refetching}
+      />
+      {afterNearby.map(shelf)}
     </div>
   );
 }
@@ -526,6 +634,224 @@ function RealMoney() {
 }
 
 /**
+ * One value proposition of the Why-Manfaa trio: icon above, then the claim
+ * and its one-line justification. Icon-above rather than icon-beside on
+ * purpose — how-it-works already owns the icon-beside-text row shape, and
+ * two identical trios on one page would read as the same section twice.
+ */
+function WhyPoint({
+  icon: Icon,
+  title,
+  body,
+}: {
+  icon: LucideIcon;
+  title: string;
+  body: string;
+}) {
+  return (
+    <li className="flex flex-col gap-2.5">
+      <span className="flex size-10 items-center justify-center rounded-lg bg-brand-soft text-brand">
+        <Icon className="size-4.5" />
+      </span>
+      <div className="flex flex-col gap-1">
+        <h3 className="text-sm font-semibold text-mono">{title}</h3>
+        <p className="text-xs/relaxed text-muted-foreground">{body}</p>
+      </div>
+    </li>
+  );
+}
+
+/**
+ * The evergreen trio that keeps a young catalogue from ending abruptly:
+ * three claims that stay true with one store or a hundred, and that no
+ * other section on the page already makes. How-it-works owns the mechanics,
+ * RealMoney owns rufiyaa-not-points, the trust line owns free/no-card — so
+ * this trio carries what is left: no coupons, everything tracked, built for
+ * the Maldives. It renders for members too: for them it is the reminder of
+ * what the code in their pocket does, not a pitch.
+ */
+function WhyManfaa() {
+  const { t } = useTranslation();
+
+  return (
+    <section className="container py-12 lg:py-14">
+      <h2 className="pb-6 font-display text-2xl text-mono sm:text-3xl">
+        {t('landing.whyTitle')}
+      </h2>
+      <ul className="grid gap-6 sm:grid-cols-3 sm:gap-8">
+        <WhyPoint
+          icon={TicketPercent}
+          title={t('landing.why1Title')}
+          body={t('landing.why1Body')}
+        />
+        <WhyPoint
+          icon={ReceiptText}
+          title={t('landing.why2Title')}
+          body={t('landing.why2Body')}
+        />
+        <WhyPoint
+          icon={MapPin}
+          title={t('landing.why3Title')}
+          body={t('landing.why3Body')}
+        />
+      </ul>
+    </section>
+  );
+}
+
+/**
+ * The other side of the marketplace, addressed once, at the very end: a
+ * store owner who scrolled the whole storefront is the one visitor this
+ * page was not written for, and this band hands them their door. External
+ * host (merchant.manfaa.app), so a plain anchor rather than a Link — the
+ * same signup URL the header's quiet nav item points at.
+ */
+function MerchantCta() {
+  const { t } = useTranslation();
+
+  return (
+    <section className="border-t border-border bg-muted/30">
+      <div className="container flex flex-col items-start gap-4 py-10 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-start gap-4">
+          <span className="flex size-12 shrink-0 items-center justify-center rounded-full bg-brand-soft text-brand">
+            <Store className="size-5" />
+          </span>
+          <div className="flex flex-col gap-1">
+            <h2 className="text-lg font-semibold text-mono">
+              {t('landing.merchantCtaTitle')}
+            </h2>
+            <p className="max-w-xl text-sm text-muted-foreground">
+              {t('landing.merchantCtaBody')}
+            </p>
+          </div>
+        </div>
+        <Button variant="outline" asChild className="shrink-0">
+          <a href="https://merchant.manfaa.app/signup" rel="noopener">
+            {t('nav.becomeMerchant')}
+          </a>
+        </Button>
+      </div>
+    </section>
+  );
+}
+
+/** One value point of the merchant pitch — icon tile beside the claim, the
+ *  how-it-works row shape, drawn in the panel band's own inks. */
+function MerchantPoint({
+  icon: Icon,
+  title,
+  body,
+}: {
+  icon: LucideIcon;
+  title: string;
+  body: string;
+}) {
+  return (
+    <li className="flex items-start gap-3">
+      <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-panel-foreground/10 text-panel-accent">
+        <Icon className="size-4.5" />
+      </span>
+      <div className="flex min-w-0 flex-col gap-1">
+        <h3 className="text-sm font-semibold">{title}</h3>
+        <p className="text-xs/relaxed text-panel-foreground/80">{body}</p>
+      </div>
+    </li>
+  );
+}
+
+/**
+ * The merchant pitch — SIGNED-OUT visitors only (owner request 2026-08-17:
+ * the signed-out landing must tell store owners why they should join, not
+ * just shoppers). A member sees the small MerchantCta band instead; the
+ * full sales pitch is for the store owner who wandered in from a search.
+ *
+ * Its own chapter by design: the panel gradient the hero once wore, so it
+ * reads as a change of audience — everything above this band talks to
+ * shoppers, this band talks to the till side of the counter. The ink
+ * tokens guarantee ≥ 4.5:1 for panel-foreground on every stop.
+ *
+ * The credibility block names Rakuten, Honey, Dell, Microsoft and Samsung
+ * as COMPARISONS — the model they proved, never a relationship — and the
+ * footnote says so outright.
+ */
+function ForMerchants() {
+  const { t } = useTranslation();
+
+  return (
+    <section className="bg-gradient-to-br from-panel-from via-panel-via to-panel-to text-panel-foreground">
+      <div className="container flex flex-col gap-8 py-14 lg:py-16">
+        <div className="flex max-w-2xl flex-col gap-3">
+          <span className="inline-flex items-center gap-2 text-2xs font-semibold tracking-wide text-panel-accent uppercase">
+            <Store className="size-3.5" />
+            {t('landing.merchantsEyebrow')}
+          </span>
+          <h2 className="font-display text-2xl text-balance sm:text-3xl">
+            {t('landing.merchantsTitle')}
+          </h2>
+          <p className="text-sm/relaxed text-pretty text-panel-foreground/80">
+            {t('landing.merchantsIntro')}
+          </p>
+        </div>
+
+        <ul className="grid gap-6 sm:grid-cols-2 lg:gap-8">
+          <MerchantPoint
+            icon={Users}
+            title={t('landing.merchantsPoint1Title')}
+            body={t('landing.merchantsPoint1Body')}
+          />
+          <MerchantPoint
+            icon={Handshake}
+            title={t('landing.merchantsPoint2Title')}
+            body={t('landing.merchantsPoint2Body')}
+          />
+          <MerchantPoint
+            icon={Repeat}
+            title={t('landing.merchantsPoint3Title')}
+            body={t('landing.merchantsPoint3Body')}
+          />
+          <MerchantPoint
+            icon={SlidersHorizontal}
+            title={t('landing.merchantsPoint4Title')}
+            body={t('landing.merchantsPoint4Body')}
+          />
+        </ul>
+
+        {/* The proof: the model's pedigree, phrased as comparison only. */}
+        <div className="flex flex-col gap-3 rounded-2xl bg-panel-to/40 p-6 ring-1 ring-panel-foreground/15">
+          <h3 className="text-sm font-semibold">
+            {t('landing.merchantsProofTitle')}
+          </h3>
+          <p className="max-w-3xl text-sm/relaxed text-panel-foreground/80">
+            {t('landing.merchantsProof1')}
+          </p>
+          <p className="max-w-3xl text-sm/relaxed text-panel-foreground/80">
+            {t('landing.merchantsProof2')}
+          </p>
+          <p className="text-2xs text-panel-foreground/60">
+            {t('landing.merchantsDisclaimer')}
+          </p>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-4">
+          <Button
+            size="lg"
+            asChild
+            className="bg-panel-foreground text-panel-to hover:bg-panel-foreground/90"
+          >
+            <a href="https://merchant.manfaa.app/signup" rel="noopener">
+              {t('nav.becomeMerchant')}
+            </a>
+          </Button>
+          <span className="text-xs text-panel-foreground/70">
+            {t('landing.merchantsCtaHint')}
+          </span>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/**
  * The search block that opens the storefront for a SIGNED-OUT visitor,
  * sitting with the category rail below how-it-works: by then they know what
  * Manfaa is and the question has changed from "what is this?" to "who takes
@@ -555,10 +881,43 @@ function SearchAndCategories({
 }
 
 export default function LandingPage() {
-  // Coordinate-free on purpose: the landing has no "near you" shelf any
-  // more — Nearby is a rail entry point, and geolocation is only ever asked
-  // for on /discover, from the button the visitor presses there.
-  const { data, isPending } = useDiscovery(null);
+  /**
+   * ONE geolocation state for the landing, feeding the discovery query's
+   * key — the "Near you" shelf and every card's distance line come from the
+   * same coord-scoped payload. Geolocation itself only ever runs from the
+   * shelf's own button (never a prompt on page load), with one exception:
+   * when the Permissions API reports the choice as ALREADY granted, the fix
+   * is fetched silently — getCurrentPosition cannot prompt in that state —
+   * so a returning visitor who said yes once sees "Near you" populated
+   * without pressing anything again.
+   */
+  const location = useLocationRequest();
+  const requestRef = useRef(location.requestLocation);
+  requestRef.current = location.requestLocation;
+  useEffect(() => {
+    if (
+      typeof navigator === 'undefined' ||
+      navigator.permissions === undefined
+    ) {
+      return;
+    }
+    let cancelled = false;
+    navigator.permissions
+      .query({ name: 'geolocation' })
+      .then((status) => {
+        if (!cancelled && status.state === 'granted') {
+          requestRef.current();
+        }
+      })
+      // A browser without geolocation in its Permissions API: keep the
+      // gesture-gated button, exactly as if the check did not exist.
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const { data, isPending, isPlaceholderData } = useDiscovery(location.coords);
   const signedIn = useSignedIn();
 
   // The single best live promotion becomes the hero's second panel; the
@@ -568,10 +927,23 @@ export default function LandingPage() {
   const storefront =
     data !== undefined &&
     (hasListedStores(data) ? (
-      <Shelves sections={data} />
+      <Shelves
+        sections={data}
+        location={location}
+        refetching={isPlaceholderData}
+      />
     ) : (
       <AllEmptyBlock />
     ));
+
+  // The admin-curated offer banners, leading the shelves exactly as they do
+  // on /discover. The wrapper's bottom padding exists only when the row
+  // does — with zero live offers nothing renders, not even the spacing.
+  const offers = data !== undefined && data.offers.length > 0 && (
+    <div className="pb-8">
+      <FeaturedOffers offers={data.offers} />
+    </div>
+  );
 
   return (
     <div className="flex min-h-screen w-full flex-col bg-background">
@@ -585,6 +957,7 @@ export default function LandingPage() {
             <CustomerBanner />
             {isPending && <CategoryRailSkeleton />}
             {data !== undefined && <CategoryRail sections={data} />}
+            {offers}
             {storefront}
           </>
         ) : (
@@ -595,11 +968,18 @@ export default function LandingPage() {
             <HowItWorks />
             <RealMoney />
             <SearchAndCategories sections={data} isPending={isPending} />
+            {offers}
             {storefront}
           </>
         )}
 
+        {/* Evergreen from here down — true with one store or a hundred, so
+            the page ends deliberately however thin the catalogue above. */}
+        <WhyManfaa />
         <MarketplaceTeaser />
+        {/* Members get the quiet one-line band; a signed-out visitor might
+            BE a store owner, so they get the full pitch chapter. */}
+        {signedIn ? <MerchantCta /> : <ForMerchants />}
       </main>
       <PublicFooter />
     </div>

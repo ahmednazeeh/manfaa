@@ -16,7 +16,6 @@ use App\Models\Adjustment;
 use App\Models\AdminUser;
 use App\Models\Merchant;
 use App\Models\MerchantUser;
-use App\Models\NotificationTemplate;
 use App\Models\Settlement;
 use App\Models\SettlementLine;
 use App\Models\SettlementPayment;
@@ -470,14 +469,8 @@ final class SettlementBuilder
             $this->notifications->sendToMerchantStaff(
                 NotificationTemplateKey::SettlementDue,
                 $settlement->merchant,
-                // The amount follows the TEMPLATE's language: "MVR 500.00"
-                // in English, "500.00 ރުފިޔާ" in Dhivehi — never "MVR"
-                // inside a Thaana sentence.
-                fn (NotificationTemplate $template): array => [
-                    'amount' => NotificationService::money(
-                        (int) $settlement->amount_due_laari,
-                        $template->sendsDhivehi(),
-                    ),
+                [
+                    'amount' => NotificationService::money((int) $settlement->amount_due_laari),
                     'reference' => (string) $settlement->reference,
                 ],
                 Permission::SettlementsView,

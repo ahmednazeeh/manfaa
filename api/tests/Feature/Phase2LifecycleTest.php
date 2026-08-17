@@ -158,7 +158,9 @@ it('runs the full Phase 2 vendor lifecycle: credential → POS ingest → replay
         'effective_to' => null,
     ]);
     $owner = MerchantUser::factory()->for($merchant)->owner()->create();
-    $admin = AdminUser::factory()->create();
+    // Superadmin: the lifecycle ends in a manual reinstatement, which is
+    // gated superadmin-only (EnsureSuperadmin) like store approval.
+    $admin = AdminUser::factory()->create(['role' => 'superadmin']);
     $this->customer = Customer::factory()->create(['customer_code' => '482917']);
 
     Carbon::setTestNow(CarbonImmutable::parse('2026-07-30T10:00:00+05:00'));

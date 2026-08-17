@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Mobile;
 
+use App\Domain\Customers\CustomerAvatar;
 use App\Http\Controllers\Controller;
 use App\Http\Responses\CacheableJson;
 use App\Models\Customer;
@@ -40,6 +41,9 @@ final class SessionController extends Controller
                 'name' => $customer->name,
                 'customer_code' => $customer->customer_code,
                 'phone' => $customer->phone,
+                // Null until a picture is set. Content-addressed (a new
+                // uuid URL per upload), so the app caches it hard.
+                'avatar_url' => CustomerAvatar::url($customer),
                 // What the app needs to know it must nag about: nobody gets
                 // paid without one.
                 'has_payout_account' => filled($customer->payout_bank)

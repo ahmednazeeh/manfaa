@@ -8,6 +8,8 @@ use App\Domain\Cashback\Actor;
 use App\Domain\Cashback\InvalidTransitionException;
 use App\Domain\Cashback\TransactionState;
 use App\Domain\Cashback\TransitionService;
+use App\Domain\Notifications\NotificationService;
+use App\Domain\Notifications\NotificationTemplateKey;
 use App\Models\Transaction;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
@@ -24,7 +26,10 @@ use Illuminate\Support\Facades\DB;
  */
 final readonly class ValidationSweeper
 {
-    public function __construct(private TransitionService $transitions) {}
+    public function __construct(
+        private TransitionService $transitions,
+        private NotificationService $notifications,
+    ) {}
 
     /**
      * @return int the number of transactions moved onto the settlement clock
@@ -52,6 +57,21 @@ final readonly class ValidationSweeper
             try {
                 $this->transitions->makePayable($transaction, Actor::system());
                 $swept++;
+
+                // Tell the customer their Pending just became Confirmed —
+                // the "when validated" moment (owner request 2026-08-17).
+                // This is the WINDOW-CLOSED path only: a zero-window or
+                // backdated credit confirms in the same breath it is earned,
+                // and CashbackEarned already announced that. Zero-value and
+                // customerless rows have nothing to announce.
+                $customer = $transaction->customer;
+
+                if ($customer !== null && (int) $transaction->cashback_laari > 0) {
+                    $this->notifications->send(NotificationTemplateKey::CashbackConfirmed, $customer, [
+                        'amount' => NotificationService::money((int) $transaction->cashback_laari),
+                        'store' => (string) $transaction->merchant?->name,
+                    ]);
+                }
             } catch (InvalidTransitionException) {
                 // A concurrent process moved it first — nothing left to do.
             }

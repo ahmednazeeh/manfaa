@@ -11,6 +11,7 @@ import {
   CreditCard,
   Landmark,
   LogOut,
+  Map as MapIcon,
   Megaphone,
   MessageSquare,
   Percent,
@@ -18,6 +19,7 @@ import {
   ShieldAlert,
   ShieldCheck,
   SlidersHorizontal,
+  Smartphone,
   Store,
   Tags,
   type LucideIcon,
@@ -30,6 +32,7 @@ import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useAdminUser } from '@/components/auth/admin-guard';
+import { ManfaaLogo } from '@/components/shell/manfaa-logo';
 import { ThemeToggle } from '@/components/shell/theme-toggle';
 
 interface NavItem {
@@ -97,6 +100,7 @@ function OpenHoldsBadge() {
 const NAV_ITEMS: NavItem[] = [
   { href: '/settlements', label: 'Settlements', icon: Landmark },
   { href: '/merchants', label: 'Merchants', icon: Store },
+  { href: '/zones', label: 'Zones', icon: MapIcon },
   {
     href: '/holds',
     label: 'Holds',
@@ -115,11 +119,16 @@ const NAV_ITEMS: NavItem[] = [
 
 const SETTINGS_ITEMS: NavItem[] = [
   { href: '/settings/platform', label: 'Platform', icon: SlidersHorizontal },
+  { href: '/settings/app-releases', label: 'App releases', icon: Smartphone },
   { href: '/settings/fee-tiers', label: 'Fee tiers', icon: Percent },
   { href: '/settings/bank-accounts', label: 'Bank accounts', icon: CreditCard },
   { href: '/settings/store-categories', label: 'Store categories', icon: Tags },
   { href: '/settings/offers', label: 'Featured offers', icon: Megaphone },
-  { href: '/settings/notifications', label: 'Notifications', icon: MessageSquare },
+  {
+    href: '/settings/notifications',
+    label: 'Notifications',
+    icon: MessageSquare,
+  },
   {
     href: '/settings/admins',
     label: 'Admins',
@@ -209,8 +218,11 @@ export function AppShell({ children }: { children: ReactNode }) {
     <div className="flex min-h-screen w-full">
       <aside className="hidden w-60 shrink-0 flex-col border-e border-border bg-muted/30 lg:flex">
         <div className="flex h-16 items-center border-b border-border px-5">
-          <Link href="/settlements" className="text-lg font-semibold">
-            Manfaa <span className="text-muted-foreground">Admin</span>
+          <Link href="/settlements" className="flex items-center gap-2">
+            <ManfaaLogo />
+            <span className="text-lg font-semibold text-muted-foreground">
+              Admin
+            </span>
           </Link>
         </div>
         <div className="flex-1 overflow-y-auto p-3">
@@ -220,8 +232,14 @@ export function AppShell({ children }: { children: ReactNode }) {
 
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex h-16 items-center justify-between gap-4 border-b border-border px-5">
-          <Link href="/settlements" className="text-lg font-semibold lg:hidden">
-            Manfaa <span className="text-muted-foreground">Admin</span>
+          <Link
+            href="/settlements"
+            className="flex items-center gap-2 lg:hidden"
+          >
+            <ManfaaLogo />
+            <span className="text-lg font-semibold text-muted-foreground">
+              Admin
+            </span>
           </Link>
           <div className="hidden lg:block" />
           <div className="flex items-center gap-3">

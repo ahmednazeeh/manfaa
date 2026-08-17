@@ -35,23 +35,13 @@ class NotificationTemplate extends Model
     }
 
     /**
-     * The body to send. Dhivehi when the store has written one, English
-     * otherwise — never an empty message.
-     *
-     * Customers carry no language preference today, so this is the whole of
-     * the language decision. When they do, this method is the one place that
-     * has to learn about it.
+     * The body to send — always the English one, by decision (2026-08-17):
+     * every notification goes out in English. The body_dv column still
+     * exists but is never read; if per-language sending ever returns, this
+     * method is the one place that has to learn about it.
      */
     public function body(): string
     {
-        $dhivehi = trim((string) $this->body_dv);
-
-        return $dhivehi === '' ? (string) $this->body_en : $dhivehi;
-    }
-
-    /** True when the Dhivehi body is what body() would send. */
-    public function sendsDhivehi(): bool
-    {
-        return trim((string) $this->body_dv) !== '';
+        return (string) $this->body_en;
     }
 }

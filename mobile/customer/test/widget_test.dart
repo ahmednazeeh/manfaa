@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -72,6 +74,7 @@ void main() {
   devicesTests();
   otpErrorTests();
   payoutAccountTests();
+  avatarTests();
   polishTests();
 
   testWidgets('MoneyText renders laari as the canonical MVR string',
@@ -248,6 +251,26 @@ class _FakeApi extends ManfaaApi {
   @override
   Future<void> revokeDevice(int id) async => revoked.add(id);
 
+  var avatarUploads = 0;
+  var avatarRemovals = 0;
+
+  @override
+  Future<String?> uploadAvatar({
+    required Uint8List bytes,
+    required String filename,
+  }) async {
+    avatarUploads++;
+    const url = 'https://cdn.example/avatar.png';
+    await session.setAvatarUrl(url);
+    return url;
+  }
+
+  @override
+  Future<void> removeAvatar() async {
+    avatarRemovals++;
+    await session.setAvatarUrl(null);
+  }
+
   PayoutAccount payout = PayoutAccount.fromJson(const {
     'bank_name': null,
     'account_no': null,
@@ -298,7 +321,7 @@ class _FakeApi extends ManfaaApi {
   }
 
   @override
-  Future<DiscoverFeed> discover({double? lat, double? lng}) async =>
+  Future<DiscoverFeed> discover({double? lat, double? lng, int? zone}) async =>
       DiscoverFeed.fromJson(const {
         'increased': [
           {
@@ -561,6 +584,11 @@ void activityTests() {
 
 void discoverTests() {
   Future<void> signInAndOpenDiscover(WidgetTester tester) async {
+    // The redesigned Discover carries a header, search and featured chrome
+    // above the shelves — a taller surface keeps the shelves in the lazy
+    // ListView's build window.
+    await tester.binding.setSurfaceSize(const Size(430, 2400));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.pumpWidget(onboardingApp((s) => _FakeApi(session: s)));
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField).first, '7712345');
@@ -630,6 +658,14 @@ void devicesTests() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 50));
 
+    // The Appearance card pushed the devices tile past the list's lazy-build
+    // extent, so scroll it into existence before tapping.
+    await tester.scrollUntilVisible(
+      find.text('Signed-in devices'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pump();
     await tester.tap(find.text('Signed-in devices'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 50));
@@ -729,6 +765,10 @@ void otpErrorTests() {
 void payoutAccountTests() {
   testWidgets('changing the payout account requires the code — the gate',
       (tester) async {
+    // Taller surface so the settings list and the payout form both build
+    // fully — the redesign's larger controls push content past 600px.
+    await tester.binding.setSurfaceSize(const Size(430, 1800));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
     late _FakeApi api;
     await tester.pumpWidget(onboardingApp((s) {
       api = _FakeApi(session: s);
@@ -790,6 +830,59 @@ void payoutAccountTests() {
 }
 
 
+void avatarTests() {
+  testWidgets('the profile photo sheet offers remove only once a photo exists',
+      (tester) async {
+    late _FakeApi api;
+    await tester.pumpWidget(onboardingApp((s) {
+      api = _FakeApi(session: s);
+      return api;
+    }));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField).first, '7712345');
+    await tester.tap(find.text('Continue'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+    await tester.enterText(find.byType(TextField).first, '111111');
+    await tester.tap(find.text('Verify'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+    await tester.pump(const Duration(milliseconds: 50));
+
+    await tester.tap(find.text('Profile'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+
+    // The identity avatar is the tap target; the pencil badge marks it.
+    await tester.tap(find.byIcon(Icons.edit_rounded));
+    await tester.pumpAndSettle();
+
+    // No photo yet: choose is offered, remove is not.
+    expect(find.text('Choose photo'), findsOneWidget);
+    expect(find.text('Remove photo'), findsNothing);
+
+    // Dismiss via the barrier.
+    await tester.tapAt(const Offset(10, 100));
+    await tester.pumpAndSettle();
+
+    // A photo appears (as if uploaded from another surface) — the session
+    // bump repaints, and the sheet now offers remove.
+    await api.session.setAvatarUrl('https://cdn.example/avatar.png');
+    await tester.pump();
+
+    await tester.tap(find.byIcon(Icons.edit_rounded));
+    await tester.pumpAndSettle();
+    expect(find.text('Remove photo'), findsOneWidget);
+
+    await tester.tap(find.text('Remove photo'));
+    await tester.pumpAndSettle();
+
+    expect(api.avatarRemovals, 1);
+    expect(api.session.avatarUrl, isNull);
+    expect(find.text('Profile picture removed.'), findsOneWidget);
+  });
+}
+
 Widget themedApp(Locale locale, Brightness brightness) {
   final store = MemorySecretStore();
   return ProviderScope(
@@ -846,6 +939,10 @@ void polishTests() {
 
   testWidgets('the notifications toggle flips the push preference',
       (tester) async {
+    // Taller surface so the settings list builds and taps land without
+    // fighting a lazy ListView.
+    await tester.binding.setSurfaceSize(const Size(430, 1800));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
     late _FakeApi api;
     await tester.pumpWidget(onboardingApp((s) {
       api = _FakeApi(session: s);
@@ -867,6 +964,10 @@ void polishTests() {
     await tester.pump(const Duration(milliseconds: 50));
 
     expect(api.session.pushEnabled, isTrue);
+    // The Appearance card pushed the toggle below the fold on the test
+    // viewport — bring it into view before tapping.
+    await tester.ensureVisible(find.byType(Switch));
+    await tester.pump();
     await tester.tap(find.byType(Switch));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 50));
