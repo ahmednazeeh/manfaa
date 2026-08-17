@@ -44,6 +44,19 @@ abstract final class ApiCode {
   static const idempotencyKeyReuseMismatch = 'idempotency_key_reuse_mismatch';
   static const idempotencyKeyInFlight = 'idempotency_key_in_flight';
 
+  // ------------------------------------------------- amend / cancel (MR2)
+  // The transactions tab's correction refusals. All terminal: the sale's
+  // state moved on, or the platform owns it now — retyping cannot fix any
+  // of them.
+  static const notAmendableState = 'not_amendable_state';
+  static const backdatedIrreversible = 'backdated_irreversible';
+  static const invalidState = 'invalid_state';
+  static const adjustmentCreated = 'adjustment_created';
+  static const storeNotApproved = 'store_not_approved';
+  static const storeNotTrading = 'store_not_trading';
+  static const saleBelowEligible = 'sale_below_eligible';
+  static const linesSumMismatch = 'lines_sum_mismatch';
+
   // -------------------------------------------------- signup + setup wizard
   // The merchant onboarding path (mobile signup/setup mounting, MR1).
   static const otpInvalid = 'otp_invalid';

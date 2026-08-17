@@ -615,6 +615,128 @@ class SetupCategory {
       dhivehi && (nameDv ?? '').isNotEmpty ? nameDv! : nameEn;
 }
 
+/// GET /merchant/customers/lookup?code=NNNNNN — the till's name check
+/// before money moves (a typo here credits a stranger).
+///
+/// The two 200 answers are deliberately thin: `{"valid":true,"name":…}` for
+/// a creditable code, `{"valid":false}` for everything else — an unknown
+/// code and a non-active customer are byte-identical so the endpoint is no
+/// membership oracle. NOTE: unlike the rest of the surface this answer has
+/// no `data` wrapper.
+class CustomerLookup {
+  CustomerLookup({required this.valid, this.name});
+
+  factory CustomerLookup.fromJson(Map<String, dynamic> json) => CustomerLookup(
+        valid: json['valid'] as bool? ?? false,
+        name: json['name'] as String?,
+      );
+
+  final bool valid;
+
+  /// The customer's full name — only present when [valid].
+  final String? name;
+}
+
+/// One priced rate window on GET /merchant/rate. Rates are 2-decimal percent
+/// STRINGS off the wire (§1) and stay strings; the fee pair is null only for
+/// a legacy unpriced rate (where the server refuses credits anyway).
+class RateWindow {
+  RateWindow({
+    required this.cashbackRatePercent,
+    this.platformFeePercent,
+    this.allInPercent,
+    required this.effectiveFrom,
+    this.effectiveTo,
+  });
+
+  factory RateWindow.fromJson(Map<String, dynamic> json) => RateWindow(
+        cashbackRatePercent: _s(json['cashback_rate_percent']),
+        platformFeePercent: json['platform_fee_percent'] as String?,
+        allInPercent: json['all_in_percent'] as String?,
+        effectiveFrom: _s(json['effective_from']),
+        effectiveTo: json['effective_to'] as String?,
+      );
+
+  final String cashbackRatePercent;
+  final String? platformFeePercent;
+  final String? allInPercent;
+
+  /// ISO 8601 in the business timezone (Indian/Maldives).
+  final String effectiveFrom;
+  final String? effectiveTo;
+}
+
+/// GET /merchant/rate — the standing terms the cost preview estimates from.
+class MerchantRate {
+  MerchantRate({this.current, this.pending});
+
+  factory MerchantRate.fromJson(Map<String, dynamic> json) => MerchantRate(
+        current: json['current'] is Map
+            ? RateWindow.fromJson((json['current'] as Map).cast<String, dynamic>())
+            : null,
+        pending: json['pending'] is Map
+            ? RateWindow.fromJson((json['pending'] as Map).cast<String, dynamic>())
+            : null,
+      );
+
+  /// Null when the store has no effective rate at all — the server refuses
+  /// credits in that state, and the till says so instead of previewing.
+  final RateWindow? current;
+
+  /// The §7 scheduled decrease window (effective next business midnight);
+  /// null when nothing is scheduled.
+  final RateWindow? pending;
+}
+
+/// One product category on GET /merchant/product-categories — the split
+/// editor's vocabulary. The list includes INACTIVE rows on purpose (older
+/// transactions still reference them); the editor filters on [active].
+class ProductCategory {
+  ProductCategory({
+    required this.id,
+    required this.slug,
+    required this.nameEn,
+    this.nameDv,
+    required this.mode,
+    this.cashbackRatePercent,
+    required this.active,
+    required this.sort,
+  });
+
+  factory ProductCategory.fromJson(Map<String, dynamic> json) =>
+      ProductCategory(
+        id: json['id'] as int? ?? 0,
+        slug: _s(json['slug']),
+        nameEn: _s(json['name_en']),
+        nameDv: json['name_dv'] as String?,
+        mode: _s(json['mode']),
+        cashbackRatePercent: json['cashback_rate_percent'] as String?,
+        active: json['active'] as bool? ?? false,
+        sort: _count(json['sort']),
+      );
+
+  final int id;
+
+  /// The immutable line key — what a credit's `lines[].category` takes.
+  final String slug;
+  final String nameEn;
+  final String? nameDv;
+
+  /// `excluded` (earns nothing, even in promotions) or `rate` (its own
+  /// cashback rate, in [cashbackRatePercent]).
+  final String mode;
+
+  /// "5.00" for a rate rule; null when excluded.
+  final String? cashbackRatePercent;
+  final bool active;
+  final int sort;
+
+  bool get excluded => mode == 'excluded';
+
+  String label({required bool dhivehi}) =>
+      dhivehi && (nameDv ?? '').isNotEmpty ? nameDv! : nameEn;
+}
+
 /// POST /merchant/credits — the recorded sale, plus whether this answer is
 /// an idempotent REPLAY of an earlier commit (guide §6: the replay arrives
 /// as 200 with `Idempotency-Replay: true`; the first commit is a 201 —

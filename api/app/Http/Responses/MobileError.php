@@ -183,12 +183,18 @@ final class MobileError
     /**
      * Carry an exception's own headers onto the enveloped response.
      *
-     * @param  array<string, string>  $headers
+     * Values are cast to string: ThrottleRequestsException carries
+     * Retry-After and the X-RateLimit-* family as INTEGERS, and Symfony's
+     * ResponseHeaderBag::set() accepts array|string|null only — without the
+     * cast every real mobile 429 became a 500 in the very act of being
+     * enveloped.
+     *
+     * @param  array<string, mixed>  $headers
      */
     private static function withHeaders(JsonResponse $response, array $headers): JsonResponse
     {
         foreach ($headers as $header => $value) {
-            $response->headers->set($header, $value);
+            $response->headers->set($header, is_array($value) ? $value : (string) $value);
         }
 
         return $response;

@@ -1,3 +1,7 @@
+import 'dart:async';
+import 'dart:io' show Platform;
+
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:manfaa_core/manfaa_core.dart';
@@ -65,16 +69,16 @@ final localeProvider = NotifierProvider<LocaleController, Locale>(
 );
 
 ThemeMode _themeModeFrom(String v) => switch (v) {
-      'dark' => ThemeMode.dark,
-      'system' => ThemeMode.system,
-      _ => ThemeMode.light,
-    };
+  'dark' => ThemeMode.dark,
+  'system' => ThemeMode.system,
+  _ => ThemeMode.light,
+};
 
 String _themeModeName(ThemeMode m) => switch (m) {
-      ThemeMode.dark => 'dark',
-      ThemeMode.system => 'system',
-      ThemeMode.light => 'light',
-    };
+  ThemeMode.dark => 'dark',
+  ThemeMode.system => 'system',
+  ThemeMode.light => 'light',
+};
 
 /// The theme mode the user chose. Light-first by default (see SessionBase),
 /// persisted so it survives a restart — and, like locale, a sign-out.
@@ -91,3 +95,75 @@ class ThemeModeController extends Notifier<ThemeMode> {
 final themeModeProvider = NotifierProvider<ThemeModeController, ThemeMode>(
   ThemeModeController.new,
 );
+
+/// The till's offline credit queue (manfaa_core CreditQueue) wired to the
+/// real API: every credit — online or not — submits THROUGH it, so the
+/// idempotency key minted at compose time is the one every retry carries.
+/// A ChangeNotifierProvider so the Credit tab's pending-sync banner repaints
+/// on every queue movement.
+final creditQueueProvider = ChangeNotifierProvider<CreditQueue>((ref) {
+  final api = ref.watch(apiProvider);
+  final queue = CreditQueue(
+    ref.watch(secretStoreProvider),
+    (entry) => api.createCredit(
+      idempotencyKey: entry.key,
+      customerCode: entry.customerCode,
+      invoiceNo: entry.invoiceNo,
+      eligibleLaari: entry.eligibleLaari,
+      saleLaari: entry.saleLaari,
+      occurredAt: entry.occurredAt,
+      cashbackRatePercent: entry.cashbackRatePercent,
+      lines: entry.lines.isEmpty ? null : entry.lines,
+      backdatedAcknowledged: entry.backdatedAcknowledged,
+    ),
+  );
+  // Fire-and-forget: load() is idempotent and every queue method awaits it.
+  queue.load();
+  return queue;
+});
+
+/// Drains the queue when the world changes: the app returning to the
+/// foreground, and connectivity coming back. Watched once from the shell —
+/// alive exactly while a signed-in, trading merchant is inside the app.
+final queueDrainDriverProvider = Provider<void>((ref) {
+  final driver = _QueueDrainDriver(ref.read(creditQueueProvider.notifier));
+  ref.onDispose(driver.dispose);
+});
+
+class _QueueDrainDriver with WidgetsBindingObserver {
+  _QueueDrainDriver(this._queue) {
+    WidgetsBinding.instance.addObserver(this);
+    // Under `flutter test` there is no platform channel behind the plugin,
+    // and the EventChannel activation failure is reported to FlutterError
+    // (uncatchable from here) — so the wiring is gated on the test-runner
+    // env; the resume path and the manual "Sync now" still drain in tests.
+    if (Platform.environment.containsKey('FLUTTER_TEST')) return;
+    try {
+      _connectivity = Connectivity().onConnectivityChanged.listen(
+        (results) {
+          if (results.any((r) => r != ConnectivityResult.none)) {
+            _queue.drain();
+          }
+        },
+        // A platform without the plugin errors instead of emitting; the
+        // resume path still drains.
+        onError: (Object _, StackTrace _) {},
+      );
+    } catch (_) {
+      // No connectivity events — foreground/resume remains the trigger.
+    }
+  }
+
+  final CreditQueue _queue;
+  StreamSubscription<List<ConnectivityResult>>? _connectivity;
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _queue.drain();
+  }
+
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _connectivity?.cancel();
+  }
+}

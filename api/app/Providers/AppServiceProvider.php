@@ -116,6 +116,22 @@ class AppServiceProvider extends ServiceProvider
             );
         });
 
+        // The mobile customer lookup (merchant app MR2) — the web mounts it
+        // at inline throttle:30,1 behind a session; here the same 30/min per
+        // user under the named class-discriminated key, for the same
+        // cross-audience id-collision reason as above. Separate bucket from
+        // the web's by construction; the per-merchant daily MISS budget is
+        // the controller's own and spans both surfaces on purpose.
+        RateLimiter::for('mobile-lookup', function (Request $request): Limit {
+            $user = $request->user();
+
+            return Limit::perMinute(30)->by(
+                $user instanceof Authenticatable
+                    ? $user::class.':'.$user->getAuthIdentifier()
+                    : 'ip:'.$request->ip(),
+            );
+        });
+
         RateLimiter::for('discovery', function (Request $request): Limit {
             $token = (string) config('services.discovery.internal_token');
 

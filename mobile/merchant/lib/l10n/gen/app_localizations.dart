@@ -914,6 +914,12 @@ abstract class AppLocalizations {
   /// **'Choose where you sell'**
   String get missingChannel;
 
+  /// No description provided for @missingContact.
+  ///
+  /// In en, this message translates to:
+  /// **'Add a contact phone number'**
+  String get missingContact;
+
   /// No description provided for @missingRate.
   ///
   /// In en, this message translates to:
@@ -973,6 +979,984 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'This store hasn\'t finished setup, and your role can\'t edit it. Ask the store owner to finish it on their account.'**
   String get staffSetupBody;
+
+  /// No description provided for @cancel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get cancel;
+
+  /// No description provided for @save.
+  ///
+  /// In en, this message translates to:
+  /// **'Save'**
+  String get save;
+
+  /// No description provided for @optionalLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'optional'**
+  String get optionalLabel;
+
+  /// No description provided for @creditTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Credit customer'**
+  String get creditTitle;
+
+  /// No description provided for @creditSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Record a sale and credit the customer\'s cashback.'**
+  String get creditSubtitle;
+
+  /// No description provided for @modeEnterCode.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter code'**
+  String get modeEnterCode;
+
+  /// No description provided for @modeScanQr.
+  ///
+  /// In en, this message translates to:
+  /// **'Scan QR'**
+  String get modeScanQr;
+
+  /// No description provided for @modeRecent.
+  ///
+  /// In en, this message translates to:
+  /// **'Recent'**
+  String get modeRecent;
+
+  /// No description provided for @codeAskHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Ask the customer for the 6-digit code shown in their Manfaa app.'**
+  String get codeAskHint;
+
+  /// No description provided for @lookupChecking.
+  ///
+  /// In en, this message translates to:
+  /// **'Checking code…'**
+  String get lookupChecking;
+
+  /// No description provided for @lookupVerified.
+  ///
+  /// In en, this message translates to:
+  /// **'Verified'**
+  String get lookupVerified;
+
+  /// No description provided for @lookupNotFoundTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'We don\'t recognise this code'**
+  String get lookupNotFoundTitle;
+
+  /// No description provided for @lookupNotFoundBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Check the digits with the customer before trying again — a typo here credits a stranger.'**
+  String get lookupNotFoundBody;
+
+  /// No description provided for @lookupFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not check this code — try again.'**
+  String get lookupFailed;
+
+  /// No description provided for @scanPrompt.
+  ///
+  /// In en, this message translates to:
+  /// **'Point the camera at the QR code in the customer\'s Manfaa app.'**
+  String get scanPrompt;
+
+  /// No description provided for @scanDenied.
+  ///
+  /// In en, this message translates to:
+  /// **'Camera access is blocked. Allow the camera in your phone\'s settings, or type the 6-digit code.'**
+  String get scanDenied;
+
+  /// No description provided for @scanFallbackHint.
+  ///
+  /// In en, this message translates to:
+  /// **'You can always type the code by hand.'**
+  String get scanFallbackHint;
+
+  /// No description provided for @recentEmptyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'No recent customers'**
+  String get recentEmptyTitle;
+
+  /// No description provided for @recentEmptyBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Customers you credit appear here for quick reuse.'**
+  String get recentEmptyBody;
+
+  /// No description provided for @invoiceLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Invoice number'**
+  String get invoiceLabel;
+
+  /// No description provided for @invoiceHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Required — one credit per invoice, exactly as printed on the receipt.'**
+  String get invoiceHint;
+
+  /// No description provided for @saleDateTimeLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Sale date & time'**
+  String get saleDateTimeLabel;
+
+  /// No description provided for @saleDateTimeNow.
+  ///
+  /// In en, this message translates to:
+  /// **'Recorded as right now unless you change it.'**
+  String get saleDateTimeNow;
+
+  /// No description provided for @saleDateTimeEdited.
+  ///
+  /// In en, this message translates to:
+  /// **'Will be recorded at the time shown.'**
+  String get saleDateTimeEdited;
+
+  /// No description provided for @saleDateTimeSetNow.
+  ///
+  /// In en, this message translates to:
+  /// **'Set to now'**
+  String get saleDateTimeSetNow;
+
+  /// No description provided for @eligibleLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Eligible amount'**
+  String get eligibleLabel;
+
+  /// No description provided for @eligibleHint.
+  ///
+  /// In en, this message translates to:
+  /// **'The part of the bill cashback is computed on, per your agreement.'**
+  String get eligibleHint;
+
+  /// No description provided for @eligibleInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a valid amount, e.g. 1,250.00.'**
+  String get eligibleInvalid;
+
+  /// No description provided for @fullSaleLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Full sale amount'**
+  String get fullSaleLabel;
+
+  /// No description provided for @fullSaleHint.
+  ///
+  /// In en, this message translates to:
+  /// **'The whole invoice total — reference only, never used in computation.'**
+  String get fullSaleHint;
+
+  /// No description provided for @fullSaleInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Must be a valid amount, at least the eligible amount.'**
+  String get fullSaleInvalid;
+
+  /// No description provided for @customRateToggle.
+  ///
+  /// In en, this message translates to:
+  /// **'Custom cashback for this sale'**
+  String get customRateToggle;
+
+  /// No description provided for @customRateToggleHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Pay this customer more than your usual rate.'**
+  String get customRateToggleHint;
+
+  /// No description provided for @customRateLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cashback for this sale'**
+  String get customRateLabel;
+
+  /// No description provided for @customRateHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Must be {rate} or higher — you can only raise your advertised rate, never lower it. The customer is told the higher figure.'**
+  String customRateHint(String rate);
+
+  /// No description provided for @customRateHintNoRate.
+  ///
+  /// In en, this message translates to:
+  /// **'Your store has no cashback rate in effect yet — contact Manfaa before crediting customers.'**
+  String get customRateHintNoRate;
+
+  /// No description provided for @customRateFormat.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a percent with up to two decimal places, e.g. 7.50.'**
+  String get customRateFormat;
+
+  /// No description provided for @customRateRange.
+  ///
+  /// In en, this message translates to:
+  /// **'Cashback runs from {min} to {max}.'**
+  String customRateRange(String min, String max);
+
+  /// No description provided for @customRateTooLow.
+  ///
+  /// In en, this message translates to:
+  /// **'This sale already earns {rate}. A custom rate can only be higher — your advertised rate is a promise to the customer.'**
+  String customRateTooLow(String rate);
+
+  /// No description provided for @customRateRefusedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'That rate is lower than this sale already earns.'**
+  String get customRateRefusedTitle;
+
+  /// No description provided for @customRateRefusedBody.
+  ///
+  /// In en, this message translates to:
+  /// **'This sale earns {rate} — your standing rate, or a promotion running right now. Enter a higher rate, or switch the custom rate off.'**
+  String customRateRefusedBody(String rate);
+
+  /// No description provided for @customRateRefusedBodyNoRate.
+  ///
+  /// In en, this message translates to:
+  /// **'A custom rate can only raise what this sale already earns. Enter a higher rate, or switch the custom rate off.'**
+  String get customRateRefusedBodyNoRate;
+
+  /// No description provided for @customRateNotPricedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'That rate isn\'t available yet.'**
+  String get customRateNotPricedTitle;
+
+  /// No description provided for @splitToggle.
+  ///
+  /// In en, this message translates to:
+  /// **'Split by category'**
+  String get splitToggle;
+
+  /// No description provided for @splitToggleHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Split this sale into product categories.'**
+  String get splitToggleHint;
+
+  /// No description provided for @splitBreakdownTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Category breakdown'**
+  String get splitBreakdownTitle;
+
+  /// No description provided for @splitAddCategory.
+  ///
+  /// In en, this message translates to:
+  /// **'Add category'**
+  String get splitAddCategory;
+
+  /// No description provided for @splitEverythingElse.
+  ///
+  /// In en, this message translates to:
+  /// **'Everything else'**
+  String get splitEverythingElse;
+
+  /// No description provided for @splitEditLine.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit line'**
+  String get splitEditLine;
+
+  /// No description provided for @splitRemoveLine.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove line'**
+  String get splitRemoveLine;
+
+  /// No description provided for @splitDialogTitleAdd.
+  ///
+  /// In en, this message translates to:
+  /// **'Add category amount'**
+  String get splitDialogTitleAdd;
+
+  /// No description provided for @splitDialogTitleEdit.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit category amount'**
+  String get splitDialogTitleEdit;
+
+  /// No description provided for @splitCategoryLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Category'**
+  String get splitCategoryLabel;
+
+  /// No description provided for @splitAmountLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Amount'**
+  String get splitAmountLabel;
+
+  /// No description provided for @splitAmountInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a valid amount of at least MVR 0.01.'**
+  String get splitAmountInvalid;
+
+  /// No description provided for @splitExcludedNote.
+  ///
+  /// In en, this message translates to:
+  /// **'No cashback — still part of the total.'**
+  String get splitExcludedNote;
+
+  /// No description provided for @splitEmptyHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Add the sale\'s parts — the lines must add up to the eligible amount, excluded categories included.'**
+  String get splitEmptyHint;
+
+  /// No description provided for @splitOtherChip.
+  ///
+  /// In en, this message translates to:
+  /// **'Other'**
+  String get splitOtherChip;
+
+  /// No description provided for @splitLinesTotal.
+  ///
+  /// In en, this message translates to:
+  /// **'Lines total'**
+  String get splitLinesTotal;
+
+  /// No description provided for @splitMismatchTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'The lines don\'t add up to the eligible amount.'**
+  String get splitMismatchTitle;
+
+  /// No description provided for @splitMismatchBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Difference: {difference}. Every part of the bill goes in, including the excluded ones — the credit can\'t be recorded until the two match.'**
+  String splitMismatchBody(String difference);
+
+  /// No description provided for @costPreviewTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Cost preview'**
+  String get costPreviewTitle;
+
+  /// No description provided for @previewCashback.
+  ///
+  /// In en, this message translates to:
+  /// **'Customer cashback ({rate})'**
+  String previewCashback(String rate);
+
+  /// No description provided for @previewFee.
+  ///
+  /// In en, this message translates to:
+  /// **'Platform fee ({rate})'**
+  String previewFee(String rate);
+
+  /// No description provided for @previewYouPay.
+  ///
+  /// In en, this message translates to:
+  /// **'You pay ({rate})'**
+  String previewYouPay(String rate);
+
+  /// No description provided for @previewPerLine.
+  ///
+  /// In en, this message translates to:
+  /// **'per line'**
+  String get previewPerLine;
+
+  /// No description provided for @previewEstimateNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Estimate — final amounts use the rate at the sale time.'**
+  String get previewEstimateNote;
+
+  /// No description provided for @previewNoRate.
+  ///
+  /// In en, this message translates to:
+  /// **'No cashback rate is in effect yet — contact Manfaa before crediting customers.'**
+  String get previewNoRate;
+
+  /// No description provided for @previewUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Your current rate is unavailable right now — the credit still uses the correct rate on the server.'**
+  String get previewUnavailable;
+
+  /// No description provided for @backdatedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Backdated sale — this credit is final'**
+  String get backdatedTitle;
+
+  /// No description provided for @backdatedBody.
+  ///
+  /// In en, this message translates to:
+  /// **'This sale is older than your refund window — once credited it cannot be reversed, and it becomes payable to Manfaa immediately.'**
+  String get backdatedBody;
+
+  /// No description provided for @backdatedMaybeTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'This sale may be backdated'**
+  String get backdatedMaybeTitle;
+
+  /// No description provided for @backdatedMaybeBody.
+  ///
+  /// In en, this message translates to:
+  /// **'This sale may be older than your refund window. If it is, once credited it cannot be reversed, and it becomes payable to Manfaa immediately.'**
+  String get backdatedMaybeBody;
+
+  /// No description provided for @backdatedConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'I understand: this credit cannot be reversed and is payable now.'**
+  String get backdatedConfirm;
+
+  /// No description provided for @backdatedConfirmRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm you understand before recording this credit.'**
+  String get backdatedConfirmRequired;
+
+  /// No description provided for @backdatedResultTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Credited — final and payable now'**
+  String get backdatedResultTitle;
+
+  /// No description provided for @backdatedResultBody.
+  ///
+  /// In en, this message translates to:
+  /// **'This backdated sale skipped the refund window. The customer\'s cashback is payable to Manfaa immediately, and neither you nor your POS can reverse it — contact Manfaa if it needs correcting.'**
+  String get backdatedResultBody;
+
+  /// No description provided for @pendingNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Credited cashback will appear as pending. It will be validated and released to the customer after settlement.'**
+  String get pendingNote;
+
+  /// No description provided for @creditCta.
+  ///
+  /// In en, this message translates to:
+  /// **'Credit customer'**
+  String get creditCta;
+
+  /// No description provided for @errDuplicateInvoiceTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'This invoice is already credited.'**
+  String get errDuplicateInvoiceTitle;
+
+  /// No description provided for @errDuplicateInvoiceBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Each invoice can be credited once. If this is a different sale, check the invoice number on the receipt.'**
+  String get errDuplicateInvoiceBody;
+
+  /// No description provided for @errSuspendedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Your store is suspended — new cashback is paused.'**
+  String get errSuspendedTitle;
+
+  /// No description provided for @errSuspendedBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Settle your outstanding balance to resume crediting customers, or contact Manfaa if you believe this is wrong.'**
+  String get errSuspendedBody;
+
+  /// No description provided for @errCreditFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not record the credit.'**
+  String get errCreditFailed;
+
+  /// No description provided for @queuedBannerTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 sale waiting to sync} other{{count} sales waiting to sync}}'**
+  String queuedBannerTitle(int count);
+
+  /// No description provided for @queuedBannerBody.
+  ///
+  /// In en, this message translates to:
+  /// **'They\'ll be sent automatically when you\'re back online.'**
+  String get queuedBannerBody;
+
+  /// No description provided for @queuedBannerAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Sync now'**
+  String get queuedBannerAction;
+
+  /// No description provided for @queuedSnack.
+  ///
+  /// In en, this message translates to:
+  /// **'No connection — the sale is saved and will sync automatically.'**
+  String get queuedSnack;
+
+  /// No description provided for @attentionTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Needs attention'**
+  String get attentionTitle;
+
+  /// No description provided for @attentionBody.
+  ///
+  /// In en, this message translates to:
+  /// **'These queued sales were refused when they synced — review each one.'**
+  String get attentionBody;
+
+  /// No description provided for @attentionRetry.
+  ///
+  /// In en, this message translates to:
+  /// **'Try again'**
+  String get attentionRetry;
+
+  /// No description provided for @attentionDiscard.
+  ///
+  /// In en, this message translates to:
+  /// **'Dismiss'**
+  String get attentionDiscard;
+
+  /// No description provided for @resultRecordedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Cashback recorded'**
+  String get resultRecordedTitle;
+
+  /// No description provided for @resultBelowMinTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Recorded — no reward'**
+  String get resultBelowMinTitle;
+
+  /// No description provided for @resultBelowMinBody.
+  ///
+  /// In en, this message translates to:
+  /// **'This sale is below your store\'s minimum eligible amount. It was recorded with zero cashback — the customer earns nothing on it and nothing is payable.'**
+  String get resultBelowMinBody;
+
+  /// No description provided for @resultOnHoldTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Recorded — under review'**
+  String get resultOnHoldTitle;
+
+  /// No description provided for @resultOnHoldBody.
+  ///
+  /// In en, this message translates to:
+  /// **'The sale is on hold while Manfaa checks it. It counts for the customer once the review clears it; nothing else is needed from you.'**
+  String get resultOnHoldBody;
+
+  /// No description provided for @resultReplayedNote.
+  ///
+  /// In en, this message translates to:
+  /// **'This sale was already recorded earlier — this is the original result.'**
+  String get resultReplayedNote;
+
+  /// No description provided for @resultCustomer.
+  ///
+  /// In en, this message translates to:
+  /// **'Customer'**
+  String get resultCustomer;
+
+  /// No description provided for @resultInvoice.
+  ///
+  /// In en, this message translates to:
+  /// **'Invoice'**
+  String get resultInvoice;
+
+  /// No description provided for @resultState.
+  ///
+  /// In en, this message translates to:
+  /// **'State'**
+  String get resultState;
+
+  /// No description provided for @resultEligible.
+  ///
+  /// In en, this message translates to:
+  /// **'Eligible amount'**
+  String get resultEligible;
+
+  /// No description provided for @resultYouPay.
+  ///
+  /// In en, this message translates to:
+  /// **'You pay'**
+  String get resultYouPay;
+
+  /// No description provided for @resultLinesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Priced lines'**
+  String get resultLinesTitle;
+
+  /// No description provided for @creditAnother.
+  ///
+  /// In en, this message translates to:
+  /// **'Credit another customer'**
+  String get creditAnother;
+
+  /// No description provided for @stateTracked.
+  ///
+  /// In en, this message translates to:
+  /// **'Recorded'**
+  String get stateTracked;
+
+  /// No description provided for @stateAwaitingValidation.
+  ///
+  /// In en, this message translates to:
+  /// **'In refund window'**
+  String get stateAwaitingValidation;
+
+  /// No description provided for @statePayableUnfunded.
+  ///
+  /// In en, this message translates to:
+  /// **'Payable to Manfaa'**
+  String get statePayableUnfunded;
+
+  /// No description provided for @stateOnHold.
+  ///
+  /// In en, this message translates to:
+  /// **'Under review'**
+  String get stateOnHold;
+
+  /// No description provided for @stateConfirmed.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirmed'**
+  String get stateConfirmed;
+
+  /// No description provided for @statePaid.
+  ///
+  /// In en, this message translates to:
+  /// **'Paid to customer'**
+  String get statePaid;
+
+  /// No description provided for @stateReversed.
+  ///
+  /// In en, this message translates to:
+  /// **'Reversed'**
+  String get stateReversed;
+
+  /// No description provided for @stateWrittenOff.
+  ///
+  /// In en, this message translates to:
+  /// **'Written off — unpaid'**
+  String get stateWrittenOff;
+
+  /// No description provided for @stateOther.
+  ///
+  /// In en, this message translates to:
+  /// **'Updated'**
+  String get stateOther;
+
+  /// No description provided for @reasonAutoValidation.
+  ///
+  /// In en, this message translates to:
+  /// **'Validated automatically'**
+  String get reasonAutoValidation;
+
+  /// No description provided for @reasonBackdatedFinal.
+  ///
+  /// In en, this message translates to:
+  /// **'Backdated — cannot be reversed'**
+  String get reasonBackdatedFinal;
+
+  /// No description provided for @reasonBelowMinimum.
+  ///
+  /// In en, this message translates to:
+  /// **'Below minimum sale'**
+  String get reasonBelowMinimum;
+
+  /// No description provided for @reasonMerchantSuspended.
+  ///
+  /// In en, this message translates to:
+  /// **'Store suspended'**
+  String get reasonMerchantSuspended;
+
+  /// No description provided for @reasonSettlementAllocated.
+  ///
+  /// In en, this message translates to:
+  /// **'Paid by store'**
+  String get reasonSettlementAllocated;
+
+  /// No description provided for @reasonPayoutCompleted.
+  ///
+  /// In en, this message translates to:
+  /// **'Paid out'**
+  String get reasonPayoutCompleted;
+
+  /// No description provided for @reasonCustomerRefund.
+  ///
+  /// In en, this message translates to:
+  /// **'Refunded'**
+  String get reasonCustomerRefund;
+
+  /// No description provided for @reasonTillVoid.
+  ///
+  /// In en, this message translates to:
+  /// **'Voided at the till'**
+  String get reasonTillVoid;
+
+  /// No description provided for @reasonDuplicate.
+  ///
+  /// In en, this message translates to:
+  /// **'Duplicate sale'**
+  String get reasonDuplicate;
+
+  /// No description provided for @reasonOtherCorrected.
+  ///
+  /// In en, this message translates to:
+  /// **'Corrected — other reason'**
+  String get reasonOtherCorrected;
+
+  /// No description provided for @reasonStaleTimestamp.
+  ///
+  /// In en, this message translates to:
+  /// **'Held — sale was backdated'**
+  String get reasonStaleTimestamp;
+
+  /// No description provided for @reasonUnknown.
+  ///
+  /// In en, this message translates to:
+  /// **'Updated by Manfaa'**
+  String get reasonUnknown;
+
+  /// No description provided for @transactionsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Transactions'**
+  String get transactionsTitle;
+
+  /// No description provided for @filterAll.
+  ///
+  /// In en, this message translates to:
+  /// **'All states'**
+  String get filterAll;
+
+  /// No description provided for @txEmptyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'No transactions yet'**
+  String get txEmptyTitle;
+
+  /// No description provided for @txEmptyBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Sales you credit appear here.'**
+  String get txEmptyBody;
+
+  /// No description provided for @txEmptyFiltered.
+  ///
+  /// In en, this message translates to:
+  /// **'No transactions match this filter.'**
+  String get txEmptyFiltered;
+
+  /// No description provided for @backdatedChip.
+  ///
+  /// In en, this message translates to:
+  /// **'Backdated'**
+  String get backdatedChip;
+
+  /// No description provided for @amendAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Correct amount'**
+  String get amendAction;
+
+  /// No description provided for @cancelAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel sale'**
+  String get cancelAction;
+
+  /// No description provided for @amendTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Correct the amount'**
+  String get amendTitle;
+
+  /// No description provided for @amendBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Fix what was rung up on {invoiceNo}. The cashback is recalculated at the same rate the sale was recorded under.'**
+  String amendBody(String invoiceNo);
+
+  /// No description provided for @amendEligibleLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Eligible amount'**
+  String get amendEligibleLabel;
+
+  /// No description provided for @amendHint.
+  ///
+  /// In en, this message translates to:
+  /// **'The part of the bill cashback is computed on, as it should have been.'**
+  String get amendHint;
+
+  /// No description provided for @amendLinesLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Category amounts'**
+  String get amendLinesLabel;
+
+  /// No description provided for @amendLinesHint.
+  ///
+  /// In en, this message translates to:
+  /// **'The eligible amount adds up from these lines:'**
+  String get amendLinesHint;
+
+  /// No description provided for @amendCurrent.
+  ///
+  /// In en, this message translates to:
+  /// **'Currently {amount} · cashback {cashback}'**
+  String amendCurrent(String amount, String cashback);
+
+  /// No description provided for @amendSubmit.
+  ///
+  /// In en, this message translates to:
+  /// **'Save correction'**
+  String get amendSubmit;
+
+  /// No description provided for @amendDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Amount corrected.'**
+  String get amendDone;
+
+  /// No description provided for @amendFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not correct the amount.'**
+  String get amendFailed;
+
+  /// No description provided for @cancelTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel this sale'**
+  String get cancelTitle;
+
+  /// No description provided for @cancelBody.
+  ///
+  /// In en, this message translates to:
+  /// **'{invoiceNo} comes off entirely and the cashback is taken back.'**
+  String cancelBody(String invoiceNo);
+
+  /// No description provided for @cancelReasonLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Reason'**
+  String get cancelReasonLabel;
+
+  /// No description provided for @cancelNoteLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Note (optional)'**
+  String get cancelNoteLabel;
+
+  /// No description provided for @cancelWarning.
+  ///
+  /// In en, this message translates to:
+  /// **'The customer has already been told they earned this. Cancelling removes it from their balance.'**
+  String get cancelWarning;
+
+  /// No description provided for @cancelSubmit.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel sale'**
+  String get cancelSubmit;
+
+  /// No description provided for @cancelDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Sale cancelled.'**
+  String get cancelDone;
+
+  /// No description provided for @cancelFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not cancel the sale.'**
+  String get cancelFailed;
+
+  /// No description provided for @keepSale.
+  ///
+  /// In en, this message translates to:
+  /// **'Keep sale'**
+  String get keepSale;
+
+  /// No description provided for @cancelReasonRefund.
+  ///
+  /// In en, this message translates to:
+  /// **'Refunded'**
+  String get cancelReasonRefund;
+
+  /// No description provided for @cancelReasonVoid.
+  ///
+  /// In en, this message translates to:
+  /// **'Voided at the till'**
+  String get cancelReasonVoid;
+
+  /// No description provided for @cancelReasonDuplicate.
+  ///
+  /// In en, this message translates to:
+  /// **'Duplicate entry'**
+  String get cancelReasonDuplicate;
+
+  /// No description provided for @cancelReasonError.
+  ///
+  /// In en, this message translates to:
+  /// **'Keyed in error'**
+  String get cancelReasonError;
+
+  /// No description provided for @errNotAmendable.
+  ///
+  /// In en, this message translates to:
+  /// **'This sale can no longer be changed — its window has closed.'**
+  String get errNotAmendable;
+
+  /// No description provided for @errBackdatedIrreversible.
+  ///
+  /// In en, this message translates to:
+  /// **'Backdated credits can never be reversed.'**
+  String get errBackdatedIrreversible;
+
+  /// No description provided for @todayTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Today'**
+  String get todayTitle;
+
+  /// No description provided for @todayCredits.
+  ///
+  /// In en, this message translates to:
+  /// **'Credits'**
+  String get todayCredits;
+
+  /// No description provided for @todayEligible.
+  ///
+  /// In en, this message translates to:
+  /// **'Eligible sales'**
+  String get todayEligible;
+
+  /// No description provided for @todayCashback.
+  ///
+  /// In en, this message translates to:
+  /// **'Cashback'**
+  String get todayCashback;
 }
 
 class _AppLocalizationsDelegate

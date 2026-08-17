@@ -457,6 +457,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get missingChannel => 'Choose where you sell';
 
   @override
+  String get missingContact => 'Add a contact phone number';
+
+  @override
   String get missingRate => 'Set your cashback rate';
 
   @override
@@ -490,4 +493,562 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get staffSetupBody =>
       'This store hasn\'t finished setup, and your role can\'t edit it. Ask the store owner to finish it on their account.';
+
+  @override
+  String get cancel => 'Cancel';
+
+  @override
+  String get save => 'Save';
+
+  @override
+  String get optionalLabel => 'optional';
+
+  @override
+  String get creditTitle => 'Credit customer';
+
+  @override
+  String get creditSubtitle =>
+      'Record a sale and credit the customer\'s cashback.';
+
+  @override
+  String get modeEnterCode => 'Enter code';
+
+  @override
+  String get modeScanQr => 'Scan QR';
+
+  @override
+  String get modeRecent => 'Recent';
+
+  @override
+  String get codeAskHint =>
+      'Ask the customer for the 6-digit code shown in their Manfaa app.';
+
+  @override
+  String get lookupChecking => 'Checking code…';
+
+  @override
+  String get lookupVerified => 'Verified';
+
+  @override
+  String get lookupNotFoundTitle => 'We don\'t recognise this code';
+
+  @override
+  String get lookupNotFoundBody =>
+      'Check the digits with the customer before trying again — a typo here credits a stranger.';
+
+  @override
+  String get lookupFailed => 'Could not check this code — try again.';
+
+  @override
+  String get scanPrompt =>
+      'Point the camera at the QR code in the customer\'s Manfaa app.';
+
+  @override
+  String get scanDenied =>
+      'Camera access is blocked. Allow the camera in your phone\'s settings, or type the 6-digit code.';
+
+  @override
+  String get scanFallbackHint => 'You can always type the code by hand.';
+
+  @override
+  String get recentEmptyTitle => 'No recent customers';
+
+  @override
+  String get recentEmptyBody =>
+      'Customers you credit appear here for quick reuse.';
+
+  @override
+  String get invoiceLabel => 'Invoice number';
+
+  @override
+  String get invoiceHint =>
+      'Required — one credit per invoice, exactly as printed on the receipt.';
+
+  @override
+  String get saleDateTimeLabel => 'Sale date & time';
+
+  @override
+  String get saleDateTimeNow => 'Recorded as right now unless you change it.';
+
+  @override
+  String get saleDateTimeEdited => 'Will be recorded at the time shown.';
+
+  @override
+  String get saleDateTimeSetNow => 'Set to now';
+
+  @override
+  String get eligibleLabel => 'Eligible amount';
+
+  @override
+  String get eligibleHint =>
+      'The part of the bill cashback is computed on, per your agreement.';
+
+  @override
+  String get eligibleInvalid => 'Enter a valid amount, e.g. 1,250.00.';
+
+  @override
+  String get fullSaleLabel => 'Full sale amount';
+
+  @override
+  String get fullSaleHint =>
+      'The whole invoice total — reference only, never used in computation.';
+
+  @override
+  String get fullSaleInvalid =>
+      'Must be a valid amount, at least the eligible amount.';
+
+  @override
+  String get customRateToggle => 'Custom cashback for this sale';
+
+  @override
+  String get customRateToggleHint =>
+      'Pay this customer more than your usual rate.';
+
+  @override
+  String get customRateLabel => 'Cashback for this sale';
+
+  @override
+  String customRateHint(String rate) {
+    return 'Must be $rate or higher — you can only raise your advertised rate, never lower it. The customer is told the higher figure.';
+  }
+
+  @override
+  String get customRateHintNoRate =>
+      'Your store has no cashback rate in effect yet — contact Manfaa before crediting customers.';
+
+  @override
+  String get customRateFormat =>
+      'Enter a percent with up to two decimal places, e.g. 7.50.';
+
+  @override
+  String customRateRange(String min, String max) {
+    return 'Cashback runs from $min to $max.';
+  }
+
+  @override
+  String customRateTooLow(String rate) {
+    return 'This sale already earns $rate. A custom rate can only be higher — your advertised rate is a promise to the customer.';
+  }
+
+  @override
+  String get customRateRefusedTitle =>
+      'That rate is lower than this sale already earns.';
+
+  @override
+  String customRateRefusedBody(String rate) {
+    return 'This sale earns $rate — your standing rate, or a promotion running right now. Enter a higher rate, or switch the custom rate off.';
+  }
+
+  @override
+  String get customRateRefusedBodyNoRate =>
+      'A custom rate can only raise what this sale already earns. Enter a higher rate, or switch the custom rate off.';
+
+  @override
+  String get customRateNotPricedTitle => 'That rate isn\'t available yet.';
+
+  @override
+  String get splitToggle => 'Split by category';
+
+  @override
+  String get splitToggleHint => 'Split this sale into product categories.';
+
+  @override
+  String get splitBreakdownTitle => 'Category breakdown';
+
+  @override
+  String get splitAddCategory => 'Add category';
+
+  @override
+  String get splitEverythingElse => 'Everything else';
+
+  @override
+  String get splitEditLine => 'Edit line';
+
+  @override
+  String get splitRemoveLine => 'Remove line';
+
+  @override
+  String get splitDialogTitleAdd => 'Add category amount';
+
+  @override
+  String get splitDialogTitleEdit => 'Edit category amount';
+
+  @override
+  String get splitCategoryLabel => 'Category';
+
+  @override
+  String get splitAmountLabel => 'Amount';
+
+  @override
+  String get splitAmountInvalid => 'Enter a valid amount of at least MVR 0.01.';
+
+  @override
+  String get splitExcludedNote => 'No cashback — still part of the total.';
+
+  @override
+  String get splitEmptyHint =>
+      'Add the sale\'s parts — the lines must add up to the eligible amount, excluded categories included.';
+
+  @override
+  String get splitOtherChip => 'Other';
+
+  @override
+  String get splitLinesTotal => 'Lines total';
+
+  @override
+  String get splitMismatchTitle =>
+      'The lines don\'t add up to the eligible amount.';
+
+  @override
+  String splitMismatchBody(String difference) {
+    return 'Difference: $difference. Every part of the bill goes in, including the excluded ones — the credit can\'t be recorded until the two match.';
+  }
+
+  @override
+  String get costPreviewTitle => 'Cost preview';
+
+  @override
+  String previewCashback(String rate) {
+    return 'Customer cashback ($rate)';
+  }
+
+  @override
+  String previewFee(String rate) {
+    return 'Platform fee ($rate)';
+  }
+
+  @override
+  String previewYouPay(String rate) {
+    return 'You pay ($rate)';
+  }
+
+  @override
+  String get previewPerLine => 'per line';
+
+  @override
+  String get previewEstimateNote =>
+      'Estimate — final amounts use the rate at the sale time.';
+
+  @override
+  String get previewNoRate =>
+      'No cashback rate is in effect yet — contact Manfaa before crediting customers.';
+
+  @override
+  String get previewUnavailable =>
+      'Your current rate is unavailable right now — the credit still uses the correct rate on the server.';
+
+  @override
+  String get backdatedTitle => 'Backdated sale — this credit is final';
+
+  @override
+  String get backdatedBody =>
+      'This sale is older than your refund window — once credited it cannot be reversed, and it becomes payable to Manfaa immediately.';
+
+  @override
+  String get backdatedMaybeTitle => 'This sale may be backdated';
+
+  @override
+  String get backdatedMaybeBody =>
+      'This sale may be older than your refund window. If it is, once credited it cannot be reversed, and it becomes payable to Manfaa immediately.';
+
+  @override
+  String get backdatedConfirm =>
+      'I understand: this credit cannot be reversed and is payable now.';
+
+  @override
+  String get backdatedConfirmRequired =>
+      'Confirm you understand before recording this credit.';
+
+  @override
+  String get backdatedResultTitle => 'Credited — final and payable now';
+
+  @override
+  String get backdatedResultBody =>
+      'This backdated sale skipped the refund window. The customer\'s cashback is payable to Manfaa immediately, and neither you nor your POS can reverse it — contact Manfaa if it needs correcting.';
+
+  @override
+  String get pendingNote =>
+      'Credited cashback will appear as pending. It will be validated and released to the customer after settlement.';
+
+  @override
+  String get creditCta => 'Credit customer';
+
+  @override
+  String get errDuplicateInvoiceTitle => 'This invoice is already credited.';
+
+  @override
+  String get errDuplicateInvoiceBody =>
+      'Each invoice can be credited once. If this is a different sale, check the invoice number on the receipt.';
+
+  @override
+  String get errSuspendedTitle =>
+      'Your store is suspended — new cashback is paused.';
+
+  @override
+  String get errSuspendedBody =>
+      'Settle your outstanding balance to resume crediting customers, or contact Manfaa if you believe this is wrong.';
+
+  @override
+  String get errCreditFailed => 'Could not record the credit.';
+
+  @override
+  String queuedBannerTitle(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count sales waiting to sync',
+      one: '1 sale waiting to sync',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get queuedBannerBody =>
+      'They\'ll be sent automatically when you\'re back online.';
+
+  @override
+  String get queuedBannerAction => 'Sync now';
+
+  @override
+  String get queuedSnack =>
+      'No connection — the sale is saved and will sync automatically.';
+
+  @override
+  String get attentionTitle => 'Needs attention';
+
+  @override
+  String get attentionBody =>
+      'These queued sales were refused when they synced — review each one.';
+
+  @override
+  String get attentionRetry => 'Try again';
+
+  @override
+  String get attentionDiscard => 'Dismiss';
+
+  @override
+  String get resultRecordedTitle => 'Cashback recorded';
+
+  @override
+  String get resultBelowMinTitle => 'Recorded — no reward';
+
+  @override
+  String get resultBelowMinBody =>
+      'This sale is below your store\'s minimum eligible amount. It was recorded with zero cashback — the customer earns nothing on it and nothing is payable.';
+
+  @override
+  String get resultOnHoldTitle => 'Recorded — under review';
+
+  @override
+  String get resultOnHoldBody =>
+      'The sale is on hold while Manfaa checks it. It counts for the customer once the review clears it; nothing else is needed from you.';
+
+  @override
+  String get resultReplayedNote =>
+      'This sale was already recorded earlier — this is the original result.';
+
+  @override
+  String get resultCustomer => 'Customer';
+
+  @override
+  String get resultInvoice => 'Invoice';
+
+  @override
+  String get resultState => 'State';
+
+  @override
+  String get resultEligible => 'Eligible amount';
+
+  @override
+  String get resultYouPay => 'You pay';
+
+  @override
+  String get resultLinesTitle => 'Priced lines';
+
+  @override
+  String get creditAnother => 'Credit another customer';
+
+  @override
+  String get stateTracked => 'Recorded';
+
+  @override
+  String get stateAwaitingValidation => 'In refund window';
+
+  @override
+  String get statePayableUnfunded => 'Payable to Manfaa';
+
+  @override
+  String get stateOnHold => 'Under review';
+
+  @override
+  String get stateConfirmed => 'Confirmed';
+
+  @override
+  String get statePaid => 'Paid to customer';
+
+  @override
+  String get stateReversed => 'Reversed';
+
+  @override
+  String get stateWrittenOff => 'Written off — unpaid';
+
+  @override
+  String get stateOther => 'Updated';
+
+  @override
+  String get reasonAutoValidation => 'Validated automatically';
+
+  @override
+  String get reasonBackdatedFinal => 'Backdated — cannot be reversed';
+
+  @override
+  String get reasonBelowMinimum => 'Below minimum sale';
+
+  @override
+  String get reasonMerchantSuspended => 'Store suspended';
+
+  @override
+  String get reasonSettlementAllocated => 'Paid by store';
+
+  @override
+  String get reasonPayoutCompleted => 'Paid out';
+
+  @override
+  String get reasonCustomerRefund => 'Refunded';
+
+  @override
+  String get reasonTillVoid => 'Voided at the till';
+
+  @override
+  String get reasonDuplicate => 'Duplicate sale';
+
+  @override
+  String get reasonOtherCorrected => 'Corrected — other reason';
+
+  @override
+  String get reasonStaleTimestamp => 'Held — sale was backdated';
+
+  @override
+  String get reasonUnknown => 'Updated by Manfaa';
+
+  @override
+  String get transactionsTitle => 'Transactions';
+
+  @override
+  String get filterAll => 'All states';
+
+  @override
+  String get txEmptyTitle => 'No transactions yet';
+
+  @override
+  String get txEmptyBody => 'Sales you credit appear here.';
+
+  @override
+  String get txEmptyFiltered => 'No transactions match this filter.';
+
+  @override
+  String get backdatedChip => 'Backdated';
+
+  @override
+  String get amendAction => 'Correct amount';
+
+  @override
+  String get cancelAction => 'Cancel sale';
+
+  @override
+  String get amendTitle => 'Correct the amount';
+
+  @override
+  String amendBody(String invoiceNo) {
+    return 'Fix what was rung up on $invoiceNo. The cashback is recalculated at the same rate the sale was recorded under.';
+  }
+
+  @override
+  String get amendEligibleLabel => 'Eligible amount';
+
+  @override
+  String get amendHint =>
+      'The part of the bill cashback is computed on, as it should have been.';
+
+  @override
+  String get amendLinesLabel => 'Category amounts';
+
+  @override
+  String get amendLinesHint => 'The eligible amount adds up from these lines:';
+
+  @override
+  String amendCurrent(String amount, String cashback) {
+    return 'Currently $amount · cashback $cashback';
+  }
+
+  @override
+  String get amendSubmit => 'Save correction';
+
+  @override
+  String get amendDone => 'Amount corrected.';
+
+  @override
+  String get amendFailed => 'Could not correct the amount.';
+
+  @override
+  String get cancelTitle => 'Cancel this sale';
+
+  @override
+  String cancelBody(String invoiceNo) {
+    return '$invoiceNo comes off entirely and the cashback is taken back.';
+  }
+
+  @override
+  String get cancelReasonLabel => 'Reason';
+
+  @override
+  String get cancelNoteLabel => 'Note (optional)';
+
+  @override
+  String get cancelWarning =>
+      'The customer has already been told they earned this. Cancelling removes it from their balance.';
+
+  @override
+  String get cancelSubmit => 'Cancel sale';
+
+  @override
+  String get cancelDone => 'Sale cancelled.';
+
+  @override
+  String get cancelFailed => 'Could not cancel the sale.';
+
+  @override
+  String get keepSale => 'Keep sale';
+
+  @override
+  String get cancelReasonRefund => 'Refunded';
+
+  @override
+  String get cancelReasonVoid => 'Voided at the till';
+
+  @override
+  String get cancelReasonDuplicate => 'Duplicate entry';
+
+  @override
+  String get cancelReasonError => 'Keyed in error';
+
+  @override
+  String get errNotAmendable =>
+      'This sale can no longer be changed — its window has closed.';
+
+  @override
+  String get errBackdatedIrreversible =>
+      'Backdated credits can never be reversed.';
+
+  @override
+  String get todayTitle => 'Today';
+
+  @override
+  String get todayCredits => 'Credits';
+
+  @override
+  String get todayEligible => 'Eligible sales';
+
+  @override
+  String get todayCashback => 'Cashback';
 }

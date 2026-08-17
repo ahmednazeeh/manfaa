@@ -294,6 +294,94 @@ class MerchantApi extends ManfaaApiBase<MerchantSession> {
         query: {'state': ?state, 'per_page': ?perPage},
       );
 
+  /// Confirm who a 6-digit code belongs to BEFORE crediting — the name
+  /// check the till shows beside the Verified chip. `{valid:false}` covers
+  /// unknown and non-active codes identically (no membership oracle), and
+  /// the endpoint has two budgets: 30/min per user, and a per-MERCHANT
+  /// 60-misses/day budget shared with the web — once tripped, even valid
+  /// codes answer 429 until the day rolls.
+  Future<CustomerLookup> lookupCustomer(String code) async {
+    final data = await run(
+      () => dio.get<Map<String, dynamic>>(
+        '/merchant/customers/lookup',
+        queryParameters: {'code': code},
+      ),
+    );
+
+    // The one mobile answer WITHOUT a `data` wrapper — parsed off the root.
+    return CustomerLookup.fromJson(data ?? const {});
+  }
+
+  /// The standing terms (current + any §7 pending decrease) the credit
+  /// screen's cost preview estimates from. Gate: `rate.view` — seeds to
+  /// every role, so the cashier's preview never 403s.
+  Future<MerchantRate> merchantRate() async =>
+      MerchantRate.fromJson(await getJson('/merchant/rate'));
+
+  /// The split editor's category vocabulary, ordered by sort then id, and
+  /// INCLUDING inactive rows (old lines still name them) — filter on
+  /// `active` for the editor. Gate: `product_categories.view` (every role).
+  Future<List<ProductCategory>> productCategories() async {
+    final data = await run(
+      () => dio.get<Map<String, dynamic>>('/merchant/product-categories'),
+    );
+
+    return [
+      for (final item in (data?['data'] as List? ?? const []))
+        ProductCategory.fromJson((item as Map).cast<String, dynamic>()),
+    ];
+  }
+
+  /// Fix what was rung up while the sale still sits in its refund window
+  /// (`awaiting_validation` && !backdated — the same gate the actions
+  /// render behind). The cashback is repriced at the sale's FROZEN terms;
+  /// [lines] (when the sale was split) replace the split wholesale and must
+  /// sum to [eligibleLaari]. Gate: `transactions.amend` (Manager+).
+  Future<MerchantTransaction> amendTransaction({
+    required int id,
+    required int eligibleLaari,
+    int? saleLaari,
+    List<CreditLine>? lines,
+  }) async {
+    final data = await run(
+      () => dio.patch<Map<String, dynamic>>(
+        '/merchant/transactions/$id',
+        data: {
+          'eligible_amount': eligibleLaari,
+          'sale_amount': ?saleLaari,
+          if (lines != null)
+            'lines': [for (final line in lines) line.toJson()],
+        },
+      ),
+    );
+
+    return MerchantTransaction.fromJson(
+      (data?['data'] as Map?)?.cast<String, dynamic>() ?? {},
+    );
+  }
+
+  /// The till void: take the whole sale off and claw the cashback back.
+  /// Same window as amend, plus the hard rule the server proves in tests —
+  /// a BACKDATED credit can never be cancelled (`backdated_irreversible`).
+  /// [reason] is one of refund | void | duplicate | error.
+  /// Gate: `transactions.cancel`.
+  Future<MerchantTransaction> cancelTransaction({
+    required int id,
+    required String reason,
+    String? note,
+  }) async {
+    final data = await run(
+      () => dio.post<Map<String, dynamic>>(
+        '/merchant/transactions/$id/cancel',
+        data: {'reason': reason, 'note': ?note},
+      ),
+    );
+
+    return MerchantTransaction.fromJson(
+      (data?['data'] as Map?)?.cast<String, dynamic>() ?? {},
+    );
+  }
+
   // ------------------------------------------------------------- credits
 
   /// Record a sale — the till's whole reason to be signed in.

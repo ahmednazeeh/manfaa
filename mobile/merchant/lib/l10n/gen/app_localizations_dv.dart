@@ -462,6 +462,9 @@ class AppLocalizationsDv extends AppLocalizations {
   String get missingChannel => 'ވިއްކާ ގޮތް ނަންގަވާ';
 
   @override
+  String get missingContact => 'ގުޅޭނެ ފޯނު ނަންބަރެއް ލިޔުއްވާ';
+
+  @override
   String get missingRate => 'ކޭޝްބެކް ރޭޓް ޖައްސަވާ';
 
   @override
@@ -495,4 +498,571 @@ class AppLocalizationsDv extends AppLocalizations {
   @override
   String get staffSetupBody =>
       'މި ފިހާރައިގެ ސެޓަޕް އަދި ނުނިމޭ، އަދި ތިޔަ ރޯލަކުން އެ ބަދަލެއް ނުކުރެއްވޭނެ. ފިހާރައިގެ ވެރިފަރާތުގެ އެކައުންޓުން ނިންމަވަން ދަންނަވާ.';
+
+  @override
+  String get cancel => 'ކެންސަލް';
+
+  @override
+  String get save => 'ރައްކާކުރައްވާ';
+
+  @override
+  String get optionalLabel => 'އިޚްތިޔާރީ';
+
+  @override
+  String get creditTitle => 'ކަސްޓަމަރަށް ކްރެޑިޓްކުރައްވާ';
+
+  @override
+  String get creditSubtitle =>
+      'ވިޔަފާރިއެއް ރެކޯޑްކޮށް ކަސްޓަމަރުގެ ކޭޝްބެކް ދޫކުރައްވާ.';
+
+  @override
+  String get modeEnterCode => 'ކޯޑު ލިޔުއްވާ';
+
+  @override
+  String get modeScanQr => 'QR ސްކޭން';
+
+  @override
+  String get modeRecent => 'ފަހުގެ';
+
+  @override
+  String get codeAskHint =>
+      'ކަސްޓަމަރުގެ މަންފާ އެޕްގައި ފެންނަ 6 އަދަދުގެ ކޯޑަށް އެދިވަޑައިގަންނަވާ.';
+
+  @override
+  String get lookupChecking => 'ކޯޑު ބަލަނީ…';
+
+  @override
+  String get lookupVerified => 'ކަށަވަރު';
+
+  @override
+  String get lookupNotFoundTitle => 'މި ކޯޑެއް ނޭނގުނު';
+
+  @override
+  String get lookupNotFoundBody =>
+      'އަލުން މަސައްކަތްކުރެއްވުމުގެ ކުރިން ކަސްޓަމަރާއެކު އަދަދުތައް ޗެކްކުރައްވާ — ކުށަކުން އެހެން މީހަކަށް ކްރެޑިޓްވެދާނެ.';
+
+  @override
+  String get lookupFailed => 'ކޯޑު ނުބެލުނު — އަލުން މަސައްކަތްކުރައްވާ.';
+
+  @override
+  String get scanPrompt =>
+      'ކަސްޓަމަރުގެ މަންފާ އެޕްގައިވާ QR ކޯޑަށް ކެމެރާ އަމާޒުކުރައްވާ.';
+
+  @override
+  String get scanDenied =>
+      'ކެމެރާ ބޭނުންކުރުން ބްލޮކްވެފައި. ފޯނުގެ ސެޓިންގްސްއިން ކެމެރާއަށް ހުއްދަ ދެއްވާ، ނުވަތަ 6 އަދަދުގެ ކޯޑު ލިޔުއްވާ.';
+
+  @override
+  String get scanFallbackHint =>
+      'ކޮންމެ ވަގުތެއްގައިވެސް ކޯޑު އަތުން ލިޔެވިދާނެއެވެ.';
+
+  @override
+  String get recentEmptyTitle => 'ފަހުގެ ކަސްޓަމަރުންނެއް ނެތް';
+
+  @override
+  String get recentEmptyBody =>
+      'ކްރެޑިޓްކުރައްވާ ކަސްޓަމަރުން އަވަހަށް އަލުން ބޭނުންކުރެއްވުމަށް މިތަނުން ފެންނާނެއެވެ.';
+
+  @override
+  String get invoiceLabel => 'އިންވޮއިސް ނަންބަރު';
+
+  @override
+  String get invoiceHint =>
+      'ލާޒިމް — ކޮންމެ އިންވޮއިސްއަކަށް އެއް ކްރެޑިޓް، ރަސީދުގައި ޗާޕުކުރެވިފައިވާ ގޮތަށް.';
+
+  @override
+  String get saleDateTimeLabel => 'ވިޔަފާރީގެ ތާރީޚާއި ވަގުތު';
+
+  @override
+  String get saleDateTimeNow =>
+      'ބަދަލުނުކުރައްވާނަމަ މިހާރުގެ ވަގުތަށް ރެކޯޑްވާނެއެވެ.';
+
+  @override
+  String get saleDateTimeEdited => 'ދައްކާފައިވާ ވަގުތަށް ރެކޯޑްވާނެއެވެ.';
+
+  @override
+  String get saleDateTimeSetNow => 'މިހާރުގެ ވަގުތު ލައްވާ';
+
+  @override
+  String get eligibleLabel => 'ކޭޝްބެކް ލިބޭ ޢަދަދު';
+
+  @override
+  String get eligibleHint =>
+      'އެއްބަސްވުމާ އެއްގޮތަށް، ބިލުން ކޭޝްބެކް ހިސާބުކުރާ ބައި.';
+
+  @override
+  String get eligibleInvalid =>
+      'ސައްޙަ އަދަދެއް ލިޔުއްވާ، މިސާލަކަށް 1,250.00.';
+
+  @override
+  String get fullSaleLabel => 'މުޅި ވިޔަފާރީގެ ޢަދަދު';
+
+  @override
+  String get fullSaleHint =>
+      'މުޅި އިންވޮއިސްގެ ޖުމްލަ — ރިފަރެންސަށް އެކަނި، ހިސާބުކުރުމުގައި ބޭނުމެއް ނުކުރެވޭނެ.';
+
+  @override
+  String get fullSaleInvalid =>
+      'ސައްޙަ އަދަދަކަށް ވާންޖެހޭނެ — މަދުވެގެން ކޭޝްބެކް ލިބޭ ޢަދަދު.';
+
+  @override
+  String get customRateToggle => 'މި ވިޔަފާރިއަށް ޚާއްޞަ ކޭޝްބެކެއް';
+
+  @override
+  String get customRateToggleHint =>
+      'މި ކަސްޓަމަރަށް އާންމު ރޭޓަށްވުރެ ބޮޑު ކޭޝްބެކެއް ދެއްވާ.';
+
+  @override
+  String get customRateLabel => 'މި ވިޔަފާރީގެ ކޭޝްބެކް';
+
+  @override
+  String customRateHint(String rate) {
+    return '$rate ނުވަތަ އެއަށްވުރެ މަތި ވާންޖެހޭނެ — އިޢުލާނުކުރެވިފައިވާ ރޭޓް ހަމައެކަނި މަތިކުރެއްވޭނެ، ކުޑައެއް ނުކުރެއްވޭނެ. ކަސްޓަމަރަށް އަންގާނީ އެ ބޮޑު އަދަދެވެ.';
+  }
+
+  @override
+  String get customRateHintNoRate =>
+      'ފިހާރައިގައި އަދި ކޭޝްބެކް ރޭޓެއް ނެތް — ކަސްޓަމަރުންނަށް ކްރެޑިޓްކުރެއްވުމުގެ ކުރިން މަންފާއާ ގުޅުއްވާ.';
+
+  @override
+  String get customRateFormat =>
+      'ދެ ޑެސިމަލަށްވުރެ ގިނަ ނުވާގޮތަށް ޕަސެންޓެއް ލިޔުއްވާ، މިސާލަކަށް 7.50.';
+
+  @override
+  String customRateRange(String min, String max) {
+    return 'ކޭޝްބެކް ހިނގަނީ $min އިން $max އަށެވެ.';
+  }
+
+  @override
+  String customRateTooLow(String rate) {
+    return 'މިހާރުވެސް މި ވިޔަފާރިއަށް $rate ލިބެއެވެ. ޚާއްޞަ ރޭޓް ހަމައެކަނި މަތިކުރެއްވޭނެ — އިޢުލާނުކުރެވިފައިވާ ރޭޓަކީ ކަސްޓަމަރަށްވެފައިވާ ވަޢުދެކެވެ.';
+  }
+
+  @override
+  String get customRateRefusedTitle =>
+      'އެ ރޭޓަކީ މިހާރުވެސް މި ވިޔަފާރިއަށް ލިބޭ ރޭޓަށްވުރެ ކުޑަ ރޭޓެކެވެ.';
+
+  @override
+  String customRateRefusedBody(String rate) {
+    return 'މި ވިޔަފާރިއަށް $rate ލިބެއެވެ — ފިހާރައިގެ އާންމު ރޭޓް، ނުވަތަ މިހާރު ހިނގަމުންދާ ޕްރޮމޯޝަނެއް. މަތި ރޭޓެއް ލިޔުއްވާ، ނުވަތަ ޚާއްޞަ ރޭޓް ނިއްވަވާ.';
+  }
+
+  @override
+  String get customRateRefusedBodyNoRate =>
+      'ޚާއްޞަ ރޭޓުން ހަމައެކަނި މަތިކުރެއްވޭނީ މިހާރުވެސް މި ވިޔަފާރިއަށް ލިބޭ ރޭޓެވެ. މަތި ރޭޓެއް ލިޔުއްވާ، ނުވަތަ ޚާއްޞަ ރޭޓް ނިއްވަވާ.';
+
+  @override
+  String get customRateNotPricedTitle => 'އެ ރޭޓް އަދި ލިބެން ނެތެވެ.';
+
+  @override
+  String get splitToggle => 'ބައިތަކަށް ބަހާލައްވާ';
+
+  @override
+  String get splitToggleHint => 'މި ވިޔަފާރި ޕްރޮޑަކްޓް ބައިތަކަށް ބަހާލައްވާ.';
+
+  @override
+  String get splitBreakdownTitle => 'ބައިތަކުގެ ތަފްޞީލު';
+
+  @override
+  String get splitAddCategory => 'ބައެއް އިތުރުކުރައްވާ';
+
+  @override
+  String get splitEverythingElse => 'އެހެން ހުރިހާ އެއްޗެއް';
+
+  @override
+  String get splitEditLine => 'ލައިން ބަދަލުކުރައްވާ';
+
+  @override
+  String get splitRemoveLine => 'ލައިން ނަގާ';
+
+  @override
+  String get splitDialogTitleAdd => 'ބައިގެ އަދަދު އިތުރުކުރުން';
+
+  @override
+  String get splitDialogTitleEdit => 'ބައިގެ އަދަދު ބަދަލުކުރުން';
+
+  @override
+  String get splitCategoryLabel => 'ބައި';
+
+  @override
+  String get splitAmountLabel => 'އަދަދު';
+
+  @override
+  String get splitAmountInvalid =>
+      'މަދުވެގެން MVR 0.01 ގެ ސައްޙަ އަދަދެއް ލިޔުއްވާ.';
+
+  @override
+  String get splitExcludedNote =>
+      'ކޭޝްބެކެއް ނުލިބޭނެ — ނަމަވެސް ޖުމްލައިގެ ބައެކެވެ.';
+
+  @override
+  String get splitEmptyHint =>
+      'ވިޔަފާރީގެ ބައިތައް އިތުރުކުރައްވާ — ކޭޝްބެކް ނުލިބޭ ބައިތައް ހިމަނައިގެން، ލައިންތައް ކޭޝްބެކް ލިބޭ ޢަދަދާ އެއްވަރުވާންޖެހޭނެއެވެ.';
+
+  @override
+  String get splitOtherChip => 'އެހެނިހެން';
+
+  @override
+  String get splitLinesTotal => 'ލައިންތަކުގެ ޖުމްލަ';
+
+  @override
+  String get splitMismatchTitle =>
+      'ލައިންތަކުގެ ޖުމްލަ ކޭޝްބެކް ލިބޭ ޢަދަދާ ދިމައެއް ނުވޭ.';
+
+  @override
+  String splitMismatchBody(String difference) {
+    return 'ތަފާތު: $difference. ބިލުގެ ހުރިހާ ބައެއް ހިމަނަންވާނެއެވެ، ކޭޝްބެކް ނުލިބޭ ބައިތައް ވެސް — ދެ އަދަދު އެއްވަރު ވަންދެން ކްރެޑިޓް ރެކޯޑެއް ނުކުރެވޭނެއެވެ.';
+  }
+
+  @override
+  String get costPreviewTitle => 'ޚަރަދުގެ އަންދާޒާ';
+
+  @override
+  String previewCashback(String rate) {
+    return 'ކަސްޓަމަރުގެ ކޭޝްބެކް ($rate)';
+  }
+
+  @override
+  String previewFee(String rate) {
+    return 'ޕްލެޓްފޯމް ފީ ($rate)';
+  }
+
+  @override
+  String previewYouPay(String rate) {
+    return 'ތިޔަ ދައްކަވާ ($rate)';
+  }
+
+  @override
+  String get previewPerLine => 'ލައިނަކަށް';
+
+  @override
+  String get previewEstimateNote =>
+      'އަންދާޒާއެއް — ފައިނަލް އަދަދުތައް ބިނާވާނީ ވިޔަފާރީގެ ވަގުތުގެ ރޭޓަށެވެ.';
+
+  @override
+  String get previewNoRate =>
+      'އަދި ކޭޝްބެކް ރޭޓެއް ނެތް — ކަސްޓަމަރުންނަށް ކްރެޑިޓްކުރެއްވުމުގެ ކުރިން މަންފާއާ ގުޅުއްވާ.';
+
+  @override
+  String get previewUnavailable =>
+      'މިވަގުތު ރޭޓް ނުދެއްކުނު — ސާވަރުން ކްރެޑިޓަށް ރަނގަޅު ރޭޓް ބޭނުންކުރާނެއެވެ.';
+
+  @override
+  String get backdatedTitle => 'ދުވަސްވީ ވިޔަފާރިއެއް — މި ކްރެޑިޓް ފައިނަލް';
+
+  @override
+  String get backdatedBody =>
+      'މި ވިޔަފާރިއަކީ ރިފަންޑް މުއްދަތަށްވުރެ ދުވަސްވީ އެއްޗެއް — ކްރެޑިޓްކުރުމަށްފަހު އަނބުރާ ނުގެންދެވޭނެ، އަދި ވަގުތުން މަންފާއަށް ދައްކަންޖެހޭނެއެވެ.';
+
+  @override
+  String get backdatedMaybeTitle => 'މި ވިޔަފާރި ދުވަސްވެފައި ހުރެދާނެ';
+
+  @override
+  String get backdatedMaybeBody =>
+      'މި ވިޔަފާރި ރިފަންޑް މުއްދަތަށްވުރެ ދުވަސްވެފައި ހުރެދާނެއެވެ. އެހެންވެއްޖެނަމަ، ކްރެޑިޓްކުރުމަށްފަހު އަނބުރާ ނުގެންދެވޭނެ، އަދި ވަގުތުން މަންފާއަށް ދައްކަންޖެހޭނެއެވެ.';
+
+  @override
+  String get backdatedConfirm =>
+      'އަޅުގަނޑަށް އެނގޭ: މި ކްރެޑިޓް އަނބުރާ ނުގެންދެވޭނެ، އަދި މިހާރު ދައްކަންޖެހޭނެއެވެ.';
+
+  @override
+  String get backdatedConfirmRequired =>
+      'ކްރެޑިޓް ރެކޯޑްކުރެއްވުމުގެ ކުރިން ކަށަވަރުކުރައްވާ.';
+
+  @override
+  String get backdatedResultTitle =>
+      'ކްރެޑިޓްވެއްޖެ — ފައިނަލް، މިހާރު ދައްކަންޖެހޭ';
+
+  @override
+  String get backdatedResultBody =>
+      'މި ދުވަސްވީ ވިޔަފާރި ރިފަންޑް މުއްދަތު ފަހަނައަޅައި ދިޔައީއެވެ. ކަސްޓަމަރުގެ ކޭޝްބެކް ވަގުތުން މަންފާއަށް ދައްކަންޖެހޭނެ، އަދި އަނބުރައެއް ނުގެންދެވޭނެއެވެ — ރަނގަޅުކުރަންޖެހޭނަމަ މަންފާއާ ގުޅުއްވާ.';
+
+  @override
+  String get pendingNote =>
+      'ކްރެޑިޓްކުރެވުނު ކޭޝްބެކް ފުރަތަމަ ފެންނާނީ ޕެންޑިންގގައެވެ. ވެލިޑޭޓްވުމަށްފަހު، ސެޓްލްމަންޓަށްފަހު ކަސްޓަމަރަށް ދޫކުރެވޭނެއެވެ.';
+
+  @override
+  String get creditCta => 'ކަސްޓަމަރަށް ކްރެޑިޓްކުރައްވާ';
+
+  @override
+  String get errDuplicateInvoiceTitle =>
+      'މި އިންވޮއިސް މިހާރު ކްރެޑިޓްކުރެވިފައި.';
+
+  @override
+  String get errDuplicateInvoiceBody =>
+      'ކޮންމެ އިންވޮއިސްއެއް ކްރެޑިޓްކުރެވޭނީ އެއްފަހަރެވެ. މިއީ އެހެން ވިޔަފާރިއެއްނަމަ، ރަސީދުގެ އިންވޮއިސް ނަންބަރު ޗެކްކުރައްވާ.';
+
+  @override
+  String get errSuspendedTitle =>
+      'ފިހާރަ ސަސްޕެންޑްވެފައި — އައު ކޭޝްބެކް މަޑުޖެހިފައި.';
+
+  @override
+  String get errSuspendedBody =>
+      'ކަސްޓަމަރުންނަށް އަލުން ކްރެޑިޓްކުރެއްވުމަށް ދައްކަންޖެހޭ ފައިސާ ސެޓްލްކުރައްވާ، ނުވަތަ މިއީ ގޯހެއްކަމަށް ފެނިވަޑައިގަންނަވާނަމަ މަންފާއާ ގުޅުއްވާ.';
+
+  @override
+  String get errCreditFailed => 'ކްރެޑިޓް ރެކޯޑެއް ނުކުރެވުނު.';
+
+  @override
+  String queuedBannerTitle(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'ސިންކުވާން $count ވިޔަފާރި އެބައޮތް',
+      one: 'ސިންކުވާން 1 ވިޔަފާރި އެބައޮތް',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get queuedBannerBody =>
+      'އިންޓަނެޓް ލިބުމުން އަމިއްލައަށް ފޮނުވޭނެއެވެ.';
+
+  @override
+  String get queuedBannerAction => 'މިހާރު ސިންކުކުރައްވާ';
+
+  @override
+  String get queuedSnack =>
+      'އިންޓަނެޓެއް ނެތް — ވިޔަފާރި ރައްކާކުރެވިއްޖެ، އަމިއްލައަށް ސިންކުވާނެއެވެ.';
+
+  @override
+  String get attentionTitle => 'ސަމާލުކަން ބޭނުން';
+
+  @override
+  String get attentionBody =>
+      'މި ކިއޫ ވިޔަފާރިތައް ސިންކުވިއިރު ޤަބޫލެއް ނުކުރެވުނު — ކޮންމެ އެއްޗެއް ބައްލަވާ.';
+
+  @override
+  String get attentionRetry => 'އަލުން މަސައްކަތްކުރައްވާ';
+
+  @override
+  String get attentionDiscard => 'ނައްތާލައްވާ';
+
+  @override
+  String get resultRecordedTitle => 'ކޭޝްބެކް ރެކޯޑްވެއްޖެ';
+
+  @override
+  String get resultBelowMinTitle => 'ރެކޯޑްވެއްޖެ — އިނާމެއް ނެތް';
+
+  @override
+  String get resultBelowMinBody =>
+      'މި ވިޔަފާރި ފިހާރައިގެ އެންމެ ކުޑަ އަދަދަށްވުރެ ދަށެވެ. ސުމެއް ކޭޝްބެކާއެކު ރެކޯޑްކުރެވުނީ — ކަސްޓަމަރަށް އެއްޗެއް ނުލިބޭނެ، އަދި ދައްކަންޖެހޭ އެއްޗެއްވެސް ނެތެވެ.';
+
+  @override
+  String get resultOnHoldTitle => 'ރެކޯޑްވެއްޖެ — ބަލަމުންދަނީ';
+
+  @override
+  String get resultOnHoldBody =>
+      'މަންފާއިން ބަލަމުންދާތީ ވިޔަފާރި ހިފެހެއްޓިފައި. ބެލުން ނިމުމުން ކަސްޓަމަރަށް ހިމެނޭނެ؛ އިތުރު ކަމެއް ކުރައްވާކަށް ނުޖެހޭނެއެވެ.';
+
+  @override
+  String get resultReplayedNote =>
+      'މި ވިޔަފާރި ކުރިން ރެކޯޑްވެފައިވޭ — މިއީ އޭގެ އަސްލު ނަތީޖާއެވެ.';
+
+  @override
+  String get resultCustomer => 'ކަސްޓަމަރު';
+
+  @override
+  String get resultInvoice => 'އިންވޮއިސް';
+
+  @override
+  String get resultState => 'ހާލަތު';
+
+  @override
+  String get resultEligible => 'ކޭޝްބެކް ލިބޭ ޢަދަދު';
+
+  @override
+  String get resultYouPay => 'ތިޔަ ދައްކަވާ އަދަދު';
+
+  @override
+  String get resultLinesTitle => 'އަގުކުރެވުނު ލައިންތައް';
+
+  @override
+  String get creditAnother => 'އެހެން ކަސްޓަމަރަކަށް ކްރެޑިޓްކުރައްވާ';
+
+  @override
+  String get stateTracked => 'ރެކޯޑްކުރެވިފައި';
+
+  @override
+  String get stateAwaitingValidation => 'ރިފަންޑް މުއްދަތުގައި';
+
+  @override
+  String get statePayableUnfunded => 'މަންފާއަށް ދައްކަންޖެހޭ';
+
+  @override
+  String get stateOnHold => 'ބަލަމުންދަނީ';
+
+  @override
+  String get stateConfirmed => 'ކަށަވަރުވެއްޖެ';
+
+  @override
+  String get statePaid => 'ކަސްޓަމަރަށް ދެވިއްޖެ';
+
+  @override
+  String get stateReversed => 'ބާތިލުވެއްޖެ';
+
+  @override
+  String get stateWrittenOff => 'ނުލިބުނު — ރައިޓް-އޮފް';
+
+  @override
+  String get stateOther => 'އަޕްޑޭޓްވެއްޖެ';
+
+  @override
+  String get reasonAutoValidation => 'އޮޓޮމެޓިކުން ވެލިޑޭޓްވެއްޖެ';
+
+  @override
+  String get reasonBackdatedFinal =>
+      'ދުވަސްވީ ވިޔަފާރިއެއް — އަނބުރާ ނުގެންދެވޭނެ';
+
+  @override
+  String get reasonBelowMinimum => 'އެންމެ ކުޑަ އަދަދަށްވުރެ ދަށް ވިޔަފާރިއެއް';
+
+  @override
+  String get reasonMerchantSuspended => 'ފިހާރަ ސަސްޕެންޑްކުރެވިފައި';
+
+  @override
+  String get reasonSettlementAllocated => 'ފިހާރައިން ފައިސާ ދައްކާފައި';
+
+  @override
+  String get reasonPayoutCompleted => 'ފައިސާ ދޫކުރެވިއްޖެ';
+
+  @override
+  String get reasonCustomerRefund => 'ރީފަންޑްކުރެވިފައި';
+
+  @override
+  String get reasonTillVoid => 'ކައުންޓަރުން ބާތިލުކޮށްފައި';
+
+  @override
+  String get reasonDuplicate => 'ދެފަހަރު ރެކޯޑްވެފައި';
+
+  @override
+  String get reasonOtherCorrected => 'އެހެން ސަބަބަކާހުރެ ރަނގަޅުކުރެވިފައި';
+
+  @override
+  String get reasonStaleTimestamp => 'ހިފެހެއްޓިފައި — ދުވަސްވީ ވިޔަފާރިއެއް';
+
+  @override
+  String get reasonUnknown => 'މަންފާއިން އަޕްޑޭޓްކޮށްފައި';
+
+  @override
+  String get transactionsTitle => 'މުޢާމަލާތްތައް';
+
+  @override
+  String get filterAll => 'ހުރިހާ ހާލަތެއް';
+
+  @override
+  String get txEmptyTitle => 'އަދި މުޢާމަލާތެއް ނެތް';
+
+  @override
+  String get txEmptyBody =>
+      'ކްރެޑިޓްކުރައްވާ ވިޔަފާރިތައް މިތަނުން ފެންނާނެއެވެ.';
+
+  @override
+  String get txEmptyFiltered => 'މި ފިލްޓަރާ ދިމާވާ މުޢާމަލާތެއް ނެތް.';
+
+  @override
+  String get backdatedChip => 'ދުވަސްވީ';
+
+  @override
+  String get amendAction => 'ޢަދަދު ރަނގަޅުކުރައްވާ';
+
+  @override
+  String get cancelAction => 'ވިޔަފާރި ބާޠިލްކުރައްވާ';
+
+  @override
+  String get amendTitle => 'ޢަދަދު ރަނގަޅުކުރުން';
+
+  @override
+  String amendBody(String invoiceNo) {
+    return '$invoiceNo ގައި ރެކޯޑުކުރި ޢަދަދު ރަނގަޅުކުރައްވާ. ކޭޝްބެކް އަލުން ހިސާބުކުރެވޭނީ ހަމަ އެ ރޭޓުންނެވެ.';
+  }
+
+  @override
+  String get amendEligibleLabel => 'ކޭޝްބެކް ލިބޭ ޢަދަދު';
+
+  @override
+  String get amendHint => 'ބިލުން ކޭޝްބެކް ހިސާބުކުރާ ބައި، ރަނގަޅު ޢަދަދުން.';
+
+  @override
+  String get amendLinesLabel => 'ބައިތަކުގެ ޢަދަދު';
+
+  @override
+  String get amendLinesHint =>
+      'ކޭޝްބެކް ލިބޭ ޢަދަދު މި ލައިންތަކުން ޖަމާވެއެވެ:';
+
+  @override
+  String amendCurrent(String amount, String cashback) {
+    return 'މިހާރު $amount · ކޭޝްބެކް $cashback';
+  }
+
+  @override
+  String get amendSubmit => 'ރައްކާކުރައްވާ';
+
+  @override
+  String get amendDone => 'ޢަދަދު ރަނގަޅުކުރެވިއްޖެ.';
+
+  @override
+  String get amendFailed => 'ޢަދަދު ރަނގަޅެއް ނުކުރެވުނު.';
+
+  @override
+  String get cancelTitle => 'މި ވިޔަފާރި ބާޠިލްކުރުން';
+
+  @override
+  String cancelBody(String invoiceNo) {
+    return '$invoiceNo މުޅިން ނެގޭނެއެވެ، އަދި ކޭޝްބެކް އަނބުރާ ނެގޭނެއެވެ.';
+  }
+
+  @override
+  String get cancelReasonLabel => 'ސަބަބު';
+
+  @override
+  String get cancelNoteLabel => 'ނޯޓު (އިޚްތިޔާރީ)';
+
+  @override
+  String get cancelWarning =>
+      'ކަސްޓަމަރަށް މި ކޭޝްބެކް ލިބުނުކަން އަންގާފައިވެއެވެ. ބާޠިލްކުރުމުން އެ ބެލެންސުން ނެގޭނެއެވެ.';
+
+  @override
+  String get cancelSubmit => 'ބާޠިލްކުރައްވާ';
+
+  @override
+  String get cancelDone => 'ވިޔަފާރި ބާޠިލްކުރެވިއްޖެ.';
+
+  @override
+  String get cancelFailed => 'ވިޔަފާރި ބާޠިލެއް ނުކުރެވުނު.';
+
+  @override
+  String get keepSale => 'ވިޔަފާރި ބާއްވަވާ';
+
+  @override
+  String get cancelReasonRefund => 'ފައިސާ އަނބުރާ ދިން';
+
+  @override
+  String get cancelReasonVoid => 'ކައުންޓަރުގައި ބާޠިލްކުރި';
+
+  @override
+  String get cancelReasonDuplicate => 'ދެފަހަރު ވަދެފައި';
+
+  @override
+  String get cancelReasonError => 'ކުށަކުން ވަދެފައި';
+
+  @override
+  String get errNotAmendable =>
+      'މި ވިޔަފާރި ދެން ބަދަލެއް ނުކުރެއްވޭނެ — މުއްދަތު ހަމަވެއްޖެއެވެ.';
+
+  @override
+  String get errBackdatedIrreversible =>
+      'ދުވަސްވީ ކްރެޑިޓްތައް ދުވަހަކުވެސް އަނބުރާ ނުގެންދެވޭނެއެވެ.';
+
+  @override
+  String get todayTitle => 'މިއަދު';
+
+  @override
+  String get todayCredits => 'ކްރެޑިޓް';
+
+  @override
+  String get todayEligible => 'ކޭޝްބެކް ލިބޭ ވިޔަފާރި';
+
+  @override
+  String get todayCashback => 'ކޭޝްބެކް';
 }

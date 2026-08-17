@@ -4,10 +4,12 @@ import 'package:manfaa_core/manfaa_core.dart';
 
 import '../features/auth/login_screen.dart';
 import '../features/boot/boot_screen.dart';
+import '../features/credit/credit_screen.dart';
 import '../features/setup/setup_screen.dart';
 import '../features/signup/signup_screen.dart';
 import '../features/status/setup_pending_screen.dart';
 import '../features/tabs/tab_screens.dart';
+import '../features/transactions/transactions_screen.dart';
 import 'providers.dart';
 import 'shell.dart';
 

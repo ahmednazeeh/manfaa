@@ -39,6 +39,12 @@ String trimRate(String percent) {
   return bp == null ? percent : formatBp(bp).replaceFirst('%', '');
 }
 
+/// 250 bp → "2.50" — the §11 wire shape (2-decimal percent STRING) for a
+/// rate the app validated as bp. The inverse of [parsePercentToBp], used by
+/// the credit screen's custom-rate field.
+String bpToPercentString(int bp) =>
+    '${bp ~/ 100}.${(bp % 100).toString().padLeft(2, '0')}';
+
 /// The §4 static fee bands for the pre-submit all-in preview — the same
 /// table the web wizard shows. The platform's published tier schedule is
 /// authoritative: the server prices the actual fee and refuses unpriced
@@ -49,6 +55,11 @@ int staticFeeBp(int rateBp) => switch (rateBp) {
       <= 499 => 75,
       _ => 100,
     };
+
+/// Ceiling laari at `bp` basis points — the API's own §4 formula
+/// (`intdiv(eligible * bp + 9999, 10000)`), integer end to end, mirrored for
+/// the credit screen's DISPLAY-ONLY estimates. The server always reprices.
+int estimateLaariAtBp(int laari, int bp) => (laari * bp + 9999) ~/ 10000;
 
 /// Step 4 — the advertised cashback rate: a percent field bounded by the
 /// server's window, with the live all-in preview (cashback + fee) marked as

@@ -8,6 +8,7 @@ library;
 export 'src/api_base.dart';
 export 'src/api_client.dart';
 export 'src/config_gate.dart';
+export 'src/credit_queue.dart';
 export 'src/errors.dart';
 export 'src/http/interceptors.dart';
 export 'src/merchant_api.dart';

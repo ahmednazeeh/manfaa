@@ -7,7 +7,11 @@ use App\Http\Controllers\Devices\CustomerDevicesController;
 use App\Http\Controllers\Devices\CustomerPushTokenController;
 use App\Http\Controllers\Devices\MerchantDevicesController;
 use App\Http\Controllers\Devices\MerchantPushTokenController;
+use App\Http\Controllers\Merchant\CustomerLookupController;
+use App\Http\Controllers\Merchant\ProductCategoriesController;
+use App\Http\Controllers\Merchant\RateController;
 use App\Http\Controllers\Merchant\SetupController;
+use App\Http\Controllers\Merchant\TransactionCorrectionController;
 use App\Http\Controllers\Mobile\ConfigController;
 use App\Http\Controllers\Mobile\CreditController;
 use App\Http\Controllers\Mobile\CustomerOtpController;
@@ -19,6 +23,7 @@ use App\Http\Controllers\Mobile\PayoutAccountController;
 use App\Http\Controllers\Mobile\PayoutsController;
 use App\Http\Controllers\Mobile\SessionController;
 use App\Http\Controllers\Mobile\TransactionsController;
+use App\Http\Middleware\EnsureMerchantApproved;
 use App\Http\Middleware\IdempotencyMiddleware;
 use App\Http\Middleware\NormalisesMobileErrors;
 use Illuminate\Support\Facades\Route;
@@ -192,6 +197,26 @@ Route::prefix('mobile/v1')
                     ->middleware('merchant.can:transactions.view');
 
                 /*
+                 * The till void (merchant app MR2) — the SAME two corrections
+                 * the panel offers (routes/api/merchant-panel.php), same
+                 * controller, same gates in the same order: permission FIRST,
+                 * so a user who may not correct sales is refused before the
+                 * response can tell them whether the store is still trading,
+                 * then EnsureMerchantApproved:trading. The controller's
+                 * {message, code} refusals (409 not_amendable_state /
+                 * backdated_irreversible, 422 sale_below_eligible /
+                 * lines_sum_mismatch) leave through NormalisesMobileErrors as
+                 * the one mobile envelope.
+                 */
+                Route::patch('transactions/{id}', [TransactionCorrectionController::class, 'amend'])
+                    ->whereNumber('id')
+                    ->middleware(['merchant.can:transactions.amend', EnsureMerchantApproved::class.':trading']);
+
+                Route::post('transactions/{id}/cancel', [TransactionCorrectionController::class, 'cancel'])
+                    ->whereNumber('id')
+                    ->middleware(['merchant.can:transactions.cancel', EnsureMerchantApproved::class.':trading']);
+
+                /*
                  * The till's whole reason to be signed in.
                  *
                  * Idempotency-Key REQUIRED: a till that loses signal queues
@@ -218,6 +243,36 @@ Route::prefix('mobile/v1')
                         IdempotencyMiddleware::class,
                         'throttle:mobile-credits',
                     ]);
+
+                /*
+                 * The credit screen's name-confirmation (§11) — the web
+                 * lookup unchanged (routes/api/merchant-settings.php): same
+                 * permission (customers.lookup seeds to every role — posting
+                 * credits is till work), and the same 30/min-per-user
+                 * throttle, as a NAMED limiter rather than the web's inline
+                 * `throttle:30,1` — see the credits route above for the
+                 * cross-audience id-collision the inline form invites. The
+                 * per-MERCHANT daily miss budget lives inside the controller
+                 * and is deliberately SHARED with the web surface, so
+                 * alternating surfaces cannot double the enumeration
+                 * allowance.
+                 */
+                Route::get('customers/lookup', CustomerLookupController::class)
+                    ->middleware(['merchant.can:customers.lookup', 'throttle:mobile-lookup']);
+
+                // The credit screen's live estimate source: the standing rate
+                // plus any pending (§7 next-midnight decrease) window, shaped
+                // exactly as the web panel reads it (routes/api/webhooks.php).
+                // rate.view seeds to every role — the till quotes it.
+                Route::get('rate', [RateController::class, 'show'])
+                    ->middleware('merchant.can:rate.view');
+
+                // Feeds the split-by-category editor. Gated exactly as the
+                // web mount (routes/api/product-categories.php):
+                // product_categories.view seeds to every role — the list
+                // feeds the credit form, and posting credits is till work.
+                Route::get('product-categories', [ProductCategoriesController::class, 'index'])
+                    ->middleware('merchant.can:product_categories.view');
 
                 Route::get('devices', [MerchantDevicesController::class, 'index']);
                 Route::delete('devices/{id}', [MerchantDevicesController::class, 'destroy'])->whereNumber('id');

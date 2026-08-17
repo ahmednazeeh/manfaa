@@ -33,3 +33,20 @@ String formatMoney(int laari, {required bool dhivehi}) {
 
   return dhivehi ? '$amount ރުފިޔާ' : 'MVR $amount';
 }
+
+/// EXACT typed-MVR → integer laari, or null. The till's amount fields parse
+/// through here so "1,250.50" becomes 125050 by string surgery — never
+/// `double.parse` (float money is banned end to end, §11). Accepts optional
+/// thousands commas and at most two decimals; anything else is null, and the
+/// caller renders a validation hint rather than guessing.
+int? parseMvrToLaari(String input) {
+  final cleaned = input.trim().replaceAll(',', '');
+  if (!RegExp(r'^\d+(\.\d{1,2})?$').hasMatch(cleaned)) return null;
+
+  final parts = cleaned.split('.');
+  final rufiyaa = int.tryParse(parts[0]);
+  if (rufiyaa == null) return null; // overflow-length digits
+  final cents = parts.length > 1 ? int.parse(parts[1].padRight(2, '0')) : 0;
+
+  return rufiyaa * 100 + cents;
+}

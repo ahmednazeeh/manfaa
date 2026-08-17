@@ -6,6 +6,10 @@
          Asked at runtime only when the owner taps it — never at launch. -->
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
+    <!-- The Credit screen's Scan-QR mode (MR2, mobile_scanner). Asked at
+         runtime when the cashier opens the scanner; typing the 6-digit code
+         stays the universal path, and a camera is never required. -->
+    <uses-permission android:name="android.permission.CAMERA"/>
     <application
         android:label="Manfaa Merchant"
         android:name="${applicationName}"

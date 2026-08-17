@@ -30,6 +30,8 @@ dependencies:
     path: ../packages/manfaa_core
   manfaa_ui:
     path: ../packages/manfaa_ui
+  mobile_scanner: ^7.4.0
+  connectivity_plus: ^7.3.1
 
 dev_dependencies:
   flutter_test:

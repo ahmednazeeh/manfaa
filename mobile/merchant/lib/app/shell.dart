@@ -25,6 +25,9 @@ class MerchantShell extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     // Repaint when a fresh /merchant/me narrows or widens the role.
     ref.watch(sessionTickProvider);
+    // Keep the offline credit queue's drain triggers (foreground resume,
+    // connectivity regained) alive exactly while a merchant is in the shell.
+    ref.watch(queueDrainDriverProvider);
     final session = ref.watch(sessionProvider);
     final l10n = context.l10n;
 

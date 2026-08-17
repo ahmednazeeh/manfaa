@@ -102,14 +102,16 @@ class _ReviewStepState extends ConsumerState<ReviewStep> {
     const stepForMissing = {
       'category': 0,
       'channel': 0,
+      'contact': 0,
       'rate': 3,
       'terms': 4,
     };
-    const missingOrder = ['category', 'channel', 'rate', 'terms'];
+    const missingOrder = ['category', 'channel', 'contact', 'rate', 'terms'];
 
     String missingLabel(String key) => switch (key) {
           'category' => l10n.missingCategory,
           'channel' => l10n.missingChannel,
+          'contact' => l10n.missingContact,
           'rate' => l10n.missingRate,
           'terms' => l10n.missingTerms,
           _ => key,

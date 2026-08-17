@@ -7,15 +7,17 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:manfaa_core/manfaa_core.dart';
 import 'package:manfaa_merchant/app/app.dart';
 import 'package:manfaa_merchant/app/providers.dart';
+import 'package:manfaa_merchant/features/credit/credit_screen.dart'
+    show creditClock;
 
 /// Not a test — a screenshot harness. `flutter test test/screenshot_test.dart
 /// --update-goldens` writes real PNGs of the running screens so the UI can
 /// actually be LOOKED at. Loads the bundled fonts so text renders as glyphs,
 /// not boxes.
 Future<void> _loadFonts() async {
-  final manifest = json.decode(
-    await rootBundle.loadString('FontManifest.json'),
-  ) as List<dynamic>;
+  final manifest =
+      json.decode(await rootBundle.loadString('FontManifest.json'))
+          as List<dynamic>;
 
   for (final family in manifest) {
     final loader = FontLoader(family['family'] as String);
@@ -32,6 +34,8 @@ const _permissions = [
   'credits.create',
   'credits.custom_rate',
   'transactions.view',
+  'transactions.amend',
+  'transactions.cancel',
   // The owner's setup estate (MR1) — the wizard shots need the gates.
   'setup.view',
   'setup.edit',
@@ -45,51 +49,54 @@ Map<String, dynamic> _setupFixture({
   required String status,
   bool complete = false,
   String? submittedAt,
-}) =>
+}) => {
+  'status': status,
+  'steps': {
+    'profile': complete,
+    'location': complete,
+    'logo': false,
+    'rate': complete,
+  },
+  'values': {
+    'name': 'Tropical Mart',
+    'slug': 'tropical-mart',
+    'category': complete ? 'grocery' : null,
+    'channel': 'in_store',
+    'eligibility_basis': complete
+        ? 'Everything in store except tobacco, phone top-ups and gift cards.'
+        : null,
+    'contact_email': complete ? 'hello@tropicalmart.mv' : null,
+    'contact_phone': complete ? '+9607781234' : null,
+    'support_phone': null,
+    'website_url': null,
+    'primary_branch': complete
+        ? {
+            'id': 3,
+            'name': 'Tropical Mart',
+            'address': 'Majeedhee Magu, Malé',
+            'lat': 4.1755354,
+            'lng': 73.5093474,
+          }
+        : null,
+    'logo_url': null,
+    'cashback_rate_percent': complete ? '2.00' : null,
+  },
+  'rate_bounds': {'min_percent': '0.50', 'max_percent': '10.00'},
+  'categories': [
     {
-      'status': status,
-      'steps': {
-        'profile': complete,
-        'location': complete,
-        'logo': false,
-        'rate': complete,
-      },
-      'values': {
-        'name': 'Tropical Mart',
-        'slug': 'tropical-mart',
-        'category': complete ? 'grocery' : null,
-        'channel': 'in_store',
-        'eligibility_basis': complete
-            ? 'Everything in store except tobacco, phone top-ups and gift cards.'
-            : null,
-        'contact_email': complete ? 'hello@tropicalmart.mv' : null,
-        'contact_phone': complete ? '+9607781234' : null,
-        'support_phone': null,
-        'website_url': null,
-        'primary_branch': complete
-            ? {
-                'id': 3,
-                'name': 'Tropical Mart',
-                'address': 'Majeedhee Magu, Malé',
-                'lat': 4.1755354,
-                'lng': 73.5093474,
-              }
-            : null,
-        'logo_url': null,
-        'cashback_rate_percent': complete ? '2.00' : null,
-      },
-      'rate_bounds': {'min_percent': '0.50', 'max_percent': '10.00'},
-      'categories': [
-        {'slug': 'grocery', 'name_en': 'Grocery / Supermarket', 'name_dv': 'ފިހާރަ'},
-        {'slug': 'dining', 'name_en': 'Dining & Cafés', 'name_dv': 'ކެފޭ'},
-        {'slug': 'fashion', 'name_en': 'Fashion', 'name_dv': null},
-        {'slug': 'electronics', 'name_en': 'Electronics', 'name_dv': null},
-        {'slug': 'health', 'name_en': 'Health & Beauty', 'name_dv': null},
-        {'slug': 'services', 'name_en': 'Services', 'name_dv': null},
-      ],
-      'submitted_at': submittedAt,
-      'rejected_reason': null,
-    };
+      'slug': 'grocery',
+      'name_en': 'Grocery / Supermarket',
+      'name_dv': 'ފިހާރަ',
+    },
+    {'slug': 'dining', 'name_en': 'Dining & Cafés', 'name_dv': 'ކެފޭ'},
+    {'slug': 'fashion', 'name_en': 'Fashion', 'name_dv': null},
+    {'slug': 'electronics', 'name_en': 'Electronics', 'name_dv': null},
+    {'slug': 'health', 'name_en': 'Health & Beauty', 'name_dv': null},
+    {'slug': 'services', 'name_en': 'Services', 'name_dv': null},
+  ],
+  'submitted_at': submittedAt,
+  'rejected_reason': null,
+};
 
 class _ShotApi extends MerchantApi {
   _ShotApi({required super.session, this.status = 'active', this.setup});
@@ -123,58 +130,160 @@ class _ShotApi extends MerchantApi {
 
   @override
   Future<MerchantHome> home() async => MerchantHome.fromJson(const {
-        'merchant': {'name': 'Tropical Mart', 'status': 'active'},
-        'today': {
-          'credit_count': 4,
-          'eligible_laari': 235000,
-          'cashback_laari': 11750,
+    'merchant': {'name': 'Tropical Mart', 'status': 'active'},
+    'today': {
+      'credit_count': 4,
+      'eligible_laari': 235000,
+      'cashback_laari': 11750,
+    },
+    'outstanding': {
+      'total': {
+        'count': 1,
+        'cashback_laari': 2000,
+        'fee_laari': 750,
+        'fee_gst_laari': 0,
+        'payable_laari': 2750,
+      },
+      'buckets': {
+        '0_5': {
+          'count': 1,
+          'cashback_laari': 2000,
+          'fee_laari': 750,
+          'fee_gst_laari': 0,
+          'payable_laari': 2750,
         },
-        'outstanding': {
-          'total': {
-            'count': 1,
-            'cashback_laari': 2000,
-            'fee_laari': 750,
-            'fee_gst_laari': 0,
-            'payable_laari': 2750,
-          },
-          'buckets': {
-            '0_5': {
-              'count': 1,
-              'cashback_laari': 2000,
-              'fee_laari': 750,
-              'fee_gst_laari': 0,
-              'payable_laari': 2750,
-            },
-            '6_10': {
-              'count': 0,
-              'cashback_laari': 0,
-              'fee_laari': 0,
-              'fee_gst_laari': 0,
-              'payable_laari': 0,
-            },
-            '11_15': {
-              'count': 0,
-              'cashback_laari': 0,
-              'fee_laari': 0,
-              'fee_gst_laari': 0,
-              'payable_laari': 0,
-            },
-            'overdue': {
-              'count': 0,
-              'cashback_laari': 0,
-              'fee_laari': 0,
-              'fee_gst_laari': 0,
-              'payable_laari': 0,
-            },
-          },
-          'pending_adjustments': {'count': 0, 'credit_laari': 0},
+        '6_10': {
+          'count': 0,
+          'cashback_laari': 0,
+          'fee_laari': 0,
+          'fee_gst_laari': 0,
+          'payable_laari': 0,
         },
-        'open_settlement': null,
-      });
+        '11_15': {
+          'count': 0,
+          'cashback_laari': 0,
+          'fee_laari': 0,
+          'fee_gst_laari': 0,
+          'payable_laari': 0,
+        },
+        'overdue': {
+          'count': 0,
+          'cashback_laari': 0,
+          'fee_laari': 0,
+          'fee_gst_laari': 0,
+          'payable_laari': 0,
+        },
+      },
+      'pending_adjustments': {'count': 0, 'credit_laari': 0},
+    },
+    'open_settlement': null,
+  });
 
   @override
   Future<MerchantSetupState> getSetup() async =>
       MerchantSetupState.fromJson(setup ?? _setupFixture(status: status));
+
+  // ---- MR2: the till ------------------------------------------------------
+
+  @override
+  Future<CustomerLookup> lookupCustomer(String code) async => code == '374230'
+      ? CustomerLookup(valid: true, name: 'Ahmed Nazeeh')
+      : CustomerLookup(valid: false);
+
+  @override
+  Future<MerchantRate> merchantRate() async => MerchantRate.fromJson(const {
+    'current': {
+      'cashback_rate_percent': '2.00',
+      'platform_fee_percent': '0.75',
+      'all_in_percent': '2.75',
+      'effective_from': '2026-08-01T00:00:00+05:00',
+      'effective_to': null,
+    },
+    'pending': null,
+  });
+
+  @override
+  Future<List<ProductCategory>> productCategories() async => [
+    for (final (i, spec) in const [
+      ('fruits', 'Fruits', 'rate', '2.00'),
+      ('veggies', 'Veggies', 'rate', '2.00'),
+      ('tobacco', 'Tobacco', 'excluded', null),
+    ].indexed)
+      ProductCategory.fromJson({
+        'id': i + 1,
+        'slug': spec.$1,
+        'name_en': spec.$2,
+        'name_dv': null,
+        'mode': spec.$3,
+        'cashback_rate_percent': spec.$4,
+        'active': true,
+        'sort': i,
+      }),
+  ];
+
+  Map<String, dynamic> _tx(
+    int id,
+    String invoice,
+    String state, {
+    bool backdated = false,
+    String? reason,
+    int eligible = 100000,
+    int cashback = 2000,
+  }) => {
+    'id': id,
+    'origin': 'manual',
+    'invoice_no': invoice,
+    'state': state,
+    'reason_code': reason,
+    'backdated': backdated,
+    'currency': 'MVR',
+    'eligible_laari': eligible,
+    'sale_laari': null,
+    'cashback_rate_percent': '2.00',
+    'platform_fee_percent': '0.75',
+    'effective_cashback_rate_percent': '2.00',
+    'effective_platform_fee_percent': '0.75',
+    'cashback_laari': cashback,
+    'fee_laari': 750,
+    'fee_gst_laari': 60,
+    'occurred_at': '2026-08-16T14:07:00+05:00',
+    'received_at': '2026-08-16T14:07:01+05:00',
+  };
+
+  @override
+  Future<CursorPage<MerchantTransaction>> transactions({
+    String? cursor,
+    String? state,
+    int? perPage,
+  }) async => CursorPage(
+    items: [
+      MerchantTransaction.fromJson(_tx(4, 'INV-1004', 'awaiting_validation')),
+      MerchantTransaction.fromJson(
+        _tx(3, 'INV-1003', 'confirmed', eligible: 45000, cashback: 900),
+      ),
+      MerchantTransaction.fromJson(
+        _tx(
+          2,
+          'INV-1002',
+          'awaiting_validation',
+          backdated: true,
+          reason: 'backdated_final',
+        ),
+      ),
+      MerchantTransaction.fromJson(
+        _tx(
+          1,
+          'INV-1001',
+          'reversed',
+          reason: 'below_minimum',
+          eligible: 2500,
+          cashback: 0,
+        ),
+      ),
+    ],
+    nextCursor: null,
+    hasMore: false,
+  );
 
   @override
   Future<void> requestSignupOtp(String phone) async {}
@@ -183,8 +292,7 @@ class _ShotApi extends MerchantApi {
   Future<String> verifySignupOtp({
     required String phone,
     required String code,
-  }) async =>
-      'shot-signup-token';
+  }) async => 'shot-signup-token';
 
   @override
   Future<void> registerMerchant({
@@ -199,12 +307,19 @@ class _ShotApi extends MerchantApi {
 
 void main() {
   setUpAll(_loadFonts);
+  // A stable wall clock: the sale-time row renders the same golden bytes on
+  // every run (the ref's own date, for the eye-check too).
+  setUp(() => creditClock = () => DateTime(2026, 8, 16, 14, 7));
 
-  Future<void> shot(WidgetTester tester, String name, Brightness b,
-      {bool signedOut = false,
-      String status = 'active',
-      Map<String, dynamic>? setup,
-      Future<void> Function(WidgetTester tester)? drive}) async {
+  Future<void> shot(
+    WidgetTester tester,
+    String name,
+    Brightness b, {
+    bool signedOut = false,
+    String status = 'active',
+    Map<String, dynamic>? setup,
+    Future<void> Function(WidgetTester tester)? drive,
+  }) async {
     await tester.binding.setSurfaceSize(const Size(390, 844));
     tester.view.devicePixelRatio = 3.0;
     tester.view.physicalSize = const Size(390 * 3, 844 * 3);
@@ -229,13 +344,16 @@ void main() {
       );
     }
 
-    await tester.pumpWidget(ProviderScope(
-      overrides: [
-        secretStoreProvider.overrideWithValue(store),
-        sessionProvider.overrideWithValue(session),
-        apiProvider.overrideWith(
-            (ref) => _ShotApi(session: session, status: status, setup: setup)),
-        configProvider.overrideWith((ref) async => MobileConfig.fromJson(const {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          secretStoreProvider.overrideWithValue(store),
+          sessionProvider.overrideWithValue(session),
+          apiProvider.overrideWith(
+            (ref) => _ShotApi(session: session, status: status, setup: setup),
+          ),
+          configProvider.overrideWith(
+            (ref) async => MobileConfig.fromJson(const {
               'apps': {
                 'merchant': {
                   'android': {
@@ -246,10 +364,12 @@ void main() {
                 },
               },
               'features': {},
-            })),
-      ],
-      child: const MerchantApp(),
-    ));
+            }),
+          ),
+        ],
+        child: const MerchantApp(),
+      ),
+    );
     // Let boot route.
     for (var i = 0; i < 10; i++) {
       await tester.pump(const Duration(milliseconds: 120));
@@ -268,8 +388,11 @@ void main() {
   /// Walk the signup flow to the DETAILS step (business name, Thaana name,
   /// email, password) — the screen the golden captures.
   Future<void> driveToSignupDetails(WidgetTester tester) async {
-    await tester.scrollUntilVisible(find.text('Register your store'), 120,
-        scrollable: find.byType(Scrollable).first);
+    await tester.scrollUntilVisible(
+      find.text('Register your store'),
+      120,
+      scrollable: find.byType(Scrollable).first,
+    );
     await tester.tap(find.text('Register your store'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField), '7781234');
@@ -281,37 +404,171 @@ void main() {
     await tester.pump(const Duration(milliseconds: 60));
   }
 
-  testWidgets('login light',
-      (t) => shot(t, 'login_light', Brightness.light, signedOut: true));
-  testWidgets('login dark',
-      (t) => shot(t, 'login_dark', Brightness.dark, signedOut: true));
+  testWidgets(
+    'login light',
+    (t) => shot(t, 'login_light', Brightness.light, signedOut: true),
+  );
+  testWidgets(
+    'login dark',
+    (t) => shot(t, 'login_dark', Brightness.dark, signedOut: true),
+  );
   testWidgets('shell light', (t) => shot(t, 'shell_light', Brightness.light));
   testWidgets('shell dark', (t) => shot(t, 'shell_dark', Brightness.dark));
 
   // ---- MR1: signup + wizard + status --------------------------------------
   testWidgets(
-      'signup details light',
-      (t) => shot(t, 'signup_details', Brightness.light,
-          signedOut: true, drive: driveToSignupDetails));
+    'signup details light',
+    (t) => shot(
+      t,
+      'signup_details',
+      Brightness.light,
+      signedOut: true,
+      drive: driveToSignupDetails,
+    ),
+  );
   testWidgets(
-      'wizard profile light',
-      (t) => shot(t, 'wizard_profile_light', Brightness.light,
-          status: 'draft', setup: _setupFixture(status: 'draft')));
+    'wizard profile light',
+    (t) => shot(
+      t,
+      'wizard_profile_light',
+      Brightness.light,
+      status: 'draft',
+      setup: _setupFixture(status: 'draft'),
+    ),
+  );
   testWidgets(
-      'wizard profile dark',
-      (t) => shot(t, 'wizard_profile_dark', Brightness.dark,
-          status: 'draft', setup: _setupFixture(status: 'draft')));
+    'wizard profile dark',
+    (t) => shot(
+      t,
+      'wizard_profile_dark',
+      Brightness.dark,
+      status: 'draft',
+      setup: _setupFixture(status: 'draft'),
+    ),
+  );
   testWidgets(
-      'wizard review light',
-      (t) => shot(t, 'wizard_review', Brightness.light,
-          status: 'draft',
-          setup: _setupFixture(status: 'draft', complete: true)));
+    'wizard review light',
+    (t) => shot(
+      t,
+      'wizard_review',
+      Brightness.light,
+      status: 'draft',
+      setup: _setupFixture(status: 'draft', complete: true),
+    ),
+  );
   testWidgets(
-      'status pending light',
-      (t) => shot(t, 'status_pending', Brightness.light,
-          status: 'pending_review',
-          setup: _setupFixture(
-              status: 'pending_review',
-              complete: true,
-              submittedAt: '2026-08-17T09:41:00Z')));
+    'status pending light',
+    (t) => shot(
+      t,
+      'status_pending',
+      Brightness.light,
+      status: 'pending_review',
+      setup: _setupFixture(
+        status: 'pending_review',
+        complete: true,
+        submittedAt: '2026-08-17T09:41:00Z',
+      ),
+    ),
+  );
+
+  // ---- MR2: the till ------------------------------------------------------
+
+  /// Walk the Credit tab into the ref's state: verified customer, invoice,
+  /// amounts filled — the Credit Customer.png frame.
+  Future<void> driveCredit(WidgetTester tester) async {
+    await tester.tap(find.text('Credit'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField).first, '374230');
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField).at(1), 'INV-1001');
+    await tester.enterText(find.byType(TextField).at(2), '1,000.00');
+    await tester.enterText(find.byType(TextField).at(3), '1,000.00');
+    await tester.pumpAndSettle();
+    // Entering text scrolls to the focused field — put the frame back at
+    // the top of the screen for the shot.
+    await tester.dragFrom(const Offset(195, 300), const Offset(0, 900));
+    await tester.pumpAndSettle();
+  }
+
+  /// Add one split line through the editor dialog, picking [category] from
+  /// the dropdown when it is not the default.
+  Future<void> addLine(
+    WidgetTester tester,
+    String? category,
+    String amount,
+  ) async {
+    await tester.tap(find.text('Add category'));
+    await tester.pumpAndSettle();
+    if (category != null) {
+      await tester.tap(find.text('Everything else').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(category).last);
+      await tester.pumpAndSettle();
+    }
+    await tester.enterText(find.byType(TextField).last, amount);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+  }
+
+  /// The With-Category ref: split on, Fruits 300 / Veggies 250 / Other 450,
+  /// scrolled so the breakdown card leads the frame.
+  Future<void> driveCreditSplit(WidgetTester tester) async {
+    await driveCredit(tester);
+    await tester.scrollUntilVisible(
+      find.text('Split by category'),
+      160,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(Switch).last);
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.text('Add category'),
+      120,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+    await addLine(tester, 'Fruits', '300');
+    await addLine(tester, 'Veggies', '250');
+    await addLine(tester, null, '450');
+    await tester.scrollUntilVisible(
+      find.text('Cost preview'),
+      120,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+  }
+
+  Future<void> driveTransactions(WidgetTester tester) async {
+    await tester.tap(find.text('Transactions'));
+    await tester.pumpAndSettle();
+  }
+
+  testWidgets(
+    'credit light',
+    (t) => shot(t, 'credit_light', Brightness.light, drive: driveCredit),
+  );
+  testWidgets(
+    'credit dark',
+    (t) => shot(t, 'credit_dark', Brightness.dark, drive: driveCredit),
+  );
+  testWidgets(
+    'credit split light',
+    (t) => shot(
+      t,
+      'credit_split_light',
+      Brightness.light,
+      drive: driveCreditSplit,
+    ),
+  );
+  testWidgets(
+    'transactions light',
+    (t) => shot(
+      t,
+      'transactions_light',
+      Brightness.light,
+      drive: driveTransactions,
+    ),
+  );
 }

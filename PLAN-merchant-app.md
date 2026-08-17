@@ -90,9 +90,11 @@ just work):
 - [ ] **Settlements suite**: outstanding, wallet, settlements list/{id},
       preview (`settle_all` | ids), POST settlements (multipart receipt),
       POST settlements/wallet, POST settlements/{id}/receipts.
-- [ ] **Customer lookup** (`/merchant/customers/lookup`) — the credit
+- [x] **Customer lookup** (`/merchant/customers/lookup`) — the credit
       screen's name-confirmation; notably absent from mobile today.
-- [ ] **Transaction amend/cancel** (the till void).
+      (Mounted 2026-08-17 with MR2 step 1, plus rate + product-categories
+      reads for the till's preview and split editor.)
+- [x] **Transaction amend/cancel** (the till void). (Mounted 2026-08-17.)
 - [ ] **Settings estate**: profile GET/PATCH + logo upload, branches CRUD,
       staff list/invite/edit, roles CRUD + the served permission catalogue,
       bank account, preferences, product categories, promotions, rate
@@ -140,15 +142,14 @@ via the polymorphic device_tokens path the customer app already exercises
 - MR0 Foundation — DONE 2026-08-17
 - MR1 Signup + setup wizard — DONE 2026-08-17 (API mounted + app flow;
   all three Flutter suites green, goldens EYE-reviewed)
-- **MR2 Till round — workflow running (started 2026-08-17)**
-- MR3 Money (Dashboard/Settlements/Wallet) — queued
-- Follow-up (post-MR2, deferred to dodge the MR2 l10n regen): review_step
-  needs the new `contact` missing-requirement key — add to stepForMissing
-  (→ profile step 0), missingOrder, missingLabel + `missingContact` in
-  both arbs. Server side shipped 2026-08-17: submit refuses a store with
-  no phone (`missing: ['contact']`), support_phone is always materialised
-  from contact (Merchant::booted()), "same as contact" ticks by comparison
-  — profile_step.dart already does this.
+- MR2 Till round — DONE 2026-08-17 (till APIs mounted + 16 feature tests;
+  Credit screen with QR + offline idempotent queue; real Transactions tab;
+  Dashboard Today strip; goldens EYE-reviewed vs both Credit refs; all
+  suites green: api 1292, merchant 43, core 54, customer 35. Bonus: fixed
+  MobileError 429→500 header-cast production bug. The `contact`
+  missing-requirement key is wired app-side too — server refuses submit
+  for a phoneless store, support_phone always materialised from contact.)
+- **MR3 Money (Dashboard/Settlements/Wallet) — NEXT**
 - MR4 Notifications — queued (Firebase registration blocker)
 - MR5 More estate — queued
 - MR6 Release — queued
@@ -196,8 +197,8 @@ harness goldens reviewed by EYE (light+dark, en+dv where layout-affecting)
   no-key decision); Places-style search via the zones/Nominatim approach
   only if needed — pin drag + my-location covers the wizard.
 
-### MR2 — The till (Credit) + Transactions
-- [ ] Credit screen per the two Credit refs: Enter code (6-digit OTP-style)
+### MR2 — The till (Credit) + Transactions — DONE 2026-08-17
+- [x] Credit screen per the two Credit refs: Enter code (6-digit OTP-style)
       / **Scan QR** (mobile_scanner) / Recent (local history); live lookup
       chip with full name + Verified; invoice no, sale date-time (default
       now, +05:00 offset), eligible amount, optional full amount;
@@ -206,11 +207,14 @@ harness goldens reviewed by EYE (light+dark, en+dv where layout-affecting)
       + Everything-else bucket, client sum check, server refusal mapping);
       live cost preview (cashback %, fee %, you-pay %) marked estimate;
       **backdated confirm** flow; submit with Idempotency-Key; result card.
-- [ ] Offline queue: credits composed offline queue locally and drain
+- [x] Offline queue: credits composed offline queue locally and drain
       with their original idempotency keys; visible pending-sync state.
-- [ ] Transactions: cursor list, state filter, amend/cancel actions only
+      (manfaa_core `CreditQueue`: FIFO drain on foreground/connectivity,
+      2xx clears, permanent refusals park as needs-attention — never
+      silently dropped.)
+- [x] Transactions: cursor list, state filter, amend/cancel actions only
       while `awaiting_validation` && !backdated, with the web's reason set.
-- [ ] Dashboard today-tally strip (credit_count / eligible / cashback).
+- [x] Dashboard today-tally strip (credit_count / eligible / cashback).
 
 ### MR3 — Money (Dashboard + Settlements + Wallet)
 - [ ] Dashboard per Dashboard.png: Outstanding hero + Settle now,

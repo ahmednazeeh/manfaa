@@ -200,6 +200,7 @@
   "missingTitle": "Still needed before review",
   "missingCategory": "Pick a category",
   "missingChannel": "Choose where you sell",
+  "missingContact": "Add a contact phone number",
   "missingRate": "Set your cashback rate",
   "missingTerms": "Describe what earns cashback",
   "edit": "Edit",
@@ -216,5 +217,271 @@
     }
   },
   "staffSetupTitle": "Setup needs the owner",
-  "staffSetupBody": "This store hasn't finished setup, and your role can't edit it. Ask the store owner to finish it on their account."
+  "staffSetupBody": "This store hasn't finished setup, and your role can't edit it. Ask the store owner to finish it on their account.",
+
+  "cancel": "Cancel",
+  "save": "Save",
+  "optionalLabel": "optional",
+
+  "creditTitle": "Credit customer",
+  "creditSubtitle": "Record a sale and credit the customer's cashback.",
+  "modeEnterCode": "Enter code",
+  "modeScanQr": "Scan QR",
+  "modeRecent": "Recent",
+  "codeAskHint": "Ask the customer for the 6-digit code shown in their Manfaa app.",
+  "lookupChecking": "Checking code…",
+  "lookupVerified": "Verified",
+  "lookupNotFoundTitle": "We don't recognise this code",
+  "lookupNotFoundBody": "Check the digits with the customer before trying again — a typo here credits a stranger.",
+  "lookupFailed": "Could not check this code — try again.",
+  "scanPrompt": "Point the camera at the QR code in the customer's Manfaa app.",
+  "scanDenied": "Camera access is blocked. Allow the camera in your phone's settings, or type the 6-digit code.",
+  "scanFallbackHint": "You can always type the code by hand.",
+  "recentEmptyTitle": "No recent customers",
+  "recentEmptyBody": "Customers you credit appear here for quick reuse.",
+  "invoiceLabel": "Invoice number",
+  "invoiceHint": "Required — one credit per invoice, exactly as printed on the receipt.",
+  "saleDateTimeLabel": "Sale date & time",
+  "saleDateTimeNow": "Recorded as right now unless you change it.",
+  "saleDateTimeEdited": "Will be recorded at the time shown.",
+  "saleDateTimeSetNow": "Set to now",
+  "eligibleLabel": "Eligible amount",
+  "eligibleHint": "The part of the bill cashback is computed on, per your agreement.",
+  "eligibleInvalid": "Enter a valid amount, e.g. 1,250.00.",
+  "fullSaleLabel": "Full sale amount",
+  "fullSaleHint": "The whole invoice total — reference only, never used in computation.",
+  "fullSaleInvalid": "Must be a valid amount, at least the eligible amount.",
+
+  "customRateToggle": "Custom cashback for this sale",
+  "customRateToggleHint": "Pay this customer more than your usual rate.",
+  "customRateLabel": "Cashback for this sale",
+  "customRateHint": "Must be {rate} or higher — you can only raise your advertised rate, never lower it. The customer is told the higher figure.",
+  "@customRateHint": {
+    "placeholders": {
+      "rate": {
+        "type": "String"
+      }
+    }
+  },
+  "customRateHintNoRate": "Your store has no cashback rate in effect yet — contact Manfaa before crediting customers.",
+  "customRateFormat": "Enter a percent with up to two decimal places, e.g. 7.50.",
+  "customRateRange": "Cashback runs from {min} to {max}.",
+  "@customRateRange": {
+    "placeholders": {
+      "min": {
+        "type": "String"
+      },
+      "max": {
+        "type": "String"
+      }
+    }
+  },
+  "customRateTooLow": "This sale already earns {rate}. A custom rate can only be higher — your advertised rate is a promise to the customer.",
+  "@customRateTooLow": {
+    "placeholders": {
+      "rate": {
+        "type": "String"
+      }
+    }
+  },
+  "customRateRefusedTitle": "That rate is lower than this sale already earns.",
+  "customRateRefusedBody": "This sale earns {rate} — your standing rate, or a promotion running right now. Enter a higher rate, or switch the custom rate off.",
+  "@customRateRefusedBody": {
+    "placeholders": {
+      "rate": {
+        "type": "String"
+      }
+    }
+  },
+  "customRateRefusedBodyNoRate": "A custom rate can only raise what this sale already earns. Enter a higher rate, or switch the custom rate off.",
+  "customRateNotPricedTitle": "That rate isn't available yet.",
+
+  "splitToggle": "Split by category",
+  "splitToggleHint": "Split this sale into product categories.",
+  "splitBreakdownTitle": "Category breakdown",
+  "splitAddCategory": "Add category",
+  "splitEverythingElse": "Everything else",
+  "splitEditLine": "Edit line",
+  "splitRemoveLine": "Remove line",
+  "splitDialogTitleAdd": "Add category amount",
+  "splitDialogTitleEdit": "Edit category amount",
+  "splitCategoryLabel": "Category",
+  "splitAmountLabel": "Amount",
+  "splitAmountInvalid": "Enter a valid amount of at least MVR 0.01.",
+  "splitExcludedNote": "No cashback — still part of the total.",
+  "splitEmptyHint": "Add the sale's parts — the lines must add up to the eligible amount, excluded categories included.",
+  "splitOtherChip": "Other",
+  "splitLinesTotal": "Lines total",
+  "splitMismatchTitle": "The lines don't add up to the eligible amount.",
+  "splitMismatchBody": "Difference: {difference}. Every part of the bill goes in, including the excluded ones — the credit can't be recorded until the two match.",
+  "@splitMismatchBody": {
+    "placeholders": {
+      "difference": {
+        "type": "String"
+      }
+    }
+  },
+
+  "costPreviewTitle": "Cost preview",
+  "previewCashback": "Customer cashback ({rate})",
+  "@previewCashback": {
+    "placeholders": {
+      "rate": {
+        "type": "String"
+      }
+    }
+  },
+  "previewFee": "Platform fee ({rate})",
+  "@previewFee": {
+    "placeholders": {
+      "rate": {
+        "type": "String"
+      }
+    }
+  },
+  "previewYouPay": "You pay ({rate})",
+  "@previewYouPay": {
+    "placeholders": {
+      "rate": {
+        "type": "String"
+      }
+    }
+  },
+  "previewPerLine": "per line",
+  "previewEstimateNote": "Estimate — final amounts use the rate at the sale time.",
+  "previewNoRate": "No cashback rate is in effect yet — contact Manfaa before crediting customers.",
+  "previewUnavailable": "Your current rate is unavailable right now — the credit still uses the correct rate on the server.",
+
+  "backdatedTitle": "Backdated sale — this credit is final",
+  "backdatedBody": "This sale is older than your refund window — once credited it cannot be reversed, and it becomes payable to Manfaa immediately.",
+  "backdatedMaybeTitle": "This sale may be backdated",
+  "backdatedMaybeBody": "This sale may be older than your refund window. If it is, once credited it cannot be reversed, and it becomes payable to Manfaa immediately.",
+  "backdatedConfirm": "I understand: this credit cannot be reversed and is payable now.",
+  "backdatedConfirmRequired": "Confirm you understand before recording this credit.",
+  "backdatedResultTitle": "Credited — final and payable now",
+  "backdatedResultBody": "This backdated sale skipped the refund window. The customer's cashback is payable to Manfaa immediately, and neither you nor your POS can reverse it — contact Manfaa if it needs correcting.",
+
+  "pendingNote": "Credited cashback will appear as pending. It will be validated and released to the customer after settlement.",
+  "creditCta": "Credit customer",
+  "errDuplicateInvoiceTitle": "This invoice is already credited.",
+  "errDuplicateInvoiceBody": "Each invoice can be credited once. If this is a different sale, check the invoice number on the receipt.",
+  "errSuspendedTitle": "Your store is suspended — new cashback is paused.",
+  "errSuspendedBody": "Settle your outstanding balance to resume crediting customers, or contact Manfaa if you believe this is wrong.",
+  "errCreditFailed": "Could not record the credit.",
+
+  "queuedBannerTitle": "{count, plural, =1{1 sale waiting to sync} other{{count} sales waiting to sync}}",
+  "@queuedBannerTitle": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "queuedBannerBody": "They'll be sent automatically when you're back online.",
+  "queuedBannerAction": "Sync now",
+  "queuedSnack": "No connection — the sale is saved and will sync automatically.",
+  "attentionTitle": "Needs attention",
+  "attentionBody": "These queued sales were refused when they synced — review each one.",
+  "attentionRetry": "Try again",
+  "attentionDiscard": "Dismiss",
+
+  "resultRecordedTitle": "Cashback recorded",
+  "resultBelowMinTitle": "Recorded — no reward",
+  "resultBelowMinBody": "This sale is below your store's minimum eligible amount. It was recorded with zero cashback — the customer earns nothing on it and nothing is payable.",
+  "resultOnHoldTitle": "Recorded — under review",
+  "resultOnHoldBody": "The sale is on hold while Manfaa checks it. It counts for the customer once the review clears it; nothing else is needed from you.",
+  "resultReplayedNote": "This sale was already recorded earlier — this is the original result.",
+  "resultCustomer": "Customer",
+  "resultInvoice": "Invoice",
+  "resultState": "State",
+  "resultEligible": "Eligible amount",
+  "resultYouPay": "You pay",
+  "resultLinesTitle": "Priced lines",
+  "creditAnother": "Credit another customer",
+
+  "stateTracked": "Recorded",
+  "stateAwaitingValidation": "In refund window",
+  "statePayableUnfunded": "Payable to Manfaa",
+  "stateOnHold": "Under review",
+  "stateConfirmed": "Confirmed",
+  "statePaid": "Paid to customer",
+  "stateReversed": "Reversed",
+  "stateWrittenOff": "Written off — unpaid",
+  "stateOther": "Updated",
+
+  "reasonAutoValidation": "Validated automatically",
+  "reasonBackdatedFinal": "Backdated — cannot be reversed",
+  "reasonBelowMinimum": "Below minimum sale",
+  "reasonMerchantSuspended": "Store suspended",
+  "reasonSettlementAllocated": "Paid by store",
+  "reasonPayoutCompleted": "Paid out",
+  "reasonCustomerRefund": "Refunded",
+  "reasonTillVoid": "Voided at the till",
+  "reasonDuplicate": "Duplicate sale",
+  "reasonOtherCorrected": "Corrected — other reason",
+  "reasonStaleTimestamp": "Held — sale was backdated",
+  "reasonUnknown": "Updated by Manfaa",
+
+  "transactionsTitle": "Transactions",
+  "filterAll": "All states",
+  "txEmptyTitle": "No transactions yet",
+  "txEmptyBody": "Sales you credit appear here.",
+  "txEmptyFiltered": "No transactions match this filter.",
+  "backdatedChip": "Backdated",
+  "amendAction": "Correct amount",
+  "cancelAction": "Cancel sale",
+  "amendTitle": "Correct the amount",
+  "amendBody": "Fix what was rung up on {invoiceNo}. The cashback is recalculated at the same rate the sale was recorded under.",
+  "@amendBody": {
+    "placeholders": {
+      "invoiceNo": {
+        "type": "String"
+      }
+    }
+  },
+  "amendEligibleLabel": "Eligible amount",
+  "amendHint": "The part of the bill cashback is computed on, as it should have been.",
+  "amendLinesLabel": "Category amounts",
+  "amendLinesHint": "The eligible amount adds up from these lines:",
+  "amendCurrent": "Currently {amount} · cashback {cashback}",
+  "@amendCurrent": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      },
+      "cashback": {
+        "type": "String"
+      }
+    }
+  },
+  "amendSubmit": "Save correction",
+  "amendDone": "Amount corrected.",
+  "amendFailed": "Could not correct the amount.",
+  "cancelTitle": "Cancel this sale",
+  "cancelBody": "{invoiceNo} comes off entirely and the cashback is taken back.",
+  "@cancelBody": {
+    "placeholders": {
+      "invoiceNo": {
+        "type": "String"
+      }
+    }
+  },
+  "cancelReasonLabel": "Reason",
+  "cancelNoteLabel": "Note (optional)",
+  "cancelWarning": "The customer has already been told they earned this. Cancelling removes it from their balance.",
+  "cancelSubmit": "Cancel sale",
+  "cancelDone": "Sale cancelled.",
+  "cancelFailed": "Could not cancel the sale.",
+  "keepSale": "Keep sale",
+  "cancelReasonRefund": "Refunded",
+  "cancelReasonVoid": "Voided at the till",
+  "cancelReasonDuplicate": "Duplicate entry",
+  "cancelReasonError": "Keyed in error",
+  "errNotAmendable": "This sale can no longer be changed — its window has closed.",
+  "errBackdatedIrreversible": "Backdated credits can never be reversed.",
+
+  "todayTitle": "Today",
+  "todayCredits": "Credits",
+  "todayEligible": "Eligible sales",
+  "todayCashback": "Cashback"
 }

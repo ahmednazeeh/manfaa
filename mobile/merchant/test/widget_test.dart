@@ -72,13 +72,13 @@ void main() {
     await signIn(tester);
 
     // No settlements.view → no Dashboard, no Settlements; first allowed
-    // tab is Credit, whose placeholder renders.
+    // tab is Credit — since MR2 the real till, not a placeholder.
     expect(find.text('Credit'), findsOneWidget);
     expect(find.text('Transactions'), findsOneWidget);
     expect(find.text('More'), findsOneWidget);
     expect(find.text('Dashboard'), findsNothing);
     expect(find.text('Settlements'), findsNothing);
-    expect(find.text('On its way'), findsOneWidget);
+    expect(find.text('Credit customer'), findsWidgets);
   });
 
   testWidgets('a full role lands on Dashboard with all five tabs',
