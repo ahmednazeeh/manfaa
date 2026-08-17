@@ -66,3 +66,34 @@ it('logs out a merchant user and invalidates the session', function () {
 it('requires authentication for merchant me', function () {
     $this->getJson('/api/merchant/auth/me')->assertUnauthorized();
 });
+
+it('keeps a fresh merchant login alive when another guard\'s session hash pair is stale', function () {
+    // The .manfaa.app session cookie is shared by the admin, merchant and
+    // customer surfaces. A stale pair on ONE guard (here: a garbage admin
+    // hash, the 2026-08-17 production incident) must log out that guard
+    // only — flushing the whole session bounced a just-logged-in merchant
+    // straight back to /login.
+    $merchant = \App\Models\Merchant::factory()->create();
+    $owner = \App\Models\MerchantUser::factory()->for($merchant)->owner()->create([
+        'password' => bcrypt('secret-123'),
+    ]);
+    $admin = \App\Models\AdminUser::factory()->create();
+
+    $this->postJson('/api/merchant/auth/login', [
+        'email' => $owner->email,
+        'password' => 'secret-123',
+    ])->assertOk();
+
+    session()->put([
+        'login_admin_'.sha1(\Illuminate\Auth\SessionGuard::class) => $admin->id,
+        'password_hash_admin' => 'stale-or-wrong-format-value',
+    ]);
+
+    // The merchant surface stays signed in…
+    $this->getJson('/api/merchant/auth/me')->assertOk();
+
+    // …while the offending admin login (and its pair) is gone.
+    expect(session()->has('login_admin_'.sha1(\Illuminate\Auth\SessionGuard::class)))->toBeFalse()
+        ->and(session()->has('password_hash_admin'))->toBeFalse()
+        ->and(session()->has('login_merchant_'.sha1(\Illuminate\Auth\SessionGuard::class)))->toBeTrue();
+});

@@ -5,11 +5,11 @@ declare(strict_types=1);
 namespace App\Http\Middleware;
 
 use Closure;
-use Illuminate\Auth\AuthenticationException;
 use Illuminate\Auth\SessionGuard;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Log;
 use Laravel\Sanctum\Http\Middleware\AuthenticateSession;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -28,8 +28,6 @@ class AuthenticateMultiGuardSession extends AuthenticateSession
      * Handle an incoming request.
      *
      * @param  Closure(Request): (Response)  $next
-     *
-     * @throws AuthenticationException
      */
     public function handle(Request $request, Closure $next): Response
     {
@@ -41,7 +39,7 @@ class AuthenticateMultiGuardSession extends AuthenticateSession
             ->mapWithKeys(fn ($name) => [$name => $this->auth->guard($name)])
             ->filter(fn ($guard) => $guard instanceof SessionGuard);
 
-        $shouldLogout = $guards->filter(
+        $stale = $guards->filter(
             fn (SessionGuard $guard) => $guard->user() !== null
         )->filter(
             fn (SessionGuard $guard, string $name) => $request->session()->has('password_hash_'.$name)
@@ -53,13 +51,23 @@ class AuthenticateMultiGuardSession extends AuthenticateSession
             )
         );
 
-        if ($shouldLogout->isNotEmpty()) {
-            $shouldLogout->each->logoutCurrentDevice();
+        // A failed pair logs out ITS guard only — never the whole session.
+        // The .manfaa.app cookie is shared by three disjoint surfaces, so
+        // the previous flush-and-throw meant one stale admin or customer
+        // pair killed a freshly minted merchant login on the very next
+        // request: log in on the panel, bounce straight back to /login
+        // (2026-08-17 production incident). With the offending guard
+        // cleaned up, the route's own auth middleware answers for the
+        // guard it actually needs.
+        $stale->each(function (SessionGuard $guard, string $name) use ($request): void {
+            $userId = $guard->id();
+            $guard->logoutCurrentDevice();
+            $request->session()->forget('password_hash_'.$name);
 
-            $request->session()->flush();
-
-            throw new AuthenticationException('Unauthenticated.', [...$shouldLogout->keys()->all(), 'sanctum']);
-        }
+            Log::info("Session guard {$name} logged out: stored password hash no longer validates.", [
+                'user_id' => $userId,
+            ]);
+        });
 
         return tap($next($request), function () use ($request, $guards) {
             // Post-response, so a login on this very request stores its hash
