@@ -939,6 +939,7 @@ function ReviewStep({
   const stepForMissing: Record<SetupMissingKey, number> = {
     category: STEPS.indexOf('profile'),
     channel: STEPS.indexOf('profile'),
+    contact: STEPS.indexOf('profile'),
     rate: STEPS.indexOf('rate'),
     terms: STEPS.indexOf('terms'),
   };

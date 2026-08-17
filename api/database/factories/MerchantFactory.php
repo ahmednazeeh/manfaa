@@ -33,6 +33,9 @@ class MerchantFactory extends Factory
             'min_eligible_laari' => 5000,
             'eligibility_basis' => 'Invoice total excluding GST and service charge.',
             'channel' => 'in_store',
+            // Every real store signs up with a phone number, and submit now
+            // requires one — a phoneless fixture opts out explicitly.
+            'contact_phone' => '+960'.fake()->numberBetween(7000000, 7999999),
         ];
     }
 

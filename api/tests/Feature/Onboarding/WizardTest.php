@@ -142,6 +142,25 @@ it('refuses submit while required pieces are missing, naming each one', function
         ->assertJsonPath('missing', ['rate', 'terms']);
 });
 
+it('refuses submit for a store with no phone number at all', function () {
+    // The factory gives every fixture a contact number, because every real
+    // store signs up with one — a phoneless store is the explicit case, and
+    // it is exactly the store the customer app would show with no number.
+    wizardOwner(['contact_phone' => null, 'support_phone' => null, 'category' => 'cafe', 'eligibility_basis' => 'Everything.']);
+
+    $this->patchJson('/api/merchant/setup/rate', ['cashback_rate_percent' => '2.00'])->assertOk();
+
+    $this->postJson('/api/merchant/setup/submit')
+        ->assertUnprocessable()
+        ->assertJsonPath('code', 'setup_incomplete')
+        ->assertJsonPath('missing', ['contact']);
+
+    // Either number satisfies the gate; the model hook then keeps the other
+    // side materialised from it on later writes.
+    $this->patchJson('/api/merchant/setup/profile', ['contact_phone' => '+9607001122'])->assertOk();
+    $this->postJson('/api/merchant/setup/submit')->assertOk();
+});
+
 it('refuses a submit whose picked category has since been deactivated', function () {
     $owner = wizardOwner();
     $owner->merchant->update(['category' => 'beauty', 'eligibility_basis' => 'Everything.']);

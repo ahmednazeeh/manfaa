@@ -162,6 +162,7 @@
     "missing": {
       "category": "Pick a store category",
       "channel": "Choose where you sell",
+      "contact": "Add a contact phone number",
       "rate": "Set your cashback rate",
       "terms": "Write your cashback terms"
     },

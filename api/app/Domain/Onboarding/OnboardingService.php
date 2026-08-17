@@ -407,8 +407,8 @@ final class OnboardingService
 
     /**
      * The submit()/approve() completeness rules, evaluated from the actual
-     * column values: curated-and-active category, channel enum, live
-     * standing rate, non-empty terms. The logo stays optional.
+     * column values: curated-and-active category, channel enum, a phone
+     * number, live standing rate, non-empty terms. The logo stays optional.
      *
      * So does the map pin. The owner asked to ASK for one at signup, not to
      * gate approval on it (D17) — and adding it here would instantly make
@@ -431,6 +431,16 @@ final class OnboardingService
 
         if (! in_array($merchant->channel, self::CHANNELS, true)) {
             $missing[] = 'channel';
+        }
+
+        // A store the customer app shows with no phone number at all is not
+        // ready for review (owner decision 2026-08-17): either number
+        // satisfies this, and Merchant::booted() keeps support materialised
+        // from contact, so in practice this means "give us a contact number
+        // or a support line during setup".
+        if (trim((string) $merchant->contact_phone) === ''
+            && trim((string) $merchant->support_phone) === '') {
+            $missing[] = 'contact';
         }
 
         if ($this->currentRateBp($merchant) === null) {

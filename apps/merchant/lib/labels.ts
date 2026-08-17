@@ -388,6 +388,7 @@ export function vendorAbilityHint(
 export const SETUP_MISSING_KEYS = [
   'category',
   'channel',
+  'contact',
   'rate',
   'terms',
 ] as const;
@@ -396,6 +397,7 @@ export type SetupMissingKey = (typeof SETUP_MISSING_KEYS)[number];
 const SETUP_MISSING_LABEL_KEYS: Record<SetupMissingKey, string> = {
   category: 'setup.missing.category',
   channel: 'setup.missing.channel',
+  contact: 'setup.missing.contact',
   rate: 'setup.missing.rate',
   terms: 'setup.missing.terms',
 };
