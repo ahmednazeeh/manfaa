@@ -82,7 +82,7 @@ export default function LoginPage() {
           <div className="flex flex-col items-center gap-3">
             <span className="flex items-center gap-2">
               <img
-                src={toAbsoluteUrl('/media/app/mini-logo.svg')}
+                src={toAbsoluteUrl('/media/app/mini-logo.svg?v=mf2')}
                 className="h-5"
                 alt=""
                 aria-hidden

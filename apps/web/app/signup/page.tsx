@@ -177,12 +177,12 @@ export default function SignupPage() {
         <CardContent className="p-8 flex flex-col gap-6">
           <div className="flex flex-col items-center gap-3">
             <img
-              src={toAbsoluteUrl('/media/app/default-logo.svg')}
+              src={toAbsoluteUrl('/media/app/default-logo.svg?v=mf2')}
               className="dark:hidden h-[26px]"
               alt={t('common.appName')}
             />
             <img
-              src={toAbsoluteUrl('/media/app/default-logo-dark.svg')}
+              src={toAbsoluteUrl('/media/app/default-logo-dark.svg?v=mf2')}
               className="hidden dark:block h-[26px]"
               alt={t('common.appName')}
             />

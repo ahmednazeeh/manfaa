@@ -23,7 +23,7 @@ export function MerchantLanding() {
         <div className="flex items-center gap-2">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src={toAbsoluteUrl('/media/app/mini-logo.svg')}
+            src={toAbsoluteUrl('/media/app/mini-logo.svg?v=mf2')}
             className="h-5"
             alt=""
             aria-hidden

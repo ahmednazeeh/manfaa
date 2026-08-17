@@ -19,7 +19,7 @@ export function HeaderBrand() {
   
   return (
     <div className="flex items-center -ms-1">
-      <img src={toAbsoluteUrl('/media/app/mini-logo.svg')} alt="" className="h-4"/>
+      <img src={toAbsoluteUrl('/media/app/mini-logo.svg?v=mf2')} alt="" className="h-4"/>
       {isMobile && (
         <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
           <SheetTrigger asChild>

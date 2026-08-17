@@ -24,7 +24,7 @@ function SidebarHeader() {
         aria-label={t('common.appName')}
       >
         <img
-          src={toAbsoluteUrl('/media/app/mini-logo.svg')}
+          src={toAbsoluteUrl('/media/app/mini-logo.svg?v=mf2')}
           className="h-[22px] max-w-none shrink-0"
           alt=""
         />

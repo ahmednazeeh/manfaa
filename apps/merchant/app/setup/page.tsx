@@ -104,12 +104,12 @@ export default function SetupPage() {
     <div className="grow min-h-screen w-full bg-muted/40 flex flex-col">
       <header className="flex items-center gap-2.5 px-5 py-4">
         <img
-          src={toAbsoluteUrl('/media/app/default-logo.svg')}
+          src={toAbsoluteUrl('/media/app/default-logo.svg?v=mf2')}
           className="dark:hidden h-[22px]"
           alt={t('common.appName')}
         />
         <img
-          src={toAbsoluteUrl('/media/app/default-logo-dark.svg')}
+          src={toAbsoluteUrl('/media/app/default-logo-dark.svg?v=mf2')}
           className="hidden dark:block h-[22px]"
           alt={t('common.appName')}
         />
