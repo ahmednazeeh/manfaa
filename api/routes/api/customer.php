@@ -30,8 +30,14 @@ Route::prefix('customer')->middleware('auth:customer')->group(function () {
     Route::get('balance', [BalanceController::class, 'show']);
     Route::get('transactions', [TransactionsController::class, 'index']);
 
+    // The payout account carries the app's fresh-OTP gate on the WEB too
+    // (2026-08-17): a session cookie is not proof of the phone. Keyed
+    // throttles for the same reason the avatar routes carry them.
     Route::get('payout-account', [PayoutAccountController::class, 'show']);
-    Route::post('payout-account', [PayoutAccountController::class, 'store']);
+    Route::post('payout-account/otp', [PayoutAccountController::class, 'requestOtp'])
+        ->middleware('throttle:10,1,customer-payout-otp');
+    Route::post('payout-account', [PayoutAccountController::class, 'store'])
+        ->middleware('throttle:10,1,customer-payout-update');
 
     // Profile picture — set/replace and remove. The same two actions are
     // mounted on the app in routes/api/mobile.php; reading the picture is

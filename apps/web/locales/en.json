@@ -165,7 +165,14 @@
     "accountNameHint": "It must match the name on the account, or the transfer will bounce.",
     "saveAndFinish": "Save and finish",
     "skipForNow": "Skip for now",
-    "skipHint": "You can add it any time before your first payout."
+    "skipHint": "You can add it any time before your first payout.",
+    "sendCode": "Send confirmation code",
+    "resendCode": "Resend code",
+    "otpLabel": "Confirmation code",
+    "otpSent": "We sent a code to your phone.",
+    "otpSentNote": "Enter the code we sent to your phone to confirm this change.",
+    "otpSendFailed": "Couldn't send the code. Try again in a moment.",
+    "otpInvalid": "That code isn't right or has expired. Request a fresh one."
   },
   "claims": {
     "title": "Claims",

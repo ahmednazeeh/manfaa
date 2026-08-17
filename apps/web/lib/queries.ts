@@ -9,16 +9,17 @@ import {
   customerLogout,
   getCustomerBalance,
   getCustomerMe,
+  getCustomerPayout,
   getCustomerPayoutAccount,
   getDirectory,
   getDiscovery,
   getStore,
   listCustomerClaims,
-  getCustomerPayout,
   listCustomerPayouts,
   listCustomerTransactions,
   registerCustomer,
   requestCustomerOtp,
+  requestPayoutAccountOtp,
   saveCustomerPayoutAccount,
   verifyCustomerOtp,
   type CreateClaimRequest,
@@ -263,6 +264,12 @@ export function usePayoutAccount() {
     queryKey: queryKeys.payoutAccount,
     queryFn: ({ signal }) => getCustomerPayoutAccount({ signal }),
     select: (response) => response.data,
+  });
+}
+
+export function useRequestPayoutOtp() {
+  return useMutation({
+    mutationFn: () => requestPayoutAccountOtp(),
   });
 }
 

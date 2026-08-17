@@ -1,5 +1,5 @@
-import { z } from 'zod';
-import { apiFetch } from './client';
+import { z } from "zod";
+import { apiFetch } from "./client";
 import {
   BankSlugSchema,
   ClaimStateSchema,
@@ -7,7 +7,7 @@ import {
   paginated,
   TRANSACTION_REASON_CODES,
   type TransactionReasonCode,
-} from './resources';
+} from "./resources";
 
 /**
  * Typed contracts for the customer surface (Phase 3): password login, the
@@ -30,7 +30,7 @@ function queryString(
     }
   }
   const encoded = search.toString();
-  return encoded === '' ? '' : `?${encoded}`;
+  return encoded === "" ? "" : `?${encoded}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -69,8 +69,8 @@ export function customerLogin(
   body: CustomerLoginRequest,
   options: RequestOptions = {},
 ): Promise<CustomerResponse> {
-  return apiFetch('/api/customer/auth/login', CustomerResponseSchema, {
-    method: 'POST',
+  return apiFetch("/api/customer/auth/login", CustomerResponseSchema, {
+    method: "POST",
     body,
     signal: options.signal,
   });
@@ -80,8 +80,8 @@ export function customerLogin(
 export async function customerLogout(
   options: RequestOptions = {},
 ): Promise<void> {
-  await apiFetch('/api/customer/auth/logout', z.undefined(), {
-    method: 'POST',
+  await apiFetch("/api/customer/auth/logout", z.undefined(), {
+    method: "POST",
     signal: options.signal,
   });
 }
@@ -90,7 +90,7 @@ export async function customerLogout(
 export function getCustomerMe(
   options: RequestOptions = {},
 ): Promise<CustomerResponse> {
-  return apiFetch('/api/customer/auth/me', CustomerResponseSchema, {
+  return apiFetch("/api/customer/auth/me", CustomerResponseSchema, {
     signal: options.signal,
   });
 }
@@ -110,10 +110,10 @@ export function uploadCustomerAvatar(
   options: RequestOptions = {},
 ): Promise<AvatarResponse> {
   const body = new FormData();
-  body.append('avatar', file);
+  body.append("avatar", file);
 
-  return apiFetch('/api/customer/avatar', AvatarResponseSchema, {
-    method: 'POST',
+  return apiFetch("/api/customer/avatar", AvatarResponseSchema, {
+    method: "POST",
     body,
     signal: options.signal,
   });
@@ -123,8 +123,8 @@ export function uploadCustomerAvatar(
 export function removeCustomerAvatar(
   options: RequestOptions = {},
 ): Promise<AvatarResponse> {
-  return apiFetch('/api/customer/avatar', AvatarResponseSchema, {
-    method: 'DELETE',
+  return apiFetch("/api/customer/avatar", AvatarResponseSchema, {
+    method: "DELETE",
     signal: options.signal,
   });
 }
@@ -156,8 +156,8 @@ export function requestCustomerOtp(
   body: RequestOtpRequest,
   options: RequestOptions = {},
 ): Promise<RequestOtpResponse> {
-  return apiFetch('/api/customer/auth/request-otp', RequestOtpResponseSchema, {
-    method: 'POST',
+  return apiFetch("/api/customer/auth/request-otp", RequestOtpResponseSchema, {
+    method: "POST",
     body,
     signal: options.signal,
   });
@@ -188,8 +188,8 @@ export function verifyCustomerOtp(
   body: VerifyOtpRequest,
   options: RequestOptions = {},
 ): Promise<VerifyOtpResponse> {
-  return apiFetch('/api/customer/auth/verify-otp', VerifyOtpResponseSchema, {
-    method: 'POST',
+  return apiFetch("/api/customer/auth/verify-otp", VerifyOtpResponseSchema, {
+    method: "POST",
     body,
     signal: options.signal,
   });
@@ -212,8 +212,8 @@ export function registerCustomer(
   body: RegisterCustomerRequest,
   options: RequestOptions = {},
 ): Promise<CustomerResponse> {
-  return apiFetch('/api/customer/auth/register', CustomerResponseSchema, {
-    method: 'POST',
+  return apiFetch("/api/customer/auth/register", CustomerResponseSchema, {
+    method: "POST",
     body,
     signal: options.signal,
   });
@@ -253,7 +253,7 @@ export type CustomerBalanceResponse = z.infer<
 export function getCustomerBalance(
   options: RequestOptions = {},
 ): Promise<CustomerBalanceResponse> {
-  return apiFetch('/api/customer/balance', CustomerBalanceResponseSchema, {
+  return apiFetch("/api/customer/balance", CustomerBalanceResponseSchema, {
     signal: options.signal,
   });
 }
@@ -268,11 +268,11 @@ export function getCustomerBalance(
  * frontend's job).
  */
 export const CustomerTransactionStatusSchema = z.enum([
-  'pending',
-  'confirmed',
-  'paid',
-  'reversed',
-  'unpaid',
+  "pending",
+  "confirmed",
+  "paid",
+  "reversed",
+  "unpaid",
 ]);
 export type CustomerTransactionStatus = z.infer<
   typeof CustomerTransactionStatusSchema
@@ -284,11 +284,11 @@ export type CustomerTransactionStatus = z.infer<
  * reason_code.
  */
 export const CUSTOMER_STATE_REASON_KEYS = [
-  'validation_window',
-  'merchant_settlement_window',
-  'under_review',
-  'merchant_not_settled',
-  'reversed',
+  "validation_window",
+  "merchant_settlement_window",
+  "under_review",
+  "merchant_not_settled",
+  "reversed",
 ] as const;
 export type CustomerStateReasonKey =
   (typeof CUSTOMER_STATE_REASON_KEYS)[number];
@@ -305,8 +305,7 @@ export const CUSTOMER_STATUS_REASON_KEYS = [
   ...TRANSACTION_REASON_CODES,
 ] as const;
 export type CustomerStatusReasonKey =
-  | CustomerStateReasonKey
-  | TransactionReasonCode;
+  CustomerStateReasonKey | TransactionReasonCode;
 
 /** Narrows a `status_reason` string from the wire onto the union above. */
 export function isCustomerStatusReasonKey(
@@ -373,7 +372,7 @@ export function listCustomerTransactions(
  * batch nobody has approved, and showing it would promise money on a date
  * the platform has not committed to.
  */
-export const CustomerPayoutStatusSchema = z.enum(['sent', 'paid', 'failed']);
+export const CustomerPayoutStatusSchema = z.enum(["sent", "paid", "failed"]);
 export type CustomerPayoutStatus = z.infer<typeof CustomerPayoutStatusSchema>;
 
 export const CustomerPayoutSchema = z.object({
@@ -472,7 +471,7 @@ export const PayoutAccountSchema = z.object({
    * safe — the in-flight batch pays the snapshotted account, and the change
    * applies from the next batch build.
    */
-  change_effective: z.literal('next_batch'),
+  change_effective: z.literal("next_batch"),
 });
 export type PayoutAccount = z.infer<typeof PayoutAccountSchema>;
 
@@ -483,11 +482,9 @@ export type PayoutAccountResponse = z.infer<typeof PayoutAccountResponseSchema>;
 export function getCustomerPayoutAccount(
   options: RequestOptions = {},
 ): Promise<PayoutAccountResponse> {
-  return apiFetch(
-    '/api/customer/payout-account',
-    PayoutAccountResponseSchema,
-    { signal: options.signal },
-  );
+  return apiFetch("/api/customer/payout-account", PayoutAccountResponseSchema, {
+    signal: options.signal,
+  });
 }
 
 export const SavePayoutAccountRequestSchema = z.object({
@@ -495,21 +492,44 @@ export const SavePayoutAccountRequestSchema = z.object({
   /** Digits only, 6–32. */
   account_no: z.string().regex(/^\d{6,32}$/),
   account_name: z.string().min(1).max(120),
+  /** The fresh possession proof — same gate as the app (2026-08-17). */
+  otp_code: z.string().regex(/^\d{6}$/),
 });
 export type SavePayoutAccountRequest = z.infer<
   typeof SavePayoutAccountRequestSchema
 >;
+
+export const PayoutOtpResponseSchema = dataWrapped(
+  z.object({
+    sent: z.literal(true),
+    expires_in_minutes: z.number().int(),
+  }),
+);
+export type PayoutOtpResponse = z.infer<typeof PayoutOtpResponseSchema>;
+
+/**
+ * POST /api/customer/payout-account/otp — sends the confirmation code to
+ * the customer's own number on file. Saving requires the code.
+ */
+export function requestPayoutAccountOtp(
+  options: RequestOptions = {},
+): Promise<PayoutOtpResponse> {
+  return apiFetch("/api/customer/payout-account/otp", PayoutOtpResponseSchema, {
+    method: "POST",
+    signal: options.signal,
+  });
+}
 
 /** POST /api/customer/payout-account — saves (or replaces) the account. */
 export function saveCustomerPayoutAccount(
   body: SavePayoutAccountRequest,
   options: RequestOptions = {},
 ): Promise<PayoutAccountResponse> {
-  return apiFetch(
-    '/api/customer/payout-account',
-    PayoutAccountResponseSchema,
-    { method: 'POST', body, signal: options.signal },
-  );
+  return apiFetch("/api/customer/payout-account", PayoutAccountResponseSchema, {
+    method: "POST",
+    body,
+    signal: options.signal,
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -588,8 +608,8 @@ export function createCustomerClaim(
   body: CreateClaimRequest,
   options: RequestOptions = {},
 ): Promise<CustomerClaimResponse> {
-  return apiFetch('/api/customer/claims', CustomerClaimResponseSchema, {
-    method: 'POST',
+  return apiFetch("/api/customer/claims", CustomerClaimResponseSchema, {
+    method: "POST",
     body,
     signal: options.signal,
   });

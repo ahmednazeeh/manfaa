@@ -336,13 +336,19 @@ it('runs the full Phase 3 customer journey: OTP signup → promo publish → pri
         ->assertJsonPath('data.confirmed_laari', 33_000)
         ->assertJsonPath('data.pending_laari', 0);
 
-    // ── (l) Payout account registered through the customer web.
+    // ── (l) Payout account registered through the customer web — behind
+    // the same fresh-OTP gate the app carries (2026-08-17): the code goes
+    // to the number on file and rides the write.
     Carbon::setTestNow(CarbonImmutable::parse('2026-08-18T10:00:00+05:00'));
+
+    $this->postJson('/api/customer/payout-account/otp')->assertOk();
+    preg_match('/\b(\d{6})\b/', end($sms->sent)['message'], $payoutOtp);
 
     $this->postJson('/api/customer/payout-account', [
         'bank_name' => 'bml',
         'account_no' => '7712345678901',
         'account_name' => 'AISHATH MANIKE',
+        'otp_code' => $payoutOtp[1],
     ])->assertOk()->assertJsonPath('data.has_payout_account', true);
 
     // ── (m) Past the chosen cutoff, the batch builds: one customer, 33,000

@@ -1,11 +1,15 @@
 'use client';
 
 import { useState } from 'react';
-import { BankSlugSchema, type BankSlug } from '@manfaa/api-client';
+import {
+  apiErrorCode,
+  BankSlugSchema,
+  type BankSlug,
+} from '@manfaa/api-client';
 import { LoaderCircle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
-import { useSavePayoutAccount } from '@/lib/queries';
+import { useRequestPayoutOtp, useSavePayoutAccount } from '@/lib/queries';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -28,33 +32,63 @@ import { BankSelect } from '@/components/app/bank-select';
 export function PayoutAccountStep({ onDone }: { onDone: () => void }) {
   const { t } = useTranslation();
   const save = useSavePayoutAccount();
+  const otp = useRequestPayoutOtp();
 
   const [bank, setBank] = useState<BankSlug | ''>('');
   const [accountNo, setAccountNo] = useState('');
   const [accountName, setAccountName] = useState('');
+  // The fresh-OTP gate rides here too: even minutes after signup, changing
+  // where money goes demands a code to the number on file.
+  const [codeSent, setCodeSent] = useState(false);
+  const [otpCode, setOtpCode] = useState('');
 
   const canSave =
     bank !== '' &&
     accountNo.trim() !== '' &&
     accountName.trim() !== '' &&
-    !save.isPending;
+    !save.isPending &&
+    !otp.isPending;
 
   const submit = () => {
     const parsed = BankSlugSchema.safeParse(bank);
     if (!parsed.success) return;
+
+    if (!codeSent) {
+      otp.mutate(undefined, {
+        onSuccess: () => {
+          setCodeSent(true);
+          toast.success(t('payout.otpSent'));
+        },
+        onError: () => toast.error(t('payout.otpSendFailed')),
+      });
+      return;
+    }
+
+    if (!/^\d{6}$/.test(otpCode)) {
+      toast.error(t('payout.otpInvalid'));
+      return;
+    }
 
     save.mutate(
       {
         bank_name: parsed.data,
         account_no: accountNo.trim(),
         account_name: accountName.trim(),
+        otp_code: otpCode,
       },
       {
         onSuccess: () => {
           toast.success(t('payout.saved'));
           onDone();
         },
-        onError: () => toast.error(t('payout.saveFailed')),
+        onError: (mutationError) => {
+          const code = apiErrorCode(mutationError);
+          toast.error(
+            code === 'otp_invalid' || code === 'otp_attempts_exceeded'
+              ? t('payout.otpInvalid')
+              : t('payout.saveFailed'),
+          );
+        },
       },
     );
   };
@@ -110,10 +144,33 @@ export function PayoutAccountStep({ onDone }: { onDone: () => void }) {
         </p>
       </div>
 
+      {codeSent && (
+        <div className="flex flex-col gap-2.5">
+          <Label htmlFor="signup-payout-otp">{t('payout.otpLabel')}</Label>
+          <Input
+            id="signup-payout-otp"
+            dir="ltr"
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            maxLength={6}
+            placeholder="••••••"
+            value={otpCode}
+            onChange={(event) =>
+              setOtpCode(event.target.value.replace(/\D/g, ''))
+            }
+          />
+          <p className="text-xs text-muted-foreground">
+            {t('payout.otpSentNote')}
+          </p>
+        </div>
+      )}
+
       <div className="flex flex-col gap-2.5">
         <Button disabled={!canSave} onClick={submit}>
-          {save.isPending && <LoaderCircle className="animate-spin" />}
-          {t('payout.saveAndFinish')}
+          {(save.isPending || otp.isPending) && (
+            <LoaderCircle className="animate-spin" />
+          )}
+          {codeSent ? t('payout.saveAndFinish') : t('payout.sendCode')}
         </Button>
         <Button variant="ghost" onClick={onDone} disabled={save.isPending}>
           {t('payout.skipForNow')}

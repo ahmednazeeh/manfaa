@@ -2,15 +2,18 @@
 
 import { useState } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { apiErrorCode, BankSlugSchema } from '@manfaa/api-client';
 import { Landmark, LoaderCircle, TriangleAlert } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { z } from 'zod';
-import { BankSlugSchema } from '@manfaa/api-client';
 import { maskAccountNo } from '@/lib/format';
-import { BankLabel, BankSelect } from '@/components/app/bank-select';
-import { usePayoutAccount, useSavePayoutAccount } from '@/lib/queries';
+import {
+  usePayoutAccount,
+  useRequestPayoutOtp,
+  useSavePayoutAccount,
+} from '@/lib/queries';
 import { Alert, AlertIcon, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -30,11 +33,17 @@ import {
   ToolbarPageTitle,
 } from '@/components/app-layout/toolbar';
 import { ErrorBlock, LoadingBlock } from '@/components/app/async-states';
+import { BankLabel, BankSelect } from '@/components/app/bank-select';
 
 export default function PayoutAccountPage() {
   const { data: account, isPending, error } = usePayoutAccount();
   const saveMutation = useSavePayoutAccount();
+  const otpMutation = useRequestPayoutOtp();
   const [saveError, setSaveError] = useState<string | null>(null);
+  // The fresh-OTP gate (same as the app): filling the form is step one;
+  // saving requires a code sent to the number on file.
+  const [codeSent, setCodeSent] = useState(false);
+  const [otpCode, setOtpCode] = useState('');
   const { t } = useTranslation();
 
   const FormSchema = z.object({
@@ -49,17 +58,50 @@ export default function PayoutAccountPage() {
     defaultValues: { account_no: '', account_name: '' },
   });
 
+  const sendCode = () => {
+    setSaveError(null);
+    otpMutation.mutate(undefined, {
+      onSuccess: () => {
+        setCodeSent(true);
+        toast.success(t('payout.otpSent'));
+      },
+      onError: () => setSaveError(t('payout.otpSendFailed')),
+    });
+  };
+
   const onSubmit = (values: FormValues) => {
     setSaveError(null);
-    saveMutation.mutate(values, {
-      onSuccess: () => {
-        toast.success(t('payout.saved'));
-        form.reset();
+
+    // Step one: valid details but no code yet → send the code.
+    if (!codeSent) {
+      sendCode();
+      return;
+    }
+
+    if (!/^\d{6}$/.test(otpCode)) {
+      setSaveError(t('payout.otpInvalid'));
+      return;
+    }
+
+    saveMutation.mutate(
+      { ...values, otp_code: otpCode },
+      {
+        onSuccess: () => {
+          toast.success(t('payout.saved'));
+          form.reset();
+          setCodeSent(false);
+          setOtpCode('');
+        },
+        onError: (mutationError) => {
+          const code = apiErrorCode(mutationError);
+          setSaveError(
+            code === 'otp_invalid' || code === 'otp_attempts_exceeded'
+              ? t('payout.otpInvalid')
+              : t('payout.saveFailed'),
+          );
+        },
       },
-      onError: () => {
-        setSaveError(t('payout.saveFailed'));
-      },
-    });
+    );
   };
 
   return (
@@ -185,19 +227,59 @@ export default function PayoutAccountPage() {
                       )}
                     />
 
+                    {codeSent && (
+                      <FormItem>
+                        <FormLabel>{t('payout.otpLabel')}</FormLabel>
+                        <FormControl>
+                          <Input
+                            inputMode="numeric"
+                            autoComplete="one-time-code"
+                            dir="ltr"
+                            maxLength={6}
+                            placeholder="••••••"
+                            value={otpCode}
+                            onChange={(event) =>
+                              setOtpCode(event.target.value.replace(/\D/g, ''))
+                            }
+                          />
+                        </FormControl>
+                        <p className="text-xs text-muted-foreground">
+                          {t('payout.otpSentNote')}
+                        </p>
+                      </FormItem>
+                    )}
+
                     <p className="text-xs text-muted-foreground">
                       {t('payout.changeEffectiveNote')}
                     </p>
 
-                    <div>
-                      <Button type="submit" disabled={saveMutation.isPending}>
-                        {saveMutation.isPending && (
+                    <div className="flex items-center gap-3">
+                      <Button
+                        type="submit"
+                        disabled={
+                          saveMutation.isPending || otpMutation.isPending
+                        }
+                      >
+                        {(saveMutation.isPending || otpMutation.isPending) && (
                           <LoaderCircle className="animate-spin" />
                         )}
-                        {account.has_payout_account
-                          ? t('payout.replaceAccount')
-                          : t('payout.saveAccount')}
+                        {codeSent
+                          ? account.has_payout_account
+                            ? t('payout.replaceAccount')
+                            : t('payout.saveAccount')
+                          : t('payout.sendCode')}
                       </Button>
+                      {codeSent && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          disabled={otpMutation.isPending}
+                          onClick={sendCode}
+                        >
+                          {t('payout.resendCode')}
+                        </Button>
+                      )}
                     </div>
                   </form>
                 </Form>

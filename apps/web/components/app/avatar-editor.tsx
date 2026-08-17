@@ -1,13 +1,16 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
 import type { Customer } from '@manfaa/api-client';
-import { removeCustomerAvatar, uploadCustomerAvatar } from '@manfaa/api-client';
+import {
+  ApiError,
+  removeCustomerAvatar,
+  uploadCustomerAvatar,
+} from '@manfaa/api-client';
+import { useQueryClient } from '@tanstack/react-query';
 import { Camera, Loader2, Trash2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
-import { ApiError } from '@manfaa/api-client';
 import { queryKeys } from '@/lib/queries';
 
 /**
