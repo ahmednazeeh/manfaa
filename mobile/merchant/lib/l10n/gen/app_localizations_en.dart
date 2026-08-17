@@ -1608,4 +1608,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get presetAllLabel => 'All';
+
+  @override
+  String get pushOpen => 'View';
 }

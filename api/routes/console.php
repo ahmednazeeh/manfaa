@@ -29,6 +29,7 @@ Artisan::command('inspire', function () {
 Schedule::command('manfaa:sweep-validation')->hourly()->withoutOverlapping()->onOneServer();
 Schedule::command('manfaa:reinstate')->everyThirtyMinutes()->withoutOverlapping()->onOneServer();
 Schedule::command('manfaa:escalate')->dailyAt('09:00')->timezone(config('app.business_timezone'))->withoutOverlapping()->onOneServer();
+Schedule::command('manfaa:remind-settlements')->dailyAt('09:00')->timezone(config('app.business_timezone'))->withoutOverlapping()->onOneServer();
 Schedule::command('manfaa:suspend-overdue')->dailyAt('00:15')->timezone(config('app.business_timezone'))->withoutOverlapping()->onOneServer();
 Schedule::command('manfaa:write-off')->dailyAt('01:00')->timezone(config('app.business_timezone'))->withoutOverlapping()->onOneServer();
 Schedule::command('manfaa:reconcile')->dailyAt('02:00')->timezone(config('app.business_timezone'))->withoutOverlapping()->onOneServer();

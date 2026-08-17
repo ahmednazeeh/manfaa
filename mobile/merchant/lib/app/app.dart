@@ -3,6 +3,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:manfaa_ui/manfaa_ui.dart';
 
+import '../features/push/push_registrar.dart';
 import '../l10n/gen/app_localizations.dart';
 import 'providers.dart';
 import 'router.dart';
@@ -24,6 +25,12 @@ class MerchantApp extends ConsumerWidget {
     final locale = ref.watch(localeProvider);
     final router = ref.watch(routerProvider);
     final dhivehi = locale.languageCode == 'dv';
+
+    // Idempotent (each guards itself): taps route to the screen the message
+    // is about, and foreground messages surface instead of being swallowed.
+    ref.read(pushRegistrarProvider)
+      ..wireTapRouting(router)
+      ..wireForeground(rootMessengerKey, router);
 
     return MaterialApp.router(
       title: 'Manfaa Merchant',

@@ -31,6 +31,22 @@ enum NotificationTemplateKey: string
     case SettlementAccepted = 'settlement_accepted';
     case SettlementRejected = 'settlement_rejected';
 
+    // Deadline reminders (MR4). Fired by the daily manfaa:remind-settlements
+    // walk at 09:00 business time; the DAY each one fires on is computed from
+    // the live platform settings (prompt_discount_max_age_days,
+    // settlement_due_days), never hardcoded here or there.
+    case PromptDiscountExpiring = 'prompt_discount_expiring';
+    case SettlementDueSoon = 'settlement_due_soon';
+
+    // The §7 escalation ladder's rungs (MR4: the ladder now reaches phones).
+    // The KEYS are the merchant_notices type names, verbatim — one moment,
+    // one name, whether you are reading the evidence table or the push log.
+    // The day numbers are §7's own fixed rungs, exactly as EscalationLadder
+    // hardcodes them.
+    case ReminderDay10 = 'reminder_day10';
+    case UrgentDay13 = 'urgent_day13';
+    case DueDay15 = 'due_day15';
+
     public function label(): string
     {
         return match ($this) {
@@ -40,6 +56,11 @@ enum NotificationTemplateKey: string
             self::SettlementDue => 'Settlement due',
             self::SettlementAccepted => 'Settlement accepted',
             self::SettlementRejected => 'Settlement rejected',
+            self::PromptDiscountExpiring => 'Prompt discount expiring',
+            self::SettlementDueSoon => 'Settlement due soon',
+            self::ReminderDay10 => 'Day-10 reminder',
+            self::UrgentDay13 => 'Day-13 urgent reminder',
+            self::DueDay15 => 'Day-15 payment due',
         };
     }
 
@@ -53,6 +74,11 @@ enum NotificationTemplateKey: string
             self::SettlementDue => 'When a store creates a settlement and owes a transfer. Reaches staff who may see settlements.',
             self::SettlementAccepted => 'When Manfaa matches a store\'s transfer receipt and the settlement is paid off.',
             self::SettlementRejected => 'When a transfer receipt is refused, with the reason. The store has to act, so this one earns an interruption.',
+            self::PromptDiscountExpiring => 'The morning of the LAST day the prompt-payment discount can still be kept. Sent only when settling everything today would actually save money.',
+            self::SettlementDueSoon => 'The two mornings before the store\'s oldest outstanding sale becomes overdue. Once per morning, per store.',
+            self::ReminderDay10 => 'The §7 ladder\'s day-10 notice: the oldest unfunded sale has turned ten days old.',
+            self::UrgentDay13 => 'The §7 ladder\'s day-13 urgent notice — two days before payment is due.',
+            self::DueDay15 => 'The §7 ladder\'s day-15 payment-due notice. Automatic suspension follows on day 16, so this one earns an interruption.',
         };
     }
 
@@ -89,6 +115,18 @@ enum NotificationTemplateKey: string
                 'reference' => 'The settlement reference',
                 'reason' => 'Why the receipt was refused',
             ],
+            self::PromptDiscountExpiring => [
+                'amount' => 'What settling everything today saves, formatted with its currency',
+                'rate' => 'The prompt-payment discount rate, e.g. "5%"',
+            ],
+            self::SettlementDueSoon => [
+                'amount' => 'The outstanding total, formatted with its currency',
+                'date' => 'The business-timezone date the oldest sale becomes overdue',
+            ],
+            self::ReminderDay10, self::UrgentDay13, self::DueDay15 => [
+                'amount' => 'The outstanding total, formatted with its currency',
+                'date' => 'The business-timezone date the oldest sale falls due',
+            ],
         };
     }
 
@@ -103,7 +141,9 @@ enum NotificationTemplateKey: string
     {
         return match ($this) {
             self::CashbackEarned, self::CashbackConfirmed, self::PayoutPaid => false,
-            self::SettlementDue, self::SettlementAccepted, self::SettlementRejected => true,
+            self::SettlementDue, self::SettlementAccepted, self::SettlementRejected,
+            self::PromptDiscountExpiring, self::SettlementDueSoon,
+            self::ReminderDay10, self::UrgentDay13, self::DueDay15 => true,
         };
     }
 
@@ -127,6 +167,11 @@ enum NotificationTemplateKey: string
             self::SettlementDue => ['en' => 'Settlement due', 'dv' => 'ސެޓްލްމަންޓް ދައްކަންޖެހޭ'],
             self::SettlementAccepted => ['en' => 'Settlement accepted', 'dv' => 'ސެޓްލްމަންޓް ބަލައިގަނެވިއްޖެ'],
             self::SettlementRejected => ['en' => 'Receipt refused', 'dv' => 'ރަސީދު ބަލައިނުގަނެވުނު'],
+            self::PromptDiscountExpiring => ['en' => 'Discount expiring', 'dv' => 'ޑިސްކައުންޓް ގެއްލިދާނެ'],
+            self::SettlementDueSoon => ['en' => 'Payment due soon', 'dv' => 'ސުންގަޑި ކައިރިވަނީ'],
+            self::ReminderDay10 => ['en' => 'Settlement reminder', 'dv' => 'ސެޓްލްމަންޓް ހަނދާންކޮށްދިނުން'],
+            self::UrgentDay13 => ['en' => 'Urgent reminder', 'dv' => 'އަވަސް ހަނދާންކޮށްދިނުން'],
+            self::DueDay15 => ['en' => 'Payment due', 'dv' => 'ފައިސާ ދައްކަންޖެހޭ'],
         };
     }
 

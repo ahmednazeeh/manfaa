@@ -8,6 +8,7 @@ import '../../app/app.dart';
 import '../../app/providers.dart';
 import '../../widgets/merchant_brand.dart';
 import '../money/money_providers.dart';
+import '../push/push_registrar.dart';
 import '../settlements/settlement_widgets.dart';
 
 /// The Dashboard (MR3), drawn to Dashboard.png: the outstanding hero with
@@ -21,11 +22,27 @@ import '../settlements/settlement_widgets.dart';
 /// only behind `wallet.view`, and the deadline banner only when the
 /// settle-all preview both may be read (`settlements.preview`) and has
 /// something to price.
-class DashboardScreen extends ConsumerWidget {
+class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<DashboardScreen> createState() => _DashboardScreenState();
+}
+
+class _DashboardScreenState extends ConsumerState<DashboardScreen> {
+  @override
+  void initState() {
+    super.initState();
+    // Push permission is asked HERE — signed in, the outstanding hero on
+    // screen, the value obvious — never on first launch (PushRegistrar's
+    // docblock). Same timing pattern as the customer app's Home.
+    Future.microtask(
+      () => ref.read(pushRegistrarProvider).ensureRegistered(),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
     ref.watch(sessionTickProvider);
     final session = ref.watch(sessionProvider);
     final l10n = context.l10n;

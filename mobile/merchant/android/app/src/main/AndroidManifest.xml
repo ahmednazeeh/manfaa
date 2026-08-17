@@ -10,6 +10,11 @@
          runtime when the cashier opens the scanner; typing the 6-digit code
          stays the universal path, and a camera is never required. -->
     <uses-permission android:name="android.permission.CAMERA"/>
+    <!-- Android 13+: notifications are OFF until this runtime permission is
+         granted, and the permission cannot even be REQUESTED unless it is
+         declared here. Asked after sign-in from the Dashboard (MR4), never
+         at launch. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <application
         android:label="Manfaa Merchant"
         android:name="${applicationName}"

@@ -116,7 +116,7 @@ Exists today: `settlement_due` (batch created), `settlement_accepted`,
 via the polymorphic device_tokens path the customer app already exercises
 (same FCM service account; zero server-side Firebase work).
 
-- [ ] **New deadline reminders** (the owner's "1 day left" case): a daily
+- [x] **New deadline reminders** (the owner's "1 day left" case): a daily
       command beside `manfaa:escalate` (09:00 business tz) computing, per
       merchant with outstanding payables, the oldest `clock_start_at` age:
       - `prompt_discount_expiring` — fires at age `max_age_days − 1`
@@ -128,13 +128,21 @@ via the polymorphic device_tokens path the customer app already exercises
       (English-only bodies per the 2026-08-17 decision), fired through
       `sendToMerchantStaff(..., Permission::SettlementsView)`,
       EscalationLadder-style dedupe (one per merchant per cycle day).
-- [ ] **Wire the §7 ladder to push**: day-10/13/15 notices currently write
+      (Shipped 2026-08-17: `manfaa:remind-settlements`, 09:00 business tz
+      beside `manfaa:escalate`; thresholds computed from live
+      PlatformConfig, saving = settle-all preview's own `discount_laari`.)
+- [x] **Wire the §7 ladder to push**: day-10/13/15 notices currently write
       a merchant_notices row + log line only — have EscalationLadder also
       call NotificationService so the existing ladder reaches phones.
-- [ ] **App side**: PushRegistrar clone (merchant push-token routes,
+      (Shipped 2026-08-17, behind the ladder's own alreadySent dedupe.)
+- [x] **App side**: PushRegistrar clone (merchant push-token routes,
       permission asked after sign-in from Dashboard), POST_NOTIFICATIONS,
-      foreground banner, tap-routing by template key (settlement_* →
-      Settlements/detail, discount/due reminders → Settlements).
+      foreground banner (SnackBar + View action), tap-routing by template
+      key (settlement_accepted/rejected → detail when a `settlement_id`
+      data key ships, list until then; every deadline/ladder key →
+      Settlements; unknown → nowhere). Coded to completion behind
+      PLACEHOLDER Firebase config — builds and runs today, push lights up
+      when the real config lands, zero code changes. (2026-08-17)
 - [x] Dashboard mirrors the reminder: the **prompt-discount deadline
       banner** (from `settlements/preview?settle_all=1`) exactly as
       Dashboard.png draws it ("Your oldest sale stops earning the 5%
@@ -158,9 +166,14 @@ via the polymorphic device_tokens path the customer app already exercises
   settlement detail, Wallet screen; en+dv strings aligned with the web
   panel's dv.json; 6 new goldens EYE-checked vs both refs; all suites
   green: merchant 56, core 72, ui 3, customer 35.)
-- **MR4 Notifications — NEXT** (the server reminder work can start now;
-  only the app push wiring waits on the Firebase registration blocker)
-- MR5 More estate — queued
+- MR4 Notifications — DONE 2026-08-17 code-complete (server: 5 template
+  keys, `manfaa:remind-settlements` daily 09:00 business tz, ladder rungs
+  now push, 11 reminder tests; app: push registrar clone, tap routing,
+  foreground banner, debug-APK build proven against the placeholder
+  Firebase config; suites green: api 1315, merchant 62, core 72,
+  customer 35. LIVE-push remains dark until the console registration of
+  `mv.manfaa.merchant` — a config-file swap, zero code changes.)
+- **MR5 More estate — NEXT**
 - MR6 Release — queued
 - MR7 Tablet optimisation (merchant only) — queued after MR6 (owner-agreed
   2026-08-17; phone-first until then)
@@ -245,13 +258,29 @@ harness goldens reviewed by EYE (light+dark, en+dv where layout-affecting)
 - [x] Wallet: balance + movements.
 
 ### MR4 — Notifications (the owner requirement)
-- [ ] Server reminder work (section above) + tests incl. the day-9 fire,
-      dedupe, and ladder-to-push.
-- [ ] App push wiring + tap routing + foreground banner.
-- [ ] BLOCKER to clear first: register **`mv.manfaa.merchant`** Android app
-      in Firebase project `manfaa-6e1b4` → new google-services.json +
-      firebase_options.dart (server FCM credentials already cover it).
-      Owner action in Firebase console, or say the word and I'll walk it.
+- [x] Server reminder work (section above) + tests incl. the day-9 fire,
+      dedupe, and ladder-to-push. (Shipped 2026-08-17: five template keys
+      seeded active English-only; SettlementReminderTest covers the day-9
+      fire, silence when no discount is earnable, same-day dedupe,
+      config-derived thresholds, ladder-to-push double-run, permission
+      filtering, and template attribute caching.)
+- [x] App push wiring + tap routing + foreground banner. Shipped behind
+      well-formed PLACEHOLDER config (`android/app/google-services.json` +
+      `lib/firebase_options.dart`, both loudly marked): the build passes
+      the google-services plugin today; `Firebase.initializeApp` succeeds;
+      `getToken()` fails and is swallowed by the registrar's guards.
+      (2026-08-17; debug APK build verified against the placeholder.)
+- [ ] **The ONLY remaining step** (owner action, Firebase console):
+      register the Android app **`mv.manfaa.merchant`** in project
+      `manfaa-6e1b4` (server FCM service account already covers it), then:
+      1. download its real `google-services.json` over
+         `mobile/merchant/android/app/google-services.json`;
+      2. copy `api_key.current_key` → `apiKey` and `mobilesdk_app_id` →
+         `appId` in `mobile/merchant/lib/firebase_options.dart` (android
+         block; the project values already match) — or run
+         `flutterfire configure`;
+      3. rebuild. ZERO code changes — push lights up. iOS later (APNs .p8
+         still missing, inherited blocker).
 
 ### MR5 — More (management estate)
 - [ ] More screen per Merchant More.png (identity card + menu + logout).
@@ -310,6 +339,8 @@ is additive. Customer app stays phone-only (owner call).
 
 ## Standing blockers / owner asks
 - Firebase console: register `mv.manfaa.merchant` (Android; iOS later).
+  App side is fully coded behind placeholders — the swap procedure is in
+  the MR4 round notes above and in `lib/firebase_options.dart`'s header.
 - APNs .p8 still missing (iOS push silent until then) — inherited blocker.
 - FCM service-account key rotation — inherited blocker.
 - Forgot-password for merchant users: no backend; decide want/skip.

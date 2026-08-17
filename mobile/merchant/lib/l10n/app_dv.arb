@@ -623,5 +623,6 @@
   "movementSettlementCredit": "ސެޓްލްމަންޓަކުން ލިބުނު ކްރެޑިޓް",
   "movementOther": "އެޑްޖަސްޓްމަންޓް",
   "balanceAfterLabel": "ފަހުގެ ބެލެންސް: {amount}",
-  "presetAllLabel": "ހުރިހާ"
+  "presetAllLabel": "ހުރިހާ",
+  "pushOpen": "ބައްލަވާ"
 }

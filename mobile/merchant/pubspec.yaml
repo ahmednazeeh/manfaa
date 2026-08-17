@@ -32,6 +32,11 @@ dependencies:
     path: ../packages/manfaa_ui
   mobile_scanner: ^7.4.0
   connectivity_plus: ^7.3.1
+  # Push (MR4): same versions the customer app pins. Runs against PLACEHOLDER
+  # Firebase config until mv.manfaa.merchant is registered in the console —
+  # see lib/firebase_options.dart for the swap procedure.
+  firebase_core: ^4.13.0
+  firebase_messaging: ^16.5.0
 
 dev_dependencies:
   flutter_test:

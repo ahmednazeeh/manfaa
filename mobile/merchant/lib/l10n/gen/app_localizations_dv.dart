@@ -1629,4 +1629,7 @@ class AppLocalizationsDv extends AppLocalizations {
 
   @override
   String get presetAllLabel => 'ހުރިހާ';
+
+  @override
+  String get pushOpen => 'ބައްލަވާ';
 }

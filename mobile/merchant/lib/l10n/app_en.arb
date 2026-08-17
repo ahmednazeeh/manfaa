@@ -776,5 +776,6 @@
       }
     }
   },
-  "presetAllLabel": "All"
+  "presetAllLabel": "All",
+  "pushOpen": "View"
 }

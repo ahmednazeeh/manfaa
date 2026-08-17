@@ -2893,6 +2893,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'All'**
   String get presetAllLabel;
+
+  /// No description provided for @pushOpen.
+  ///
+  /// In en, this message translates to:
+  /// **'View'**
+  String get pushOpen;
 }
 
 class _AppLocalizationsDelegate

@@ -3,8 +3,12 @@ import java.io.FileInputStream
 
 plugins {
     id("com.android.application")
-    // NO google-services yet: Firebase registration for mv.manfaa.merchant
-    // is the MR4 blocker; the app must build and run without it until then.
+    // Parses android/app/google-services.json — a PLACEHOLDER until the
+    // owner registers mv.manfaa.merchant in Firebase console project
+    // manfaa-6e1b4 (see lib/firebase_options.dart for the swap procedure).
+    // The placeholder is well-formed, so the build works today and push
+    // lights up when the real file replaces it — zero code changes.
+    id("com.google.gms.google-services")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }

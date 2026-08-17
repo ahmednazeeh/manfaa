@@ -5,6 +5,10 @@ declare(strict_types=1);
 namespace App\Domain\Standing;
 
 use App\Domain\Cashback\TransactionState;
+use App\Domain\MerchantAccess\Permission;
+use App\Domain\Notifications\NotificationService;
+use App\Domain\Notifications\NotificationTemplateKey;
+use App\Models\Merchant;
 use App\Models\MerchantNotice;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
@@ -38,7 +42,10 @@ use Illuminate\Support\Facades\DB;
  */
 final readonly class EscalationLadder
 {
-    public function __construct(private NoticeRecorder $notices) {}
+    public function __construct(
+        private NoticeRecorder $notices,
+        private NotificationService $notifications,
+    ) {}
 
     /**
      * @return int the number of notices sent
@@ -88,13 +95,35 @@ final readonly class EscalationLadder
                 continue;
             }
 
+            $oldestDueAt = CarbonImmutable::parse($row->oldest_due_at)->utc();
+
             $this->notices->record((int) $row->merchant_id, $type, [
                 'days_since_clock_start' => $elapsedDays,
                 'oldest_clock_start_at' => $clockStart->toIso8601String(),
-                'oldest_due_at' => CarbonImmutable::parse($row->oldest_due_at)->utc()->toIso8601String(),
+                'oldest_due_at' => $oldestDueAt->toIso8601String(),
                 'open_transactions' => (int) $row->open_count,
                 'outstanding_laari' => (int) $row->outstanding_laari,
             ]);
+
+            // MR4: the rung reaches phones as well as the notice table. Same
+            // moment, same data — the outstanding total is the row's summed
+            // stored integers (§10) and the date is the recorded oldest
+            // due_at as a business-tz day. This sits BEHIND the alreadySent
+            // gate above, so the ladder's own dedupe is the push's dedupe: a
+            // second run the same day records nothing and pushes nothing.
+            $merchant = Merchant::query()->find((int) $row->merchant_id);
+
+            if ($merchant !== null) {
+                $this->notifications->sendToMerchantStaff(
+                    NotificationTemplateKey::from($type),
+                    $merchant,
+                    [
+                        'amount' => NotificationService::money((int) $row->outstanding_laari),
+                        'date' => $oldestDueAt->setTimezone($timezone)->format('j M Y'),
+                    ],
+                    Permission::SettlementsView,
+                );
+            }
 
             $sent++;
         }
