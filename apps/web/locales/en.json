@@ -409,7 +409,9 @@
     "merchantsProof1": "Rakuten and Honey built some of the largest shopping communities on earth on exactly this model — rewarding a real purchase works better than paying for attention.",
     "merchantsProof2": "It is also why brands like Dell, Microsoft and Samsung run cashback and affiliate programmes of their own: a percentage of a confirmed sale is marketing spend that has already paid for itself.",
     "merchantsDisclaimer": "Named for comparison only — Manfaa is independent and not affiliated with any of these companies.",
-    "merchantsCtaHint": "Free to list — your first customers are already here."
+    "merchantsCtaHint": "Free to list — your first customers are already here.",
+    "heroPhoneAlt": "The Manfaa app home screen showing available cashback, the Manfaa code and QR",
+    "heroToastLabel": "Cashback earned"
   },
   "payouts": {
     "title": "Payouts",

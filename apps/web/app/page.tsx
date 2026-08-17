@@ -32,7 +32,7 @@ import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { CashbackDemo } from '@/components/app/cashback-demo';
+import { HeroPhone } from '@/components/app/hero-phone';
 import {
   CategoryRail,
   CategoryRailSkeleton,
@@ -252,7 +252,7 @@ function Hero({ promoted }: { promoted: DiscoveryEntry | null }) {
           </p>
         </div>
 
-        <CashbackDemo />
+        <HeroPhone />
       </div>
 
       {/* The boosted store, when there is one, reads as a card under the
