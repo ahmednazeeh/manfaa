@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Merchant\SetupController;
+use App\Http\Controllers\Merchant\AccountClosureController;
 use App\Http\Controllers\Merchant\SignupController;
 use Illuminate\Support\Facades\Route;
 
@@ -53,4 +54,14 @@ Route::prefix('merchant')->middleware('auth:merchant')->group(function () {
 
     Route::post('settings/logo', [SetupController::class, 'storeLogo'])
         ->middleware(['merchant.can:branding.update', 'throttle:20,1']);
+});
+
+// Self-service store closure (store-readiness 2026-08-17): the public
+// merchant /account-deletion page. Phone possession (the store's contact
+// number) proven by OTP is the credential; a store owing money is refused
+// at confirm — settling stays open, closing waits.
+Route::prefix('merchant/account-closure')->group(function () {
+    Route::post('request-otp', [AccountClosureController::class, 'requestOtp'])->middleware('throttle:30,1');
+    Route::post('verify', [AccountClosureController::class, 'verify'])->middleware('throttle:10,1');
+    Route::post('confirm', [AccountClosureController::class, 'confirm'])->middleware('throttle:10,1');
 });

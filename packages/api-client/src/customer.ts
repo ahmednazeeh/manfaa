@@ -175,6 +175,8 @@ export const VerifyOtpResponseSchema = dataWrapped(
     /** Short-lived proof of phone possession; spend it on register. */
     signup_token: z.string(),
     expires_in_minutes: z.number().int(),
+    /** Revealed only after OTP proof: this number already has an account. */
+    already_registered: z.boolean().optional(),
   }),
 );
 export type VerifyOtpResponse = z.infer<typeof VerifyOtpResponseSchema>;

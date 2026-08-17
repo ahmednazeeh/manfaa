@@ -32,7 +32,7 @@ class OtpAuthController extends Controller
      * The STORED shape. Callers may send seven local digits instead —
      * withNormalisedPhone() folds those in before this ever runs.
      */
-    private const string PHONE_RULE = 'regex:/^\+960[79]\d{6}$/';
+    public const string PHONE_RULE = 'regex:/^\+960[79]\d{6}$/';
 
     public function __construct(private readonly OtpService $otp) {}
 
@@ -78,6 +78,15 @@ class OtpAuthController extends Controller
             'data' => [
                 'signup_token' => $token,
                 'expires_in_minutes' => OtpService::SIGNUP_TOKEN_TTL_MINUTES,
+                // Safe to reveal ONLY here: the caller has just proven they
+                // hold the phone. The signup UI uses it to stop an
+                // already-registered member at the code step ("sign in
+                // instead") rather than letting them fill the whole details
+                // form and be refused at the very end.
+                'already_registered' => \App\Models\Customer::query()
+                    ->where('phone', $validated['phone'])
+                    ->where('status', '!=', 'closed')
+                    ->exists(),
             ],
         ]);
     }

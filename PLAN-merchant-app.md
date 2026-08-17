@@ -173,9 +173,9 @@ via the polymorphic device_tokens path the customer app already exercises
   Firebase config; suites green: api 1315, merchant 62, core 72,
   customer 35. LIVE-push remains dark until the console registration of
   `mv.manfaa.merchant` — a config-file swap, zero code changes.)
-- **MR5 More estate — IN PROGRESS** (A-half shipped 2026-08-17: More
-  shell + Profile + Cashback Settings, per-round notes below; B-half —
-  Employees/Roles/Branches/Promotions — replaces the coming-soon routes)
+- **MR5 More estate — SHIPPED 2026-08-17** (A-half: More shell + Profile
+  + Cashback Settings; B-half same day: Employees/Roles/Branches/
+  Promotions replaced the coming-soon routes — per-round notes below)
 - MR6 Release — queued
 - WL merchant.manfaa.app landing — SHIPPED 2026-08-17 (landing + split
   auth panels + real-Dashboard mockup; also retired the METRONIC template
@@ -304,15 +304,38 @@ harness goldens reviewed by EYE (light+dark, en+dv where layout-affecting)
       changed — retired slug stays pickable; logo replace through the MR1
       setup endpoint with the 2MB/type pre-flight. manfaa_core grew
       MerchantProfile + profile GET/PATCH with wire tests.)
-- [ ] Manage Employees per Manage Employees.png (stat tiles, search, rows
+- [x] Manage Employees per Manage Employees.png (stat tiles, search, rows
       with role + status chips incl. Suspended; invite → one-time temp
       password reveal; role reassign + active toggle; last-owner guard).
-- [ ] Roles per Roles.png layout (role cards with counts; editor =
+      (2026-08-17, engineer B: reconciliation applied — stat tiles are
+      REAL counts (total + active; no invite state server-side, so no
+      "Pending invites"), row subtitle is the EMAIL. Invite sheet's role
+      picker enforces D5 client-side (mayAssignRole; actor ownership read
+      off the staff list by email — mobile /me carries no role); the
+      one-time temp password dialog is locked until acknowledged, with
+      copy. Edit sheet mirrors the guards as sentences (last active
+      owner, self-demote/deactivate) AND renders the server's refusal
+      sentence. Permissions-overview footer from real per-role counts.)
+- [x] Roles per Roles.png layout (role cards with counts; editor =
       checkbox grid from the SERVED catalogue, delegation rules: only
       what you hold, owner role frozen, in-use delete refusal).
-- [ ] Manage Branches per Branches.png layout (stat tiles, search, cards
+      (2026-08-17, engineer B: green ref restyled violet; owner card gets
+      the Full Access treatment, frozen — no edit/delete. Editor grid is
+      grouped from GET /merchant/permissions (D8 — server wording,
+      verbatim); un-held slugs draw disabled+locked with the hint, stored
+      slugs stay tickable (only ADDITIONS are a grant); name_dv is
+      tri-state on the wire (nameDvChanged). role_in_use / cap /
+      permission_not_held refusals render as the server's sentences.)
+- [x] Manage Branches per Branches.png layout (stat tiles, search, cards
       with name/address/pin/zone + active state; add/edit dialog with
       flutter_map pin picker; delete → 409 branch_referenced handling).
+      (2026-08-17, engineer B: reconciliation applied — no photos, hours,
+      phone or active flag (branches carry none); the stat strip counts
+      what is real: total / pinned / no pin. Numbered tinted circles,
+      kebab edit/delete per slug. Sheet reuses the setup step's
+      drag-under-a-fixed-pin picker; the pin is a PAIR — set or cleared
+      whole. Delete confirm, then 409 branch_referenced as the localized
+      sentence.)
 - [x] Cashback Settings per Cashback Settings.png (general rate with §7
       timing copy, per-category rules incl. excluded mode, min eligible
       sale, validation window; matches the web's merged screen).
@@ -328,8 +351,24 @@ harness goldens reviewed by EYE (light+dark, en+dv where layout-affecting)
       otherwise overlays their CTA). Goldens more_{light,dark},
       profile_light, cashback_settings{,_earning}_light EYE-checked vs the
       refs; suites green: merchant 75, core 86, ui 3, customer 35.)
-- [ ] Promotions (list, create draft with cost preview + tier-cliff
+- [x] Promotions (list, create draft with cost preview + tier-cliff
       warning, publish confirm — immutable once live, cancel draft only).
+      (2026-08-17, engineer B: no ref — house card idiom + the web page's
+      content. Draft/Live/Published/Ended/Cancelled chips off status +
+      is_live (the SERVER's answer, never re-derived); stale-draft null
+      fees render a dash line, publish left to the server's refusal.
+      Builder validates as integer bp (exact-string wire), picks the
+      window in Maldives wall time sent with explicit +05:00, laari
+      integers, branch scope behind branches.view. cost_preview arrives
+      at the ROOT beside data on create/publish and renders verbatim —
+      delta and tier-cliff warning included. Publish sits behind the
+      immutable-once-live confirm; cancel is draft-only. manfaa_core grew
+      staff/roles/catalogue/branches/promotions clients — 16 wire tests
+      (core 102). Merchant suite 86: 6 estate contract tests (temp-pw
+      reveal locked till acknowledged, delegation-disabled checkboxes,
+      last-owner lock + server-sentence render, branch 409 sentence,
+      publish confirm) + goldens employees_{light,dark}, roles_light,
+      branches_light, promotions_light EYE-checked vs the refs.)
 
 ### MR6 — Release
 - [ ] Branding from Merchant App Logo.png: launcher icons + splash
@@ -414,9 +453,15 @@ approval risk is compliance details:
       Ltd") and stand up the support@manfaa.app mailbox; lawyer review
       recommended before store submission.)
 - [ ] IN-APP account deletion (customer app; Apple 5.1.1(v) + Play
-      require it) — server-side anonymise-not-delete design per the
-      ledger law (transactions survive, identity unlinked), plus the
-      one-tap flow in Profile.
+      require it) — SERVER + WEB SHIPPED 2026-08-17: phone+OTP
+      self-service flows live on both /account-deletion pages
+      (customer: anonymise-not-delete, balance warning, tombstoned
+      phone frees the number; merchant: settle-first gate, staff doors
+      shut). Remaining: the one-tap flow in the customer app's Profile
+      riding on POST /api/customer/account-deletion/*, and the signup
+      screens (web done, apps pending) using verify-otp's new
+      `already_registered` flag to stop existing numbers at the code
+      step.
 - [ ] OTP review bypass: a designated test number whose SMS code is
       static server-side (reviewers cannot receive Maldivian SMS) — both
       apps, gated so it never works for real numbers.

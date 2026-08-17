@@ -5,6 +5,7 @@ use App\Http\Controllers\Customer\AvatarController;
 use App\Http\Controllers\Customer\BalanceController;
 use App\Http\Controllers\Customer\ClaimsController;
 use App\Http\Controllers\Customer\DiscoveryController;
+use App\Http\Controllers\Customer\AccountDeletionController;
 use App\Http\Controllers\Customer\OtpAuthController;
 use App\Http\Controllers\Customer\PayoutAccountController;
 use App\Http\Controllers\Customer\PayoutsController;
@@ -25,6 +26,16 @@ Route::prefix('customer/auth')->group(function () {
     Route::post('request-otp', [OtpAuthController::class, 'requestOtp'])->middleware('throttle:30,1');
     Route::post('verify-otp', [OtpAuthController::class, 'verifyOtp'])->middleware('throttle:10,1');
     Route::post('register', [OtpAuthController::class, 'register'])->middleware('throttle:10,1');
+});
+
+// Self-service account deletion (store-readiness 2026-08-17): public on
+// purpose — the person deleting may have lost the app; possession of the
+// registered phone, proven by OTP, is the credential. Same limiter budget
+// as sign-up inside the controller; these throttles are the backstop.
+Route::prefix('customer/account-deletion')->group(function () {
+    Route::post('request-otp', [AccountDeletionController::class, 'requestOtp'])->middleware('throttle:30,1');
+    Route::post('verify', [AccountDeletionController::class, 'verify'])->middleware('throttle:10,1');
+    Route::post('confirm', [AccountDeletionController::class, 'confirm'])->middleware('throttle:10,1');
 });
 
 Route::prefix('customer')->middleware('auth:customer')->group(function () {

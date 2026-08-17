@@ -1,38 +1,47 @@
 import { Metadata } from 'next';
+import { ClosureFlow } from '@/components/marketing/closure-flow';
 import { LegalPage, LegalSection } from '@/components/marketing/legal-page';
 
 export const metadata: Metadata = {
   title: 'Account Closure — Manfaa Merchant',
-  description: 'How to close a store account or delete a staff account.',
+  description: 'Close a store with the registered contact number and an SMS code.',
 };
 
 export default function MerchantAccountDeletionPage() {
   return (
     <LegalPage title="Close a store or staff account" updated="17 August 2026">
-      <LegalSection heading="Closing your store's account">
-        <p>
-          Email <strong>support@manfaa.app</strong> from the store
-          owner&rsquo;s registered email with the subject &ldquo;Close my
-          store&rdquo;, naming the store. We confirm the request with the
-          owner before anything changes.
-        </p>
+      <ClosureFlow />
+
+      <LegalSection heading="How closing works">
         <ul>
           <li>
-            <strong>Settle first:</strong> outstanding cashback and fees must
-            be settled before closure completes. Your panel access stays open
-            for settling, receipts and records throughout.
+            Closure is self-service: verify the store&rsquo;s registered
+            contact number with the SMS code above, and each store on that
+            number appears with its settlement position.
           </li>
           <li>
-            On closure the store leaves the Manfaa app and map, crediting
-            stops, and all staff accounts are deactivated. Closure is
-            completed within 30 days of the final settlement.
+            <strong>Settle first:</strong> a store still owing cashback or
+            fees cannot be closed — the panel stays open for settling,
+            receipts and records until the balance is zero, then the Close
+            button unlocks.
           </li>
           <li>
-            Transaction and settlement records are financial records and are
-            retained as required for auditing and by law; staff personal
-            details are deleted on request after closure.
+            On closure the store leaves the Manfaa app and map immediately,
+            crediting stops, and every staff account is deactivated and
+            signed out.
           </li>
         </ul>
+      </LegalSection>
+
+      <LegalSection heading="What is kept">
+        <p>
+          Transaction and settlement records are financial records and are
+          retained for as long as the law requires — they are the shared
+          ledger between the store, its customers&rsquo; cashback and
+          Manfaa. Business details no longer appear anywhere public. Staff
+          names and emails are anonymised on request after closure: write to{' '}
+          <strong>support@manfaa.app</strong>.
+        </p>
       </LegalSection>
 
       <LegalSection heading="Deleting a single staff account">
@@ -41,7 +50,7 @@ export default function MerchantAccountDeletionPage() {
           Manage Employees — deactivation is immediate. A former staff
           member can also ask us directly at{' '}
           <strong>support@manfaa.app</strong> to have their personal details
-          (name and email) deleted from a deactivated account; the actions
+          (name and email) anonymised on a deactivated account; the actions
           they took while employed remain in the store&rsquo;s records,
           attributed to a deactivated account.
         </p>

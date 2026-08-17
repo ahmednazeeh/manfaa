@@ -104,6 +104,13 @@ export default function SignupPage() {
       { phone, code },
       {
         onSuccess: (response) => {
+          // The number already has an account (revealed only after OTP
+          // proof): stop here with "sign in instead" rather than letting
+          // them fill the whole details form and be refused at the end.
+          if (response.data.already_registered === true) {
+            setErrorMessage(t('auth.phoneAlreadyRegistered'));
+            return;
+          }
           setSignupToken(response.data.signup_token);
           setStep('details');
         },
