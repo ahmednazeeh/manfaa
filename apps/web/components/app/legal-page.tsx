@@ -18,7 +18,7 @@ export function LegalPage({
   children: ReactNode;
 }) {
   return (
-    <div className="flex min-h-screen flex-col bg-background">
+    <div className="flex min-h-screen w-full flex-col bg-background">
       <PublicHeader />
       <main className="container grow py-10 lg:py-14">
         <article dir="ltr" lang="en" className="mx-auto w-full max-w-3xl">
