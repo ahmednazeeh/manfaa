@@ -178,8 +178,11 @@ via the polymorphic device_tokens path the customer app already exercises
   Promotions replaced the coming-soon routes — per-round notes below)
 - MR6 Release — DONE 2026-08-17 (Android; iOS waits on the APNs/.p8 +
   Apple developer account track)
-- **MR7 Tablet optimisation — NEXT** (or the store-readiness items /
-  Firebase registration, owner's pick)
+- **MR7 Tablet optimisation — IN FLIGHT** (workflow running 2026-08-17)
+- MR8 Owner on-device feedback round — queued next (§MR8: promo timezone
+  bug, branch map grey screen, dashboard staleness, split-editor rework,
+  hidden eligible amount under split, tab reset, staff password
+  reset/edit, in-app legal + close-store, admin approval flow design)
 - WL merchant.manfaa.app landing — SHIPPED 2026-08-17 (landing + split
   auth panels + real-Dashboard mockup; also retired the METRONIC template
   logo the auth cards had been shipping). Only the APK card remains,
@@ -398,23 +401,45 @@ Deferred by design until MR0–MR6 land. Phone-first per the refs; the
 column-of-cards layouts carry no fixed-width assumptions, so this round
 is additive. Customer app stays phone-only (owner call).
 
-- [ ] Width-adaptive shell: content rail capped ~640dp on phones-in-
+- [x] Width-adaptive shell: content rail capped ~640dp on phones-in-
       landscape/small tablets; ≥840dp gets a NavigationRail (left) instead
       of the bottom bar — same 5 destinations, same permission gating.
+      (2026-08-17: lib/widgets/adaptive.dart — kMediumMinWidth 600 /
+      kExpandedMinWidth 840, ContentRail width-cap wrapper +
+      bottomClearanceOf() so navClearance never leaves dead space under
+      the rail shell; house-styled _NavRail in shell.dart, same kTabs
+      items list. Adopted by Dashboard/Credit/More; estates screens adopt
+      the same wrapper in their half.)
 - [ ] Two-pane estates where a list drives a detail: Transactions
       (list | amend/detail), Settlements (list | detail/receipts),
       More → Employees/Roles/Branches (list | editor).
-- [ ] Till on tablet: Credit screen as two columns ≥840dp — identify +
+- [x] Till on tablet: Credit screen as two columns ≥840dp — identify +
       amounts left, split editor + cost preview + CTA right (the counter
-      use-case this round exists for).
-- [ ] Dashboard: aging buckets 2×2 → 4-across; cards flow into two
-      columns.
-- [ ] Unlock landscape on tablets only (keep phones portrait if that is
-      what the manifest does today — check, don't assume).
-- [ ] Golden harness gains a tablet surface (1280×800 or similar) for the
+      use-case this round exists for). (2026-08-17. Phone column
+      untouched; result card keeps the 640 rail on the wide canvas.)
+- [x] Dashboard: aging buckets 2×2 → 4-across; cards flow into two
+      columns. (2026-08-17: hero + deadline banner full-width above;
+      left = payable breakdown + credit CTA, right = wallet + Today.)
+- [x] Unlock landscape on tablets only (keep phones portrait if that is
+      what the manifest does today — check, don't assume). (2026-08-17:
+      CHECKED — nothing is locked anywhere: no setPreferredOrientations,
+      no android:screenOrientation, iOS plist allows portrait+landscape
+      on both idioms. Landscape already works on every device, so per the
+      round's own rule nothing was changed.)
+- [x] Golden harness gains a tablet surface (1280×800 or similar) for the
       key screens; eye-check vs taste, no refs exist for tablet.
-- [ ] Text-scale + keyboard/mouse sanity pass (tab focus on the code
-      boxes, scanner-gun Enter submits the code field).
+      (2026-08-17: tabletShot() 1280×800 @2x → tablet_dashboard_light /
+      tablet_credit_light / tablet_more_light, eye-checked; estates
+      screens add their own tablet shots in their half. Every
+      pre-existing phone golden verified byte-identical.)
+- [x] Text-scale + keyboard/mouse sanity pass (tab focus on the code
+      boxes, scanner-gun Enter submits the code field). (2026-08-17:
+      CodeBoxes' real TextField takes hardware digits + Enter — Enter on
+      a verified code walks focus to the invoice field, retries a failed
+      lookup, stays quiet under six digits; Enter on invoice/amount
+      fields submits only when the form is complete (same _submittable
+      gate as the CTA). Widget-tested in credit_test.dart, plus a 1.3
+      text-scale no-overflow pass on the till.)
 
 ### WL — merchant.manfaa.app landing (web side-quest; owner-approved 2026-08-17)
 
@@ -448,6 +473,73 @@ touches only apps/merchant.
       grey; that look retires.
 - [x] After MR6 ships the APK: the landing links the download
       (2026-08-17).
+
+## MR8 — Owner on-device feedback round (reported 2026-08-17, after v1.0.0)
+
+The owner's first real pass over the shipped APK + web panel. Runs after
+MR7 lands. Items keep the owner's intent verbatim; each names where the
+fix lives.
+
+### Bugs
+
+- [ ] **Promotion publish timezone bug** (server + both clients): owner
+      picked the 18th, refusal says the 17th is in the past — the window
+      validation compares in the wrong timezone. Fix: evaluate
+      starts_at/ends_at in the business timezone (Indian/Maldives);
+      ALLOW a start up to 24 hours in the past (owner decision) so a
+      same-day promo publishes; and format the date in refusal messages
+      as a human local date, never a raw shifted timestamp. Audit what
+      the web panel sends (naive vs +05:00) — the app already sends
+      explicit +05:00.
+- [ ] **Branch map grey screen** (app branches add/edit + check web):
+      the pin-picker map fails to load tiles when creating a branch.
+      App uses flutter_map/OSM — check tile requests on-device (OSM
+      blocks default user agents: set userAgentPackageName; also check
+      release-APK cleartext/network config). Web setup map is Google
+      (NEXT_PUBLIC_GOOGLE_MAPS_API_KEY) — verify key referrer
+      restrictions cover merchant.manfaa.app.
+- [ ] **Dashboard staleness after crediting** (app): after a credit —
+      especially a backdated one that is immediately payable — returning
+      Home still shows the old outstanding/due figures. Invalidate the
+      dashboard providers (outstanding, settle-all preview, home) on
+      every successful credit submit, and refresh on tab re-entry.
+- [ ] **Split-by-category: eligible amount must not contradict lines**
+      (app, web parity): when the split is ON, hide the eligible-amount
+      field and derive it from the lines sum in the background — the
+      owner hit "doesn't add up" from the visible field drifting.
+
+### UX
+
+- [ ] **Split editor add-category rework** (app credit screen): the
+      add-category popup is not friendly. Replace with inline add-row:
+      each row = searchable category dropdown + amount field; "Add row"
+      appends; delete per row. Keep the sum check + Everything-else
+      bucket semantics.
+- [ ] **Tab switch resets the left tab** (app): navigating to another
+      tab resets the tab being left to its root/fresh state, so
+      returning never lands mid-flow.
+
+### Features
+
+- [ ] **Employee management completeness** (server + web + app): add
+      staff PASSWORD RESET (owner/manager-triggered, one-time temp
+      password reveal like invite) and EDIT of staff details (name; and
+      email if server allows) — currently only role + active toggle
+      exist everywhere.
+- [ ] **Merchant app legal + closure estate** (store-readiness): More
+      gains Privacy Policy and Terms of Service entries (the
+      merchant.manfaa.app/{privacy,terms} documents) and a
+      close-store/delete-account entry riding the shipped
+      /api/merchant/account-closure flow (in-app, phone+OTP, settle-first
+      gate — same rules as the web page).
+- [ ] **Admin approval flow for store edits + new branches** (owner
+      decision — needs a design pass first): public-facing store changes
+      (profile edits, new branches) should not go live silently; they
+      queue for admin approval like initial onboarding. Design the
+      pending-changes model (what is held: public fields + branches;
+      what stays instant: operational settings), the admin review queue
+      UI, and the merchant-side "pending approval" states across web and
+      app. Server + admin panel + both merchant surfaces.
 
 ## Store readiness (App Store / Play — from the 2026-08-17 approval review)
 
