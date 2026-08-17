@@ -175,6 +175,8 @@ via the polymorphic device_tokens path the customer app already exercises
   `mv.manfaa.merchant` — a config-file swap, zero code changes.)
 - **MR5 More estate — NEXT**
 - MR6 Release — queued
+- WL merchant.manfaa.app landing (web side-quest, §WL below) — queued;
+  can run beside any round (apps/merchant only); APK card follows MR6
 - MR7 Tablet optimisation (merchant only) — queued after MR6 (owner-agreed
   2026-08-17; phone-first until then)
 
@@ -336,6 +338,30 @@ is additive. Customer app stays phone-only (owner call).
       key screens; eye-check vs taste, no refs exist for tablet.
 - [ ] Text-scale + keyboard/mouse sanity pass (tab focus on the code
       boxes, scanner-gun Enter submits the code field).
+
+### WL — merchant.manfaa.app landing (web side-quest; owner-approved 2026-08-17)
+
+A lean front door, not a marketing site. Today `/` redirects signed-out
+visitors to a bare login wall — yet the subdomain is the address that
+gets said aloud and printed. The main site keeps the SEO-weighted pitch
+(manfaa.app's business section already CTAs to /signup); this page just
+converts whoever arrives directly. Can run beside any MR round — it
+touches only apps/merchant.
+
+- [ ] Root `/`: signed-in → dashboard exactly as today; signed-out →
+      landing instead of the login bounce.
+- [ ] Landing content (one page, violet system, en+dv): concise pitch —
+      customers discover you on the app and map; you set your own
+      cashback rate; simple settlement with the 5% prompt-payment
+      discount — prominent **Register your store** → existing /signup
+      wizard, **Log in** beside it.
+- [ ] Do NOT duplicate manfaa.app's marketing content; keep it a lean
+      converter.
+- [ ] Nice-to-have: render the merchant app's real Dashboard via the
+      screenshot-harness pattern (marketing fixture) as the landing's
+      phone mockup, like the manfaa.app hero.
+- [ ] After MR6 ships the APK: add the app download card
+      (manfaa-merchant.apk slot + Cloudflare purge rule applies).
 
 ## Standing blockers / owner asks
 - Firebase console: register `mv.manfaa.merchant` (Android; iOS later).
