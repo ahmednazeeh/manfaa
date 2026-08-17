@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show debugDisableShadows;
 import 'dart:typed_data';
 
 import 'package:flutter/services.dart' show FontLoader, rootBundle;
@@ -68,6 +69,10 @@ void main() {
   setUpAll(_loadFonts);
 
   Future<void> shot(WidgetTester tester, String name, Brightness b) async {
+    // Golden runs disable real shadows and draw solid grey boxes instead —
+    // the exact halo the owner flagged on the landing hero. Marketing shots
+    // must look like the device, so real soft shadows are restored here.
+    debugDisableShadows = false;
     await tester.binding.setSurfaceSize(const Size(390, 844));
     tester.view.devicePixelRatio = 3.0;
     tester.view.physicalSize = const Size(390 * 3, 844 * 3);
@@ -111,6 +116,10 @@ void main() {
       find.byType(ManfaaApp),
       matchesGoldenFile('shots/$name.png'),
     );
+
+    // Restored INSIDE the body: the framework asserts painting debug vars
+    // before tearDowns run.
+    debugDisableShadows = true;
   }
 
   testWidgets('marketing home light',

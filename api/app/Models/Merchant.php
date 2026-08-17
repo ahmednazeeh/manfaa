@@ -18,6 +18,38 @@ class Merchant extends Model
     protected $guarded = [];
 
     /**
+     * The support phone is always MATERIALISED (owner decision 2026-08-17):
+     * "same as the contact number" saves the contact number itself, and the
+     * edit UIs derive the tick by comparing the two fields. The previous
+     * convention — NULL means "same", read models fall back at display time
+     * — left the customer app showing no number at all, because a NULL
+     * survives every payload that forgets to fall back.
+     *
+     * Two rules, on every save regardless of which controller wrote:
+     *  - a blank support phone copies the contact phone;
+     *  - a support phone that matched the contact phone FOLLOWS it when the
+     *    contact changes (unless this save sets support explicitly) — so
+     *    the stored copy cannot go stale, which was the argument for the
+     *    NULL convention in the first place.
+     */
+    protected static function booted(): void
+    {
+        static::saving(function (Merchant $merchant): void {
+            if (blank($merchant->contact_phone)) {
+                return;
+            }
+
+            $wasSame = blank($merchant->getOriginal('support_phone'))
+                || $merchant->getOriginal('support_phone') === $merchant->getOriginal('contact_phone');
+
+            if (blank($merchant->support_phone)
+                || ($wasSame && $merchant->isDirty('contact_phone') && ! $merchant->isDirty('support_phone'))) {
+                $merchant->support_phone = $merchant->contact_phone;
+            }
+        });
+    }
+
+    /**
      * @return array<string, string>
      */
     protected function casts(): array

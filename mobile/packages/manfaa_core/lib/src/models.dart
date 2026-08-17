@@ -537,7 +537,10 @@ class StorePage {
           for (final item in (json['product_categories'] as List? ?? const []))
             (item as Map).cast<String, dynamic>(),
         ],
-        contactPhone: json['contact_phone'] as String?,
+        // The API serves the number under both keys; older payloads only
+        // carried support_phone, so fall back rather than show no phone.
+        contactPhone:
+            (json['contact_phone'] ?? json['support_phone']) as String?,
         websiteUrl: json['website_url'] as String?,
       );
 

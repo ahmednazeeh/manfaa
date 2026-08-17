@@ -286,7 +286,7 @@ it('serves the full public store page for an active merchant', function () {
 
     expect(array_keys($data))->toBe([
         'name', 'name_dv', 'slug', 'category', 'logo_url', 'channel', 'featured',
-        'cashback_rate_percent', 'standing_cashback_rate_percent', 'promotion', 'cashback_basis', 'support_phone', 'website_url', 'category_rates', 'branches', 'joined',
+        'cashback_rate_percent', 'standing_cashback_rate_percent', 'promotion', 'cashback_basis', 'contact_phone', 'support_phone', 'website_url', 'category_rates', 'branches', 'joined',
     ]);
 
     // No product categories defined — the rates table is an empty list
@@ -511,7 +511,10 @@ it('publishes the store\'s support number and website, normalising a bare domain
         ->assertOk()
         ->json('data');
 
+    // Both keys, same number: the web store page reads support_phone, the
+    // customer app's StorePage model reads contact_phone.
     expect($data['support_phone'])->toBe('+9607779999')
+        ->and($data['contact_phone'])->toBe('+9607779999')
         ->and($data['website_url'])->toBe('https://teaplus.mv');
 });
 

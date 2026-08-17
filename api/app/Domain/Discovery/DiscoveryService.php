@@ -805,10 +805,13 @@ final class DiscoveryService
             // The merchant's own eligibility wording, verbatim (§11: shown to
             // customers, never used in computation). Null when unset.
             'cashback_basis' => $merchant->eligibility_basis,
-            // How a shopper reaches the store. The support number falls back
-            // to the contact number so the storefront always has one to show
-            // — a store that never set a separate line is not a store with
-            // no phone.
+            // How a shopper reaches the store — served under BOTH keys,
+            // because the web store page reads support_phone while the
+            // customer app's StorePage model reads contact_phone (shipped
+            // APKs included). The ?? fallback stays as a belt for any row
+            // written before support_phone became always-materialised (see
+            // Merchant::booted()).
+            'contact_phone' => $merchant->support_phone ?? $merchant->contact_phone,
             'support_phone' => $merchant->support_phone ?? $merchant->contact_phone,
             'website_url' => self::normaliseUrl($merchant->website_url),
             // "Everything else" earns the standing rate above; excluded

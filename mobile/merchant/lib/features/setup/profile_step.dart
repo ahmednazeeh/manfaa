@@ -34,9 +34,12 @@ class _ProfileStepState extends ConsumerState<ProfileStep> {
   late final _website =
       TextEditingController(text: widget.state.values.websiteUrl ?? '');
 
-  /// Ticked when the store has no distinct support line — the state a fresh
-  /// signup starts in.
-  late bool _supportSame = (widget.state.values.supportPhone ?? '').isEmpty;
+  /// Derived by COMPARISON: "same as contact" is stored as an actual copy
+  /// of the contact number (the server materialises it), so the tick means
+  /// the two fields hold the same number — including the fresh-signup state
+  /// where both are still empty.
+  late bool _supportSame = (widget.state.values.supportPhone ?? '').isEmpty ||
+      widget.state.values.supportPhone == widget.state.values.contactPhone;
 
   var _busy = false;
   var _categoryError = false;
@@ -69,7 +72,12 @@ class _ProfileStepState extends ConsumerState<ProfileStep> {
             channel: _channel,
             contactEmail: _clean(_contactEmail),
             contactPhone: _clean(_contactPhone),
-            supportPhone: _supportSame ? null : _clean(_supportPhone),
+            // Same-as-contact sends the contact number itself — the support
+            // field is always materialised server-side so the storefront
+            // always has a real number to show.
+            supportPhone: _supportSame
+                ? _clean(_contactPhone)
+                : (_clean(_supportPhone) ?? _clean(_contactPhone)),
             websiteUrl: _clean(_website),
           );
       if (mounted) widget.onSaved(fresh);

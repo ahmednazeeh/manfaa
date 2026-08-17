@@ -92,8 +92,12 @@ function ProfileForm({
   const storeUrl = `${
     process.env.NEXT_PUBLIC_STOREFRONT_URL ?? 'https://manfaa.app'
   }/store/${profile.slug}`;
+  // Derived by COMPARISON: "same as contact" is stored as an actual copy of
+  // the contact number (the server materialises it), so the tick means the
+  // two fields hold the same number.
   const [supportSameAsContact, setSupportSameAsContact] = useState(
-    (profile.support_phone ?? '') === '',
+    (profile.support_phone ?? '') === '' ||
+      profile.support_phone === profile.contact_phone,
   );
   const [websiteUrl, setWebsiteUrl] = useState(profile.website_url ?? '');
   const [name, setName] = useState(profile.name);
@@ -108,7 +112,10 @@ function ProfileForm({
     setContactEmail(profile.contact_email ?? '');
     setContactPhone(profile.contact_phone ?? '');
     setSupportPhone(profile.support_phone ?? '');
-    setSupportSameAsContact((profile.support_phone ?? '') === '');
+    setSupportSameAsContact(
+      (profile.support_phone ?? '') === '' ||
+        profile.support_phone === profile.contact_phone,
+    );
     setWebsiteUrl(profile.website_url ?? '');
     setName(profile.name);
   }, [profile]);
@@ -157,9 +164,11 @@ function ProfileForm({
         contact_email: contactEmail.trim() === '' ? null : contactEmail.trim(),
         name: name.trim(),
         contact_phone: contactPhone.trim() === '' ? null : contactPhone.trim(),
-        // Null, not a copy of the contact number — see the wizard.
+        // The contact number itself, not null — the support field is always
+        // materialised so the storefront always has a real number; see the
+        // wizard and Merchant::booted().
         support_phone: supportSameAsContact || supportPhone.trim() === ''
-          ? null
+          ? (contactPhone.trim() === '' ? null : contactPhone.trim())
           : supportPhone.trim(),
         website_url: websiteUrl.trim() === '' ? null : websiteUrl.trim(),
       },

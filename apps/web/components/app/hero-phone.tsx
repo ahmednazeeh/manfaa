@@ -26,7 +26,7 @@ export function HeroPhone() {
 
       {/* The device — floats slowly. */}
       <div className="motion-safe:animate-hero-float">
-        <div className="relative w-[264px] overflow-hidden rounded-[2.4rem] border-[7px] border-zinc-900 bg-zinc-900 shadow-2xl shadow-zinc-900/25 dark:border-zinc-700 sm:w-[290px]">
+        <div className="relative w-[236px] overflow-hidden rounded-[2.2rem] border-[6px] border-zinc-900 bg-zinc-900 shadow-2xl shadow-zinc-900/25 dark:border-zinc-700 sm:w-[252px]">
           {/* eslint-disable-next-line @next/next/no-img-element -- static marketing asset, exact pixels wanted */}
           <img
             src="/app-home-light.png"

@@ -235,10 +235,13 @@ function ProfileStep({
   const [supportPhone, setSupportPhone] = useState(
     state.values.support_phone ?? '',
   );
-  // Ticked when the store has not set a distinct support line — which is the
-  // common case, and the state a fresh signup starts in.
+  // Derived by COMPARISON, not by absence: "same as contact" is stored as
+  // an actual copy of the contact number (the server materialises it), so
+  // the tick means "these two fields hold the same number" — including the
+  // fresh-signup state where both are still empty.
   const [supportSameAsContact, setSupportSameAsContact] = useState(
-    (state.values.support_phone ?? '') === '',
+    (state.values.support_phone ?? '') === '' ||
+      state.values.support_phone === state.values.contact_phone,
   );
   const [categoryError, setCategoryError] = useState(false);
 
@@ -253,11 +256,12 @@ function ProfileStep({
         channel,
         contact_email: contactEmail.trim() === '' ? null : contactEmail.trim(),
         contact_phone: contactPhone.trim() === '' ? null : contactPhone.trim(),
-        // Same-as-contact is stored as NULL rather than as a copy: the
-        // storefront already falls back to the contact number, and a copy
-        // would silently go stale the day the contact number changes.
+        // Same-as-contact sends the contact number itself — the support
+        // field is always materialised so the storefront always has a real
+        // number. Staleness is the server's problem: a stored copy follows
+        // the contact number when it changes (Merchant::booted()).
         support_phone: supportSameAsContact || supportPhone.trim() === ''
-          ? null
+          ? (contactPhone.trim() === '' ? null : contactPhone.trim())
           : supportPhone.trim(),
         website_url: websiteUrl.trim() === '' ? null : websiteUrl.trim(),
       },

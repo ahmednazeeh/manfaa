@@ -241,3 +241,27 @@ it('renames the store without moving its link', function () {
     expect($merchant->name)->toBe('Chai House')
         ->and($merchant->slug)->toBe($slugBefore);
 });
+
+it('materialises the support phone: blank copies contact, a matching copy follows a contact change', function () {
+    // "Same as the contact number" saves the contact number itself — the
+    // old NULL-means-same convention reached the customer app as a store
+    // with no phone at all (Merchant::booted()).
+    $this->patchJson('/api/merchant/profile', [
+        'contact_phone' => '+9607771234',
+        'support_phone' => null,
+    ])->assertOk();
+
+    expect($this->merchant->refresh()->support_phone)->toBe('+9607771234');
+
+    // The stored copy follows the contact number, so it cannot go stale…
+    $this->patchJson('/api/merchant/profile', ['contact_phone' => '+9609998877'])->assertOk();
+    expect($this->merchant->refresh()->support_phone)->toBe('+9609998877');
+
+    // …but an explicitly distinct support line is respected and stays put.
+    $this->patchJson('/api/merchant/profile', ['support_phone' => '+9603334455'])->assertOk();
+    $this->patchJson('/api/merchant/profile', ['contact_phone' => '+9601112233'])->assertOk();
+
+    $merchant = $this->merchant->refresh();
+    expect($merchant->contact_phone)->toBe('+9601112233')
+        ->and($merchant->support_phone)->toBe('+9603334455');
+});
