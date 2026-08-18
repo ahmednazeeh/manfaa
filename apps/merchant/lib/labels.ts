@@ -390,6 +390,7 @@ export const SETUP_MISSING_KEYS = [
   'category',
   'channel',
   'contact',
+  'description',
   'rate',
   'terms',
 ] as const;
@@ -399,6 +400,7 @@ const SETUP_MISSING_LABEL_KEYS: Record<SetupMissingKey, string> = {
   category: 'setup.missing.category',
   channel: 'setup.missing.channel',
   contact: 'setup.missing.contact',
+  description: 'setup.missing.description',
   rate: 'setup.missing.rate',
   terms: 'setup.missing.terms',
 };
@@ -457,6 +459,7 @@ type ProfileChangeField =
   | 'name_dv'
   | 'category'
   | 'channel'
+  | 'description'
   | 'eligibility_basis'
   | 'website_url'
   | 'logo';
@@ -468,6 +471,7 @@ const PROFILE_CHANGE_FIELD_KEYS: Record<ProfileChangeField, string> = {
   name_dv: 'pending.field.name_dv',
   category: 'pending.field.category',
   channel: 'pending.field.channel',
+  description: 'pending.field.description',
   eligibility_basis: 'pending.field.eligibility_basis',
   website_url: 'pending.field.website_url',
   logo: 'pending.field.logo',

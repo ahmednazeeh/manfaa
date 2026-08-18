@@ -62,6 +62,9 @@ class _ProfileEditScreenState extends ConsumerState<ProfileEditScreen> {
   late final _terms = TextEditingController(
     text: widget.profile.eligibilityBasis ?? '',
   );
+  late final _description = TextEditingController(
+    text: widget.profile.description ?? '',
+  );
 
   /// Derived by COMPARISON — the tick means the two fields hold the same
   /// number (or support is blank), exactly the web checkbox's rule.
@@ -75,6 +78,11 @@ class _ProfileEditScreenState extends ConsumerState<ProfileEditScreen> {
   String? _logoError;
   var _busy = false;
   String? _nameError;
+
+  /// Over the 180-word ceiling, or the server's own 422 sentence. Never
+  /// "required": the PATCH's rule is `nullable`, and inventing a client-side
+  /// requirement the server does not have is how the two drift.
+  String? _descriptionError;
 
   /// MR9 — the store's claims waiting on a reviewer. Seeded from the profile
   /// this screen was opened with, and replaced by the answer to a gated
@@ -91,6 +99,7 @@ class _ProfileEditScreenState extends ConsumerState<ProfileEditScreen> {
     _supportPhone.dispose();
     _website.dispose();
     _terms.dispose();
+    _description.dispose();
     super.dispose();
   }
 
@@ -190,6 +199,13 @@ class _ProfileEditScreenState extends ConsumerState<ProfileEditScreen> {
       return;
     }
 
+    // The 180-WORD ceiling, refused here rather than spent on a round trip
+    // the server will only answer with the same refusal.
+    if (countWords(_description.text) > kDescriptionMaxWords) {
+      setState(() => _descriptionError = l10n.descriptionTooLong);
+      return;
+    }
+
     setState(() => _busy = true);
     try {
       final contactPhone = _clean(_contactPhone);
@@ -200,6 +216,7 @@ class _ProfileEditScreenState extends ConsumerState<ProfileEditScreen> {
             nameDv: _clean(_nameDv),
             channel: _channel,
             eligibilityBasis: _clean(_terms),
+            description: _clean(_description),
             contactEmail: _clean(_contactEmail),
             contactPhone: contactPhone,
             // Ticked, the CONTACT number itself travels — the support field
@@ -226,7 +243,15 @@ class _ProfileEditScreenState extends ConsumerState<ProfileEditScreen> {
       );
       Navigator.of(context).pop();
     } catch (e) {
-      if (mounted) {
+      if (!mounted) return;
+      // A 422 on `description` belongs UNDER the field, where it can be
+      // acted on — not in a snackbar that slides away.
+      final field = e is MobileApiException
+          ? e.fieldMessages('description').firstOrNull
+          : null;
+      if (field != null) {
+        setState(() => _descriptionError = field);
+      } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
@@ -578,6 +603,18 @@ class _ProfileEditScreenState extends ConsumerState<ProfileEditScreen> {
                         hintText: 'teaplus.mv',
                         prefixIcon: Icon(Icons.language_rounded),
                       ),
+                    ),
+                    const SizedBox(height: Gap.xl),
+                    // The SAME control the wizard's profile step draws —
+                    // one ceiling, one counter, one place to change them.
+                    DescriptionField(
+                      controller: _description,
+                      errorText: _descriptionError,
+                      onChanged: (_) {
+                        if (_descriptionError != null) {
+                          setState(() => _descriptionError = null);
+                        }
+                      },
                     ),
                     const SizedBox(height: Gap.xl),
                     Text(l10n.termsTitle, style: theme.textTheme.labelLarge),

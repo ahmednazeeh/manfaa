@@ -107,6 +107,22 @@
   "channelInStoreHint": "ކަސްޓަމަރުން ފިހާރައަށް އައިސް ގަންނަނީ.",
   "channelOnlineHint": "އޯޑަރުތައް އަންނަނީ އޮންލައިންކޮށް.",
   "channelBothHint": "ކައުންޓަރާއި އޮންލައިން އޯޑަރު ދެގޮތް.",
+  "descriptionLabel": "ފިހާރައިގެ ތަޢާރަފު",
+  "descriptionPlaceholder": "މިސާލަކަށް: ތާޒާ ތަރުކާރީއާއި ގޭތެރެއަށް ބޭނުންވާ ސާމާނު ލިބޭ ފިހާރައެއް.",
+  "descriptionHint": "ގިނަވެގެން 180 ބަސް — ފިހާރައިގެ ޞަފްޙާއިން ކަސްޓަމަރުންނަށް މި ފެންނާނެ.",
+  "descriptionRequired": "ކުރިއަށް ދިއުމަށް ފިހާރައިގެ ތަޢާރަފެއް ލިޔުއްވާ.",
+  "descriptionTooLong": "180 ބަހަށްވުރެ ދިގު. ކުރުކުރައްވާ.",
+  "descriptionWordCount": "{count} / {max} ބަސް",
+  "@descriptionWordCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "max": {
+        "type": "int"
+      }
+    }
+  },
   "contactEmailLabel": "ގުޅޭނެ އީމެއިލް",
   "contactPhoneLabel": "ގުޅޭނެ ނަންބަރު",
   "supportPhoneLabel": "ކަސްޓަމަރ ސަޕޯޓް ނަންބަރު",
@@ -173,6 +189,7 @@
   "reviewName": "ފިހާރައިގެ ނަން",
   "reviewCategory": "ބާވަތް",
   "reviewChannel": "ވިއްކާ ގޮތް",
+  "reviewDescription": "ތަޢާރަފު",
   "reviewLocation": "ތަން",
   "reviewLogo": "ލޯގޯ",
   "reviewRate": "ކޭޝްބެކް ރޭޓް",
@@ -197,6 +214,7 @@
   "missingTitle": "ރިވިއުގެ ކުރިން ފުރިހަމަކުރަންޖެހޭ",
   "missingCategory": "ބާވަތެއް ނަންގަވާ",
   "missingChannel": "ވިއްކާ ގޮތް ނަންގަވާ",
+  "missingDescription": "ފިހާރައިގެ ތަޢާރަފު ލިޔުއްވާ",
   "missingContact": "ގުޅޭނެ ފޯނު ނަންބަރެއް ލިޔުއްވާ",
   "missingRate": "ކޭޝްބެކް ރޭޓް ޖައްސަވާ",
   "missingTerms": "ކޭޝްބެކް ލިބޭ ތަކެތި ބަޔާންކުރައްވާ",

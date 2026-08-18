@@ -8,10 +8,15 @@ import '../../app/providers.dart';
 import 'setup_common.dart';
 
 /// Step 1 — store profile: the curated category CHIPS (from the setup
-/// payload itself), the channel choice as selection rows, contacts, and the
-/// website. Saved server-side on Continue; "same as contact" stores the
-/// support phone as NULL rather than a copy (web parity — a copy would go
-/// silently stale the day the contact number changes).
+/// payload itself), the channel choice as selection rows, the store's own
+/// description, contacts, and the website. Saved server-side on Continue;
+/// "same as contact" stores the support phone as NULL rather than a copy
+/// (web parity — a copy would go silently stale the day the contact number
+/// changes).
+///
+/// The description is REQUIRED here — it is a submit requirement the server
+/// enforces (`missing[] = description`), and asking for it at the step that
+/// owns it beats refusing at the submit button five steps later.
 class ProfileStep extends ConsumerStatefulWidget {
   const ProfileStep({super.key, required this.state, required this.onSaved});
 
@@ -25,6 +30,8 @@ class ProfileStep extends ConsumerStatefulWidget {
 class _ProfileStepState extends ConsumerState<ProfileStep> {
   late String? _category = widget.state.values.category;
   late String _channel = widget.state.values.channel;
+  late final _description =
+      TextEditingController(text: widget.state.values.description ?? '');
   late final _contactEmail =
       TextEditingController(text: widget.state.values.contactEmail ?? '');
   late final _contactPhone =
@@ -44,8 +51,12 @@ class _ProfileStepState extends ConsumerState<ProfileStep> {
   var _busy = false;
   var _categoryError = false;
 
+  /// Empty, over the 180-word ceiling, or the server's own 422 sentence.
+  String? _descriptionError;
+
   @override
   void dispose() {
+    _description.dispose();
     _contactEmail.dispose();
     _contactPhone.dispose();
     _supportPhone.dispose();
@@ -59,9 +70,22 @@ class _ProfileStepState extends ConsumerState<ProfileStep> {
   }
 
   Future<void> _save() async {
+    final l10n = context.l10n;
     final category = _category;
-    if (category == null) {
-      setState(() => _categoryError = true);
+    final description = _description.text.trim();
+    final tooLong = countWords(description) > kDescriptionMaxWords;
+
+    // Both refusals are shown at once: fixing one and being told about the
+    // other on the next tap is the shape of form that gets abandoned.
+    if (category == null || description.isEmpty || tooLong) {
+      setState(() {
+        _categoryError = category == null;
+        _descriptionError = description.isEmpty
+            ? l10n.descriptionRequired
+            : tooLong
+                ? l10n.descriptionTooLong
+                : null;
+      });
       return;
     }
 
@@ -70,6 +94,7 @@ class _ProfileStepState extends ConsumerState<ProfileStep> {
       final fresh = await ref.read(apiProvider).saveSetupProfile(
             category: category,
             channel: _channel,
+            description: description,
             contactEmail: _clean(_contactEmail),
             contactPhone: _clean(_contactPhone),
             // Same-as-contact sends the contact number itself — the support
@@ -82,7 +107,16 @@ class _ProfileStepState extends ConsumerState<ProfileStep> {
           );
       if (mounted) widget.onSaved(fresh);
     } catch (e) {
-      if (mounted) {
+      if (!mounted) return;
+      // A 422 on `description` belongs UNDER the field — the count this
+      // build refuses at may not be the count the server refuses at, and a
+      // snackbar that vanishes is not a correction the owner can act on.
+      final field = e is MobileApiException
+          ? e.fieldMessages('description').firstOrNull
+          : null;
+      if (field != null) {
+        setState(() => _descriptionError = field);
+      } else {
         ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text(describeSetupError(context, e))));
       }
@@ -149,6 +183,16 @@ class _ProfileStepState extends ConsumerState<ProfileStep> {
           const SizedBox(height: Gap.sm),
         ],
         const SizedBox(height: Gap.md),
+        DescriptionField(
+          controller: _description,
+          errorText: _descriptionError,
+          onChanged: (_) {
+            if (_descriptionError != null) {
+              setState(() => _descriptionError = null);
+            }
+          },
+        ),
+        const SizedBox(height: Gap.lg),
         Text(l10n.contactEmailLabel, style: theme.textTheme.labelLarge),
         const SizedBox(height: Gap.sm),
         TextField(

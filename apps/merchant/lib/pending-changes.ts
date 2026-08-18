@@ -39,6 +39,7 @@ const FIELD_ORDER = [
   'logo',
   'category',
   'channel',
+  'description',
   'website_url',
   'eligibility_basis',
   'address',

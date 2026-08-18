@@ -15,7 +15,8 @@ import 'profile_edit_screen.dart';
 
 /// The store profile (MR5), drawn to Profile.png: the lavender header card
 /// (logo, names, Verified) and the row list — logo thumb, names, category,
-/// channel, contacts, website, and the what-earns-cashback text.
+/// channel, contacts, website, the store's own description, and the
+/// what-earns-cashback text.
 ///
 /// `eligibility_basis` is ONE free-text string on the wire, so the ref's
 /// chips render as the text itself — the look is followed, data is never
@@ -120,7 +121,6 @@ class ProfileScreen extends ConsumerWidget {
     MerchantSetupState? setup,
   ) {
     final l10n = context.l10n;
-    final theme = Theme.of(context);
     final dhivehi = Localizations.localeOf(context).languageCode == 'dv';
     final logoUrl = setup?.values.logoUrl;
     final canEdit = session.can('profile.edit');
@@ -233,49 +233,76 @@ class ProfileScreen extends ConsumerWidget {
             const _RowDivider(),
             _WebsiteRow(url: profile.websiteUrl),
             const _RowDivider(),
+            // The store's own words, up to 180 of them — a paragraph, so it
+            // gets the full width rather than a value column.
+            _TextBlock(
+              icon: Icons.notes_rounded,
+              label: l10n.descriptionLabel,
+              text: profile.description,
+            ),
+            const _RowDivider(),
             // ONE free-text string on the wire — rendered as the text.
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: Gap.md),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      const IconTile(
-                        Icons.percent_rounded,
-                        tint: ManfaaTint.violet,
-                        size: 36,
-                        iconSize: 18,
-                      ),
-                      const SizedBox(width: Gap.md),
-                      Expanded(
-                        child: Text(
-                          l10n.termsTitle,
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: Gap.sm),
-                  Text(
-                    (profile.eligibilityBasis ?? '').trim().isEmpty
-                        ? l10n.notSet
-                        : profile.eligibilityBasis!,
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: (profile.eligibilityBasis ?? '').trim().isEmpty
-                          ? theme.colorScheme.onSurfaceVariant
-                          : null,
-                    ),
-                  ),
-                ],
-              ),
+            _TextBlock(
+              icon: Icons.percent_rounded,
+              label: l10n.termsTitle,
+              text: profile.eligibilityBasis,
             ),
           ],
         ),
       ),
     ];
+  }
+}
+
+/// A full-width paragraph row: icon tile, label, and the text underneath —
+/// the shape a description or the terms text needs, where a value squeezed
+/// into the end column would ellipsize away the whole point.
+class _TextBlock extends StatelessWidget {
+  const _TextBlock({
+    required this.icon,
+    required this.label,
+    required this.text,
+  });
+
+  final IconData icon;
+  final String label;
+  final String? text;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    final theme = Theme.of(context);
+    final body = (text ?? '').trim();
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: Gap.md),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              IconTile(icon, tint: ManfaaTint.violet, size: 36, iconSize: 18),
+              const SizedBox(width: Gap.md),
+              Expanded(
+                child: Text(
+                  label,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: Gap.sm),
+          Text(
+            body.isEmpty ? l10n.notSet : body,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: body.isEmpty ? theme.colorScheme.onSurfaceVariant : null,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 

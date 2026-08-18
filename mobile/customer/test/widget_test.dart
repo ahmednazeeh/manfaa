@@ -381,25 +381,54 @@ class _FakeApi extends ManfaaApi {
         ],
       });
 
+  /// The keys here are the ones DiscoveryService::buildStore() really emits
+  /// (`cashback_basis`, `category_rates`) — the fixture is the wire, not the
+  /// merchant-side spelling of the same columns.
+  ///
+  /// Two stores on purpose: Ocean Café has written a description, Island
+  /// Mart is one of the stores that predate the field and sends the key not
+  /// at all — the case the page must render as absent, not as an empty box.
   @override
-  Future<StorePage> store(String slug) async => StorePage.fromJson(const {
-        'name': 'Ocean Café',
-        'name_dv': null,
-        'slug': 'ocean-cafe',
-        'category': 'dining',
-        'logo_url': null,
-        'channel': 'in_store',
-        'cashback_rate_percent': '8.00',
-        'standing_cashback_rate_percent': '5.00',
-        'promo_ends_at': null,
-        'eligibility_basis': 'Food and drinks; excludes tobacco.',
-        'branches': [
-          {'name': 'Malé main', 'address': 'Majeedhee Magu'},
-        ],
-        'product_categories': [],
-        'contact_phone': '+9603312345',
-        'website_url': null,
-      });
+  Future<StorePage> store(String slug) async => StorePage.fromJson(
+        slug == 'island-mart'
+            ? const {
+                'name': 'Island Mart',
+                'name_dv': null,
+                'slug': 'island-mart',
+                'category': 'grocery',
+                'logo_url': null,
+                'channel': 'both',
+                'cashback_rate_percent': '5.00',
+                'standing_cashback_rate_percent': '5.00',
+                'promotion': null,
+                'cashback_basis': null,
+                'branches': <Map<String, dynamic>>[],
+                'category_rates': <Map<String, dynamic>>[],
+                'contact_phone': null,
+                'website_url': null,
+              }
+            : const {
+                'name': 'Ocean Café',
+                'name_dv': null,
+                'slug': 'ocean-cafe',
+                'category': 'dining',
+                'logo_url': null,
+                'channel': 'in_store',
+                'cashback_rate_percent': '8.00',
+                'standing_cashback_rate_percent': '5.00',
+                'promo_ends_at': null,
+                'description':
+                    'A harbour-front café pulling espresso since 2011.',
+                'description_dv': null,
+                'cashback_basis': 'Food and drinks; excludes tobacco.',
+                'branches': [
+                  {'name': 'Malé main', 'address': 'Majeedhee Magu'},
+                ],
+                'category_rates': <Map<String, dynamic>>[],
+                'contact_phone': '+9603312345',
+                'website_url': null,
+              },
+      );
 
   @override
   Future<HomeData> home() async => HomeData.fromJson({
@@ -630,6 +659,43 @@ void discoverTests() {
     expect(find.text('What earns cashback'), findsOneWidget);
     expect(find.text('Food and drinks; excludes tobacco.'), findsOneWidget);
     expect(find.text('Malé main'), findsOneWidget);
+  });
+
+  testWidgets('the store page leads with the store\'s own description',
+      (tester) async {
+    await signInAndOpenDiscover(tester);
+
+    await tester.tap(find.text('Ocean Café').first);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+    await tester.pump(const Duration(milliseconds: 50));
+
+    expect(find.text('About'), findsOneWidget);
+    expect(
+      find.text('A harbour-front café pulling espresso since 2011.'),
+      findsOneWidget,
+    );
+
+    // It reads BEFORE the commercial detail — the store introducing itself
+    // sits above the terms card, not below the branches.
+    final about = tester.getTopLeft(find.text('About')).dy;
+    final terms = tester.getTopLeft(find.text('What earns cashback')).dy;
+    expect(about, lessThan(terms));
+  });
+
+  testWidgets('a store with no description gets no block at all',
+      (tester) async {
+    await signInAndOpenDiscover(tester);
+
+    await tester.tap(find.text('Island Mart').first);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+    await tester.pump(const Duration(milliseconds: 50));
+
+    // The store renders; the About card simply is not there. An empty card
+    // would read as a store with nothing to say about itself.
+    expect(find.text('Island Mart'), findsWidgets);
+    expect(find.text('About'), findsNothing);
   });
 }
 

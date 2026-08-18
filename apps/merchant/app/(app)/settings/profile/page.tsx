@@ -45,6 +45,10 @@ import {
   ToolbarPageTitle,
 } from '@/components/app-layout/toolbar';
 import { ErrorBlock, LoadingBlock } from '@/components/app/async-states';
+import {
+  DescriptionField,
+  descriptionTooLong,
+} from '@/components/app/description-field';
 import { PendingChangeAlert } from '@/components/app/pending-change';
 import { LogoUploader } from '@/components/setup/setup-wizard';
 
@@ -82,6 +86,7 @@ function ProfileForm({
   const [eligibilityBasis, setEligibilityBasis] = useState(
     profile.eligibility_basis ?? '',
   );
+  const [description, setDescription] = useState(profile.description ?? '');
   const [contactEmail, setContactEmail] = useState(profile.contact_email ?? '');
   const [contactPhone, setContactPhone] = useState(profile.contact_phone ?? '');
   const [supportPhone, setSupportPhone] = useState(profile.support_phone ?? '');
@@ -111,6 +116,7 @@ function ProfileForm({
     setCategory(profile.category ?? '');
     setChannel(profile.channel);
     setEligibilityBasis(profile.eligibility_basis ?? '');
+    setDescription(profile.description ?? '');
     setContactEmail(profile.contact_email ?? '');
     setContactPhone(profile.contact_phone ?? '');
     setSupportPhone(profile.support_phone ?? '');
@@ -193,6 +199,7 @@ function ProfileForm({
         channel,
         eligibility_basis:
           eligibilityBasis.trim() === '' ? null : eligibilityBasis,
+        description: description.trim() === '' ? null : description,
         contact_email: contactEmail.trim() === '' ? null : contactEmail.trim(),
         name: name.trim(),
         contact_phone: contactPhone.trim() === '' ? null : contactPhone.trim(),
@@ -457,6 +464,12 @@ function ProfileForm({
             </div>
           </div>
 
+          <DescriptionField
+            id="store-description"
+            value={description}
+            onChange={setDescription}
+          />
+
           <div className="flex flex-col gap-2.5">
             <Label htmlFor="eligibility-basis">{t('setup.termsLabel')}</Label>
             <Textarea
@@ -483,7 +496,12 @@ function ProfileForm({
           )}
           <Button
             className="ms-auto"
-            disabled={updateProfile.isPending}
+            // Past the word ceiling the API refuses the whole PATCH — every
+            // other field on this form included — so the button waits rather
+            // than trading a red counter for a red toast.
+            disabled={
+              updateProfile.isPending || descriptionTooLong(description)
+            }
             onClick={save}
           >
             {updateProfile.isPending && (

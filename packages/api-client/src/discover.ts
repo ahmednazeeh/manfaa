@@ -339,7 +339,8 @@ export type StoreBranch = z.infer<typeof StoreBranchSchema>;
  * gets NOW (the promo rate when one is live);
  * `standing_cashback_rate_percent` is the "usually" rate.
  * `cashback_basis` is the merchant's own eligibility wording, verbatim —
- * displayed to customers, never used in computation.
+ * displayed to customers, never used in computation. `description` is the
+ * store's own introduction, nullable and optional.
  */
 export const StoreDetailSchema = z.object({
   name: z.string(),
@@ -355,6 +356,19 @@ export const StoreDetailSchema = z.object({
   cashback_rate_percent: PercentSchema,
   standing_cashback_rate_percent: PercentSchema,
   promotion: StorePromotionSchema.nullable(),
+  /**
+   * The store's own words about itself (≤180 words), shown to shoppers
+   * before any commercial detail. Null — never "" — for every store that
+   * has not written one, including the stores that predate the field; the
+   * page renders no block at all rather than an empty one.
+   *
+   * `.catch(null)` for the same reason `joined` carries it: the key is
+   * newer than some deployed API builds, and a store page must not fail to
+   * parse over a paragraph it can simply omit.
+   */
+  description: z.string().nullable().catch(null),
+  /** Thaana description; null when the store wrote only the Latin one. */
+  description_dv: z.string().nullable().catch(null),
   cashback_basis: z.string().nullable(),
   /**
    * The number a SHOPPER rings. Falls back server-side to the store's

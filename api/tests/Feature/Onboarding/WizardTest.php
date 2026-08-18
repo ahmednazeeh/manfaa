@@ -293,3 +293,42 @@ it('requires the store to describe itself before review, and holds the descripti
 
     expect($owner->merchant->fresh()->description)->toContain('word');
 });
+
+it('takes Dhivehi as OPTIONAL beside the required English description', function () {
+    $owner = wizardOwner([
+        'category' => 'cafe',
+        'eligibility_basis' => 'Everything.',
+        'description' => null,
+    ]);
+    MerchantRate::factory()->for($owner->merchant)->create([
+        'rate_bp' => 200,
+        'effective_from' => now()->subMinute(),
+    ]);
+
+    // Dhivehi alone does not satisfy the requirement — English is the one
+    // every store must write (owner decision 2026-08-18).
+    $this->patchJson('/api/merchant/setup/profile', [
+        'description_dv' => 'ދިވެހި ތަފްޞީލު',
+    ])->assertOk();
+
+    $this->postJson('/api/merchant/setup/submit')
+        ->assertUnprocessable()
+        ->assertJsonPath('missing', ['description']);
+
+    // English fills the gap; the Dhivehi it was given stands beside it.
+    $this->patchJson('/api/merchant/setup/profile', [
+        'description' => 'A harbour cafe serving coffee and short eats.',
+    ])->assertOk();
+
+    $this->postJson('/api/merchant/setup/submit')->assertOk();
+
+    $merchant = $owner->merchant->fresh();
+    expect($merchant->description)->toContain('harbour cafe')
+        ->and($merchant->description_dv)->toBe('ދިވެހި ތަފްޞީލު');
+
+    // And the Dhivehi side honours the same 180-word ceiling.
+    $owner->merchant->update(['status' => 'draft']);
+    $this->patchJson('/api/merchant/setup/profile', [
+        'description_dv' => implode(' ', array_fill(0, 181, 'ބަސް')),
+    ])->assertUnprocessable();
+});

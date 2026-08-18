@@ -56,6 +56,7 @@ const _profileFixture = {
     'category_retired': false,
     'channel': 'in_store',
     'eligibility_basis': 'Everything except tobacco.',
+    'description': 'A neighbourhood grocery on Majeedhee Magu, open daily.',
     'contact_email': 'hello@tropicalmart.mv',
     'contact_phone': '+9607781234',
     'support_phone': '+9603334455',
@@ -120,6 +121,10 @@ void main() {
       expect(profile.categoryRetired, isFalse);
       expect(profile.channel, 'in_store');
       expect(profile.eligibilityBasis, 'Everything except tobacco.');
+      expect(
+        profile.description,
+        'A neighbourhood grocery on Majeedhee Magu, open daily.',
+      );
       expect(profile.contactEmail, 'hello@tropicalmart.mv');
       expect(profile.contactPhone, '+9607781234');
       expect(profile.supportPhone, '+9603334455');
@@ -146,11 +151,27 @@ void main() {
         'name_dv': null,
         'channel': 'both',
         'eligibility_basis': null,
+        'description': null,
         'contact_email': null,
         'contact_phone': '+9607781234',
         'support_phone': '+9607781234',
         'website_url': null,
       });
+    });
+
+    test('the description travels on the PATCH, verbatim', () async {
+      final adapter = _RecordingAdapter((_) => _json(_profileFixture, 200));
+
+      await _api(adapter).updateProfile(
+        name: 'Tropical Mart',
+        channel: 'in_store',
+        description: 'A neighbourhood grocery on Majeedhee Magu, open daily.',
+      );
+
+      expect(
+        (adapter.requests.single.data as Map)['description'],
+        'A neighbourhood grocery on Majeedhee Magu, open daily.',
+      );
     });
 
     test('category travels ONLY when changed', () async {

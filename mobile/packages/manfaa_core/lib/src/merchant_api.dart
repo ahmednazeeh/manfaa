@@ -170,13 +170,15 @@ class MerchantApi extends ManfaaApiBase<MerchantSession> {
   Future<MerchantSetupState> getSetup() async =>
       MerchantSetupState.fromJson(await getJson('/merchant/setup'));
 
-  /// The profile step's save: category + channel + contacts, all keys sent
-  /// every time (an explicit null CLEARS server-side — that is how "same as
-  /// contact" stores the support phone). Gate: `setup.edit`; refused with
-  /// `setup_not_editable` outside draft|rejected. Answers the full state.
+  /// The profile step's save: category + channel + the store's own
+  /// description + contacts, all keys sent every time (an explicit null
+  /// CLEARS server-side — that is how "same as contact" stores the support
+  /// phone). Gate: `setup.edit`; refused with `setup_not_editable` outside
+  /// draft|rejected. Answers the full state.
   Future<MerchantSetupState> saveSetupProfile({
     required String category,
     required String channel,
+    String? description,
     String? contactEmail,
     String? contactPhone,
     String? supportPhone,
@@ -186,6 +188,10 @@ class MerchantApi extends ManfaaApiBase<MerchantSession> {
         () => dio.patch<Map<String, dynamic>>('/merchant/setup/profile', data: {
           'category': category,
           'channel': channel,
+          // The store's own words (≤180 WORDS server-side). The wizard
+          // writes it DIRECTLY — a draft store is about to be reviewed
+          // whole, so there is nothing to gate.
+          'description': description,
           'contact_email': contactEmail,
           'contact_phone': contactPhone,
           'support_phone': supportPhone,
@@ -663,7 +669,8 @@ class MerchantApi extends ManfaaApiBase<MerchantSession> {
   /// Gate: `profile.edit` + approved store.
   ///
   /// MR9 splits the answer in two. For a LIVE store the public claims (name,
-  /// Dhivehi name, category, channel, the terms text, website, logo) QUEUE
+  /// Dhivehi name, category, channel, the terms text, the description,
+  /// website, logo) QUEUE
   /// for admin review — 202, with the change request — while the contact
   /// details apply on the spot. Both halves can happen in the one request,
   /// which is why the result carries the fresh profile AS WELL AS the queue:
@@ -675,6 +682,7 @@ class MerchantApi extends ManfaaApiBase<MerchantSession> {
     String? nameDv,
     required String channel,
     String? eligibilityBasis,
+    String? description,
     String? contactEmail,
     String? contactPhone,
     String? supportPhone,
@@ -688,6 +696,10 @@ class MerchantApi extends ManfaaApiBase<MerchantSession> {
         'name_dv': nameDv,
         'channel': channel,
         'eligibility_basis': eligibilityBasis,
+        // A public claim: on a LIVE store this key is part of the GATED
+        // half, so a changed description comes back as a 202 change
+        // request, exactly like the name or the category.
+        'description': description,
         'contact_email': contactEmail,
         'contact_phone': contactPhone,
         'support_phone': supportPhone,

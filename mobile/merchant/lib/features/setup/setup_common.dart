@@ -9,12 +9,33 @@ import '../../app/app.dart';
 /// review-row edits, fix-this links) resolves through indices of it.
 const kSetupSteps = ['profile', 'location', 'logo', 'rate', 'terms', 'review'];
 
+/// The store description's ceiling: 180 WORDS, not characters — the exact
+/// `App\Rules\MaxWords(180)` the server validates with. A word ceiling
+/// refuses neither a long Dhivehi word nor a short English one unfairly,
+/// which is the whole reason the server counts words.
+const kDescriptionMaxWords = 180;
+
+/// Words the way the SERVER counts them: any run of whitespace separates
+/// words, in every script we serve (`preg_split('/\s+/u', trim($value))`).
+/// Counting differently here would refuse text the server accepts — or,
+/// worse, wave through text it will refuse.
+int countWords(String text) =>
+    text.trim().split(RegExp(r'\s+')).where((word) => word.isNotEmpty).length;
+
 /// Resume at the first step whose REQUIRED value is still missing — the
 /// exact web rule (firstIncompleteStep). Logo is never required; location
 /// only for a store customers can walk into, read from the channel the
 /// SERVER holds.
 int firstIncompleteStep(MerchantSetupState state) {
-  if (!state.steps.profile || state.values.category == null) return 0;
+  // The description is a SUBMIT requirement saved on the profile step, so a
+  // store that filled that step before the field existed resumes there
+  // rather than discovering it at the submit button (the terms rule below,
+  // applied to the step that owns the field).
+  if (!state.steps.profile ||
+      state.values.category == null ||
+      (state.values.description ?? '').trim().isEmpty) {
+    return 0;
+  }
   if (state.locationRequired && !state.pinned) return 1;
   if (state.values.cashbackRatePercent == null) {
     return kSetupSteps.indexOf('rate');
@@ -201,6 +222,122 @@ class SelectChip extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// The store-description control: label, a multi-line field, and the line
+/// underneath carrying BOTH the guidance (which names the 180-word ceiling)
+/// and a live word counter that turns to the error colour once the ceiling
+/// is passed.
+///
+/// Shared by the wizard's profile step and the MR5 profile editor, for the
+/// same reason [SelectChip] and [SelectRow] are: the two surfaces save the
+/// SAME field, so the ceiling must be drawn in one place or the two will
+/// drift the first time the number moves.
+///
+/// The counter repaints from the controller itself — the owner has to see
+/// the count move while typing, not after the next validation.
+class DescriptionField extends StatefulWidget {
+  const DescriptionField({
+    super.key,
+    required this.controller,
+    this.errorText,
+    this.onChanged,
+  });
+
+  final TextEditingController controller;
+
+  /// The refusal to print in place of the guidance: empty, over the
+  /// ceiling, or the server's own 422 sentence for `description`.
+  final String? errorText;
+
+  /// Fired on every keystroke so the screen can clear a stale refusal.
+  final ValueChanged<String>? onChanged;
+
+  @override
+  State<DescriptionField> createState() => _DescriptionFieldState();
+}
+
+class _DescriptionFieldState extends State<DescriptionField> {
+  @override
+  void initState() {
+    super.initState();
+    widget.controller.addListener(_repaint);
+  }
+
+  @override
+  void didUpdateWidget(DescriptionField old) {
+    super.didUpdateWidget(old);
+    // A screen that swaps controllers keeps its counter: the State outlives
+    // the widget, so the listener has to follow.
+    if (old.controller != widget.controller) {
+      old.controller.removeListener(_repaint);
+      widget.controller.addListener(_repaint);
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.controller.removeListener(_repaint);
+    super.dispose();
+  }
+
+  void _repaint() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    final theme = Theme.of(context);
+    final words = countWords(widget.controller.text);
+    final overCeiling = words > kDescriptionMaxWords;
+    final error = widget.errorText;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(l10n.descriptionLabel, style: theme.textTheme.labelLarge),
+        const SizedBox(height: Gap.sm),
+        TextField(
+          controller: widget.controller,
+          minLines: 4,
+          maxLines: 8,
+          keyboardType: TextInputType.multiline,
+          textInputAction: TextInputAction.newline,
+          onChanged: widget.onChanged,
+          decoration: InputDecoration(hintText: l10n.descriptionPlaceholder),
+        ),
+        const SizedBox(height: Gap.xs),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Text(
+                error ?? l10n.descriptionHint,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: error != null
+                      ? theme.colorScheme.error
+                      : theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+            const SizedBox(width: Gap.sm),
+            Text(
+              l10n.descriptionWordCount(words, kDescriptionMaxWords),
+              // Latin digits keep their order inside dv.
+              textDirection: TextDirection.ltr,
+              style: theme.textTheme.bodySmall?.copyWith(
+                fontWeight: overCeiling ? FontWeight.w700 : null,
+                color: overCeiling
+                    ? theme.colorScheme.error
+                    : theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
+        ),
+      ],
     );
   }
 }

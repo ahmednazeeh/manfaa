@@ -52,6 +52,41 @@ export function useStoreName(): (store: {
   );
 }
 
+/**
+ * A store's own description in the reader's language, or null when there is
+ * nothing to show.
+ *
+ * The single guard the store page asks before it draws the block, so
+ * "absent", "null" and "   " all resolve to the same answer: no block. The
+ * stores that predate the field have no description, and an empty paragraph
+ * under the store name would read as a store with nothing to say.
+ *
+ * Language rule mirrors {@link useStoreName}: Thaana when the page is
+ * Dhivehi AND the store wrote a Thaana description, otherwise the Latin
+ * one. A blank Latin description is never papered over with the Thaana
+ * text — an English reader would get a script they did not ask for.
+ */
+export function useStoreDescription(): (store: {
+  description: string | null;
+  description_dv: string | null;
+}) => string | null {
+  const { i18n } = useTranslation();
+  const dhivehi = i18n.language.startsWith('dv');
+
+  return useCallback(
+    (store) => {
+      const dv = store.description_dv?.trim() ?? '';
+      if (dhivehi && dv !== '') {
+        return dv;
+      }
+      const en = store.description?.trim() ?? '';
+
+      return en === '' ? null : en;
+    },
+    [dhivehi],
+  );
+}
+
 /** The localised display label for a merchant channel. Never the raw enum. */
 export function useChannelLabel(): (channel: MerchantChannel) => string {
   const { t } = useTranslation();

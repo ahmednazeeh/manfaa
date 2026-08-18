@@ -39,11 +39,14 @@ import { StoreAvatar } from '@/components/app/store-avatar';
 import {
   ChannelChip,
   useCategoryLabel,
+  useStoreDescription,
   useStoreName,
 } from '@/components/app/store-labels';
 
 /**
  * PUBLIC store page (/store/[slug]): the merchant's cashback offer in full —
+ * the store's own description under its name (nullable: omitted entirely,
+ * never an empty paragraph, for the stores that predate the field),
  * hero rate (promo-aware), how earning works (always future-conditional:
  * "you'll earn … once the store confirms", never a promise), the merchant's
  * own cashback-basis wording verbatim, and branches with tap-to-locate
@@ -560,44 +563,65 @@ function StoreContent({ store }: { store: StoreDetail }) {
   const { t } = useTranslation();
   const categoryLabel = useCategoryLabel();
   const storeName = useStoreName();
+  const storeDescription = useStoreDescription();
+  const description = storeDescription(store);
 
   return (
     <div className="flex w-full max-w-3xl flex-col gap-8 pb-10">
-      <div className="flex items-center gap-4">
-        <StoreAvatar
-          name={storeName(store)}
-          slug={store.slug}
-          logoUrl={store.logo_url}
-          size="lg"
-        />
-        <div className="flex min-w-0 flex-col gap-2">
-          <div className="flex flex-wrap items-center gap-2">
-            <h1 className="text-2xl font-semibold tracking-tight text-mono">
-              {storeName(store)}
-            </h1>
-            {store.featured && (
-              <Badge variant="primary" appearance="light" size="sm">
-                <Sparkles className="size-3" />
-                {t('store.featuredBadge')}
-              </Badge>
-            )}
-          </div>
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
-            {store.category !== null && (
-              <span>{categoryLabel(store.category)}</span>
-            )}
-            {/* The channel label sits right beside the category — always
-                the localised label, never the raw enum. */}
-            <ChannelChip channel={store.channel} />
-            {store.joined !== null && (
-              <span>
-                {t('store.joinedLabel', {
-                  date: formatMonthYear(store.joined),
-                })}
-              </span>
-            )}
+      {/* Identity, then the store's own words about itself — the first
+          thing a shopper reads, before any commercial detail. The two are
+          one group so the description hugs the name instead of floating a
+          section apart from it. */}
+      <div className="flex flex-col gap-4">
+        <div className="flex items-center gap-4">
+          <StoreAvatar
+            name={storeName(store)}
+            slug={store.slug}
+            logoUrl={store.logo_url}
+            size="lg"
+          />
+          <div className="flex min-w-0 flex-col gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="text-2xl font-semibold tracking-tight text-mono">
+                {storeName(store)}
+              </h1>
+              {store.featured && (
+                <Badge variant="primary" appearance="light" size="sm">
+                  <Sparkles className="size-3" />
+                  {t('store.featuredBadge')}
+                </Badge>
+              )}
+            </div>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
+              {store.category !== null && (
+                <span>{categoryLabel(store.category)}</span>
+              )}
+              {/* The channel label sits right beside the category — always
+                  the localised label, never the raw enum. */}
+              <ChannelChip channel={store.channel} />
+              {store.joined !== null && (
+                <span>
+                  {t('store.joinedLabel', {
+                    date: formatMonthYear(store.joined),
+                  })}
+                </span>
+              )}
+            </div>
           </div>
         </div>
+        {/* Absent for every store that has not written one — then there is
+            no paragraph at all, not an empty one. */}
+        {description !== null && (
+          // `dir="auto"` for the same reason the rate table carries it: a
+          // Dhivehi page falling back to a store's Latin description must
+          // not right-align English prose, and vice versa.
+          <p
+            dir="auto"
+            className="text-sm leading-relaxed whitespace-pre-wrap text-secondary-foreground"
+          >
+            {description}
+          </p>
+        )}
       </div>
 
       <CashbackHero store={store} />

@@ -23,6 +23,14 @@ export {
   percentDeltaToBp,
   percentToBp,
 } from './percent';
+// The store description's word ceiling, and the count that decides it — the
+// client mirror of the API's App\Rules\MaxWords, so a counter can turn red
+// on exactly the text the server would refuse.
+export {
+  countWords,
+  isOverWordCeiling,
+  STORE_DESCRIPTION_MAX_WORDS,
+} from './words';
 export {
   LoginRequestSchema,
   UserSchema,

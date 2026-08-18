@@ -208,8 +208,21 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
         if (mounted) context.go(homeLocationFor(ref.read(sessionProvider)));
       });
 
+  /// Signup is ENGLISH ONLY (owner decision 2026-08-18), the same rule the
+  /// web signup follows: the account-creation form is one language on every
+  /// surface, whatever the app's chosen locale is. The override is scoped to
+  /// this screen — the wizard and the rest of the app stay bilingual.
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => Localizations.override(
+        context: context,
+        locale: const Locale('en'),
+        child: Directionality(
+          textDirection: TextDirection.ltr,
+          child: Builder(builder: _form),
+        ),
+      );
+
+  Widget _form(BuildContext context) {
     final l10n = context.l10n;
     final theme = Theme.of(context);
 

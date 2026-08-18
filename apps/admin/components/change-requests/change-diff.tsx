@@ -100,8 +100,13 @@ function FieldValue({
   }
 
   // The customer-facing promise is prose, sometimes several lines of it, and
-  // is shown to shoppers verbatim — so it is reviewed verbatim.
-  const isProse = field === 'eligibility_basis' || field === 'address';
+  // is shown to shoppers verbatim — so it is reviewed verbatim. `break-all`
+  // is right for a URL and wrong for a paragraph: it would hyphenate the
+  // store's description mid-word all the way down a narrow column.
+  const isProse =
+    field === 'eligibility_basis' ||
+    field === 'description' ||
+    field === 'address';
   return (
     <span
       className={cn(

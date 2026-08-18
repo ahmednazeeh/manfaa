@@ -228,6 +228,12 @@ export const MerchantSetupStateSchema = z.object({
     category: z.string().nullable(),
     channel: MerchantChannelSchema,
     eligibility_basis: z.string().nullable(),
+    /**
+     * The store's own words about itself, shown to shoppers on its page.
+     * Required (non-empty) before submit, capped at
+     * STORE_DESCRIPTION_MAX_WORDS words rather than characters.
+     */
+    description: z.string().nullable(),
     contact_email: z.string().nullable(),
     contact_phone: z.string().nullable(),
     support_phone: z.string().nullable().catch(null),
@@ -274,7 +280,8 @@ export type MerchantSetupStateResponse = z.infer<
  *  - `setup_not_editable` (409) — writes are allowed only while the store
  *    is draft or rejected;
  *  - `setup_incomplete` (422) — submit with the missing requirement keys in
- *    `missing` (`category` | `channel` | `rate` | `terms`);
+ *    `missing` (`category` | `channel` | `contact` | `rate` | `terms` |
+ *    `description`);
  *  - `not_pending_review` (409) — admin approve/reject on a store that is
  *    not awaiting review;
  *  - `rate_not_priced` (422) — the rate step above the active schedule
@@ -307,6 +314,13 @@ export const UpdateMerchantSetupProfileRequestSchema = z.object({
   channel: MerchantChannelSchema.optional(),
   /** The terms & exclusions text; required (non-empty) before submit. */
   eligibility_basis: z.string().max(2000).nullable().optional(),
+  /**
+   * The store's description; required (non-empty) before submit. No
+   * character cap here on purpose — the API's ceiling is
+   * STORE_DESCRIPTION_MAX_WORDS *words* (App\Rules\MaxWords), so a length in
+   * characters would refuse text the server accepts.
+   */
+  description: z.string().nullable().optional(),
   contact_email: z.email().max(255).nullable().optional(),
   contact_phone: z.string().max(32).nullable().optional(),
   /** The number shoppers ring; the panel offers "same as contact" as one tick. */
@@ -486,6 +500,8 @@ export const StoreReviewSchema = z.object({
   category: z.string().nullable(),
   channel: MerchantChannelSchema,
   eligibility_basis: z.string().nullable(),
+  /** The store's own words — the public claim the reviewer is approving. */
+  description: z.string().nullable(),
   contact_email: z.string().nullable(),
   contact_phone: z.string().nullable(),
   logo_url: z.string().nullable(),

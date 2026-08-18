@@ -97,20 +97,32 @@ class _ReviewStepState extends ConsumerState<ReviewStep> {
           );
 
     final terms = (values.eligibilityBasis ?? '').trim();
+    final description = (values.description ?? '').trim();
 
     /// The wizard step that fixes a missing requirement key (web parity).
     const stepForMissing = {
       'category': 0,
       'channel': 0,
+      'description': 0,
       'contact': 0,
       'rate': 3,
       'terms': 4,
     };
-    const missingOrder = ['category', 'channel', 'contact', 'rate', 'terms'];
+    // The wizard's own order, not the server's — the list reads top-to-bottom
+    // the way the steps it links into do.
+    const missingOrder = [
+      'category',
+      'channel',
+      'description',
+      'contact',
+      'rate',
+      'terms',
+    ];
 
     String missingLabel(String key) => switch (key) {
           'category' => l10n.missingCategory,
           'channel' => l10n.missingChannel,
+          'description' => l10n.missingDescription,
           'contact' => l10n.missingContact,
           'rate' => l10n.missingRate,
           'terms' => l10n.missingTerms,
@@ -145,6 +157,13 @@ class _ReviewStepState extends ConsumerState<ReviewStep> {
           tint: ManfaaTint.blue,
           label: l10n.reviewChannel,
           value: channelLabel,
+          onTap: () => widget.onJump(0),
+        ),
+        _ReviewRow(
+          icon: Icons.notes_rounded,
+          tint: ManfaaTint.blue,
+          label: l10n.reviewDescription,
+          value: description.isEmpty ? null : description,
           onTap: () => widget.onJump(0),
         ),
         _ReviewRow(

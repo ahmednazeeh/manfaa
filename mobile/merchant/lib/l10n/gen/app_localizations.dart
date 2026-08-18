@@ -596,6 +596,42 @@ abstract class AppLocalizations {
   /// **'A counter and online orders.'**
   String get channelBothHint;
 
+  /// No description provided for @descriptionLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Store description'**
+  String get descriptionLabel;
+
+  /// No description provided for @descriptionPlaceholder.
+  ///
+  /// In en, this message translates to:
+  /// **'e.g. A neighbourhood grocery stocking fresh produce, household basics and the daily essentials.'**
+  String get descriptionPlaceholder;
+
+  /// No description provided for @descriptionHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Up to 180 words — shoppers read this on your store page.'**
+  String get descriptionHint;
+
+  /// No description provided for @descriptionRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Describe your store to continue.'**
+  String get descriptionRequired;
+
+  /// No description provided for @descriptionTooLong.
+  ///
+  /// In en, this message translates to:
+  /// **'That is over 180 words. Shorten it to continue.'**
+  String get descriptionTooLong;
+
+  /// No description provided for @descriptionWordCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} / {max} words'**
+  String descriptionWordCount(int count, int max);
+
   /// No description provided for @contactEmailLabel.
   ///
   /// In en, this message translates to:
@@ -848,6 +884,12 @@ abstract class AppLocalizations {
   /// **'Channel'**
   String get reviewChannel;
 
+  /// No description provided for @reviewDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Description'**
+  String get reviewDescription;
+
   /// No description provided for @reviewLocation.
   ///
   /// In en, this message translates to:
@@ -913,6 +955,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Choose where you sell'**
   String get missingChannel;
+
+  /// No description provided for @missingDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Describe your store'**
+  String get missingDescription;
 
   /// No description provided for @missingContact.
   ///

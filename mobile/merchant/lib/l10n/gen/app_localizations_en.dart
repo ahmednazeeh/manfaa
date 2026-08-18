@@ -283,6 +283,29 @@ class AppLocalizationsEn extends AppLocalizations {
   String get channelBothHint => 'A counter and online orders.';
 
   @override
+  String get descriptionLabel => 'Store description';
+
+  @override
+  String get descriptionPlaceholder =>
+      'e.g. A neighbourhood grocery stocking fresh produce, household basics and the daily essentials.';
+
+  @override
+  String get descriptionHint =>
+      'Up to 180 words — shoppers read this on your store page.';
+
+  @override
+  String get descriptionRequired => 'Describe your store to continue.';
+
+  @override
+  String get descriptionTooLong =>
+      'That is over 180 words. Shorten it to continue.';
+
+  @override
+  String descriptionWordCount(int count, int max) {
+    return '$count / $max words';
+  }
+
+  @override
   String get contactEmailLabel => 'Contact email';
 
   @override
@@ -422,6 +445,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get reviewChannel => 'Channel';
 
   @override
+  String get reviewDescription => 'Description';
+
+  @override
   String get reviewLocation => 'Location';
 
   @override
@@ -455,6 +481,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get missingChannel => 'Choose where you sell';
+
+  @override
+  String get missingDescription => 'Describe your store';
 
   @override
   String get missingContact => 'Add a contact phone number';

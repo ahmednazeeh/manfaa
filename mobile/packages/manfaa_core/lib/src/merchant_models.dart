@@ -539,6 +539,7 @@ class MerchantSetupValues {
     required this.category,
     required this.channel,
     required this.eligibilityBasis,
+    required this.description,
     required this.contactEmail,
     required this.contactPhone,
     required this.supportPhone,
@@ -555,6 +556,7 @@ class MerchantSetupValues {
         category: json['category'] as String?,
         channel: _s(json['channel']),
         eligibilityBasis: json['eligibility_basis'] as String?,
+        description: json['description'] as String?,
         contactEmail: json['contact_email'] as String?,
         contactPhone: json['contact_phone'] as String?,
         supportPhone: json['support_phone'] as String?,
@@ -577,6 +579,13 @@ class MerchantSetupValues {
   /// in_store | online | both.
   final String channel;
   final String? eligibilityBasis;
+
+  /// The store's own words about itself, up to 180 WORDS (the server's
+  /// App\Rules\MaxWords — a word ceiling refuses neither a long Dhivehi
+  /// word nor a short English one unfairly). Shown to shoppers on the store
+  /// page, and a SUBMIT requirement: empty is the `description` key in
+  /// `setup_incomplete.missing[]`.
+  final String? description;
   final String? contactEmail;
   final String? contactPhone;
 
@@ -800,6 +809,7 @@ class MerchantProfile {
     required this.categoryRetired,
     required this.channel,
     this.eligibilityBasis,
+    this.description,
     this.contactEmail,
     this.contactPhone,
     this.supportPhone,
@@ -818,6 +828,7 @@ class MerchantProfile {
         categoryRetired: json['category_retired'] as bool? ?? false,
         channel: _s(json['channel']),
         eligibilityBasis: json['eligibility_basis'] as String?,
+        description: json['description'] as String?,
         contactEmail: json['contact_email'] as String?,
         contactPhone: json['contact_phone'] as String?,
         supportPhone: json['support_phone'] as String?,
@@ -851,6 +862,11 @@ class MerchantProfile {
   /// The §11 free-text mirror of the agreement — ONE string, displayed to
   /// customers, never used in computation.
   final String? eligibilityBasis;
+
+  /// The store's own words about itself (≤180 WORDS), on the public store
+  /// page. A public CLAIM, so on a live store an edit to it queues for
+  /// review with the name and the category — never applies on the spot.
+  final String? description;
   final String? contactEmail;
   final String? contactPhone;
 

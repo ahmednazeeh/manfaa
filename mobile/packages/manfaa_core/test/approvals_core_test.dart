@@ -253,6 +253,72 @@ void main() {
       expect(result.profile.pendingChange?.id, 1);
     });
 
+    test('a changed DESCRIPTION queues like any other public claim', () async {
+      // The server's gated half is fail-CLOSED (ChangeRequestService:
+      // everything the PATCH validates that is not a contact detail), so
+      // the description arrived gated the day it was added — the app only
+      // has to parse the diff the reviewer will decide on.
+      final adapter = _RecordingAdapter(
+        (_) => _json(const {
+          'data': {
+            'status': 'pending_review',
+            'change_request': {
+              'id': 9,
+              'merchant_id': 1,
+              'kind': 'profile',
+              'kind_label': 'store profile change',
+              'status': 'pending',
+              'branch_id': null,
+              'branch_name': 'Tropical Mart',
+              'changes': [
+                {
+                  'field': 'description',
+                  'from': 'A neighbourhood grocery.',
+                  'to': 'A neighbourhood grocery, open every day until 11pm.',
+                },
+              ],
+              'proposed': {
+                'description':
+                    'A neighbourhood grocery, open every day until 11pm.',
+              },
+              'current': {'description': 'A neighbourhood grocery.'},
+              'submitted_at': '2026-08-18T10:25:01+00:00',
+              'reviewed_at': null,
+              'reviewed_by': null,
+              'rejected_reason': null,
+            },
+            'profile': {
+              'id': 1,
+              'name': 'Tropical Mart',
+              'slug': 'tropical-mart',
+              'status': 'active',
+              'category': 'grocery',
+              'category_retired': false,
+              'channel': 'in_store',
+              // The LIVE description — what a shopper still reads.
+              'description': 'A neighbourhood grocery.',
+              'pending_change': null,
+            },
+          },
+        }, 202),
+      );
+
+      final result = await _api(adapter).updateProfile(
+        name: 'Tropical Mart',
+        channel: 'in_store',
+        description: 'A neighbourhood grocery, open every day until 11pm.',
+      );
+
+      expect(result.pending, isTrue);
+      expect(result.queued!.changes.single.field, 'description');
+      expect(
+        result.queued!.proposed['description'],
+        'A neighbourhood grocery, open every day until 11pm.',
+      );
+      // The store still says what it said until an admin approves.
+      expect(result.profile.description, 'A neighbourhood grocery.');
+    });
+
     test('a 200 is a plain save — the profile resource itself, nothing queued',
         () async {
       final adapter = _RecordingAdapter(

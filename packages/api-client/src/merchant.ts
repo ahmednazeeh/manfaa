@@ -981,6 +981,13 @@ export const MerchantProfileSchema = z.object({
   /** Never rendered as the literal "both" — display "In Store & Online". */
   channel: MerchantChannelSchema,
   eligibility_basis: z.string().nullable(),
+  /**
+   * The store's own words about itself, shown to shoppers on its page — a
+   * public CLAIM, so on a live store an edit queues for review like the name
+   * or the category. Capped at STORE_DESCRIPTION_MAX_WORDS words, not
+   * characters.
+   */
+  description: z.string().nullable(),
   contact_email: z.string().nullable(),
   contact_phone: z.string().nullable(),
   support_phone: z.string().nullable().catch(null),
@@ -1022,6 +1029,12 @@ export const UpdateMerchantProfileRequestSchema = z.object({
   category: z.string().max(80).nullable().optional(),
   channel: MerchantChannelSchema.optional(),
   eligibility_basis: z.string().max(2000).nullable().optional(),
+  /**
+   * The store's description. No character cap here on purpose — the API's
+   * ceiling is STORE_DESCRIPTION_MAX_WORDS *words* (App\Rules\MaxWords), so
+   * a length in characters would refuse text the server accepts.
+   */
+  description: z.string().nullable().optional(),
   contact_email: z.email().max(255).nullable().optional(),
   contact_phone: z.string().max(32).nullable().optional(),
   /** The number shoppers ring; the panel offers "same as contact" as one tick. */
@@ -1071,11 +1084,14 @@ export interface MerchantProfileSaveResult {
  * `profile.edit` plus an approved store.
  *
  * A live store's public claims (name, name_dv, category, channel,
- * eligibility_basis, website_url) do NOT apply here: they queue for admin
- * review and come back as `queued`. Contact email, contact phone and support
- * phone apply in the same request — a wrong number means customers cannot
- * reach the store, so holding that fix for a reviewer would only prolong the
- * harm (PLAN-merchant-app.md §MR9).
+ * eligibility_basis, description, website_url) do NOT apply here: they queue
+ * for admin review and come back as `queued`. The gate is fail-closed
+ * server-side — everything this endpoint validates except the three contact
+ * keys is a claim — so a field added tomorrow queues too.
+ *
+ * Contact email, contact phone and support phone apply in the same request —
+ * a wrong number means customers cannot reach the store, so holding that fix
+ * for a reviewer would only prolong the harm (PLAN-merchant-app.md §MR9).
  */
 export async function updateMerchantProfile(
   body: UpdateMerchantProfileRequest,

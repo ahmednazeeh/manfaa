@@ -250,6 +250,7 @@ const CHANGE_FIELDS: Record<string, string> = {
   name_dv: 'Dhivehi name',
   category: 'Category',
   channel: 'Channel',
+  description: 'Store description',
   eligibility_basis: 'Terms & exclusions',
   website_url: 'Website',
   logo: 'Logo',

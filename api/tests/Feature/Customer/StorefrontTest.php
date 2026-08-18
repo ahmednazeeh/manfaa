@@ -286,7 +286,7 @@ it('serves the full public store page for an active merchant', function () {
 
     expect(array_keys($data))->toBe([
         'name', 'name_dv', 'slug', 'category', 'logo_url', 'channel', 'featured',
-        'cashback_rate_percent', 'standing_cashback_rate_percent', 'promotion', 'description', 'cashback_basis', 'contact_phone', 'support_phone', 'website_url', 'category_rates', 'branches', 'joined',
+        'cashback_rate_percent', 'standing_cashback_rate_percent', 'promotion', 'description', 'description_dv', 'cashback_basis', 'contact_phone', 'support_phone', 'website_url', 'category_rates', 'branches', 'joined',
     ]);
 
     // No product categories defined — the rates table is an empty list

@@ -58,6 +58,7 @@ class ProfileController extends Controller
             'channel' => ['sometimes', 'string', Rule::in(OnboardingService::CHANNELS)],
             'eligibility_basis' => ['sometimes', 'nullable', 'string', 'max:2000'],
             'description' => ['sometimes', 'nullable', 'string', new MaxWords(180)],
+            'description_dv' => ['sometimes', 'nullable', 'string', new MaxWords(180)],
             'contact_email' => ['sometimes', 'nullable', 'string', 'email', 'max:255'],
             'contact_phone' => ['sometimes', 'nullable', 'string', 'max:32'],
             'support_phone' => ['sometimes', 'nullable', 'string', 'max:32'],

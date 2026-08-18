@@ -41,6 +41,7 @@ class MerchantProfileResource extends JsonResource
             'channel' => $this->channel,
             'eligibility_basis' => $this->eligibility_basis,
             'description' => $this->description,
+            'description_dv' => $this->description_dv,
             'contact_email' => $this->contact_email,
             'contact_phone' => $this->contact_phone,
             'support_phone' => $this->support_phone,

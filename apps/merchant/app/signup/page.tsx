@@ -36,7 +36,6 @@ import {
   InputOTPGroup,
   InputOTPSlot,
 } from '@/components/ui/input-otp';
-import { LanguageSwitcher } from '@/components/app/language-switcher';
 import { PitchPanel } from '@/components/marketing/pitch';
 
 type Step = 'phone' | 'code' | 'details';
@@ -48,7 +47,12 @@ type Step = 'phone' | 'code' | 'details';
  * resumable /setup wizard.
  */
 export default function SignupPage() {
-  const { t } = useTranslation();
+  // Signup is ENGLISH ONLY (owner decision 2026-08-18) — and hiding the
+  // switcher is not enough on its own: someone who picked Dhivehi on the
+  // landing page would still meet a Dhivehi form. A fixed translator pins
+  // the words, and dir/lang below pin the direction with them.
+  const { i18n } = useTranslation();
+  const t = i18n.getFixedT('en');
   const router = useRouter();
 
   const [step, setStep] = useState<Step>('phone');
@@ -194,14 +198,21 @@ export default function SignupPage() {
     // and details steps stay a clean centered form.
     <div
       className={
-        step === 'phone' ? 'grid min-h-screen w-full lg:grid-cols-2' : undefined
+        // w-full in BOTH branches: <body> is a flex row, so a wrapper with
+        // no width shrinks to its content and leaves the dark ground beside
+        // it — which is exactly what the OTP step did (owner report
+        // 2026-08-18).
+        step === 'phone'
+          ? 'grid min-h-screen w-full lg:grid-cols-2'
+          : 'flex min-h-screen w-full'
       }
     >
       {step === 'phone' && <PitchPanel />}
-      <div className="relative grow flex items-center justify-center min-h-screen w-full bg-muted/40 p-5">
-        <div className="absolute top-4 end-4">
-          <LanguageSwitcher />
-        </div>
+      <div
+        dir="ltr"
+        lang="en"
+        className="relative grow flex items-center justify-center min-h-screen w-full bg-muted/40 p-5"
+      >
         <Card className="w-full max-w-[440px]">
         <CardContent className="p-8 flex flex-col gap-6">
           <div className="flex flex-col items-center gap-3">

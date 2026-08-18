@@ -10,9 +10,15 @@ import '../../app/app.dart';
 import '../../app/providers.dart';
 import 'store_widgets.dart';
 
-/// One store's public page: the rate, the terms, the places.
+/// One store's public page: the store's own words, the rate, the terms, the
+/// places.
 ///
-/// `eligibility_basis` gets a card of its own — the §11 over-promise guard.
+/// The description sits directly under the identity card — it is the store
+/// introducing itself, so it comes before the commercial detail. It is
+/// nullable and stays nullable: the stores that predate the field render no
+/// card rather than an empty one.
+///
+/// `cashback_basis` gets a card of its own — the §11 over-promise guard.
 /// A merchant defines their own eligible amount, so "10%" without "on what"
 /// is exactly how a customer earns MVR 12 on a MVR 1,250 bill and OUR brand
 /// carries the disappointment.
@@ -83,6 +89,7 @@ class _StoreBody extends StatelessWidget {
     final dhivehi = Localizations.localeOf(context).languageCode == 'dv';
     final store = page.entry;
     final category = store.category;
+    final description = page.displayDescription(dhivehi);
 
     final channelLabel = switch (store.channel) {
       'online' => l10n.channelOnline,
@@ -124,6 +131,38 @@ class _StoreBody extends StatelessWidget {
             ],
           ),
         ),
+        // The store's own words, directly under its identity — the first
+        // thing a shopper reads after "which store is this". Absent for the
+        // stores that predate the field, and then there is no card at all:
+        // an empty box would read as a store with nothing to say.
+        if (description != null) ...[
+          const SizedBox(height: Gap.md),
+          ManfaaCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _CardLabel(
+                  icon: Icons.storefront_outlined,
+                  tint: ManfaaTint.blue,
+                  label: l10n.storeAbout,
+                ),
+                const SizedBox(height: Gap.md),
+                Text(
+                  description,
+                  // The SCRIPT sets the direction, not the reader's locale:
+                  // a Dhivehi reader on a store that wrote only English
+                  // prose must not get it right-aligned.
+                  textDirection: page.descriptionIsThaana(dhivehi)
+                      ? TextDirection.rtl
+                      : TextDirection.ltr,
+                  // Body copy, not a data row: the extra line height is what
+                  // makes up to 180 words readable on a phone.
+                  style: theme.textTheme.bodyMedium?.copyWith(height: 1.5),
+                ),
+              ],
+            ),
+          ),
+        ],
         if (store.boosted && store.promoEndsAt != null) ...[
           const SizedBox(height: Gap.md),
           Builder(builder: (context) {

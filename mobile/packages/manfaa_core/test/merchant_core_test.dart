@@ -182,6 +182,7 @@ const _setupFixture = {
       'category': 'grocery',
       'channel': 'in_store',
       'eligibility_basis': 'All items except tobacco.',
+      'description': 'A neighbourhood grocery on Majeedhee Magu.',
       'contact_email': 'owner@freshmart.mv',
       'contact_phone': '+9607712345',
       'support_phone': null,
@@ -632,6 +633,10 @@ void main() {
       expect(state.values.name, 'Fresh Mart');
       expect(state.values.category, 'grocery');
       expect(state.values.channel, 'in_store');
+      expect(
+        state.values.description,
+        'A neighbourhood grocery on Majeedhee Magu.',
+      );
       expect(state.values.supportPhone, isNull);
       expect(state.values.cashbackRatePercent, '2.00');
       expect(state.values.primaryBranch?.lat, 4.1755354);
@@ -654,6 +659,7 @@ void main() {
       await api.saveSetupProfile(
         category: 'grocery',
         channel: 'both',
+        description: 'A neighbourhood grocery on Majeedhee Magu.',
         contactEmail: 'owner@freshmart.mv',
       );
 
@@ -662,11 +668,25 @@ void main() {
       expect(request.data, {
         'category': 'grocery',
         'channel': 'both',
+        'description': 'A neighbourhood grocery on Majeedhee Magu.',
         'contact_email': 'owner@freshmart.mv',
         'contact_phone': null,
         'support_phone': null,
         'website_url': null,
       });
+    });
+
+    test('an unwritten description travels as an explicit null', () async {
+      final adapter = _RecordingAdapter((_) => _json(_setupFixture, 200));
+      final api = _api(adapter);
+
+      await api.saveSetupProfile(category: 'grocery', channel: 'in_store');
+
+      expect(
+        (adapter.requests.single.data as Map).containsKey('description'),
+        isTrue,
+      );
+      expect((adapter.requests.single.data as Map)['description'], isNull);
     });
 
     test('the terms save touches ONLY eligibility_basis', () async {

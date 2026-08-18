@@ -107,6 +107,22 @@
   "channelInStoreHint": "Customers walk in to buy.",
   "channelOnlineHint": "Orders come in online.",
   "channelBothHint": "A counter and online orders.",
+  "descriptionLabel": "Store description",
+  "descriptionPlaceholder": "e.g. A neighbourhood grocery stocking fresh produce, household basics and the daily essentials.",
+  "descriptionHint": "Up to 180 words — shoppers read this on your store page.",
+  "descriptionRequired": "Describe your store to continue.",
+  "descriptionTooLong": "That is over 180 words. Shorten it to continue.",
+  "descriptionWordCount": "{count} / {max} words",
+  "@descriptionWordCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "max": {
+        "type": "int"
+      }
+    }
+  },
   "contactEmailLabel": "Contact email",
   "contactPhoneLabel": "Contact phone",
   "supportPhoneLabel": "Customer support number",
@@ -173,6 +189,7 @@
   "reviewName": "Store name",
   "reviewCategory": "Category",
   "reviewChannel": "Channel",
+  "reviewDescription": "Description",
   "reviewLocation": "Location",
   "reviewLogo": "Logo",
   "reviewRate": "Cashback rate",
@@ -197,6 +214,7 @@
   "missingTitle": "Still needed before review",
   "missingCategory": "Pick a category",
   "missingChannel": "Choose where you sell",
+  "missingDescription": "Describe your store",
   "missingContact": "Add a contact phone number",
   "missingRate": "Set your cashback rate",
   "missingTerms": "Describe what earns cashback",

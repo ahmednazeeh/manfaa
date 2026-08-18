@@ -102,6 +102,12 @@
     "categoryHint": "Pick the category that best matches your store — customers browse by it.",
     "categoryRequired": "Pick a category.",
     "channelLabel": "Where do you sell?",
+    "descriptionLabel": "About your store",
+    "descriptionPlaceholder": "e.g. A family-run café in Malé serving fresh bread, short eats and Maldivian coffee from 6am every day.",
+    "descriptionGuidance": "Shown on your store page. Tell shoppers what you sell and why your store is worth a visit.",
+    "descriptionCount": "{{words}} / {{max}} words",
+    "descriptionTooLong": "That's over {{max}} words — shorten it before saving.",
+    "descriptionRequired": "Write a short description of your store before continuing.",
     "contactEmailLabel": "Contact email (optional)",
     "contactPhoneLabel": "Contact phone (optional)",
     "contactHint": "Shown on your public store page so customers can reach you.",
@@ -148,6 +154,7 @@
     "reviewName": "Store name",
     "reviewCategory": "Category",
     "reviewChannel": "Channel",
+    "reviewDescription": "About your store",
     "reviewLocation": "Location",
     "reviewNoLocation": "No pin — customers won't see you in Nearby",
     "reviewLogo": "Logo",
@@ -163,6 +170,7 @@
       "category": "Pick a store category",
       "channel": "Choose where you sell",
       "contact": "Add a contact phone number",
+      "description": "Describe your store in a few words",
       "rate": "Set your cashback rate",
       "terms": "Write your cashback terms"
     },
@@ -392,7 +400,7 @@
     "profileQueued": "Sent to Manfaa for review — your store keeps its current details until it's approved",
     "logoQueued": "Logo sent to Manfaa for review",
     "logoPendingNote": "This logo is waiting for Manfaa's review. Your store keeps showing the current one until it is approved.",
-    "reviewedFieldsNote": "Manfaa reviews your store name, Dhivehi name, logo, category, channel, website and cashback terms before customers see them. Contact details save straight away."
+    "reviewedFieldsNote": "Manfaa reviews your store name, Dhivehi name, logo, category, channel, description, website and cashback terms before customers see them. Contact details save straight away."
   },
   "branches": {
     "title": "Branches",
@@ -459,6 +467,7 @@
       "name_dv": "Dhivehi name",
       "category": "Category",
       "channel": "Channel",
+      "description": "About your store",
       "eligibility_basis": "What earns cashback",
       "website_url": "Website",
       "logo": "Logo",

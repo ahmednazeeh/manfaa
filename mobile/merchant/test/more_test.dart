@@ -142,6 +142,76 @@ void main() {
     },
   );
 
+  testWidgets('the profile edit sends the description it was given', (
+    tester,
+  ) async {
+    final (api, _) = await boot(
+      tester,
+      permissions: const ['profile.view', 'profile.edit', 'setup.view'],
+    );
+
+    await tester.tap(find.text('View profile'));
+    await tester.pumpAndSettle();
+    // The view screen prints the store's own words before anything is
+    // edited — the field is READ here, not only written.
+    expect(
+      find.text('A neighbourhood grocery on Majeedhee Magu, open daily.'),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.text('Edit'));
+    await tester.pumpAndSettle();
+
+    // 0 name, 1 Thaana name, 2 contact email, 3 contact phone, 4 website,
+    // 5 description (the support field is hidden while the tick holds).
+    final description = find.byType(TextField).at(5);
+    expect(
+      tester.widget<TextField>(description).controller!.text,
+      'A neighbourhood grocery on Majeedhee Magu, open daily.',
+    );
+
+    await tester.enterText(
+      description,
+      'A neighbourhood grocery on Majeedhee Magu, open until 11pm.',
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Save profile'));
+    await tester.pumpAndSettle();
+
+    expect(
+      api.profilePatches.single['description'],
+      'A neighbourhood grocery on Majeedhee Magu, open until 11pm.',
+    );
+  });
+
+  testWidgets('181 words never leaves the profile editor', (tester) async {
+    final (api, _) = await boot(
+      tester,
+      permissions: const ['profile.view', 'profile.edit', 'setup.view'],
+    );
+
+    await tester.tap(find.text('View profile'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Edit'));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byType(TextField).at(5),
+      List.filled(181, 'word').join(' '),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('181 / 180 words'), findsOneWidget);
+
+    await tester.tap(find.text('Save profile'));
+    await tester.pumpAndSettle();
+
+    expect(api.profilePatches, isEmpty);
+    expect(
+      find.text('That is over 180 words. Shorten it to continue.'),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('a DIFFERENT support number unticks the comparison box', (
     tester,
   ) async {
@@ -194,6 +264,7 @@ const _profileFixture = <String, dynamic>{
   'category_retired': false,
   'channel': 'in_store',
   'eligibility_basis': 'Everything except tobacco.',
+  'description': 'A neighbourhood grocery on Majeedhee Magu, open daily.',
   'contact_email': 'hello@tropicalmart.mv',
   'contact_phone': '+9607781234',
   'support_phone': '+9607781234',
@@ -250,6 +321,7 @@ class _FakeApi extends MerchantApi {
     String? nameDv,
     required String channel,
     String? eligibilityBasis,
+    String? description,
     String? contactEmail,
     String? contactPhone,
     String? supportPhone,
@@ -262,6 +334,7 @@ class _FakeApi extends MerchantApi {
       'name_dv': nameDv,
       'channel': channel,
       'eligibility_basis': eligibilityBasis,
+      'description': description,
       'contact_email': contactEmail,
       'contact_phone': contactPhone,
       'support_phone': supportPhone,
@@ -289,6 +362,7 @@ class _FakeApi extends MerchantApi {
         'category': 'grocery',
         'channel': 'in_store',
         'eligibility_basis': 'Everything except tobacco.',
+        'description': 'A neighbourhood grocery on Majeedhee Magu, open daily.',
         'contact_email': 'hello@tropicalmart.mv',
         'contact_phone': '+9607781234',
         'support_phone': null,

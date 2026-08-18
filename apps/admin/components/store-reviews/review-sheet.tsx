@@ -81,7 +81,8 @@ function Empty({ children = 'Not provided' }: { children?: ReactNode }) {
 
 /**
  * Everything the merchant entered in the setup wizard, reviewable in one
- * drawer: logo preview, category, channel, the offered rate priced against
+ * drawer: logo preview, the store's own description (the claim approval
+ * publishes, so it leads), category, channel, the offered rate priced against
  * the ACTIVE fee tier schedule (all-in = cashback + platform fee), the map
  * pin, the terms & exclusions text shown verbatim to customers, contacts and
  * step completion. Approve asks for confirmation — it makes the store publicly
@@ -209,6 +210,24 @@ export function ReviewSheet({
                   </p>
                 </div>
               ) : null}
+
+              {/* The store's own words, first and whole. Everything else on
+                  this sheet is a fact the console already knows how to check
+                  — a category slug, a rate, a pin. The description is the
+                  claim the merchant is asking to publish, so it is what
+                  approval actually decides on, and it is read before the
+                  numbers rather than after them. */}
+              <Field label="About this store (shown to shoppers on its page)">
+                {review.description ? (
+                  <p className="rounded-md border border-border bg-muted/40 p-3 whitespace-pre-wrap">
+                    {review.description}
+                  </p>
+                ) : (
+                  <Empty>
+                    Not written — a store cannot be submitted without one
+                  </Empty>
+                )}
+              </Field>
 
               <div className="grid grid-cols-2 gap-4">
                 <Field label="Category">

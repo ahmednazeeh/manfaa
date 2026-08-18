@@ -36,6 +36,7 @@ void main() {
     bool pinned = false,
     String? rate,
     String? terms,
+    String? description,
     String? logoUrl,
     String? submittedAt,
     String? rejectedReason,
@@ -54,6 +55,7 @@ void main() {
           'category': category,
           'channel': channel,
           'eligibility_basis': terms,
+          'description': description,
           'contact_email': 'owner@freshmart.mv',
           'contact_phone': '+9607712345',
           'support_phone': null,
@@ -123,8 +125,8 @@ void main() {
 
     test('profile done, unpinned counter store stops at location', () {
       expect(
-        firstIncompleteStep(
-            state(setupJson(profileDone: true, category: 'grocery'))),
+        firstIncompleteStep(state(setupJson(
+            profileDone: true, category: 'grocery', description: 'A shop.'))),
         1,
       );
     });
@@ -132,7 +134,10 @@ void main() {
     test('online-only SKIPS location straight to rate', () {
       expect(
         firstIncompleteStep(state(setupJson(
-            profileDone: true, category: 'grocery', channel: 'online'))),
+            profileDone: true,
+            category: 'grocery',
+            description: 'A shop.',
+            channel: 'online'))),
         3,
       );
     });
@@ -142,11 +147,44 @@ void main() {
         firstIncompleteStep(state(setupJson(
           profileDone: true,
           category: 'grocery',
+          description: 'A shop.',
           pinned: true,
           rate: '2.00',
           terms: 'All items.',
         ))),
         5,
+      );
+    });
+
+    test('a saved profile with NO description resumes at the profile step',
+        () {
+      // The description became a submit requirement after stores had
+      // already passed this step, so `steps.profile` is true while the
+      // field is empty: sending them back here is the alternative to a
+      // refusal five steps later at the submit button.
+      expect(
+        firstIncompleteStep(state(setupJson(
+          profileDone: true,
+          category: 'grocery',
+          pinned: true,
+          rate: '2.00',
+          terms: 'All items.',
+        ))),
+        0,
+      );
+    });
+
+    test('a description of only whitespace is no description', () {
+      expect(
+        firstIncompleteStep(state(setupJson(
+          profileDone: true,
+          category: 'grocery',
+          description: '   ',
+          pinned: true,
+          rate: '2.00',
+          terms: 'All items.',
+        ))),
+        0,
       );
     });
   });
@@ -260,6 +298,141 @@ void main() {
     );
   });
 
+  testWidgets('an EMPTY description refuses the profile step before the wire',
+      (tester) async {
+    final store = await seededStore('draft');
+    late _SetupFakeApi api;
+    await tester.pumpWidget(app(
+      store,
+      (s) => api = _SetupFakeApi(session: s, setup: setupJson()),
+    ));
+    await settleTall(tester);
+
+    // Everything else the step needs, so the description is the ONLY thing
+    // standing between this owner and step 2.
+    await tester.tap(find.text('Grocery'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Continue'));
+    await tester.pumpAndSettle();
+
+    // Still on the profile step, with the refusal under the field — and the
+    // hint it replaced named the ceiling before any of this.
+    expect(find.text('Store profile'), findsOneWidget);
+    expect(find.text('Describe your store to continue.'), findsOneWidget);
+    expect(api.profileSaves, isEmpty);
+  });
+
+  testWidgets('181 words is refused client-side, before the request',
+      (tester) async {
+    final store = await seededStore('draft');
+    late _SetupFakeApi api;
+    await tester.pumpWidget(app(
+      store,
+      (s) => api = _SetupFakeApi(session: s, setup: setupJson()),
+    ));
+    await settleTall(tester);
+
+    await tester.tap(find.text('Grocery'));
+    await tester.pumpAndSettle();
+
+    // The counter is live: 181 words reads as over the ceiling the moment
+    // it is typed, and the step refuses to spend a round trip on it.
+    final tooLong = List.filled(181, 'word').join(' ');
+    await tester.enterText(find.byType(TextField).first, tooLong);
+    await tester.pumpAndSettle();
+    expect(find.text('181 / 180 words'), findsOneWidget);
+
+    await tester.tap(find.text('Continue'));
+    await tester.pumpAndSettle();
+
+    expect(api.profileSaves, isEmpty);
+    expect(
+      find.text('That is over 180 words. Shorten it to continue.'),
+      findsOneWidget,
+    );
+
+    // Exactly 180 is inside the ceiling — the boundary is "more than", the
+    // server's own reading of MaxWords(180).
+    await tester.enterText(
+      find.byType(TextField).first,
+      List.filled(180, 'word').join(' '),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Continue'));
+    await tester.pumpAndSettle();
+
+    expect(api.profileSaves, hasLength(1));
+    expect(countWords(api.profileSaves.single['description'] as String), 180);
+  });
+
+  testWidgets('a saved description travels and the step moves on',
+      (tester) async {
+    final store = await seededStore('draft');
+    late _SetupFakeApi api;
+    await tester.pumpWidget(app(
+      store,
+      (s) => api = _SetupFakeApi(session: s, setup: setupJson()),
+    ));
+    await settleTall(tester);
+
+    await tester.tap(find.text('Grocery'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byType(TextField).first,
+      '  A neighbourhood grocery on Majeedhee Magu.  ',
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Continue'));
+    await tester.pumpAndSettle();
+
+    // Trimmed, verbatim, and the wizard walked to the location step.
+    expect(
+      api.profileSaves.single['description'],
+      'A neighbourhood grocery on Majeedhee Magu.',
+    );
+    expect(find.text('Store location'), findsOneWidget);
+  });
+
+  testWidgets('the review step lists the description and labels it when '
+      'the server says it is missing', (tester) async {
+    final store = await seededStore('draft');
+    await tester.pumpWidget(app(
+      store,
+      (s) => _SetupFakeApi(
+        session: s,
+        setup: setupJson(
+          profileDone: true,
+          category: 'grocery',
+          description: 'A neighbourhood grocery on Majeedhee Magu.',
+          pinned: true,
+          rate: '2.00',
+          terms: 'All items.',
+        ),
+        missingOnSubmit: const ['description'],
+      ),
+    ));
+    await settleTall(tester);
+
+    expect(find.text('Review & submit'), findsOneWidget);
+    expect(find.text('Description'), findsOneWidget);
+    expect(
+      find.text('A neighbourhood grocery on Majeedhee Magu.'),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.text('Submit for review'));
+    await tester.pumpAndSettle();
+
+    // The new key is LABELLED, never printed as the raw wire word.
+    expect(find.text('Describe your store'), findsOneWidget);
+    expect(find.text('description'), findsNothing);
+
+    // And the fix link lands on the step that owns the field.
+    await tester.tap(find.text('Describe your store'));
+    await tester.pumpAndSettle();
+    expect(find.text('Store profile'), findsOneWidget);
+  });
+
   testWidgets('the wizard resumes at the first incomplete step (terms)',
       (tester) async {
     final store = await seededStore('draft');
@@ -270,6 +443,7 @@ void main() {
         setup: setupJson(
           profileDone: true,
           category: 'grocery',
+          description: 'A neighbourhood grocery on Majeedhee Magu.',
           pinned: true,
           rate: '2.00',
         ),
@@ -290,7 +464,11 @@ void main() {
       (s) => _SetupFakeApi(
         session: s,
         setup: setupJson(
-            profileDone: true, category: 'grocery', channel: 'online'),
+          profileDone: true,
+          category: 'grocery',
+          description: 'A neighbourhood grocery on Majeedhee Magu.',
+          channel: 'online',
+        ),
       ),
     ));
     await settleTall(tester);
@@ -313,6 +491,7 @@ void main() {
         setup: setupJson(
           profileDone: true,
           category: 'grocery',
+          description: 'A neighbourhood grocery on Majeedhee Magu.',
           pinned: true,
           rate: '2.00',
           terms: 'All items.',
@@ -349,6 +528,7 @@ void main() {
         setup: setupJson(
           profileDone: true,
           category: 'grocery',
+          description: 'A neighbourhood grocery on Majeedhee Magu.',
           pinned: true,
           rate: '2.00',
           terms: 'All items.',
@@ -377,6 +557,7 @@ void main() {
           status: 'rejected',
           profileDone: true,
           category: 'grocery',
+          description: 'A neighbourhood grocery on Majeedhee Magu.',
           pinned: true,
           rate: '2.00',
           terms: 'All items.',
@@ -450,6 +631,10 @@ class _SetupFakeApi extends MerchantApi {
   final List<String> permissions;
   var registered = false;
 
+  /// Every PATCH /merchant/setup/profile the step actually made — the seam
+  /// that proves a client-side refusal never reached the wire.
+  final profileSaves = <Map<String, dynamic>>[];
+
   Map<String, dynamic> get _values => setup['values'] as Map<String, dynamic>;
   Map<String, dynamic> get _steps => setup['steps'] as Map<String, dynamic>;
 
@@ -518,13 +703,16 @@ class _SetupFakeApi extends MerchantApi {
   Future<MerchantSetupState> saveSetupProfile({
     required String category,
     required String channel,
+    String? description,
     String? contactEmail,
     String? contactPhone,
     String? supportPhone,
     String? websiteUrl,
   }) async {
+    profileSaves.add({'category': category, 'description': description});
     _values['category'] = category;
     _values['channel'] = channel;
+    _values['description'] = description;
     _values['contact_email'] = contactEmail;
     _values['contact_phone'] = contactPhone;
     _values['support_phone'] = supportPhone;

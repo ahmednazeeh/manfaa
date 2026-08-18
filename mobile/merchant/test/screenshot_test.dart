@@ -286,6 +286,10 @@ Map<String, dynamic> _setupFixture({
     'eligibility_basis': complete
         ? 'Everything in store except tobacco, phone top-ups and gift cards.'
         : null,
+    'description': complete
+        ? 'A neighbourhood grocery on Majeedhee Magu, stocking fresh produce, '
+              'household basics and the daily essentials.'
+        : null,
     'contact_email': complete ? 'hello@tropicalmart.mv' : null,
     'contact_phone': complete ? '+9607781234' : null,
     'support_phone': null,
@@ -624,6 +628,9 @@ class _ShotApi extends MerchantApi {
     'channel': 'in_store',
     'eligibility_basis':
         'Groceries, household essentials and selected daily items.',
+    'description':
+        'A neighbourhood grocery on Majeedhee Magu, stocking fresh produce, '
+        'household basics and the daily essentials.',
     'contact_email': 'hello@tropicalmart.mv',
     'contact_phone': '+960 778 1234',
     'support_phone': '+960 333 4455',

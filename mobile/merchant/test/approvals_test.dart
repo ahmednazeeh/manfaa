@@ -152,6 +152,58 @@ void main() {
     },
   );
 
+  testWidgets(
+    'a changed DESCRIPTION queues, and the pending card lists it by name',
+    (tester) async {
+      final api = await boot(
+        tester,
+        permissions: const ['profile.view', 'profile.edit', 'setup.view'],
+      );
+
+      await tester.tap(find.text('View profile'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Edit'));
+      await tester.pumpAndSettle();
+
+      // 0 name, 1 Thaana name, 2 contact email, 3 contact phone, 4 website,
+      // 5 description (the support field is hidden while the tick holds).
+      await tester.enterText(
+        find.byType(TextField).at(5),
+        'A neighbourhood grocery on Majeedhee Magu, open until 11pm.',
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Save profile'));
+      await tester.pumpAndSettle();
+
+      expect(
+        api.profilePatches.single['description'],
+        'A neighbourhood grocery on Majeedhee Magu, open until 11pm.',
+      );
+      // A gated save is NOT a save — the description is a public claim.
+      expect(find.text("Sent for Manfaa's review"), findsOneWidget);
+      expect(find.text('Profile saved'), findsNothing);
+
+      // Back on the view screen: the card names the field in the app's own
+      // words and carries the PROPOSED text, while the row underneath still
+      // holds the words a shopper reads today.
+      await tester.pumpAndSettle();
+      expect(find.text("Waiting for Manfaa's review"), findsOneWidget);
+      expect(find.text('Store description'), findsWidgets);
+      expect(
+        find.text(
+          'A neighbourhood grocery on Majeedhee Magu, open until 11pm.',
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.text('A neighbourhood grocery on Majeedhee Magu.'),
+        findsOneWidget,
+      );
+      // Never the raw wire key.
+      expect(find.text('description'), findsNothing);
+    },
+  );
+
   testWidgets('the editor warns that re-saving replaces the pending request', (
     tester,
   ) async {
@@ -278,6 +330,7 @@ const _profileFixture = <String, dynamic>{
   'category_retired': false,
   'channel': 'in_store',
   'eligibility_basis': 'Everything except tobacco.',
+  'description': 'A neighbourhood grocery on Majeedhee Magu.',
   'contact_email': 'hello@tropicalmart.mv',
   'contact_phone': '+9607781234',
   'support_phone': '+9607781234',
@@ -303,6 +356,35 @@ const _pendingProfile = <String, dynamic>{
   ],
   'proposed': {'name': 'Tropical Fresh Market', 'category': 'dining'},
   'current': {'name': 'Tropical Mart', 'category': 'grocery'},
+  'submitted_at': '2026-08-17T09:41:00+00:00',
+  'reviewed_at': null,
+  'reviewed_by': null,
+  'rejected_reason': null,
+};
+
+/// A live store editing only its own words: `description` is not on the
+/// INSTANT list, so ChangeRequestService's fail-closed default gates it —
+/// the app's job is to say so in words the owner recognises.
+const _pendingDescription = <String, dynamic>{
+  'id': 24,
+  'merchant_id': 7,
+  'kind': 'profile',
+  'kind_label': 'store profile change',
+  'status': 'pending',
+  'branch_id': null,
+  'branch_name': 'Tropical Mart',
+  'changes': [
+    {
+      'field': 'description',
+      'from': 'A neighbourhood grocery on Majeedhee Magu.',
+      'to': 'A neighbourhood grocery on Majeedhee Magu, open until 11pm.',
+    },
+  ],
+  'proposed': {
+    'description':
+        'A neighbourhood grocery on Majeedhee Magu, open until 11pm.',
+  },
+  'current': {'description': 'A neighbourhood grocery on Majeedhee Magu.'},
   'submitted_at': '2026-08-17T09:41:00+00:00',
   'reviewed_at': null,
   'reviewed_by': null,
@@ -380,6 +462,12 @@ class _FakeApi extends MerchantApi {
 
   final deleted = <int>[];
 
+  /// Every PATCH /merchant/profile the editor made, name + description.
+  final profilePatches = <Map<String, dynamic>>[];
+
+  /// The queue a gated save created, as the next GET would carry it.
+  Map<String, dynamic>? _lastQueued;
+
   MerchantChangeRequest _queued(Map<String, dynamic> json) =>
       MerchantChangeRequest.fromJson(json);
 
@@ -410,7 +498,10 @@ class _FakeApi extends MerchantApi {
   @override
   Future<MerchantProfile> profile() async => MerchantProfile.fromJson({
     ..._profileFixture,
-    'pending_change': pendingProfileJson,
+    // What the store is waiting on: the fixture it was booted with, or the
+    // request a save made HERE — the GET carries `pending_change` either
+    // way, which is how the view screen knows to draw the card.
+    'pending_change': pendingProfileJson ?? _lastQueued,
   });
 
   @override
@@ -419,6 +510,7 @@ class _FakeApi extends MerchantApi {
     String? nameDv,
     required String channel,
     String? eligibilityBasis,
+    String? description,
     String? contactEmail,
     String? contactPhone,
     String? supportPhone,
@@ -426,18 +518,29 @@ class _FakeApi extends MerchantApi {
     bool categoryChanged = false,
     String? category,
   }) async {
+    profilePatches.add({'name': name, 'description': description});
+
+    // The server diffs the GATED half against the live row, so what comes
+    // back is the queue for the claim that actually moved: a changed
+    // description queues exactly as a rename does.
+    final changed = description != _profileFixture['description']
+        ? _pendingDescription
+        : _pendingProfile;
+    if (gated) _lastQueued = changed;
+
     final profile = MerchantProfile.fromJson({
       ..._profileFixture,
       'contact_phone': contactPhone,
       'support_phone': supportPhone,
-      if (gated) 'pending_change': _pendingProfile,
+      if (gated) 'pending_change': changed,
       // Not live: the claim applied on the spot.
       if (!gated) 'name': name,
+      if (!gated) 'description': description,
     });
 
     return ProfileSaveResult(
       profile: profile,
-      queued: gated ? _queued(_pendingProfile) : null,
+      queued: gated ? _queued(changed) : null,
     );
   }
 
@@ -452,6 +555,7 @@ class _FakeApi extends MerchantApi {
         'category': 'grocery',
         'channel': 'in_store',
         'eligibility_basis': 'Everything except tobacco.',
+        'description': 'A neighbourhood grocery on Majeedhee Magu.',
         'contact_email': 'hello@tropicalmart.mv',
         'contact_phone': '+9607781234',
         'support_phone': null,

@@ -285,6 +285,29 @@ class AppLocalizationsDv extends AppLocalizations {
   String get channelBothHint => 'ކައުންޓަރާއި އޮންލައިން އޯޑަރު ދެގޮތް.';
 
   @override
+  String get descriptionLabel => 'ފިހާރައިގެ ތަޢާރަފު';
+
+  @override
+  String get descriptionPlaceholder =>
+      'މިސާލަކަށް: ތާޒާ ތަރުކާރީއާއި ގޭތެރެއަށް ބޭނުންވާ ސާމާނު ލިބޭ ފިހާރައެއް.';
+
+  @override
+  String get descriptionHint =>
+      'ގިނަވެގެން 180 ބަސް — ފިހާރައިގެ ޞަފްޙާއިން ކަސްޓަމަރުންނަށް މި ފެންނާނެ.';
+
+  @override
+  String get descriptionRequired =>
+      'ކުރިއަށް ދިއުމަށް ފިހާރައިގެ ތަޢާރަފެއް ލިޔުއްވާ.';
+
+  @override
+  String get descriptionTooLong => '180 ބަހަށްވުރެ ދިގު. ކުރުކުރައްވާ.';
+
+  @override
+  String descriptionWordCount(int count, int max) {
+    return '$count / $max ބަސް';
+  }
+
+  @override
   String get contactEmailLabel => 'ގުޅޭނެ އީމެއިލް';
 
   @override
@@ -427,6 +450,9 @@ class AppLocalizationsDv extends AppLocalizations {
   String get reviewChannel => 'ވިއްކާ ގޮތް';
 
   @override
+  String get reviewDescription => 'ތަޢާރަފު';
+
+  @override
   String get reviewLocation => 'ތަން';
 
   @override
@@ -460,6 +486,9 @@ class AppLocalizationsDv extends AppLocalizations {
 
   @override
   String get missingChannel => 'ވިއްކާ ގޮތް ނަންގަވާ';
+
+  @override
+  String get missingDescription => 'ފިހާރައިގެ ތަޢާރަފު ލިޔުއްވާ';
 
   @override
   String get missingContact => 'ގުޅޭނެ ފޯނު ނަންބަރެއް ލިޔުއްވާ';

@@ -519,6 +519,8 @@ class DiscoverFeed {
 class StorePage {
   StorePage({
     required this.entry,
+    required this.description,
+    required this.descriptionDv,
     required this.eligibilityBasis,
     required this.branches,
     required this.productCategories,
@@ -528,13 +530,27 @@ class StorePage {
 
   factory StorePage.fromJson(Map<String, dynamic> json) => StorePage(
         entry: StoreEntry.fromJson(json),
-        eligibilityBasis: json['eligibility_basis'] as String?,
+        // Nullable on the wire and NOT a defaulted empty string: the stores
+        // that predate the field send no description at all, and the page
+        // must render as if the block did not exist rather than as a blank
+        // one.
+        description: json['description'] as String?,
+        descriptionDv: json['description_dv'] as String?,
+        // The storefront payload names this `cashback_basis`; the
+        // `eligibility_basis` fallback is the merchant-side spelling, kept
+        // so any payload that ever used it still fills the card.
+        eligibilityBasis:
+            (json['cashback_basis'] ?? json['eligibility_basis']) as String?,
         branches: [
           for (final item in (json['branches'] as List? ?? const []))
             StoreBranch.fromJson((item as Map).cast<String, dynamic>()),
         ],
+        // Ditto: the storefront serves the rate card as `category_rates`.
         productCategories: [
-          for (final item in (json['product_categories'] as List? ?? const []))
+          for (final item
+              in ((json['category_rates'] ?? json['product_categories'])
+                      as List? ??
+                  const []))
             (item as Map).cast<String, dynamic>(),
         ],
         // The API serves the number under both keys; older payloads only
@@ -546,6 +562,14 @@ class StorePage {
 
   final StoreEntry entry;
 
+  /// The store's own words about itself. Null for every store that has not
+  /// written one — the stores already live predate the field, and the live
+  /// storefront answers `"description": null` for them today.
+  final String? description;
+
+  /// The Thaana description; null when the store wrote only the Latin one.
+  final String? descriptionDv;
+
   /// §11: displayed to customers because the merchant defines their own
   /// eligible amount — the over-promise guard.
   final String? eligibilityBasis;
@@ -553,6 +577,36 @@ class StorePage {
   final List<Map<String, dynamic>> productCategories;
   final String? contactPhone;
   final String? websiteUrl;
+
+  /// The description in the reader's language, or null when there is
+  /// nothing to show — the single guard the UI asks before it draws the
+  /// block, so "unset", "null" and "  " all mean the same thing: no block.
+  ///
+  /// Mirrors [StoreEntry.displayName]: Thaana when the reader is on Dhivehi
+  /// AND the store wrote one, otherwise the Latin text. A blank Latin one is
+  /// never papered over with the Thaana text — an English reader would get
+  /// a script they did not ask for.
+  String? displayDescription(bool dhivehi) {
+    if (descriptionIsThaana(dhivehi)) {
+      return descriptionDv!.trim();
+    }
+    final en = description?.trim();
+
+    return en == null || en.isEmpty ? null : en;
+  }
+
+  /// Whether [displayDescription] answers with the Thaana text — which is
+  /// what decides the paragraph's DIRECTION, not the reader's locale.
+  ///
+  /// A Dhivehi reader on a store that wrote only a Latin description gets
+  /// that Latin text; laid out RTL it right-aligns English prose and throws
+  /// its full stop to the wrong end. Same rule as [displayDescription], said
+  /// once so the two can never disagree.
+  bool descriptionIsThaana(bool dhivehi) {
+    final dv = descriptionDv?.trim();
+
+    return dhivehi && dv != null && dv.isNotEmpty;
+  }
 }
 
 class StoreBranch {

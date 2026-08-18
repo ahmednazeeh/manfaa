@@ -171,9 +171,10 @@ export type ChangeRequestStatus = z.infer<typeof ChangeRequestStatusSchema>;
 
 /**
  * One field's before/after. `field` is the wire's own column name (`name`,
- * `name_dv`, `category`, `channel`, `eligibility_basis`, `website_url`, or
- * `name`/`address`/`lat`/`lng` on a branch) with ONE rename: a logo change
- * arrives as `logo`, both sides being preview URLs rather than paths.
+ * `name_dv`, `category`, `channel`, `eligibility_basis`, `description`,
+ * `website_url`, or `name`/`address`/`lat`/`lng` on a branch) with ONE
+ * rename: a logo change arrives as `logo`, both sides being preview URLs
+ * rather than paths.
  *
  * The values stay `unknown` on purpose. They are raw JSON out of the stored
  * payload/snapshot, so the same field can be a float on one side and the

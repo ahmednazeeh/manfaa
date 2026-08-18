@@ -54,6 +54,10 @@ import { Input, InputAddon, InputGroup } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Textarea } from '@/components/ui/textarea';
+import {
+  DescriptionField,
+  descriptionTooLong,
+} from '@/components/app/description-field';
 import { formatPin } from '@/components/app/location-picker';
 import {
   locationRequired,
@@ -63,10 +67,11 @@ import {
 
 /**
  * The resumable store setup wizard (§1 decision 2026-08-15). Six steps —
- * Store profile (curated category + channel), Location (the primary branch's
- * map pin; required for a store with a counter, skippable online), Logo
- * (skippable), Cashback rate (percent input via parsePercentToBp with the
- * all-in preview), Terms & exclusions, Review & submit. Every step is
+ * Store profile (curated category + channel + the store's own description),
+ * Location (the primary branch's map pin; required for a store with a
+ * counter, skippable online), Logo (skippable), Cashback rate (percent input
+ * via parsePercentToBp with the all-in preview), Terms & exclusions, Review
+ * & submit. Every step is
  * persisted server-side the moment it saves, so quitting mid-wizard resumes
  * exactly where the owner left off (GET /merchant/setup).
  *
@@ -107,7 +112,14 @@ function staticFeeBp(rateBp: number): number {
 
 /** Resume at the first step whose REQUIRED value is still missing. */
 function firstIncompleteStep(state: MerchantSetupState): number {
-  if (!state.steps.profile || state.values.category === null) {
+  // The description joined the profile step after some stores had already
+  // marked it done, so the step's own flag is not enough to say it is
+  // finished — the value is.
+  if (
+    !state.steps.profile ||
+    state.values.category === null ||
+    (state.values.description ?? '').trim() === ''
+  ) {
     return STEPS.indexOf('profile');
   }
   // An online-only store may pass this step unpinned, so being unpinned does
@@ -208,7 +220,7 @@ function StepIndicator({
 }
 
 // ---------------------------------------------------------------------------
-// Step 1 — store profile (curated category + channel + contact)
+// Step 1 — store profile (curated category + channel + description + contact)
 // ---------------------------------------------------------------------------
 
 function ProfileStep({
@@ -243,17 +255,30 @@ function ProfileStep({
     (state.values.support_phone ?? '') === '' ||
       state.values.support_phone === state.values.contact_phone,
   );
+  const [description, setDescription] = useState(
+    state.values.description ?? '',
+  );
   const [categoryError, setCategoryError] = useState(false);
+  const [descriptionError, setDescriptionError] = useState(false);
+
+  // Past the word ceiling the API refuses the save outright, so the step
+  // refuses first and says which half of the field is wrong.
+  const descriptionOverCeiling = descriptionTooLong(description);
 
   const save = () => {
+    const noDescription = description.trim() === '';
+    setDescriptionError(noDescription);
     if (category === null) {
       setCategoryError(true);
+    }
+    if (category === null || noDescription || descriptionOverCeiling) {
       return;
     }
     updateProfile.mutate(
       {
         category,
         channel,
+        description,
         contact_email: contactEmail.trim() === '' ? null : contactEmail.trim(),
         contact_phone: contactPhone.trim() === '' ? null : contactPhone.trim(),
         // Same-as-contact sends the contact number itself — the support
@@ -356,6 +381,16 @@ function ProfileStep({
           </RadioGroup>
         </div>
 
+        <DescriptionField
+          id="setup-description"
+          value={description}
+          onChange={(value) => {
+            setDescription(value);
+            setDescriptionError(false);
+          }}
+          error={descriptionError ? t('setup.descriptionRequired') : null}
+        />
+
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
           <div className="flex flex-col gap-2.5">
             <Label htmlFor="setup-contact-email">
@@ -431,7 +466,10 @@ function ProfileStep({
         </div>
       </CardContent>
       <CardFooter className="justify-end">
-        <Button disabled={updateProfile.isPending} onClick={save}>
+        <Button
+          disabled={updateProfile.isPending || descriptionOverCeiling}
+          onClick={save}
+        >
           {updateProfile.isPending && <LoaderCircle className="animate-spin" />}
           {t('common.continue')}
         </Button>
@@ -952,6 +990,7 @@ function ReviewStep({
     category: STEPS.indexOf('profile'),
     channel: STEPS.indexOf('profile'),
     contact: STEPS.indexOf('profile'),
+    description: STEPS.indexOf('profile'),
     rate: STEPS.indexOf('rate'),
     terms: STEPS.indexOf('terms'),
   };
@@ -999,6 +1038,17 @@ function ReviewStep({
           {row(
             t('setup.reviewChannel'),
             merchantChannelLabel(t, values.channel),
+            STEPS.indexOf('profile'),
+          )}
+          {row(
+            t('setup.reviewDescription'),
+            (values.description ?? '').trim() !== '' ? (
+              <span className="whitespace-pre-wrap">{values.description}</span>
+            ) : (
+              <span className="text-muted-foreground">
+                {t('common.notSet')}
+              </span>
+            ),
             STEPS.indexOf('profile'),
           )}
           {row(

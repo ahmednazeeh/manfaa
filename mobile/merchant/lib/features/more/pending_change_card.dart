@@ -9,7 +9,8 @@ import '../../widgets/tx_format.dart';
 /// MR9 — "Waiting for Manfaa's review", carrying the PROPOSED values.
 ///
 /// A live store's public claims (its name, category, channel, logo, website,
-/// the what-earns-cashback promise) and its whole branch estate do not move
+/// its own description, the what-earns-cashback promise) and its whole
+/// branch estate do not move
 /// when the owner saves: they queue for admin review. Without this card a
 /// gated save is indistinguishable from a lost one — the form would say
 /// "saved" and every field would still read the old value.
@@ -180,6 +181,7 @@ String changeFieldLabel(AppLocalizations l10n, String kind, String field) {
       'category' => l10n.categoryLabel,
       'channel' => l10n.channelRowLabel,
       'eligibility_basis' => l10n.termsTitle,
+      'description' => l10n.descriptionLabel,
       'website_url' => l10n.changeFieldWebsite,
       'logo' => l10n.storeLogoLabel,
       // A field the server gates tomorrow ships before this build does.
