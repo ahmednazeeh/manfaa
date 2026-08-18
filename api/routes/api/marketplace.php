@@ -1,12 +1,14 @@
 <?php
 
 use App\Http\Controllers\Admin\MarketplaceKybController;
+use App\Http\Controllers\Admin\OrderPaymentController;
 use App\Http\Controllers\Customer\AddressController;
 use App\Http\Controllers\Customer\CartController;
 use App\Http\Controllers\Customer\MarketController;
 use App\Http\Controllers\Customer\OrderController;
 use App\Http\Controllers\Merchant\DeliveryRuleController;
 use App\Http\Controllers\Merchant\MarketplaceEnrolmentController;
+use App\Http\Controllers\Merchant\OrderController as MerchantOrderController;
 use App\Http\Controllers\Merchant\ProductController;
 use App\Http\Middleware\EnsureMerchantApproved;
 use App\Http\Middleware\EnsureSuperadmin;
@@ -144,9 +146,37 @@ Route::prefix('customer')
         Route::get('orders/{order}', [OrderController::class, 'show'])->whereNumber('order');
     });
 
+/*
+ * The shop's order queue (MP6). Quick actions: accept, reject, advance,
+ * reduce. Behind the trading gate — a store that is not active has no
+ * business fulfilling.
+ */
+Route::prefix('merchant/marketplace')
+    ->middleware(['auth:merchant', 'marketplace', 'merchant.can:marketplace.manage'])
+    ->group(function (): void {
+        Route::get('orders', [MerchantOrderController::class, 'index']);
+        Route::get('orders/{suborder}', [MerchantOrderController::class, 'show'])->whereNumber('suborder');
+
+        Route::middleware(EnsureMerchantApproved::class.':'.EnsureMerchantApproved::TRADING)->group(function (): void {
+            Route::post('orders/{suborder}/accept', [MerchantOrderController::class, 'accept'])->whereNumber('suborder');
+            Route::post('orders/{suborder}/reject', [MerchantOrderController::class, 'reject'])->whereNumber('suborder');
+            Route::post('orders/{suborder}/advance', [MerchantOrderController::class, 'advance'])->whereNumber('suborder');
+            Route::post('orders/{suborder}/amend', [MerchantOrderController::class, 'amend'])->whereNumber('suborder');
+        });
+    });
+
 Route::prefix('admin/marketplace')
     ->middleware(['auth:admin', 'marketplace'])
     ->group(function (): void {
+        // Payment proof: reading is ordinary admin work, deciding is not.
+        Route::get('payments', [OrderPaymentController::class, 'index']);
+        Route::get('payments/{order}/receipt', [OrderPaymentController::class, 'receipt'])->whereNumber('order');
+
+        Route::middleware(EnsureSuperadmin::class)->group(function (): void {
+            Route::post('payments/{order}/verify', [OrderPaymentController::class, 'verify'])->whereNumber('order');
+            Route::post('payments/{order}/refuse', [OrderPaymentController::class, 'refuse'])->whereNumber('order');
+        });
+
         // Reading applications is ordinary admin work.
         Route::get('kyb', [MarketplaceKybController::class, 'index']);
         Route::get('kyb/{merchant}', [MarketplaceKybController::class, 'show'])->whereNumber('merchant');

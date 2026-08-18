@@ -1142,3 +1142,77 @@ invoice that nothing else in the system agrees with.
 
 **Not in MP5:** merchant fulfilment and amendments (MP6), cashback crediting
 (MP8).
+
+---
+
+## 18. MP6 — fulfilment and amendments (in progress)
+
+The shop's half of an order (`Orders.png`, `Order Details.png`) and the
+reduction flow the owner asked for (§2.7, §5.4c).
+
+### A finding that shapes this round
+
+**There is no customer wallet.** A customer's payable balance is derived, not
+stored: `EligibilityQuery` sums CONFIRMED transactions with cashback and no
+payout item. There is no ledger a refund could simply be added to.
+
+Two ways to honour "refund to the wallet", and neither belongs in a
+fulfilment round:
+
+- Write the refund as a transaction so it flows into payout batches. It
+  would work mechanically and corrupt every report — a refund is not
+  cashback, and it would land in "cashback issued", in merchant
+  reconciliation, and in the ledger as something it is not.
+- Build a real customer wallet and teach the payout path to draw from it.
+  That is a change to a LIVE money system and deserves the round that is
+  about money.
+
+So MP6 records the **obligation** — `customer_refunds`, one row per amended
+line, `pending` — created in the same transaction as the recompute, so an
+amendment can never reduce an order without owing the customer the
+difference. **MP8 decides how it is paid** and settles them. The seam is
+deliberate: half a wallet is worse than none.
+
+**Server**
+
+- [x] Merchant: list orders by state, show one, accept, reject with a reason.
+- [x] State machine: accepted → preparing → ready → out_for_delivery →
+      delivered, with pickup codes for collection.
+- [x] Amendments: reduce a line or remove it, recompute the whole suborder
+      from `fulfilled_qty` against the FROZEN rates, and record the refund.
+- [x] Removing the last line offers rejection instead (§2.7).
+- [x] Admin: verify or refuse a payment proof (deferred from MP5).
+- [ ] Notifications for every moment the customer cannot see for themselves
+      — **deferred to MP7**, where the customer's own order-tracking screen
+      is built: writing the messages beside the screen they link into is how
+      the two end up saying the same thing.
+
+**Proof**
+
+- [x] Tests: accept/reject; a reduction recomputes cashback, fee and payable
+      against frozen rates; delivery never moves; the refund obligation
+      matches the arithmetic; the last line cannot be amended to nothing;
+      a shop cannot touch another shop's order; states cannot skip.
+- [x] Full API suite green, pint clean.
+
+**Shipped 2026-08-18.** 14 fulfilment tests, 93 marketplace tests in total;
+full API suite **1501 green**; live behind the switch.
+
+What the tests pin, beyond the happy path:
+
+- **A reduction recomputes against the FROZEN rates.** The test doubles the
+  platform fee after placement, then amends, and asserts the recompute still
+  uses 2%.
+- **Delivery never moves.** A basket over the free-delivery threshold, cut
+  back under it, still pays nothing for delivery. The customer met the terms
+  with the order they placed; a shortage on the shop's shelf is not their
+  fault. This is the general rule — *the customer must never owe more after
+  a change they did not make* — in its first concrete form.
+- **The state machine refuses shortcuts.** "Ready" before "accepted" is not
+  a shortcut, it is a lie about what happened to somebody's shopping.
+- **Amending to nothing sends you to reject instead**, so the customer gets
+  the rejection notice and their delivery fee back rather than an order for
+  nothing.
+- **A refused payment goes back for another receipt, not to the bin.** A
+  wrong screenshot is a fixable mistake; cancelling would throw away a
+  basket somebody built.
