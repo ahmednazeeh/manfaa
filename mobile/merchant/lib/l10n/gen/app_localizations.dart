@@ -1940,24 +1940,6 @@ abstract class AppLocalizations {
   /// **'Settle everything outstanding before then and save {amount}'**
   String discountDeadlineBody(String amount);
 
-  /// No description provided for @bucket05.
-  ///
-  /// In en, this message translates to:
-  /// **'0–5 days'**
-  String get bucket05;
-
-  /// No description provided for @bucket610.
-  ///
-  /// In en, this message translates to:
-  /// **'6–10 days'**
-  String get bucket610;
-
-  /// No description provided for @bucket1115.
-  ///
-  /// In en, this message translates to:
-  /// **'11–15 days'**
-  String get bucket1115;
-
   /// No description provided for @bucketOverdue.
   ///
   /// In en, this message translates to:
@@ -2137,18 +2119,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Recommended'**
   String get methodRecommended;
-
-  /// No description provided for @methodInsufficient.
-  ///
-  /// In en, this message translates to:
-  /// **'Insufficient'**
-  String get methodInsufficient;
-
-  /// No description provided for @breakdownTitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Breakdown'**
-  String get breakdownTitle;
 
   /// No description provided for @totalDueLabel.
   ///
@@ -4693,12 +4663,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The prompt-payment discount no longer applies to your oldest sale.'**
   String get discountNoneSub;
-
-  /// No description provided for @agingTitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Aging'**
-  String get agingTitle;
 
   /// No description provided for @viewBreakdown.
   ///

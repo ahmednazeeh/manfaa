@@ -2,7 +2,7 @@ name: manfaa_merchant
 description: "The Manfaa merchant app — the till in the pocket."
 publish_to: 'none'
 
-version: 1.0.3+4
+version: 1.0.4+5
 
 environment:
   sdk: ^3.12.2

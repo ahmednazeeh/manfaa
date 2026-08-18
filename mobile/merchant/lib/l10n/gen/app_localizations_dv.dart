@@ -1057,15 +1057,6 @@ class AppLocalizationsDv extends AppLocalizations {
   }
 
   @override
-  String get bucket05 => '0–5 ދުވަސް';
-
-  @override
-  String get bucket610 => '6–10 ދުވަސް';
-
-  @override
-  String get bucket1115 => '11–15 ދުވަސް';
-
-  @override
   String get bucketOverdue => 'ސުންގަޑި ފަހަނައަޅާފައި';
 
   @override
@@ -1185,12 +1176,6 @@ class AppLocalizationsDv extends AppLocalizations {
 
   @override
   String get methodRecommended => 'ލަފާދެވޭ ގޮތް';
-
-  @override
-  String get methodInsufficient => 'ބެލެންސް ނުފުދޭ';
-
-  @override
-  String get breakdownTitle => 'ތަފްޞީލު';
 
   @override
   String get totalDueLabel => 'ޖުމްލަ ދައްކަންޖެހޭ';
@@ -2711,9 +2696,6 @@ class AppLocalizationsDv extends AppLocalizations {
   @override
   String get discountNoneSub =>
       'އެންމެ ކުރީގެ ވިޔަފާރިއަށް އަވަހަށް ދެއްކުމުގެ ޑިސްކައުންޓް ނުލިބޭ.';
-
-  @override
-  String get agingTitle => 'ދުވަސްވީ މިންވަރު';
 
   @override
   String get viewBreakdown => 'ތަފްޞީލު ބައްލަވާ';

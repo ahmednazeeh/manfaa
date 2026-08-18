@@ -1042,15 +1042,6 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get bucket05 => '0–5 days';
-
-  @override
-  String get bucket610 => '6–10 days';
-
-  @override
-  String get bucket1115 => '11–15 days';
-
-  @override
   String get bucketOverdue => 'Overdue';
 
   @override
@@ -1170,12 +1161,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get methodRecommended => 'Recommended';
-
-  @override
-  String get methodInsufficient => 'Insufficient';
-
-  @override
-  String get breakdownTitle => 'Breakdown';
 
   @override
   String get totalDueLabel => 'Total due';
@@ -2675,9 +2660,6 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get discountNoneSub =>
       'The prompt-payment discount no longer applies to your oldest sale.';
-
-  @override
-  String get agingTitle => 'Aging';
 
   @override
   String get viewBreakdown => 'View breakdown';
