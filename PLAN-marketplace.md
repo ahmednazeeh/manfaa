@@ -176,6 +176,39 @@ What follows:
   products list different things on purpose: one is "which businesses give
   cashback", the other is "which shops can send me rice today".
 
+### 2.7 Order amendments — the shop reduces, never adds
+
+Owner, 2026-08-18: a store picking an order finds the eggs are gone. It must
+be able to drop that line, or cut the quantity, with the difference refunded
+to the customer's wallet and the change visible to them.
+
+**The shop may only reduce.** Quantities go down or to zero; nothing may be
+added and no price may rise. The customer authorised a specific amount at
+checkout and paid it to us — anything upward is a new order, not an edit.
+That single rule is what keeps this safe.
+
+`suborder_items.qty` is what was **ordered** and never changes;
+`fulfilled_qty` is what the shop will actually supply. The gap between them
+*is* the amendment, which is what lets the customer's screen show both
+numbers rather than quietly rewriting history.
+
+**When.** From `accepted` until `ready` / `out_for_delivery` — the window in
+which someone is physically picking the order. Never after the goods are
+handed over, and never after cashback has been credited (§5.4c), which is the
+same boundary stated twice.
+
+**Removing everything is a rejection, not an amendment.** If the last line
+would go to zero the shop is told to reject the suborder instead, so the
+customer gets the rejection notice and the full-refund path (§5.4b) rather
+than an order for nothing.
+
+**A reason is required** — out of stock, damaged, customer request, other.
+The customer is told what changed and why; "your order changed" with no
+cause is worse than a phone call.
+
+Every amendment is a row with an actor, so a shop that habitually cuts
+orders is visible to an admin rather than a matter of opinion.
+
 ### 2.4 Delivery rules — per branch, per destination island
 
 Owner, clarified 2026-08-18:
@@ -291,8 +324,20 @@ suborders                         one per SERVING BRANCH — the unit of fulfilm
   reject_reason, pickup_code
   accepted_at … delivered_at
 
-suborder_items                    product_id, name snapshot, qty, unit_price_laari,
-                                  line_total_laari, cashback_laari
+suborder_items                    product_id, name snapshot, unit_price_laari
+  qty                             what the customer ORDERED — immutable
+  fulfilled_qty                   what the shop can actually supply;
+                                  defaults to qty, 0 = removed entirely
+  line_total_laari, cashback_laari
+
+suborder_amendments               the shop reducing an order (§2.7)
+  suborder_id, merchant_user_id
+  reason                          out_of_stock | damaged | customer_request | other
+  note, refund_laari, created_at
+
+suborder_amendment_lines
+  amendment_id, suborder_item_id
+  qty_before, qty_after, refund_laari
 ```
 
 Snapshots are deliberate: a price edited next week must not restate last
@@ -351,7 +396,30 @@ cards and white MIB backing from MR11.
 `Order Received.png` then shows the order under review with per-store
 statuses and the projected cashback.
 
-### 3.5 Orders live in **Activity**, not a new tab
+### 3.5 Seeing an amended order
+
+The owner's requirement, verbatim: *"strike through + refunded amount and
+also if instead of full removal if partial remove, then show changes."*
+
+- **Line removed entirely** — the row stays, struck through, greyed, with
+  **`Refunded MVR 78.00`** on the end. The item is not deleted from the
+  screen: the customer ordered it, and a row that silently vanishes reads as
+  a bug or a swindle.
+- **Quantity reduced** — the row stays at full strength with the change
+  shown inline: **`×3 ~~×2~~`** → `×2`, the old line total struck through
+  beside the new one, and `Refunded MVR 34.00`.
+- **A per-store banner** naming the cause: *"Island Mart changed this order —
+  1 item out of stock. MVR 78.00 refunded to your wallet."*
+- **The cashback figure updates too**, with its old value struck through, so
+  the number promised at checkout and the number now earned are both on
+  screen. Hiding the reduction would be the one thing that turns a shortage
+  into a grievance.
+- **The refund is a wallet line** in Activity, linked back to the order, so
+  the money is traceable from either end.
+- Push on amendment (`order_amended`, §8), because a customer who is out
+  when their order changes cannot see a screen.
+
+### 3.6 Orders live in **Activity**, not a new tab
 
 `Customer App Order Tracking.png` is explicit: *"Track your marketplace and
 cashback orders in one place."* The existing Activity tab gains Active /
@@ -374,6 +442,12 @@ Order details: store/customer/fulfilment/payment/cashback/value grid, the
 customer block with **Call** and **Open map** (our own map, our own label —
 the fix from 2026-08-18), items with substitution flags, the money
 breakdown, and Accept / Reject with a required reason.
+
+**Editing while picking** (§2.7): each item row on an accepted order carries
+a quantity stepper down to zero and an out-of-stock action. The screen shows
+the running refund as they go — *"Refunding MVR 78.00"* — so the shop sees
+the customer's side of the decision before they commit it, and a reason is
+required to save. Taking the last line to zero offers Reject instead.
 
 Push on every new order, reusing the merchant-staff channel — and, per the
 2026-08-18 decision, **SMS as well**, since a new order is exactly the kind
@@ -462,6 +536,43 @@ own reconciliation.
 
 The credit is a ledger posting like any other and appears in Activity beside
 the order it came from. It is never a silent adjustment to the order total.
+
+### 5.4c What an amendment does to the money
+
+Recomputed from `fulfilled_qty`, with one deliberate exception:
+
+```
+fulfilled_items_laari = Σ (unit_price_laari × fulfilled_qty)
+refund_laari          = items_laari − fulfilled_items_laari      → customer wallet
+
+delivery_laari        UNCHANGED  ← the exception, and it matters
+cashback_laari        = ceil(fulfilled_items_laari × cashback_rate_bp)
+order_fee_laari       = ceil(fulfilled_items_laari × order_fee_bp)
+
+payable_to_merchant_laari
+  = fulfilled_items_laari + delivery_laari − cashback_laari
+    − order_fee_laari − order_fee_gst_laari
+```
+
+**Delivery never moves.** If dropping an item takes the basket back under
+the free-delivery threshold, the customer does **not** suddenly owe a
+delivery fee. They met the terms with the order they placed; a shortage in
+the shop's own stock is not a reason to charge them more. The same holds for
+the order minimum — falling under it after an amendment does not cancel
+anything.
+
+**The customer must never owe more after a change they did not make.** That
+sentence is the whole rule; the frozen delivery fee is just its first
+consequence.
+
+**Cashback falls with the items**, because it is earned on what was actually
+bought. This has to be *shown*, not merely applied — the customer was
+promised a figure at checkout and will notice a smaller one. Both the refund
+and the reduced cashback appear on the order.
+
+**We take less too.** The marketplace fee recomputes on the fulfilled items,
+so the platform's cut shrinks with the merchant's sale rather than being
+charged on goods nobody received.
 
 ### 5.5 Admin → **Merchant Settlements** (new menu)
 
@@ -595,6 +706,7 @@ the store):
 | `order_placed`            | merchant | push + SMS |
 | `order_accepted`          | customer | push |
 | `order_rejected`          | customer | push + SMS |
+| `order_amended`           | customer | push + SMS |
 | `order_ready_for_pickup`  | customer | push |
 | `order_out_for_delivery`  | customer | push |
 | `order_delivered`         | customer | push |
@@ -714,7 +826,7 @@ Each round ships end-to-end and green, in the house style.
 | **MP3** | Delivery and addresses: per-branch/per-island rules, `customer_addresses`, zone resolution, and branch storefronts (§2.3). |
 | **MP4** | Browse and cart: Market tab, store page, floating cart, collapsible multi-vendor cart with minimum warnings. |
 | **MP5** | Checkout and orders: the four steps, receipt-first payment, order + suborder creation, Order Received. |
-| **MP6** | Fulfilment: merchant Orders tab and details, accept/reject, statuses, pickup codes, notifications. |
+| **MP6** | Fulfilment: merchant Orders tab and details, accept/reject, **amendments with wallet refunds** (§2.7, §5.4c), statuses, pickup codes, notifications. |
 | **MP7** | Customer tracking: Activity unification, per-store statuses, Track order. |
 | **MP8** | Money: marketplace fee with overrides, cashback on validation, **Merchant Settlements** with xlsx export/import. |
 | **MP9** | Customer web + merchant web marketplace parity. |
