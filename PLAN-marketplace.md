@@ -1357,3 +1357,49 @@ panel is told only whether one is configured.
 `from_account` is sent explicitly even though `/bml/transfer` ignores it:
 "whatever the default is today" is not something to reconcile a bank
 statement against.
+
+---
+
+## 22. MP10 — Merchant Settlements
+
+Shipped 2026-08-19. 14 tests; full API suite **1557 green**.
+
+Its own menu, as the owner asked — and kept apart from the settlements
+screen that already exists for a reason worth repeating: there a merchant
+pays US the cashback they granted at their till, here we pay THEM for
+marketplace orders they fulfilled. One screen showing both directions is a
+screen nobody can check.
+
+**The workflow is the customer payout one, unchanged**: build → approve →
+export xlsx → bank → import the filled sheet. Whoever does the transfers
+should not have to learn a second process because the money is going to a
+shop. Same column shape, same empty reference box at the end.
+
+### When a shop gets paid
+
+On delivery **plus the store's own validation window** — the same clock the
+customer's cashback confirms on, so a return handled inside the window
+settles before anybody is paid for it. A window the merchant already
+understands, rather than a second one invented for the marketplace.
+
+### What stops a double payment, in three places
+
+- **`suborders.payout_item_id`.** Unlinked is unpaid, linked is claimed. A
+  concurrent build loses loudly rather than paying an order twice.
+- **`internal_ref`, unique per item** (owner requirement). It is the bank's
+  idempotency key AND the payout key printed on the sheet — one string
+  identifies a transfer in our table, in the bank's, and on the paper in
+  between.
+- **An item already `sent` is skipped on import.** Re-uploading a sheet is
+  something people do; refusing it teaches them to work around us, so a
+  completed batch accepts a re-import and simply changes nothing.
+
+A key we never issued is **reported, never guessed at** — a mistyped row
+must not silently mark the wrong shop paid. Money waiting on missing bank
+details is surfaced on the batch rather than quietly absent, and its orders
+stay unclaimed so they fall into the next run. Cancelling a batch releases
+everything it claimed.
+
+The bank API path is available per item with the same interpretation rules
+as the customer side: a parked transfer is never re-sent, and its
+`approval_id` is never filed as a bank reference.
