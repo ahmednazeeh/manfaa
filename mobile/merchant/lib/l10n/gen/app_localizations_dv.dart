@@ -489,7 +489,7 @@ class AppLocalizationsDv extends AppLocalizations {
 
   @override
   String pendingSubmittedAt(String date) {
-    return 'ހުށަހެޅުނީ $date';
+    return 'ފޮނުއްވީ $date';
   }
 
   @override
@@ -1303,10 +1303,6 @@ class AppLocalizationsDv extends AppLocalizations {
 
   @override
   String get referenceLabel => 'ޕޭމަންޓް ރެފަރެންސް';
-
-  @override
-  String get referencePreviewNote =>
-      'މި ރެފަރެންސް ކަނޑައެޅޭނީ ސްލިޕް ފޮނުއްވުމުންނެވެ. ސެޓްލްމަންޓްގައި އެހެން ރެފަރެންސެއް ދައްކާނަމަ، ރަސްމީ ރެފަރެންސަކީ އެއެވެ.';
 
   @override
   String get referenceFinalNote =>
@@ -2597,4 +2593,83 @@ class AppLocalizationsDv extends AppLocalizations {
   @override
   String get mapTilesFailed =>
       'މެޕް ލޯޑެއް ނުވި. ކަނެކްޝަން ބައްލަވާފައި އަލުން މަސައްކަތްކުރައްވާ.';
+
+  @override
+  String get pendingReviewTitle => 'މަންފާގެ ރިވިއުއަށް މަޑުކުރަނީ';
+
+  @override
+  String get pendingProfileNote =>
+      'މި ބަދަލު މަންފާއިން ފާސްކުރަންދެން ކަސްޓަމަރުންނަށް ފެންނާނީ ތިރީގައިވާ މަޢުލޫމާތެވެ.';
+
+  @override
+  String get pendingReplaceNote =>
+      'އަލުން ސޭވްކުރެއްވުމުން މަޑުކުރަމުންދާ އެދުމުގެ ބަދަލުގައި އައު އެދުމެއް ހުށަހެޅޭނެއެވެ.';
+
+  @override
+  String get pendingBranchNote =>
+      'މަންފާއިން ފާސްކުރަންދެން މި ބްރާންޗްގައި ހުންނާނީ މިހާރުގެ މަޢުލޫމާތެވެ.';
+
+  @override
+  String get pendingRemovalNote =>
+      'މަންފާއިން ފާސްކުރަންދެން މި ބްރާންޗް ލިސްޓުގައި ދެމިހުންނާނެއެވެ.';
+
+  @override
+  String get pendingCreateNote =>
+      'މަންފާއިން ފާސްކުރުމުން މި ބްރާންޗް ލިސްޓުގައްޔާއި ކަސްޓަމަރުންނަށް ފެންނާނެއެވެ.';
+
+  @override
+  String get changeKindProfile => 'ފިހާރައިގެ ޕްރޮފައިލް ބަދަލު';
+
+  @override
+  String get changeKindBranchCreate => 'އައު ބްރާންޗެއް';
+
+  @override
+  String get changeKindBranchUpdate => 'ބްރާންޗް ބަދަލު';
+
+  @override
+  String get changeKindBranchDelete => 'ބްރާންޗް ނެގުން';
+
+  @override
+  String get changeKindOther => 'ފިހާރައިގެ ބަދަލު';
+
+  @override
+  String get changeFieldWebsite => 'ވެބްސައިޓް';
+
+  @override
+  String get changeFieldBranchName => 'ބްރާންޗްގެ ނަން';
+
+  @override
+  String get changeFieldAddress => 'އެޑްރެސް';
+
+  @override
+  String get changeFieldLocation => 'މެޕް ޕިން';
+
+  @override
+  String get changeFieldOther => 'އެހެނިހެން މަޢުލޫމާތު';
+
+  @override
+  String get changeLogoValue => 'އައު ފޮޓޯ';
+
+  @override
+  String get sentForReview => 'މަންފާގެ ރިވިއުއަށް ފޮނުވިއްޖެ';
+
+  @override
+  String get logoSentForReview =>
+      'އައު ލޯގޯ ރިވިއުއަށް ފޮނުވިއްޖެ — ފާސްވަންދެން މިހާރުގެ ލޯގޯ ދެމިހުންނާނެއެވެ.';
+
+  @override
+  String get branchSentForReview =>
+      'އައު ބްރާންޗް މަންފާގެ ރިވިއުއަށް ފޮނުވިއްޖެ';
+
+  @override
+  String get branchChangeSentForReview =>
+      'ބްރާންޗްގެ ބަދަލުތައް މަންފާގެ ރިވިއުއަށް ފޮނުވިއްޖެ';
+
+  @override
+  String get branchRemovalSentForReview =>
+      'ބްރާންޗް ނެގުން މަންފާގެ ރިވިއުއަށް ފޮނުވިއްޖެ';
+
+  @override
+  String get referenceComesLaterNote =>
+      'ފައިސާ ފޮނުއްވުމަށް ރެފަރެންސެއް ބޭނުމެއް ނުވާނެ — ރަސީދު އަޕްލޯޑްކުރެއްވުމުން މަންފާއިން ރެފަރެންސެއް ހަދާ، ސެޓްލްމަންޓްގައި ފެންނާނެއެވެ.';
 }

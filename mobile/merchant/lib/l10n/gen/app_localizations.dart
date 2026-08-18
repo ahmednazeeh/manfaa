@@ -2342,12 +2342,6 @@ abstract class AppLocalizations {
   /// **'Payment reference'**
   String get referenceLabel;
 
-  /// No description provided for @referencePreviewNote.
-  ///
-  /// In en, this message translates to:
-  /// **'The final reference is assigned when the slip is submitted. If the settlement shows a different one, that one is official.'**
-  String get referencePreviewNote;
-
   /// No description provided for @referenceFinalNote.
   ///
   /// In en, this message translates to:
@@ -4519,6 +4513,144 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The map couldn\'t load. Check your connection and try again.'**
   String get mapTilesFailed;
+
+  /// No description provided for @pendingReviewTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for Manfaa\'s review'**
+  String get pendingReviewTitle;
+
+  /// No description provided for @pendingProfileNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Customers keep seeing the details below until Manfaa approves the change.'**
+  String get pendingProfileNote;
+
+  /// No description provided for @pendingReplaceNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Saving again replaces the request that is waiting.'**
+  String get pendingReplaceNote;
+
+  /// No description provided for @pendingBranchNote.
+  ///
+  /// In en, this message translates to:
+  /// **'This branch keeps its current details until Manfaa approves the change.'**
+  String get pendingBranchNote;
+
+  /// No description provided for @pendingRemovalNote.
+  ///
+  /// In en, this message translates to:
+  /// **'This branch stays on your list until Manfaa approves the removal.'**
+  String get pendingRemovalNote;
+
+  /// No description provided for @pendingCreateNote.
+  ///
+  /// In en, this message translates to:
+  /// **'This branch appears in your list, and to customers, once Manfaa approves it.'**
+  String get pendingCreateNote;
+
+  /// No description provided for @changeKindProfile.
+  ///
+  /// In en, this message translates to:
+  /// **'Store profile change'**
+  String get changeKindProfile;
+
+  /// No description provided for @changeKindBranchCreate.
+  ///
+  /// In en, this message translates to:
+  /// **'New branch'**
+  String get changeKindBranchCreate;
+
+  /// No description provided for @changeKindBranchUpdate.
+  ///
+  /// In en, this message translates to:
+  /// **'Branch update'**
+  String get changeKindBranchUpdate;
+
+  /// No description provided for @changeKindBranchDelete.
+  ///
+  /// In en, this message translates to:
+  /// **'Branch removal'**
+  String get changeKindBranchDelete;
+
+  /// No description provided for @changeKindOther.
+  ///
+  /// In en, this message translates to:
+  /// **'Store change'**
+  String get changeKindOther;
+
+  /// No description provided for @changeFieldWebsite.
+  ///
+  /// In en, this message translates to:
+  /// **'Website'**
+  String get changeFieldWebsite;
+
+  /// No description provided for @changeFieldBranchName.
+  ///
+  /// In en, this message translates to:
+  /// **'Branch name'**
+  String get changeFieldBranchName;
+
+  /// No description provided for @changeFieldAddress.
+  ///
+  /// In en, this message translates to:
+  /// **'Address'**
+  String get changeFieldAddress;
+
+  /// No description provided for @changeFieldLocation.
+  ///
+  /// In en, this message translates to:
+  /// **'Map pin'**
+  String get changeFieldLocation;
+
+  /// No description provided for @changeFieldOther.
+  ///
+  /// In en, this message translates to:
+  /// **'Other details'**
+  String get changeFieldOther;
+
+  /// No description provided for @changeLogoValue.
+  ///
+  /// In en, this message translates to:
+  /// **'New image'**
+  String get changeLogoValue;
+
+  /// No description provided for @sentForReview.
+  ///
+  /// In en, this message translates to:
+  /// **'Sent for Manfaa\'s review'**
+  String get sentForReview;
+
+  /// No description provided for @logoSentForReview.
+  ///
+  /// In en, this message translates to:
+  /// **'New logo sent for review — your current one stays up until it is approved.'**
+  String get logoSentForReview;
+
+  /// No description provided for @branchSentForReview.
+  ///
+  /// In en, this message translates to:
+  /// **'New branch sent for Manfaa\'s review'**
+  String get branchSentForReview;
+
+  /// No description provided for @branchChangeSentForReview.
+  ///
+  /// In en, this message translates to:
+  /// **'Branch changes sent for Manfaa\'s review'**
+  String get branchChangeSentForReview;
+
+  /// No description provided for @branchRemovalSentForReview.
+  ///
+  /// In en, this message translates to:
+  /// **'Removal sent for Manfaa\'s review'**
+  String get branchRemovalSentForReview;
+
+  /// No description provided for @referenceComesLaterNote.
+  ///
+  /// In en, this message translates to:
+  /// **'No reference is needed for the transfer — Manfaa creates one when you upload the receipt, and you\'ll see it on the settlement.'**
+  String get referenceComesLaterNote;
 }
 
 class _AppLocalizationsDelegate

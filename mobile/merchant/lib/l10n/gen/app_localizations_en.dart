@@ -1290,10 +1290,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get referenceLabel => 'Payment reference';
 
   @override
-  String get referencePreviewNote =>
-      'The final reference is assigned when the slip is submitted. If the settlement shows a different one, that one is official.';
-
-  @override
   String get referenceFinalNote =>
       'Quote this reference with your transfer — it is how we recognise your money.';
 
@@ -2565,4 +2561,81 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get mapTilesFailed =>
       'The map couldn\'t load. Check your connection and try again.';
+
+  @override
+  String get pendingReviewTitle => 'Waiting for Manfaa\'s review';
+
+  @override
+  String get pendingProfileNote =>
+      'Customers keep seeing the details below until Manfaa approves the change.';
+
+  @override
+  String get pendingReplaceNote =>
+      'Saving again replaces the request that is waiting.';
+
+  @override
+  String get pendingBranchNote =>
+      'This branch keeps its current details until Manfaa approves the change.';
+
+  @override
+  String get pendingRemovalNote =>
+      'This branch stays on your list until Manfaa approves the removal.';
+
+  @override
+  String get pendingCreateNote =>
+      'This branch appears in your list, and to customers, once Manfaa approves it.';
+
+  @override
+  String get changeKindProfile => 'Store profile change';
+
+  @override
+  String get changeKindBranchCreate => 'New branch';
+
+  @override
+  String get changeKindBranchUpdate => 'Branch update';
+
+  @override
+  String get changeKindBranchDelete => 'Branch removal';
+
+  @override
+  String get changeKindOther => 'Store change';
+
+  @override
+  String get changeFieldWebsite => 'Website';
+
+  @override
+  String get changeFieldBranchName => 'Branch name';
+
+  @override
+  String get changeFieldAddress => 'Address';
+
+  @override
+  String get changeFieldLocation => 'Map pin';
+
+  @override
+  String get changeFieldOther => 'Other details';
+
+  @override
+  String get changeLogoValue => 'New image';
+
+  @override
+  String get sentForReview => 'Sent for Manfaa\'s review';
+
+  @override
+  String get logoSentForReview =>
+      'New logo sent for review — your current one stays up until it is approved.';
+
+  @override
+  String get branchSentForReview => 'New branch sent for Manfaa\'s review';
+
+  @override
+  String get branchChangeSentForReview =>
+      'Branch changes sent for Manfaa\'s review';
+
+  @override
+  String get branchRemovalSentForReview => 'Removal sent for Manfaa\'s review';
+
+  @override
+  String get referenceComesLaterNote =>
+      'No reference is needed for the transfer — Manfaa creates one when you upload the receipt, and you\'ll see it on the settlement.';
 }
