@@ -1295,3 +1295,65 @@ it credits what was actually supplied, not what was ordered.
 
 **Still owed (MP9):** settling `customer_refunds`, and Merchant Settlements
 with the xlsx export/import.
+
+---
+
+## 21. MP9 — the customer wallet, and money leaving the platform
+
+Shipped 2026-08-19. 21 tests; full API suite **1543 green**.
+
+The owner's design, with one change: **the refund destination is not chosen
+at cart time.** At checkout a customer has no idea whether they will need a
+refund, and it locks in an answer for circumstances weeks away they cannot
+predict — on the one screen where a decision costs a completed order.
+Refunds credit the wallet instantly, and the balance is always withdrawable,
+so nothing is lost by defaulting. If a choice is ever wanted it belongs at
+REFUND time, when they actually have the information.
+
+### The shape
+
+```
+refund (amendment / rejection)  →  wallet credit     instant, automatic
+customer requests withdrawal    →  customer_payouts  admin queue → bank API
+```
+
+`customer_refunds` stays the REASON — the audit trail of why a wallet moved.
+`customer_wallets` + entries is the balance, built like `merchant_wallets`:
+a column plus one entry per movement, never a bare number that can drift.
+
+**Cashback payouts are untouched.** `EligibilityQuery` → `PayoutBatchBuilder`
+→ xlsx → bank is live and reconciled; the wallet starts with refunds only.
+
+### `internal_ref` is the spine
+
+Minted before the payout row exists, **unique in our table**, and sent
+unchanged on every attempt. That permanence is the whole of what makes a
+retry safe, and it is why the upstream can recognise a repeat instead of
+moving money twice.
+
+Four answers, each interpreted rather than guessed at:
+
+| Upstream says | We record | Why |
+|---|---|---|
+| 200 `success` + trx_id | **sent** | Done |
+| 200 `pending_approval` + approval_id | **pending_approval** | Parked, alive, **never re-sent**. The approval id is a queue record, NOT a bank reference, and is never stored as `trx_id` |
+| 409, `existing.status = success` | **sent**, adopting `existing.trx_id` | Already paid. Reading this as a failure and retrying is the textbook double payment |
+| 409 with a code proving no debit | **failed**, money returned | Only a short ALLOW-list of codes qualifies |
+| Anything else, incl. no answer | **failed**, money stays committed | A timeout may mean the bank paid while we stopped listening. A human looks |
+
+The balance is debited when a withdrawal is **requested**, not when the bank
+moves it — leaving it spendable while a transfer queues is how the same
+laari leaves twice. It returns only on a proven failure or a cancellation.
+
+### Admin-editable, because the tunnel does not exist yet
+
+Base URL, profile segment and debited account are rows, not constants: all
+four profiles seeded **inactive**, `auto_transfer_enabled` **off**, and an
+`auto_max_laari` ceiling above which a person always looks. The API key is
+NOT in the database — `x-api-key` is the whole of the upstream's
+authentication, and a secret an admin session can read is a leaked bank. The
+panel is told only whether one is configured.
+
+`from_account` is sent explicitly even though `/bml/transfer` ignores it:
+"whatever the default is today" is not something to reconcile a bank
+statement against.

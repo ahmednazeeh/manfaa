@@ -8,6 +8,7 @@ use App\Models\BranchDeliveryRule;
 use App\Models\Customer;
 use App\Models\CustomerAddress;
 use App\Models\CustomerRefund;
+use App\Models\CustomerWallet;
 use App\Models\MerchantUser;
 use App\Models\Suborder;
 use App\Models\SuborderAmendment;
@@ -112,7 +113,13 @@ it('rejects with a reason and owes the whole subtotal back', function () {
     $refund = CustomerRefund::query()->sole();
     expect($refund->amount_laari)->toBe($sub->subtotal_laari)
         ->and($refund->reason)->toBe('suborder_rejected')
-        ->and($refund->state)->toBe('pending');
+        // Settled at once (MP9): the refund row is the REASON, the wallet is
+        // the balance, and the customer has their money back before they
+        // have finished reading the notification.
+        ->and($refund->state)->toBe('settled');
+
+    expect(CustomerWallet::query()->sole()->balance_laari)
+        ->toBe($sub->subtotal_laari);
 });
 
 it('refuses a rejection with no reason', function () {

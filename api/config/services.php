@@ -50,4 +50,14 @@ return [
         'timeout' => env('MSGOWL_TIMEOUT_SECONDS', 15),
     ],
 
+    /*
+     * The bank transfer API (owner spec 2026-08-19). The URL, profile and
+     * debited account are admin-editable rows; only the KEY lives here,
+     * because `x-api-key` is the whole of the upstream's authentication and
+     * a secret in a table an admin session can read is a leaked bank.
+     */
+    'transfer' => [
+        'api_key' => env('TETHERX_TRANSFER_API_KEY'),
+    ],
+
 ];

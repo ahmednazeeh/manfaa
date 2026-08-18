@@ -139,6 +139,10 @@ Route::prefix('customer/cart')
 Route::prefix('customer')
     ->middleware(['auth:customer', 'marketplace'])
     ->group(function (): void {
+        // The wallet is NOT behind the marketplace switch: a refund already
+        // paid into it must stay visible and withdrawable even if the
+        // marketplace is switched off tomorrow. Money we owe outlives a
+        // feature flag.
         Route::get('payment-accounts', [OrderController::class, 'paymentAccounts']);
         Route::post('orders', [OrderController::class, 'place'])->middleware('throttle:20,1');
         Route::post('orders/{order}/receipt', [OrderController::class, 'uploadReceipt'])

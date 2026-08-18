@@ -6,6 +6,7 @@ namespace App\Domain\Marketplace;
 
 use App\Domain\Notifications\NotificationService;
 use App\Domain\Notifications\NotificationTemplateKey;
+use App\Domain\Wallet\WalletService;
 use App\Models\CustomerRefund;
 use App\Models\MerchantUser;
 use App\Models\Suborder;
@@ -23,7 +24,41 @@ final readonly class FulfilmentService
     public function __construct(
         private NotificationService $notifications,
         private MarketplaceCashbackService $cashback,
+        private WalletService $wallet,
     ) {}
+
+    /**
+     * Money owed becomes money HELD, at once (owner decision 2026-08-19).
+     *
+     * The refund row is the reason; the wallet is the balance. Crediting
+     * here rather than in a nightly sweep is the point of having a wallet at
+     * all — the customer sees their money back the moment the shop cuts
+     * their order, and can withdraw it whenever they like.
+     */
+    private function refund(CustomerRefund $refund, string $description): void
+    {
+        $customer = $refund->customer;
+
+        if ($customer === null) {
+            return;
+        }
+
+        $entry = $this->wallet->credit(
+            $customer,
+            (int) $refund->amount_laari,
+            type: 'refund',
+            referenceType: CustomerRefund::class,
+            referenceId: (int) $refund->getKey(),
+            description: $description,
+        );
+
+        if ($entry !== null) {
+            $refund->forceFill([
+                'state' => 'settled',
+                'settled_at' => CarbonImmutable::now(),
+            ])->save();
+        }
+    }
 
     /**
      * The only moves allowed, in order. A state machine rather than a free
@@ -80,7 +115,7 @@ final readonly class FulfilmentService
                 'rejected_at' => CarbonImmutable::now(),
             ])->save();
 
-            CustomerRefund::query()->create([
+            $refund = CustomerRefund::query()->create([
                 'customer_id' => $suborder->order->customer_id,
                 'order_id' => $suborder->order_id,
                 'suborder_id' => $suborder->id,
@@ -90,6 +125,8 @@ final readonly class FulfilmentService
                 'reason' => 'suborder_rejected',
                 'state' => 'pending',
             ]);
+
+            $this->refund($refund, 'Refund — order refused by the store');
         });
 
         $this->tell($suborder, NotificationTemplateKey::OrderRejected, ['reason' => $reason]);
@@ -214,7 +251,7 @@ final readonly class FulfilmentService
 
             $this->recompute($locked);
 
-            CustomerRefund::query()->create([
+            $refund = CustomerRefund::query()->create([
                 'customer_id' => $locked->order->customer_id,
                 'order_id' => $locked->order_id,
                 'suborder_id' => $locked->id,
@@ -223,6 +260,8 @@ final readonly class FulfilmentService
                 'reason' => 'amendment',
                 'state' => 'pending',
             ]);
+
+            $this->refund($refund, 'Refund — items unavailable');
 
             $this->tell($locked, NotificationTemplateKey::OrderAmended, [
                 // The money is the point of the message.
