@@ -693,3 +693,14 @@ approval risk is compliance details:
 - Login field says "Email or phone" in the mock; merchant accounts are
   email-only today — shipping as Email unless the owner wants phone
   identities added server-side.
+
+---
+
+## MARKETPLACE (multi-vendor)
+
+Planned separately in **PLAN-marketplace.md** (opened 2026-08-18): vendor
+opt-in + KYB, catalogue, per-island delivery rules, multi-vendor cart and
+checkout, order fulfilment, the 2% marketplace fee, merchant settlements,
+AI search, and the superadmin kill switch. Sequence there (MP1..MP11) is
+independent of the MR rounds in this file; do not run a marketplace round
+and an MR round against the same app directory at the same time.
