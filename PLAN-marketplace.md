@@ -103,27 +103,79 @@ merchant_kyb_documents
 marketplace_categories            platform-curated tree (Rice & Grains, Oil…)
   id, parent_id, slug, name_en, name_dv, icon, sort, active
 
-products
+products                          the DEFINITION — owned by the merchant
   merchant_id, category_id
   name, name_dv, description, sku
-  price_laari                     integer
-  compare_at_laari                nullable — the struck-through "MVR 85.00"
   cashback_rate_bp                nullable → falls back to the store rate
-  stock_qty, low_stock_at         nullable stock_qty = untracked
-  state                           draft | active | out_of_stock | archived
   allow_substitutions             bool — the "No substitutions" chip
   sort, created_at, updated_at
+
+branch_products                   the LISTING — owned by the branch (§2.3)
+  branch_id, product_id
+  price_laari                     integer — a branch may price differently
+  compare_at_laari                nullable — the struck-through "MVR 85.00"
+  stock_qty, low_stock_at         nullable stock_qty = untracked
+  state                           draft | active | out_of_stock | archived
+  unique (branch_id, product_id)
 
 product_images
   product_id, path, sort          first is the card image
 ```
+
+The split is the whole point: **a product is described once and stocked per
+shop.** Stock is physical — it sits on a shelf in one building — so a chain
+with two shops cannot honestly publish one number, and a merchant should
+still not have to type the product twice. Merchants with one branch (which
+is every merchant today) never see the distinction: the panel creates the
+listing alongside the definition.
 
 Products are a **public claim**, so edits to name/price/image on an enrolled
 store flow through the existing MR9 change-request gate? **No** — see §11
 open question Q3. Provisional answer: price and stock are operational and
 apply instantly; name, images and description are claims and are gated.
 
-### 2.3 Delivery rules — per BRANCH, per destination island
+### 2.3 The branch is the storefront
+
+Owner, 2026-08-18: *"Isn't each branch treated as separate merchant for
+customer side, cart and market?"* — yes, and the plan now says so.
+
+**A customer shops at a BRANCH.** It appears in Market as its own listing,
+it gets its own subcart, and it fulfils its own order. This is how every
+outlet-based marketplace works, and here it falls out of three facts that
+are true whether we like them or not:
+
+- **Stock is physical.** It is on a shelf in one building. One number
+  across two shops is a lie the customer discovers at the door.
+- **Fulfilment is physical.** Accept, prepare, hand over, pickup code —
+  every one of those is an act by a specific shop.
+- **Delivery terms are already per branch** (§2.4), so a merchant-level
+  storefront would have to advertise terms it cannot honour.
+
+The merchant app agrees: `Orders.png` labels orders **"Island Mart — Malé"**
+and **"Horizon Bookstore — Hulhumalé"**.
+
+What follows:
+
+- Market lists branches. The card reads **brand + island**
+  ("Island Mart — Malé"), never a bare branch id.
+- The **cart's subcart is per branch**, and `suborders.branch_id` is the
+  fulfilment key (§2.6).
+- **This deletes the branch-selection rule** that an earlier draft put in
+  the cart (§2.4.1a, now withdrawn). The customer chooses the shop, we do
+  not guess for them — one less piece of magic to explain when it guesses
+  wrong.
+- **Deduplication in browse**: a brand with two branches serving the same
+  island must not appear twice in one list. Default to the branch with the
+  better terms for the customer's address (free-delivery threshold, then
+  ETA), with the others reachable from the store page.
+- **Cashback rate stays per MERCHANT.** It is a commercial agreement with a
+  business, not with a building, and splitting it per branch would be a
+  different negotiation than the one we have.
+- Cashback-side Discovery still lists **merchants**, unchanged. The two
+  products list different things on purpose: one is "which businesses give
+  cashback", the other is "which shops can send me rice today".
+
+### 2.4 Delivery rules — per branch, per destination island
 
 Owner, clarified 2026-08-18:
 
@@ -162,19 +214,15 @@ Worked example, exactly the owner's case:
 | Island Mart, Malé      | free over 25   | free over 500  |
 | Horizon, Hulhumalé     | free over 500  | free over 25   |
 
-#### 2.3.1 Two consequences of going per-branch
+#### 2.4.1 Two consequences of going per-branch
 
-**(a) The cart must choose a branch.** A merchant with shops on two islands
-now has two sets of terms, so a suborder is against a BRANCH, not just a
-merchant: `suborders.branch_id` is required, and the cart picks the serving
-branch from the delivery address — the branch whose rules cover that zone,
-cheapest terms winning a tie. This is a real improvement rather than a cost:
-a Hulhumalé customer gets served by the Hulhumalé shop, which is what any
-shopper would expect and what makes the cheap threshold reachable.
+**(a) ~~The cart must choose a branch.~~ WITHDRAWN** — superseded by §2.3.
+The customer picks the shop themselves, because the shop is what they are
+browsing. `suborders.branch_id` is still required; nothing guesses it.
 
 **(b) The store page is address-dependent.** The `Delivery MVR 25 · 30–60
 min · Min MVR 200` chips in `Market View.png` are not properties of the
-store — they are properties of *store → your address*. So:
+branch alone — they are properties of *branch → your address*. So:
 
 - with a delivery address chosen, the chips show that branch's terms to
   that island, and the cart's progress bar counts toward that island's
@@ -182,10 +230,10 @@ store — they are properties of *store → your address*. So:
 - with no address yet, show the terms for the customer's current zone if we
   have a location fix, otherwise the branch's own island, with a quiet
   "set your address for exact delivery terms" line;
-- a store no branch of which delivers to the chosen island is shown as
+- a branch that does not deliver to the chosen island is shown as
   **pickup only**, never hidden — the customer may still collect.
 
-### 2.4 Addresses
+### 2.5 Addresses
 
 `customers` has no address today. New:
 
@@ -203,7 +251,7 @@ Matches `Delivery Details Step.png` exactly, including "Pick on map" and
 "Use my location" — both already solved by our own tile proxy and the
 existing `PinPickerMap`.
 
-### 2.5 Cart and orders
+### 2.6 Cart and orders
 
 The cart is **server-side** (it prices itself, and pricing is our job):
 
@@ -230,7 +278,7 @@ orders                            the payment, one per checkout
 
 suborders                         one per SERVING BRANCH — the unit of fulfilment
   order_id, merchant_id
-  branch_id                       which shop fulfils it (§2.3.1a)
+  branch_id                       which shop fulfils it (§2.3)
   reference                       MF-1084-01
   fulfilment                      delivery | pickup
   items_laari, delivery_laari, subtotal_laari
@@ -554,7 +602,7 @@ Marketplace is **off** for every merchant until they opt in. The flow:
    the store-review sheet.
 4. **Profile sheet** — fulfilment modes, prep times, and the store's
    marketplace description. Then, **per branch**, the islands it delivers to
-   and the free-delivery minimum for each (§2.3). A store with no delivery
+   and the free-delivery minimum for each (§2.4). A store with no delivery
    rules on any branch is pickup-only, which is a valid way to open.
 5. Admin approves → `state = active` → the store appears in Market and its
    Products/Orders surfaces unlock.
@@ -600,7 +648,7 @@ when it is off. A hidden button that still answers is not hidden.
    against their marketplace payout? Plan says no for v1.
 5. ~~Delivery semantics~~ — **settled 2026-08-18**: per branch, per
    destination island, and the number is the free-delivery threshold. See
-   §2.3. What remains open is whether a branch may also refuse to deliver
+   §2.4. What remains open is whether a branch may also refuse to deliver
    below a floor (`order_minimum_laari`), or whether every below-threshold
    order is simply charged the fee. Plan keeps the column nullable so both
    work.
@@ -618,8 +666,8 @@ Each round ships end-to-end and green, in the house style.
 | Round | Scope |
 |-------|-------|
 | **MP1** | Foundations: migrations, `marketplace_enabled` kill switch, opt-in + KYB, admin review queue. No shopping yet. |
-| **MP2** | Catalogue: products, categories, images, stock. Merchant web CRUD + app quick edits. |
-| **MP3** | Delivery and addresses: per-branch/per-island rules, `customer_addresses`, zone resolution, and the branch-selection rule (§2.3.1a). |
+| **MP2** | Catalogue: product definitions on the merchant, `branch_products` listings with per-shop price and stock. Merchant web CRUD + app quick edits. |
+| **MP3** | Delivery and addresses: per-branch/per-island rules, `customer_addresses`, zone resolution, and branch storefronts (§2.3). |
 | **MP4** | Browse and cart: Market tab, store page, floating cart, collapsible multi-vendor cart with minimum warnings. |
 | **MP5** | Checkout and orders: the four steps, receipt-first payment, order + suborder creation, Order Received. |
 | **MP6** | Fulfilment: merchant Orders tab and details, accept/reject, statuses, pickup codes, notifications. |
