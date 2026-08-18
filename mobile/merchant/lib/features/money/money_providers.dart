@@ -35,11 +35,25 @@ final settleAllPreviewProvider =
 final settlementsPresetProvider =
     StateProvider.autoDispose<String>((_) => 'all');
 
-/// The PRICED preview for the current selection. 'all' is the catalogue
-/// itself; a preset re-prices the server's own membership ids — the app
-/// never works out which rows a preset contains.
+/// The merchant's OWN pick from the transaction picker (MR11), or null
+/// while a preset rules the board. Never derived: these are ids the
+/// catalogue's rows carried, handed back untouched for the server to
+/// re-price. An empty list is not a selection — the picker refuses to
+/// apply one — so null and empty both mean "the preset decides".
+final settlementCustomSelectionProvider =
+    StateProvider.autoDispose<List<int>?>((_) => null);
+
+/// The PRICED preview for the current selection. A hand-picked set re-prices
+/// exactly those ids; 'all' is the catalogue itself; a preset re-prices the
+/// server's own membership ids — the app never works out which rows a preset
+/// contains, and never prices anything itself.
 final pricedPreviewProvider =
     FutureProvider.autoDispose<SettlementPreviewData>((ref) async {
+  final custom = ref.watch(settlementCustomSelectionProvider);
+  if (custom != null && custom.isNotEmpty) {
+    return ref.watch(apiProvider).settlementPreview(transactionIds: custom);
+  }
+
   final preset = ref.watch(settlementsPresetProvider);
   if (preset == 'all') return ref.watch(settleAllPreviewProvider.future);
 
@@ -64,6 +78,10 @@ final settlementDetailProvider = FutureProvider.autoDispose
 /// Refresh everything a landed settlement changes: the board, the batch
 /// history, the wallet balance and the dashboard blocks.
 void invalidateMoney(WidgetRef ref) {
+  // A landed settlement moves the board: a hand-picked set of ids from
+  // before it can contain rows nobody may settle twice, so the pick is
+  // dropped and the board reopens on everything outstanding.
+  ref.invalidate(settlementCustomSelectionProvider);
   ref.invalidate(homeProvider);
   ref.invalidate(walletProvider);
   ref.invalidate(settleAllPreviewProvider);

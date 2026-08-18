@@ -753,6 +753,9 @@ class AppLocalizationsDv extends AppLocalizations {
   String get creditCta => 'ކަސްޓަމަރަށް ކްރެޑިޓްކުރައްވާ';
 
   @override
+  String get creditCtaShort => 'މިހާރު ކްރެޑިޓް';
+
+  @override
   String get errDuplicateInvoiceTitle =>
       'މި އިންވޮއިސް މިހާރު ކްރެޑިޓްކުރެވިފައި.';
 
@@ -1196,6 +1199,59 @@ class AppLocalizationsDv extends AppLocalizations {
   String get includedTitle => 'ހިމެނޭ މުޢާމަލާތްތައް';
 
   @override
+  String get pickerTitle => 'މުޢާމަލާތްތައް ޚިޔާރުކުރައްވާ';
+
+  @override
+  String get pickerLead =>
+      'ދައްކަވަން ބޭނުންވާ ވިޔަފާރިތައް ޚިޔާރުކުރައްވާ. މިތާ ފެންނަ ކޮންމެ އަދަދަކީވެސް އެ ވިޔަފާރިއަށް މަންފާގައި ރެކޯޑްކުރެވިފައިވާ އަދަދެވެ.';
+
+  @override
+  String get pickerRepriceTitle =>
+      'ޚިޔާރުކުރެއްވި ގޮތް ބަދަލުކުރެއްވުމުން ބެޗް އަލުން އަގުކުރެވޭނެ';
+
+  @override
+  String get pickerRepriceBody =>
+      'އައު ޚިޔާރުކުރެއްވުން އަގުކުރާނީ މަންފާގެ ސާވަރުންނެވެ. މަދު މުޢާމަލާތްތަކެއް ޚިޔާރުކުރެއްވުމުން އަވަހަށް ދެއްކުމުގެ ޑިސްކައުންޓް ގެއްލިދާނެއެވެ.';
+
+  @override
+  String get pickerSelectAll => 'ފެންނަ ހުރިހާ އެއްޗެއް ޚިޔާރުކުރައްވާ';
+
+  @override
+  String get pickerNoneInFilter => 'މި ފިލްޓަރުގައި މުޢާމަލާތެއް ނެތް.';
+
+  @override
+  String get pickerPastWindow => 'ޑިސްކައުންޓަށް މާ ދުވަސްވެފައި';
+
+  @override
+  String pickerAgeDays(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count ދުވަސް',
+      one: '1 ދުވަސް',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String pickerSelectedCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count މުޢާމަލާތް ޚިޔާރުކުރެވިފައި',
+      one: '1 މުޢާމަލާތް ޚިޔާރުކުރެވިފައި',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get pickerTotalHint =>
+      'ކްރެޑިޓާއި ޑިސްކައުންޓް އެޕްލައިކުރެވޭނީ މަންފާއިން ބެޗް އަގުކުރާ ވަގުތުގައެވެ.';
+
+  @override
+  String get pickerApplyCta => 'މި ޚިޔާރުކުރެއްވުން ބޭނުންކުރައްވާ';
+
+  @override
   String get awaitingSettlementChip => 'ސެޓްލްމަންޓްގެ އިންތިޒާރުގައި';
 
   @override
@@ -1263,10 +1319,6 @@ class AppLocalizationsDv extends AppLocalizations {
   String get payBankTitle => 'ސީދާ މި އަދަދު ޓްރާންސްފަރކުރައްވާ';
 
   @override
-  String get payBankLead =>
-      'ބޭންކުން ސީދާ މި އަދަދު ޓްރާންސްފަރކުރައްވާފައި، ތިރީގައި ސްލިޕް އަޕްލޯޑްކުރައްވާ. އެހާތަނަށް އެއްވެސް ސެޓްލްމަންޓެއް ނުއުފެދޭނެ — މުޢާމަލާތްތައް ދައްކަންޖެހޭ ގޮތުގައި ދެމިހުންނާނެއެވެ.';
-
-  @override
   String get amountToTransfer => 'ޓްރާންސްފަރކުރައްވަންވީ އަދަދު';
 
   @override
@@ -1311,10 +1363,6 @@ class AppLocalizationsDv extends AppLocalizations {
 
   @override
   String get uploadSlipTitle => 'ޓްރާންސްފަރ ސްލިޕް އަޕްލޯޑްކުރައްވާ';
-
-  @override
-  String get uploadSlipLead =>
-      'ސެޓްލްމަންޓް އުފެދެނީ ސްލިޕުންނެވެ — ކަސްޓަމަރުންގެ ކޭޝްބެކް ކަށަވަރުވުމުގެ ކުރިން މަންފާއިން ސްލިޕް ޓްރާންސްފަރއާ ދިމާކުރާނެއެވެ.';
 
   @override
   String get slipTakePhoto => 'ފޮޓޯ ނަންގަވާ';

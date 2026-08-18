@@ -344,6 +344,7 @@
   "backdatedResultBody": "This backdated sale skipped the refund window. The customer's cashback is payable to Manfaa immediately, and neither you nor your POS can reverse it — contact Manfaa if it needs correcting.",
   "pendingNote": "Cashback stays pending until settlement.",
   "creditCta": "Credit customer",
+  "creditCtaShort": "Credit now",
   "errDuplicateInvoiceTitle": "This invoice is already credited.",
   "errDuplicateInvoiceBody": "Each invoice can be credited once. If this is a different sale, check the invoice number on the receipt.",
   "errSuspendedTitle": "Your store is suspended — new cashback is paused.",
@@ -481,9 +482,6 @@
       }
     }
   },
-  "bucket05": "0–5 days",
-  "bucket610": "6–10 days",
-  "bucket1115": "11–15 days",
   "bucketOverdue": "Overdue",
   "bucketTransactions": "{count, plural, =1{1 transaction} other{{count} transactions}}",
   "@bucketTransactions": {
@@ -573,10 +571,33 @@
   "methodWalletTitle": "Wallet balance",
   "methodBankTitle": "Bank transfer",
   "methodRecommended": "Recommended",
-  "methodInsufficient": "Insufficient",
-  "breakdownTitle": "Breakdown",
   "totalDueLabel": "Total due",
   "includedTitle": "Included transactions",
+  "pickerTitle": "Choose transactions",
+  "pickerLead": "Tick the sales you are paying for. Every amount here is what Manfaa has recorded against that sale.",
+  "pickerRepriceTitle": "Changing the selection re-prices the batch",
+  "pickerRepriceBody": "Manfaa prices the new selection on its own server. A narrower batch can lose the prompt-payment discount.",
+  "pickerSelectAll": "Select all shown",
+  "pickerNoneInFilter": "No transactions in this filter.",
+  "pickerPastWindow": "Too old for the discount",
+  "pickerAgeDays": "{count, plural, =1{1 day old} other{{count} days old}}",
+  "@pickerAgeDays": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "pickerSelectedCount": "{count, plural, =1{1 transaction selected} other{{count} transactions selected}}",
+  "@pickerSelectedCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "pickerTotalHint": "Credits and any discount are applied when Manfaa prices the batch.",
+  "pickerApplyCta": "Use this selection",
   "awaitingSettlementChip": "Awaiting settlement",
   "feeShort": "Fee",
   "discountRow": "Prompt payment discount ({rate})",
@@ -617,7 +638,6 @@
   "noSettlementsYet": "No settlements yet.",
   "settlePreviewFailed": "Couldn't price this selection.",
   "payBankTitle": "Transfer exactly this amount",
-  "payBankLead": "Transfer exactly this amount at your bank, then upload the slip below. Nothing is created until then — your transactions stay payable.",
   "amountToTransfer": "Amount to transfer",
   "referenceLabel": "Payment reference",
   "referenceFinalNote": "Quote this reference with your transfer — it is how we recognise your money.",
@@ -632,7 +652,6 @@
   "noAccountTitle": "Transfer details not published yet",
   "noAccountBody": "Contact Manfaa for the account to send to. Nothing is lost — come back with the slip after you transfer.",
   "uploadSlipTitle": "Upload the transfer slip",
-  "uploadSlipLead": "The slip is what creates the settlement — Manfaa matches it to your transfer before customer cashback is confirmed.",
   "slipTakePhoto": "Take photo",
   "slipChooseFile": "Choose file",
   "slipHint": "JPEG, PNG, WebP or PDF — up to 5 MB",
@@ -1367,7 +1386,6 @@
     }
   },
   "discountNoneSub": "The prompt-payment discount no longer applies to your oldest sale.",
-  "agingTitle": "Aging",
   "viewBreakdown": "View breakdown",
   "monthTitle": "This month",
   "monthSales": "Sales through Manfaa",

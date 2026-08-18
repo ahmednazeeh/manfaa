@@ -55,6 +55,7 @@ void main() {
     List<String> permissions = moneyPermissions,
     int walletBalanceLaari = 0,
     bool includeDiscount = true,
+    bool secondRow = false,
   }) async {
     await tester.binding.setSurfaceSize(const Size(600, 3200));
     final store = await seededStore(permissions);
@@ -69,6 +70,7 @@ void main() {
               permissions: permissions,
               walletBalanceLaari: walletBalanceLaari,
               includeDiscount: includeDiscount,
+              secondRow: secondRow,
             ),
           ),
           configProvider.overrideWith((ref) async => config()),
@@ -92,13 +94,15 @@ void main() {
   ) async {
     await pumpMoney(tester);
 
-    // MR10: the liability is told ONCE, not five times — the amount now
-    // appears in the card's hero and in its 0–5 ageing column, and the
-    // accounting sits behind "View breakdown" until asked for.
-    expect(find.text('MVR 27.50'), findsNWidgets(2));
+    // MR10: the liability is told ONCE, not five times. MR11 took the
+    // ageing strip out of the card too, so the amount is on screen exactly
+    // once and the accounting still sits behind "View breakdown".
+    expect(find.text('MVR 27.50'), findsOneWidget);
     expect(find.text('1 transaction'), findsOneWidget);
-    // Empty ageing columns render the server's zeros, not blanks.
-    expect(find.text('MVR 0.00'), findsWidgets);
+    // The ageing columns are gone from the dashboard entirely — that story
+    // lives in Settlements now.
+    expect(find.text('0–5 days'), findsNothing);
+    expect(find.text('Aging'), findsNothing);
     // Collapsed by default: the cashback/fee rows are not on screen yet.
     expect(find.text('MVR 20.00'), findsNothing);
 
@@ -155,19 +159,19 @@ void main() {
     expect(find.text('View movements'), findsNothing);
   });
 
-  testWidgets('an insufficient wallet cannot be chosen — bank pays', (
+  testWidgets('an insufficient wallet is not offered at all — bank pays', (
     tester,
   ) async {
     final api = await pumpMoney(tester, walletBalanceLaari: 0);
     await goSettlements(tester);
 
-    // The wallet option shows its balance and the Insufficient state.
-    expect(find.text('Insufficient'), findsOneWidget);
-    expect(find.text('MVR 0.00'), findsWidgets);
+    // MR11 (owner report): a balance that cannot cover the amount is not a
+    // payment option — the row is absent, not disabled with a chip.
+    expect(find.text('Wallet balance'), findsNothing);
+    expect(find.text('Insufficient'), findsNothing);
+    // Bank transfer is still there, and it is what the CTA takes.
+    expect(find.text('Bank transfer'), findsOneWidget);
 
-    // Tapping it does not select it: the pay CTA still takes the bank path.
-    await tester.tap(find.text('Wallet balance'));
-    await tester.pumpAndSettle();
     await tester.tap(find.text('Pay MVR 27.12'));
     await tester.pumpAndSettle();
 
@@ -175,6 +179,117 @@ void main() {
     expect(api.walletSettles, isEmpty);
     expect(api.creates, isEmpty);
   });
+
+  testWidgets('a wallet that covers the amount IS offered', (tester) async {
+    await pumpMoney(tester, walletBalanceLaari: 500000);
+    await goSettlements(tester);
+
+    expect(find.text('Wallet balance'), findsOneWidget);
+    expect(find.text('Insufficient'), findsNothing);
+  });
+
+  testWidgets(
+    'MR11: Edit on Included transactions opens the picker, and the pick '
+    're-prices on the SERVER as exactly those ids',
+    (tester) async {
+      final api = await pumpMoney(tester, secondRow: true);
+      await goSettlements(tester);
+
+      // Both payable sales are in the batch to start with.
+      expect(find.text('INV-2107'), findsOneWidget);
+      expect(find.text('INV-2108'), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('included-edit')));
+      await tester.pumpAndSettle();
+
+      // The picker is open, and it LEADS with the re-price warning: the
+      // owner's "which would remove discount".
+      expect(find.text('Choose transactions'), findsOneWidget);
+      expect(
+        find.text('Changing the selection re-prices the batch'),
+        findsOneWidget,
+      );
+      expect(
+        find.textContaining('can lose the prompt-payment discount'),
+        findsOneWidget,
+      );
+      expect(find.text('2 transactions selected'), findsOneWidget);
+
+      // Drop the newer sale, keep the older one.
+      await tester.tap(find.text('INV-2108'));
+      await tester.pumpAndSettle();
+      expect(find.text('1 transaction selected'), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('picker-apply')));
+      await tester.pumpAndSettle();
+
+      // Back on the tab, and the SERVER priced the new selection — the app
+      // sent the ids it was given and computed no money of its own.
+      expect(find.text('Choose transactions'), findsNothing);
+      expect(api.previews.last.settleAll, isFalse);
+      expect(api.previews.last.ids, [61]);
+      expect(find.text('INV-2108'), findsNothing);
+
+      // …and the pay path carries that same selection, never settle_all.
+      await tester.tap(find.text('Pay MVR 27.12'));
+      await tester.pumpAndSettle();
+      expect(api.previews.last.settleAll, isFalse);
+      expect(api.previews.last.ids, [61]);
+    },
+  );
+
+  testWidgets(
+    'MR11: the picker opens on the batch actually being settled — a preset '
+    'narrowing is not silently widened back to everything',
+    (tester) async {
+      final api = await pumpMoney(tester, secondRow: true);
+      await goSettlements(tester);
+
+      // Narrow the board with a preset chip: the priced batch is INV-2107.
+      await tester.tap(find.text('Older than 5 days'));
+      await tester.pumpAndSettle();
+      expect(api.previews.last.ids, [61]);
+      expect(find.text('INV-2108'), findsNothing);
+
+      await tester.tap(find.byKey(const Key('included-edit')));
+      await tester.pumpAndSettle();
+
+      // Exactly the preset's membership is ticked — not the whole board.
+      expect(find.text('1 transaction selected'), findsOneWidget);
+
+      // And an untouched Apply keeps that batch: the amount the tab was
+      // showing cannot grow behind the merchant's back.
+      await tester.tap(find.byKey(const Key('picker-apply')));
+      await tester.pumpAndSettle();
+      expect(api.previews.last.settleAll, isFalse);
+      expect(api.previews.last.ids, [61]);
+      expect(find.text('INV-2108'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'MR11: ticking every row goes back as the race-proof settle_all MODE',
+    (tester) async {
+      final api = await pumpMoney(tester, secondRow: true);
+      await goSettlements(tester);
+
+      await tester.tap(find.byKey(const Key('included-edit')));
+      await tester.pumpAndSettle();
+      // Untick one, then tick it back: the whole board is the selection
+      // again, so the batch must travel as the MODE, not a frozen list.
+      await tester.tap(find.text('INV-2108'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('INV-2108'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('picker-apply')));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Pay MVR 27.12'));
+      await tester.pumpAndSettle();
+      expect(api.previews.last.settleAll, isTrue);
+      expect(api.previews.last.ids, isNull);
+    },
+  );
 
   testWidgets('wallet settle sends the settle_all MODE through unchanged', (
     tester,
@@ -311,11 +426,15 @@ class _MoneyApi extends MerchantApi {
     required this.permissions,
     required this.walletBalanceLaari,
     required this.includeDiscount,
+    this.secondRow = false,
   });
 
   final List<String> permissions;
   final int walletBalanceLaari;
   final bool includeDiscount;
+
+  /// A second payable sale on the board — what MR11's picker narrows from.
+  final bool secondRow;
 
   final previews = <_Selection>[];
   final walletSettles = <_Selection>[];
@@ -453,17 +572,36 @@ class _MoneyApi extends MerchantApi {
         'fee_laari': 750,
         'fee_gst_laari': 0,
         'due_laari': 2750,
-        'selected': true,
+        // Membership is the SERVER's: a subset preview flags which of the
+        // payable rows this priced answer covers.
+        'selected': ids.contains(61),
       },
+      // The picker needs something to narrow FROM, so a second payable row
+      // exists only for the tests that ask for it.
+      if (secondRow)
+        {
+          'id': 62,
+          'invoice_no': 'INV-2108',
+          'occurred_at': '2026-08-16T10:00:00+05:00',
+          'clock_start_at': '2026-08-16T00:00:00+00:00',
+          'due_at': '2026-08-31T00:00:00+00:00',
+          'age_days': 1,
+          'overdue': false,
+          'cashback_laari': 1000,
+          'fee_laari': 375,
+          'fee_gst_laari': 0,
+          'due_laari': 1375,
+          'selected': ids.contains(62),
+        },
     ],
     'buckets': {
       'all': {
-        'count': 1,
+        'count': secondRow ? 2 : 1,
         'cashback_laari': 2000,
         'fee_laari': 750,
         'fee_gst_laari': 0,
         'due_laari': 2750,
-        'transaction_ids': [61],
+        'transaction_ids': secondRow ? [61, 62] : [61],
       },
       'older_than_5': {
         'count': 1,
@@ -518,7 +656,11 @@ class _MoneyApi extends MerchantApi {
   }) async {
     previews.add((settleAll: settleAll, ids: transactionIds));
     return SettlementPreviewData.fromJson(
-      _preview(settleAll ? [61] : (transactionIds ?? const [])),
+      _preview(
+        settleAll
+            ? (secondRow ? [61, 62] : [61])
+            : (transactionIds ?? const []),
+      ),
     );
   }
 

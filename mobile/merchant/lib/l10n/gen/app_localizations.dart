@@ -1400,6 +1400,12 @@ abstract class AppLocalizations {
   /// **'Credit customer'**
   String get creditCta;
 
+  /// No description provided for @creditCtaShort.
+  ///
+  /// In en, this message translates to:
+  /// **'Credit now'**
+  String get creditCtaShort;
+
   /// No description provided for @errDuplicateInvoiceTitle.
   ///
   /// In en, this message translates to:
@@ -2156,6 +2162,72 @@ abstract class AppLocalizations {
   /// **'Included transactions'**
   String get includedTitle;
 
+  /// No description provided for @pickerTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose transactions'**
+  String get pickerTitle;
+
+  /// No description provided for @pickerLead.
+  ///
+  /// In en, this message translates to:
+  /// **'Tick the sales you are paying for. Every amount here is what Manfaa has recorded against that sale.'**
+  String get pickerLead;
+
+  /// No description provided for @pickerRepriceTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Changing the selection re-prices the batch'**
+  String get pickerRepriceTitle;
+
+  /// No description provided for @pickerRepriceBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Manfaa prices the new selection on its own server. A narrower batch can lose the prompt-payment discount.'**
+  String get pickerRepriceBody;
+
+  /// No description provided for @pickerSelectAll.
+  ///
+  /// In en, this message translates to:
+  /// **'Select all shown'**
+  String get pickerSelectAll;
+
+  /// No description provided for @pickerNoneInFilter.
+  ///
+  /// In en, this message translates to:
+  /// **'No transactions in this filter.'**
+  String get pickerNoneInFilter;
+
+  /// No description provided for @pickerPastWindow.
+  ///
+  /// In en, this message translates to:
+  /// **'Too old for the discount'**
+  String get pickerPastWindow;
+
+  /// No description provided for @pickerAgeDays.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 day old} other{{count} days old}}'**
+  String pickerAgeDays(int count);
+
+  /// No description provided for @pickerSelectedCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 transaction selected} other{{count} transactions selected}}'**
+  String pickerSelectedCount(int count);
+
+  /// No description provided for @pickerTotalHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Credits and any discount are applied when Manfaa prices the batch.'**
+  String get pickerTotalHint;
+
+  /// No description provided for @pickerApplyCta.
+  ///
+  /// In en, this message translates to:
+  /// **'Use this selection'**
+  String get pickerApplyCta;
+
   /// No description provided for @awaitingSettlementChip.
   ///
   /// In en, this message translates to:
@@ -2270,12 +2342,6 @@ abstract class AppLocalizations {
   /// **'Transfer exactly this amount'**
   String get payBankTitle;
 
-  /// No description provided for @payBankLead.
-  ///
-  /// In en, this message translates to:
-  /// **'Transfer exactly this amount at your bank, then upload the slip below. Nothing is created until then — your transactions stay payable.'**
-  String get payBankLead;
-
   /// No description provided for @amountToTransfer.
   ///
   /// In en, this message translates to:
@@ -2359,12 +2425,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Upload the transfer slip'**
   String get uploadSlipTitle;
-
-  /// No description provided for @uploadSlipLead.
-  ///
-  /// In en, this message translates to:
-  /// **'The slip is what creates the settlement — Manfaa matches it to your transfer before customer cashback is confirmed.'**
-  String get uploadSlipLead;
 
   /// No description provided for @slipTakePhoto.
   ///

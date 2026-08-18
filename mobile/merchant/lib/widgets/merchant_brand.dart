@@ -61,7 +61,15 @@ class MerchantTopBar extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        const MerchantWordmark(),
+        // The wordmark is BRANDING, not content: it carries no information
+        // a reader needs bigger. Left to scale with the system text size it
+        // outgrew the row and overflowed on a narrow phone at 1.3 (found
+        // 2026-08-18); clamped, the header stays intact and every word that
+        // actually says something still scales.
+        MediaQuery.withClampedTextScaling(
+          maxScaleFactor: 1.0,
+          child: const MerchantWordmark(),
+        ),
         const Spacer(),
         if (initials != null && initials!.isNotEmpty)
           ManfaaAvatar(initials!, size: 40, showDot: false),

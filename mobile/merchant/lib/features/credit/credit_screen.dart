@@ -43,6 +43,12 @@ const _kBackdatedGraceDays = 3;
 const _kMinRateBp = 50;
 const _kMaxRateBp = 2000;
 
+/// The till's ONE action, drawn twice (MR11): beside the heading and in the
+/// flow under the pending banner. Keyed so a test can hold both to the same
+/// enabled state.
+const kCreditCtaTopKey = Key('credit-cta-top');
+const kCreditCtaFlowKey = Key('credit-cta-flow');
+
 /// The screen's clock — overridable so the screenshot harness renders a
 /// stable sale time instead of the live minute. Production never touches it.
 @visibleForTesting
@@ -396,7 +402,7 @@ class _CreditScreenState extends ConsumerState<CreditScreen> {
       _buildFormCard(l10n, theme, rateAsync, activeCategories),
     ];
 
-    List<Widget> act({bool expanded = false}) => [
+    List<Widget> act() => [
       if (_splitEnabled) ...[
         SplitEditorCard(
           key: ValueKey('split-$_splitEpoch'),
@@ -420,11 +426,13 @@ class _CreditScreenState extends ConsumerState<CreditScreen> {
       ],
       const SizedBox(height: Gap.sm),
       const PendingNote(),
-      // On the wide canvas the CTA lives here, at the top of the right
-      // column where the eye already is. On a phone it is PINNED below the
-      // scroll instead (see the bar under the list) — a cashier should
-      // never scroll to find the button that ends the sale.
-      if (expanded) ...[const SizedBox(height: Gap.md), _buildCta(l10n)],
+      // MR11 (owner report): the CTA lives IN the flow, directly under the
+      // violet pending banner, on every width. The pinned bar it replaces
+      // rendered under the shell's floating nav (extendBody) and was partly
+      // unreachable; the heading's compact twin is what keeps the action
+      // within reach without covering anything.
+      const SizedBox(height: Gap.md),
+      _buildCta(l10n),
     ];
 
     return Scaffold(
@@ -453,11 +461,24 @@ class _CreditScreenState extends ConsumerState<CreditScreen> {
                         : initials.characters.first.toUpperCase(),
                   ),
                   const SizedBox(height: Gap.lg),
-                  Text(
-                    l10n.creditTitle,
-                    style: theme.textTheme.headlineMedium?.copyWith(
-                      fontWeight: FontWeight.w800,
-                    ),
+                  // The heading carries the action at its trailing edge —
+                  // the SAME button as the one in the flow below (one
+                  // enabled state, one submit path), compact so it reads as
+                  // the heading's affordance rather than a second CTA.
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          l10n.creditTitle,
+                          style: theme.textTheme.headlineMedium?.copyWith(
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: Gap.sm),
+                      _buildCompactCta(l10n, theme),
+                    ],
                   ),
                   const SizedBox(height: Gap.xs),
                   Text(
@@ -506,7 +527,7 @@ class _CreditScreenState extends ConsumerState<CreditScreen> {
                       children: [
                         Expanded(child: Column(children: identify())),
                         const SizedBox(width: Gap.lg),
-                        Expanded(child: Column(children: act(expanded: true))),
+                        Expanded(child: Column(children: act())),
                       ],
                     )
                   else ...[
@@ -518,35 +539,47 @@ class _CreditScreenState extends ConsumerState<CreditScreen> {
               ),
             );
 
-            if (expanded) return list;
-
-            // The till's ending, always within thumb reach: the button sits
-            // in its own bar under the scroll rather than at the bottom of
-            // it, so a long sale never hides the only action that matters.
-            return Column(
-              children: [
-                Expanded(child: list),
-                Container(
-                  width: double.infinity,
-                  color: theme.colorScheme.surface,
-                  padding: EdgeInsets.fromLTRB(
-                    Gap.xl,
-                    Gap.sm,
-                    Gap.xl,
-                    Gap.sm + bottomClearanceOf(context) / 2,
-                  ),
-                  child: ContentRail(child: _buildCta(l10n)),
-                ),
-              ],
-            );
+            // Nothing is pinned any more: the list's own bottom padding is
+            // [bottomClearanceOf], so the flow CTA scrolls clear of the
+            // shell's floating nav instead of sitting under it.
+            return list;
           },
         ),
       ),
     );
   }
 
+  /// The one button that ends the sale — the heading's compact twin, sized
+  /// to sit beside a headline rather than under the form. Same [_submittable]
+  /// gate, same [_submit]: one action drawn twice, never two.
+  Widget _buildCompactCta(AppLocalizations l10n, ThemeData theme) =>
+      FilledButton(
+        key: kCreditCtaTopKey,
+        onPressed: _submittable ? _submit : null,
+        style: FilledButton.styleFrom(
+          minimumSize: const Size(0, 40),
+          padding: const EdgeInsets.symmetric(horizontal: Gap.md),
+          textStyle: theme.textTheme.labelLarge,
+        ),
+        child: _busy
+            ? const SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.receipt_long_outlined, size: 18),
+                  const SizedBox(width: Gap.xs),
+                  Text(l10n.creditCtaShort),
+                ],
+              ),
+      );
+
   /// The one button that ends the sale.
   Widget _buildCta(AppLocalizations l10n) => FilledButton(
+    key: kCreditCtaFlowKey,
     onPressed: _submittable ? _submit : null,
     child: _busy
         ? const SizedBox(

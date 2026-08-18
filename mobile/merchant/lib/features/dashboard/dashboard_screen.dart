@@ -12,10 +12,10 @@ import '../money/money_providers.dart';
 import '../../widgets/tx_format.dart';
 import '../push/push_registrar.dart';
 
-/// The Dashboard (MR3), drawn to Dashboard.png: the outstanding hero with
-/// Settle now, the prompt-discount deadline banner, the 2×2 ageing buckets,
-/// the payable breakdown, the wallet card and the credit CTA — plus the
-/// MR2 Today strip.
+/// The Dashboard (MR3), drawn to Dashboard.png and reordered to the owner's
+/// counter report (MR11): the outstanding hero with Settle now and the
+/// saving as an action, the Credit customer card beside/under it, this
+/// month, today, and the wallet last.
 ///
 /// Every block renders exactly what the server serves and nothing else:
 /// the money cards exist only when /merchant/home carries `outstanding`
@@ -117,71 +117,74 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   }) {
     final outstanding = home.outstanding;
 
-    if (expanded) {
-      // Two balanced card columns under the full-width hero + banner; the
-      // ageing buckets go 4-across. Same blocks, same permission gates —
-      // only the flow changes.
-      final left = <Widget>[
-        _MonthCard(month: home.month),
-        const SizedBox(height: Gap.md),
-        if (session.can('credits.create')) ...[
-          _creditCta(context),
-          const SizedBox(height: Gap.md),
-        ],
-      ];
-      final right = <Widget>[
-        TodayStrip(today: home.today),
-        const SizedBox(height: Gap.md),
-        if (session.can('wallet.view')) ...[
-          const _WalletCard(),
-          const SizedBox(height: Gap.md),
-        ],
-      ];
-
-      return [
-        if (outstanding != null) ...[
-          _SettlementCard(
+    // The owner's running order (MR11): what the store OWES, then the till's
+    // way in, then the takings — month, day — and the wallet last, because
+    // it is the least-used card at a counter. Same permission gates as
+    // before, block for block.
+    //
+    // The money blocks exist only when the server chose to show them — null
+    // means this account may not learn the store's standing.
+    final settlementCard = outstanding == null
+        ? null
+        : _SettlementCard(
             outstanding: outstanding,
             canSettle: session.can('settlements.create'),
             canPreview: session.can('settlements.preview'),
-          ),
-          const SizedBox(height: Gap.md),
-        ],
+          );
+    final creditCta = session.can('credits.create') ? _creditCta(context) : null;
+
+    if (expanded) {
+      // "Move Credit customer next to Outstanding card" — on the slate that
+      // is literally beside it; the takings pair up underneath and the
+      // wallet closes the page.
+      final head = <Widget>[?settlementCard, ?creditCta];
+
+      return [
+        if (head.length == 2)
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(child: head.first),
+              const SizedBox(width: Gap.md),
+              Expanded(child: head.last),
+            ],
+          )
+        else if (head.isNotEmpty)
+          head.single,
+        if (head.isNotEmpty) const SizedBox(height: Gap.md),
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Expanded(child: Column(children: left)),
+            Expanded(child: _MonthCard(month: home.month)),
             const SizedBox(width: Gap.md),
-            Expanded(child: Column(children: right)),
+            Expanded(child: TodayStrip(today: home.today)),
           ],
         ),
+        if (session.can('wallet.view')) ...[
+          const SizedBox(height: Gap.md),
+          const _WalletCard(),
+        ],
       ];
     }
 
     return [
-      // The money blocks exist only when the server chose to show them —
-      // null means this account may not learn the store's standing.
       // ONE card for the whole liability (owner report 2026-08-18): the
-      // amount, the saving as an action, ageing, and the accounting behind
-      // a disclosure — instead of five cards narrating one number.
-      if (outstanding != null) ...[
-        _SettlementCard(
-          outstanding: outstanding,
-          canSettle: session.can('settlements.create'),
-          canPreview: session.can('settlements.preview'),
-        ),
+      // amount, the saving as an action, and the accounting behind a
+      // disclosure — instead of five cards narrating one number.
+      if (settlementCard != null) ...[
+        settlementCard,
         const SizedBox(height: Gap.md),
       ],
-      // What Manfaa GENERATED, next in line after what it costs.
+      // The till's way in, right under what it costs.
+      if (creditCta != null) ...[creditCta, const SizedBox(height: Gap.md)],
+      // What Manfaa GENERATED — the month, then the day.
       _MonthCard(month: home.month),
       const SizedBox(height: Gap.md),
       TodayStrip(today: home.today),
-      const SizedBox(height: Gap.md),
       if (session.can('wallet.view')) ...[
-        const _WalletCard(),
         const SizedBox(height: Gap.md),
+        const _WalletCard(),
       ],
-      if (session.can('credits.create')) _creditCta(context),
     ];
   }
 
@@ -395,8 +398,9 @@ class _ErrorBlock extends StatelessWidget {
 /// dashboard was spending its top two thirds telling the same liability
 /// five times — hero, discount notice, ageing grid, payable breakdown and
 /// wallet all narrating one number. Now the amount leads, the saving reads
-/// as an ACTION, the ageing is a quiet four-column strip, and the
-/// accounting detail hides behind "View breakdown" until asked for.
+/// as an ACTION, and the accounting detail hides behind "View breakdown"
+/// until asked for. MR11 took the ageing strip out too: age only matters
+/// where it changes what gets paid, which is the Settlements tab.
 class _SettlementCard extends ConsumerStatefulWidget {
   const _SettlementCard({
     required this.outstanding,
@@ -472,20 +476,10 @@ class _SettlementCardState extends ConsumerState<_SettlementCard> {
             const _SavingLine(),
           ],
 
-          // ── ageing, four quiet columns ────────────────────────────────
-          if (total.count > 0) ...[
-            const SizedBox(height: Gap.md),
-            Divider(height: 1, color: theme.colorScheme.outlineVariant),
-            const SizedBox(height: Gap.md),
-            Text(
-              l10n.agingTitle,
-              style: theme.textTheme.labelLarge?.copyWith(color: muted),
-            ),
-            const SizedBox(height: Gap.sm),
-            _AgingStrip(outstanding: widget.outstanding),
-          ],
-
           // ── the accounting, on request ────────────────────────────────
+          // (MR11, owner: "Remove ageing bucket from outstanding to settle
+          // card" — the ageing story lives in Settlements, where the age
+          // presets actually change what gets paid.)
           const SizedBox(height: Gap.sm),
           InkWell(
             borderRadius: BorderRadius.circular(Corner.tile),
@@ -589,57 +583,6 @@ class _SavingLine extends ConsumerWidget {
           ),
         ],
       ),
-    );
-  }
-}
-
-/// Ageing as four columns of label + amount — the server's own bucket
-/// sums, never recomputed here.
-class _AgingStrip extends StatelessWidget {
-  const _AgingStrip({required this.outstanding});
-
-  final MerchantOutstanding outstanding;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final l10n = context.l10n;
-    final muted = theme.colorScheme.onSurfaceVariant;
-
-    Widget cell(String key, String label, Color tone) {
-      final bucket = outstanding.buckets[key];
-      final laari = bucket?.payableLaari ?? 0;
-      return Expanded(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.bodySmall?.copyWith(color: muted),
-            ),
-            const SizedBox(height: 2),
-            MoneyText(
-              laari,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                fontWeight: FontWeight.w700,
-                color: laari > 0 ? tone : muted,
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        cell('0_5', l10n.bucket05, theme.colorScheme.onSurface),
-        cell('6_10', l10n.bucket610, theme.colorScheme.onSurface),
-        cell('11_15', l10n.bucket1115, ManfaaColors.amber),
-        cell('overdue', l10n.bucketOverdue, theme.colorScheme.error),
-      ],
     );
   }
 }

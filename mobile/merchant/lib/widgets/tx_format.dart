@@ -123,6 +123,25 @@ String bankDisplayName(String bankName) =>
       _ => bankName,
     };
 
+/// The short name a compact bank tile wears — "BML", "MIB". An unknown slug
+/// prints VERBATIM, never a made-up abbreviation.
+String bankShortName(String bankName) =>
+    switch (bankName.trim().toLowerCase()) {
+      'bml' => 'BML',
+      'mib' => 'MIB',
+      _ => bankName,
+    };
+
+/// The bundled logo for a platform bank, or null when Manfaa has no mark for
+/// that bank — the tile then falls back to a neutral bank glyph. A logo is
+/// never invented for a slug we do not ship art for.
+String? bankLogoAsset(String bankName) =>
+    switch (bankName.trim().toLowerCase()) {
+      'bml' => 'assets/banks/bml.png',
+      'mib' => 'assets/banks/mib.png',
+      _ => null,
+    };
+
 /// "5%" from the wire's exact "5.00" — display trim only, the string on the
 /// wire is never recomputed. "2.50" → "2.5%".
 String trimRatePercent(String ratePercent) {

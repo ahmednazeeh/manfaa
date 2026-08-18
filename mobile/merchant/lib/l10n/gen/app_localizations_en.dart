@@ -741,6 +741,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get creditCta => 'Credit customer';
 
   @override
+  String get creditCtaShort => 'Credit now';
+
+  @override
   String get errDuplicateInvoiceTitle => 'This invoice is already credited.';
 
   @override
@@ -1181,6 +1184,58 @@ class AppLocalizationsEn extends AppLocalizations {
   String get includedTitle => 'Included transactions';
 
   @override
+  String get pickerTitle => 'Choose transactions';
+
+  @override
+  String get pickerLead =>
+      'Tick the sales you are paying for. Every amount here is what Manfaa has recorded against that sale.';
+
+  @override
+  String get pickerRepriceTitle => 'Changing the selection re-prices the batch';
+
+  @override
+  String get pickerRepriceBody =>
+      'Manfaa prices the new selection on its own server. A narrower batch can lose the prompt-payment discount.';
+
+  @override
+  String get pickerSelectAll => 'Select all shown';
+
+  @override
+  String get pickerNoneInFilter => 'No transactions in this filter.';
+
+  @override
+  String get pickerPastWindow => 'Too old for the discount';
+
+  @override
+  String pickerAgeDays(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count days old',
+      one: '1 day old',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String pickerSelectedCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count transactions selected',
+      one: '1 transaction selected',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get pickerTotalHint =>
+      'Credits and any discount are applied when Manfaa prices the batch.';
+
+  @override
+  String get pickerApplyCta => 'Use this selection';
+
+  @override
   String get awaitingSettlementChip => 'Awaiting settlement';
 
   @override
@@ -1247,10 +1302,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get payBankTitle => 'Transfer exactly this amount';
 
   @override
-  String get payBankLead =>
-      'Transfer exactly this amount at your bank, then upload the slip below. Nothing is created until then — your transactions stay payable.';
-
-  @override
   String get amountToTransfer => 'Amount to transfer';
 
   @override
@@ -1294,10 +1345,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get uploadSlipTitle => 'Upload the transfer slip';
-
-  @override
-  String get uploadSlipLead =>
-      'The slip is what creates the settlement — Manfaa matches it to your transfer before customer cashback is confirmed.';
 
   @override
   String get slipTakePhoto => 'Take photo';

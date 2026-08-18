@@ -153,13 +153,9 @@ class _SettlementPayScreenState extends ConsumerState<SettlementPayScreen> {
                   Gap.huge,
                 ),
                 children: [
-                  Text(
-                    l10n.payBankLead,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                  const SizedBox(height: Gap.lg),
+                  // MR11 (owner report): no lead paragraph. The AppBar
+                  // already says "Transfer exactly this amount"; the card
+                  // below says how much and where.
                   if (_loadError != null)
                     ManfaaCard(
                       child: Column(

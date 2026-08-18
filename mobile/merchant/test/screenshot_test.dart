@@ -200,6 +200,8 @@ const _shotPreview = {
       'account_no': '7730000123456',
       'account_name': 'Manfaa Pvt Ltd',
     },
+    // BOTH platform banks, as production carries them — the pay step's
+    // compact picker (MR11) only exists when there is a choice to make.
     'bank_accounts': [
       {
         'id': 1,
@@ -208,6 +210,14 @@ const _shotPreview = {
         'account_name': 'Manfaa Pvt Ltd',
         'currency': 'MVR',
         'is_primary': true,
+      },
+      {
+        'id': 2,
+        'bank_name': 'mib',
+        'account_no': '9001400987654',
+        'account_name': 'Manfaa Pvt Ltd',
+        'currency': 'MVR',
+        'is_primary': false,
       },
     ],
     'needs_configuration': false,
@@ -1132,6 +1142,19 @@ void main() {
       await drive(tester);
     }
 
+    // Bundled images (the bank marks on the pay step) decode ASYNCHRONOUSLY.
+    // pumpAndSettle never waits for that, so without this the shot paints
+    // empty tiles where a logo belongs. runAsync lets the real decode finish.
+    final images = find.byType(Image).evaluate().toList();
+    if (images.isNotEmpty) {
+      await tester.runAsync(() async {
+        for (final element in images) {
+          await precacheImage((element.widget as Image).image, element);
+        }
+      });
+      await tester.pumpAndSettle();
+    }
+
     await expectLater(
       find.byType(MerchantApp),
       matchesGoldenFile('shots/$name.png'),
@@ -1177,6 +1200,10 @@ void main() {
   Future<void> drivePayScreen(WidgetTester tester) async {
     await driveSettlements(tester);
     await tester.tap(find.text('Pay now'));
+    await tester.pumpAndSettle();
+    // With two platform banks nothing is preselected (web parity): pick BML
+    // so the shot shows the chosen tile AND the account details below it.
+    await tester.tap(find.text('BML'));
     await tester.pumpAndSettle();
   }
 
@@ -1243,6 +1270,38 @@ void main() {
       'settlement_preview_light',
       Brightness.light,
       drive: drivePayScreen,
+    ),
+  );
+  // The same step in DARK: the proof that the bank marks keep their white
+  // tile in both themes (MIB's PNG is transparent — on a dark surface it
+  // would otherwise vanish).
+  testWidgets(
+    'settlement preview dark',
+    (t) => shot(
+      t,
+      'settlement_preview_dark',
+      Brightness.dark,
+      drive: drivePayScreen,
+    ),
+  );
+  // MR11's transaction picker — the batch's membership, the re-price
+  // warning and the age filters, on the phone frame.
+  testWidgets(
+    'settlement picker light',
+    (t) => shot(
+      t,
+      'settlement_picker_light',
+      Brightness.light,
+      drive: (tester) async {
+        await driveSettlements(tester);
+        await tester.scrollUntilVisible(
+          find.byKey(const Key('included-edit')),
+          160,
+          scrollable: find.byType(Scrollable).first,
+        );
+        await tester.tap(find.byKey(const Key('included-edit')));
+        await tester.pumpAndSettle();
+      },
     ),
   );
   testWidgets(

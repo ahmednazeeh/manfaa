@@ -53,6 +53,11 @@ flutter:
   uses-material-design: true
   generate: true
 
+  assets:
+    # MR11 — the platform banks' real marks on the pay step's bank picker,
+    # the same PNGs the customer app's payout screen ships.
+    - assets/banks/
+
   fonts:
     - family: Manrope
       fonts:

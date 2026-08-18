@@ -14,6 +14,7 @@ import '../more/estate_widgets.dart' show PaneHint;
 import 'settlement_detail_screen.dart' show SettlementDetailBody;
 import 'settlement_pay_screen.dart';
 import 'settlement_widgets.dart';
+import 'transaction_picker.dart';
 
 /// MR7 — which settlement the expanded overview | detail split is showing.
 /// Phones never read it — they push the detail route instead. autoDispose
@@ -24,9 +25,10 @@ final settlementsSelectionProvider =
     StateProvider.autoDispose<int?>((_) => null);
 
 /// The Settlements tab (MR3), drawn to Settlements.png: amount-due hero +
-/// Pay now, the discount banner, the payment-method selector (wallet with
-/// its Insufficient state vs bank transfer), the breakdown, the included
-/// transactions, recent settlements, and the full-width Pay CTA.
+/// Pay now, the discount banner, the payment-method selector (the wallet
+/// only when its balance covers the amount, plus bank transfer), the
+/// breakdown behind its disclosure, the included transactions with their
+/// picker, recent settlements, and the full-width Pay CTA.
 ///
 /// Money law: every figure is a PRICED preview integer. Settle-all is the
 /// default and travels as the `settle_all` MODE; narrowing to a preset
@@ -178,16 +180,26 @@ class SettlementsScreen extends ConsumerWidget {
   ) {
     final l10n = context.l10n;
     final preset = ref.watch(settlementsPresetProvider);
+    final custom = ref.watch(settlementCustomSelectionProvider);
     final catalogue = ref.watch(settleAllPreviewProvider).valueOrNull;
+    // Settle-all is a MODE, not a list — but only while the board IS the
+    // whole board. A hand-picked set (MR11's picker) submits exactly its
+    // ids, the same law a preset already followed.
+    final settleAllMode =
+        (custom == null || custom.isEmpty) && preset == 'all';
     final canSeeWallet = session.can('wallet.view');
     final wallet = canSeeWallet ? ref.watch(walletProvider).valueOrNull : null;
     final method = ref.watch(_methodProvider);
 
     final nothingDue = preview.amountDueLaari == 0;
-    final walletSufficient =
-        wallet != null &&
-        wallet.balanceLaari >= preview.amountDueLaari &&
-        session.can('wallet.settle');
+    // MR11 (owner report): a wallet that cannot cover the amount is not a
+    // payment option — it is not drawn at all. Only a balance that COVERS
+    // the due amount earns the row; whether it can then be USED is still
+    // the `wallet.settle` gate below.
+    final walletCovers =
+        wallet != null && wallet.balanceLaari >= preview.amountDueLaari;
+    final showWallet = canSeeWallet && walletCovers;
+    final walletSufficient = walletCovers && session.can('wallet.settle');
     final canBank = session.can('settlements.create');
 
     // The effective method: bank unless the wallet was chosen AND can pay.
@@ -195,7 +207,7 @@ class SettlementsScreen extends ConsumerWidget {
 
     void startPay() {
       if (nothingDue || useWallet) {
-        _confirmWalletSettle(context, ref, preview, preset, nothingDue);
+        _confirmWalletSettle(context, ref, preview, settleAllMode, nothingDue);
         return;
       }
       // MR8: the pay screen carries only the SELECTION — it prices itself
@@ -203,7 +215,7 @@ class SettlementsScreen extends ConsumerWidget {
       Navigator.of(context).push(
         MaterialPageRoute<void>(
           builder: (_) => SettlementPayScreen(
-            settleAll: preset == 'all',
+            settleAll: settleAllMode,
             transactionIds: preview.transactionIds,
           ),
         ),
@@ -246,19 +258,20 @@ class SettlementsScreen extends ConsumerWidget {
           ),
           action: OutlinedButton(
             style: OutlinedButton.styleFrom(minimumSize: const Size(0, 40)),
-            onPressed: () =>
-                ref.read(settlementsPresetProvider.notifier).state = 'all',
+            onPressed: () {
+              ref.read(settlementCustomSelectionProvider.notifier).state = null;
+              ref.read(settlementsPresetProvider.notifier).state = 'all';
+            },
             child: Text(l10n.settleEverythingCta),
           ),
         ),
         const SizedBox(height: Gap.md),
       ],
-      if (!nothingDue && (canSeeWallet || canBank)) ...[
+      if (!nothingDue && (showWallet || canBank)) ...[
         _PaymentMethodCard(
-          walletBalanceLaari: canSeeWallet ? wallet?.balanceLaari : null,
-          amountDueLaari: preview.amountDueLaari,
+          walletBalanceLaari: showWallet ? wallet.balanceLaari : null,
           walletSelectable: walletSufficient,
-          showWallet: canSeeWallet,
+          showWallet: showWallet,
           showBank: true,
         ),
         const SizedBox(height: Gap.md),
@@ -274,7 +287,7 @@ class SettlementsScreen extends ConsumerWidget {
       ],
       PreviewBreakdownCard(preview: preview),
       const SizedBox(height: Gap.md),
-      _IncludedTransactions(preview: preview),
+      _IncludedTransactions(preview: preview, catalogue: catalogue),
       const SizedBox(height: Gap.md),
       FilledButton(
         onPressed: payEnabled ? startPay : null,
@@ -298,7 +311,7 @@ class SettlementsScreen extends ConsumerWidget {
     BuildContext context,
     WidgetRef ref,
     SettlementPreviewData preview,
-    String preset,
+    bool settleAllMode,
     bool nothingDue,
   ) async {
     final l10n = context.l10n;
@@ -338,12 +351,12 @@ class SettlementsScreen extends ConsumerWidget {
 
     try {
       // The selection the PREVIEW priced goes through unchanged: settle-all
-      // as the mode, a preset as exactly its ids.
+      // as the mode, a preset or a hand-picked set as exactly its ids.
       final settlement = await ref
           .read(apiProvider)
           .walletSettle(
-            settleAll: preset == 'all',
-            transactionIds: preset == 'all' ? null : preview.transactionIds,
+            settleAll: settleAllMode,
+            transactionIds: settleAllMode ? null : preview.transactionIds,
           );
       if (!context.mounted) return;
       invalidateMoney(ref);
@@ -456,7 +469,13 @@ class _PresetChips extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = context.l10n;
     final theme = Theme.of(context);
-    final preset = ref.watch(settlementsPresetProvider);
+    final custom = ref.watch(settlementCustomSelectionProvider);
+    // While a HAND-PICKED set rules the board no preset describes it, so
+    // none is drawn as selected — a lit "All" chip over a narrowed batch
+    // would be a lie at the till.
+    final preset = (custom == null || custom.isEmpty)
+        ? ref.watch(settlementsPresetProvider)
+        : null;
 
     Widget chip(String key, String label) {
       final bucket = catalogue.buckets[key];
@@ -470,7 +489,13 @@ class _PresetChips extends ConsumerWidget {
           selected: selected,
           onSelected: empty
               ? null
-              : (_) => ref.read(settlementsPresetProvider.notifier).state = key,
+              : (_) {
+                  // A preset REPLACES a hand-picked set: one selection
+                  // rules the board at a time.
+                  ref.read(settlementCustomSelectionProvider.notifier).state =
+                      null;
+                  ref.read(settlementsPresetProvider.notifier).state = key;
+                },
           labelStyle: theme.textTheme.labelLarge?.copyWith(
             color: selected
                 ? theme.colorScheme.onSecondaryContainer
@@ -498,21 +523,19 @@ class _PresetChips extends ConsumerWidget {
   }
 }
 
-/// Payment method (Settlements.png): the wallet option with its balance and
-/// the Insufficient chip when it cannot cover the due amount, and bank
-/// transfer marked Recommended. Selection is honest — an insufficient
-/// wallet cannot be chosen, only seen.
+/// Payment method (Settlements.png): the wallet option with its balance,
+/// and bank transfer marked Recommended. MR11: the caller only passes
+/// [showWallet] when the balance COVERS the amount due — an insufficient
+/// wallet is not a choice to explain away, it simply is not offered.
 class _PaymentMethodCard extends ConsumerWidget {
   const _PaymentMethodCard({
     required this.walletBalanceLaari,
-    required this.amountDueLaari,
     required this.walletSelectable,
     required this.showWallet,
     required this.showBank,
   });
 
   final int? walletBalanceLaari;
-  final int amountDueLaari;
   final bool walletSelectable;
   final bool showWallet;
   final bool showBank;
@@ -522,8 +545,6 @@ class _PaymentMethodCard extends ConsumerWidget {
     final theme = Theme.of(context);
     final l10n = context.l10n;
     final method = ref.watch(_methodProvider);
-    final insufficient =
-        walletBalanceLaari != null && walletBalanceLaari! < amountDueLaari;
 
     Widget option({
       required String key,
@@ -531,7 +552,6 @@ class _PaymentMethodCard extends ConsumerWidget {
       required ManfaaTint tint,
       required String title,
       Widget? subtitle,
-      Widget? trailing,
       required bool selectable,
     }) {
       final selected = method == key && selectable;
@@ -577,10 +597,6 @@ class _PaymentMethodCard extends ConsumerWidget {
                   ],
                 ),
               ),
-              if (trailing != null) ...[
-                const SizedBox(width: Gap.sm),
-                trailing,
-              ],
               const SizedBox(width: Gap.sm),
               Icon(
                 selected
@@ -609,7 +625,7 @@ class _PaymentMethodCard extends ConsumerWidget {
             option(
               key: 'wallet',
               icon: Icons.account_balance_wallet_outlined,
-              tint: insufficient ? ManfaaTint.coral : ManfaaTint.green,
+              tint: ManfaaTint.green,
               title: l10n.methodWalletTitle,
               subtitle: walletBalanceLaari == null
                   ? null
@@ -619,12 +635,6 @@ class _PaymentMethodCard extends ConsumerWidget {
                         color: theme.colorScheme.onSurfaceVariant,
                       ),
                     ),
-              trailing: insufficient
-                  ? StatusChip(
-                      label: l10n.methodInsufficient,
-                      tone: StatusTone.attention,
-                    )
-                  : null,
               selectable: walletSelectable,
             ),
             const SizedBox(height: Gap.sm),
@@ -651,16 +661,22 @@ class _PaymentMethodCard extends ConsumerWidget {
 }
 
 /// Included transactions (Settlements.png): every selected row with its
-/// server-priced cashback/fee and the awaiting-settlement chip.
+/// server-priced cashback/fee and the awaiting-settlement chip — and, since
+/// MR11, the Edit affordance that opens the picker so the batch can be
+/// narrowed the way the web panel allows. The picker needs the CATALOGUE
+/// (every payable row, the buckets, the whole-board discount verdict), not
+/// this narrowed preview; without it the button simply is not offered.
 class _IncludedTransactions extends StatelessWidget {
-  const _IncludedTransactions({required this.preview});
+  const _IncludedTransactions({required this.preview, this.catalogue});
 
   final SettlementPreviewData preview;
+  final SettlementPreviewData? catalogue;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final l10n = context.l10n;
+    final catalogue = this.catalogue;
     final rows = [
       for (final row in preview.transactions)
         if (row.selected) row,
@@ -670,7 +686,32 @@ class _IncludedTransactions extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(l10n.includedTitle, style: theme.textTheme.titleMedium),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  l10n.includedTitle,
+                  style: theme.textTheme.titleMedium,
+                ),
+              ),
+              if (catalogue != null && catalogue.transactions.isNotEmpty)
+                TextButton.icon(
+                  key: const Key('included-edit'),
+                  style: TextButton.styleFrom(
+                    minimumSize: const Size(0, 36),
+                    padding: const EdgeInsets.symmetric(horizontal: Gap.sm),
+                  ),
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) =>
+                          TransactionPickerScreen(catalogue: catalogue),
+                    ),
+                  ),
+                  icon: const Icon(Icons.tune_rounded, size: 18),
+                  label: Text(l10n.edit),
+                ),
+            ],
+          ),
           const SizedBox(height: Gap.sm),
           for (final (index, row) in rows.indexed) ...[
             if (index > 0) const Divider(height: Gap.lg),

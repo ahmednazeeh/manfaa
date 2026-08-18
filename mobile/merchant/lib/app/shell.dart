@@ -108,6 +108,10 @@ class MerchantShell extends ConsumerWidget {
   }
 }
 
+/// The floating phone nav bar's container — the thing screen content must
+/// scroll clear of ([bottomClearanceOf]).
+const kFloatingNavBarKey = Key('merchant-floating-nav');
+
 class _NavItem {
   const _NavItem(this.branch, this.icon, this.selectedIcon, this.label);
   final int branch;
@@ -138,6 +142,10 @@ class _FloatingNavBar extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.fromLTRB(Gap.lg, 0, Gap.lg, Gap.md),
         child: Container(
+          // The bar floats OVER the branch content (extendBody), so a screen
+          // that puts a control near the bottom must clear it. Keyed so a
+          // test can measure that clearance instead of trusting the eye.
+          key: kFloatingNavBarKey,
           decoration: BoxDecoration(
             color: scheme.surfaceContainerLowest,
             // A full stadium — deliberately rounder than any content card.
@@ -239,14 +247,17 @@ class _RailButton extends StatelessWidget {
     final fg = selected ? scheme.onSecondaryContainer : scheme.onSurfaceVariant;
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: Gap.sm),
+      // MR11 (owner report): the selected pill reads slightly small on the
+      // slate too — 2dp of extra height and 2dp of extra width each side,
+      // the same nudge the phone bar got. House look unchanged.
+      padding: const EdgeInsets.symmetric(horizontal: 6),
       child: InkWell(
         borderRadius: BorderRadius.circular(Corner.control),
         onTap: onTap,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 160),
           width: double.infinity,
-          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 2),
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 2),
           decoration: BoxDecoration(
             color: selected ? scheme.secondaryContainer : Colors.transparent,
             borderRadius: BorderRadius.circular(Corner.control),
@@ -302,7 +313,10 @@ class _NavButton extends StatelessWidget {
         onTap: onTap,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 160),
-          padding: const EdgeInsets.symmetric(vertical: 7),
+          // MR11 (owner report): the selected pill sat a touch tight around
+          // its icon+label — 2dp more top and bottom. Same stadium, same
+          // colour; only the highlight breathes.
+          padding: const EdgeInsets.symmetric(vertical: 9),
           decoration: BoxDecoration(
             color: selected ? scheme.surfaceContainerHigh : Colors.transparent,
             borderRadius: BorderRadius.circular(Corner.bar),

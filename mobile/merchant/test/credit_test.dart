@@ -4,6 +4,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:manfaa_core/manfaa_core.dart';
 import 'package:manfaa_merchant/app/app.dart';
 import 'package:manfaa_merchant/app/providers.dart';
+import 'package:manfaa_merchant/app/shell.dart' show kFloatingNavBarKey;
+import 'package:manfaa_merchant/features/credit/credit_screen.dart'
+    show kCreditCtaFlowKey, kCreditCtaTopKey;
+import 'package:manfaa_merchant/features/credit/credit_widgets.dart'
+    show PendingNote;
 
 /// MR2 tests: the till. The whole app pumped with a fake MerchantApi over
 /// the REAL session store and the REAL offline queue — the tests drive the
@@ -62,8 +67,12 @@ void main() {
   Future<_TillApi> pumpTill(
     WidgetTester tester, {
     List<String> permissions = tillPermissions,
+    Size surface = const Size(600, 3000),
+    double textScale = 1.0,
   }) async {
-    await tester.binding.setSurfaceSize(const Size(600, 3000));
+    await tester.binding.setSurfaceSize(surface);
+    tester.platformDispatcher.textScaleFactorTestValue = textScale;
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
     final store = await seededStore(permissions);
     late _TillApi api;
     await tester.pumpWidget(
@@ -328,6 +337,97 @@ void main() {
       await tester.pumpAndSettle();
       expect(api.lookups, 2);
       expect(find.text('Ahmed Nazeeh'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'MR11: the heading button and the flow CTA are ONE action — one '
+    'disabled state, one submit path',
+    (tester) async {
+      final api = await pumpTill(tester);
+
+      FilledButton top() =>
+          tester.widget<FilledButton>(find.byKey(kCreditCtaTopKey));
+      FilledButton flow() =>
+          tester.widget<FilledButton>(find.byKey(kCreditCtaFlowKey));
+
+      // Both exist, and an empty till disables BOTH.
+      expect(find.byKey(kCreditCtaTopKey), findsOneWidget);
+      expect(find.byKey(kCreditCtaFlowKey), findsOneWidget);
+      expect(top().onPressed, isNull);
+      expect(flow().onPressed, isNull);
+
+      // A half-filled sale still disables both — the gate is shared, not
+      // copied.
+      await enterCode(tester, '374230');
+      await tester.enterText(field(1), 'INV-9001');
+      await tester.pumpAndSettle();
+      expect(top().onPressed, isNull);
+      expect(flow().onPressed, isNull);
+
+      // Completed: both go live together.
+      await tester.enterText(field(2), '250');
+      await tester.pumpAndSettle();
+      expect(top().onPressed, isNotNull);
+      expect(flow().onPressed, isNotNull);
+
+      // And the HEADING button submits the same credit the flow one would.
+      await tester.tap(find.byKey(kCreditCtaTopKey));
+      await tester.pumpAndSettle();
+      expect(api.credits, hasLength(1));
+      expect(api.credits.single['invoice_no'], 'INV-9001');
+    },
+  );
+
+  testWidgets('the top bar survives a large accessibility text scale on a '
+      'narrow phone — the wordmark shrinks instead of overflowing', (
+    tester,
+  ) async {
+    // Pre-existing before MR11 and only visible at scale: the wordmark grows
+    // with the reader's text size and the row had no give, so it overflowed
+    // by ~69px at 1.3 on a 390dp frame.
+    await pumpTill(tester, surface: const Size(390, 844), textScale: 1.3);
+
+    // A RenderFlex overflow throws in tests — no exception IS the assertion.
+    expect(tester.takeException(), isNull);
+    expect(find.text('Manfaa'), findsWidgets);
+  });
+
+  testWidgets(
+    'MR11: nothing is pinned — the flow CTA scrolls clear of the floating '
+    'nav instead of under it',
+    (tester) async {
+      // The shipped phone frame, where the old pinned bar overlapped.
+      await tester.binding.setSurfaceSize(const Size(390, 844));
+      // Surface size leaks between tests unless it is handed back.
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final store = await seededStore(tillPermissions);
+      await tester.pumpWidget(
+        app(store, (s) => _TillApi(session: s, permissions: tillPermissions)),
+      );
+      await tester.pumpAndSettle();
+
+      final scrollable = find.byType(Scrollable).first;
+      final position = tester.state<ScrollableState>(scrollable).position;
+      position.jumpTo(position.maxScrollExtent);
+      await tester.pumpAndSettle();
+
+      final ctaBottom = tester.getRect(find.byKey(kCreditCtaFlowKey)).bottom;
+      final navTop = tester.getRect(find.byKey(kFloatingNavBarKey)).top;
+
+      // The bar floats over the branch (extendBody). With the list's
+      // bottomClearanceOf padding the CTA ends ABOVE it — every pixel of
+      // the button is reachable. (740 vs 762 on the 390×844 frame.)
+      expect(ctaBottom, lessThanOrEqualTo(navTop));
+      // …and it really is the end of the scroll being measured, not some
+      // button parked halfway up the page.
+      expect(ctaBottom, greaterThan(navTop - 120));
+      // …and the pinned bar itself is gone: the CTA lives in the scroll,
+      // below the violet pending note.
+      expect(
+        tester.getRect(find.byType(PendingNote)).bottom,
+        lessThanOrEqualTo(tester.getRect(find.byKey(kCreditCtaFlowKey)).top),
+      );
     },
   );
 

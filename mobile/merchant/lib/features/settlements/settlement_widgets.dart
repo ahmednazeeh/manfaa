@@ -398,83 +398,122 @@ class DiscountKeepBanner extends StatelessWidget {
 /// discounted — the customer's reward is untouched), fee and GST with the
 /// discount struck through when earned, the §7 credit netted, and the total
 /// due — every figure a preview integer.
-class PreviewBreakdownCard extends StatelessWidget {
+///
+/// MR11 (owner report): the accounting sits behind a "View breakdown"
+/// disclosure — the same idiom the dashboard's settlement card uses — so
+/// the tab opens on the amount and the action, not on a ledger.
+class PreviewBreakdownCard extends StatefulWidget {
   const PreviewBreakdownCard({super.key, required this.preview});
 
   final SettlementPreviewData preview;
 
   @override
+  State<PreviewBreakdownCard> createState() => _PreviewBreakdownCardState();
+}
+
+class _PreviewBreakdownCardState extends State<PreviewBreakdownCard> {
+  var _open = false;
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final l10n = context.l10n;
+    final preview = widget.preview;
     final discount = preview.discount;
 
     return ManfaaCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(l10n.breakdownTitle, style: theme.textTheme.titleMedium),
-          const SizedBox(height: Gap.sm),
-          MoneyRow(
-            label: l10n.payableCashback,
-            laari: preview.cashbackTotalLaari,
-          ),
-          MoneyRow(
-            label: l10n.payableFee,
-            child: DiscountedFeeAmount(
-              feeLaari: preview.feeTotalLaari,
-              feeDiscountLaari: discount?.feeDiscountLaari ?? 0,
+          InkWell(
+            borderRadius: BorderRadius.circular(Corner.tile),
+            onTap: () => setState(() => _open = !_open),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: Gap.xs),
+              child: Row(
+                children: [
+                  Text(
+                    l10n.viewBreakdown,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.colorScheme.secondary,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(width: Gap.xs),
+                  Icon(
+                    _open
+                        ? Icons.keyboard_arrow_up_rounded
+                        : Icons.keyboard_arrow_right_rounded,
+                    size: 20,
+                    color: theme.colorScheme.secondary,
+                  ),
+                ],
+              ),
             ),
           ),
-          MoneyRow(
-            label: l10n.payableGst,
-            child: DiscountedFeeAmount(
-              feeLaari: preview.feeGstTotalLaari,
-              feeDiscountLaari: discount?.gstReliefLaari ?? 0,
-            ),
-          ),
-          if (discount != null && preview.discountLaari > 0) ...[
-            const Divider(height: Gap.lg),
+          if (_open) ...[
+            const SizedBox(height: Gap.sm),
             MoneyRow(
-              label: l10n.discountRow(trimRatePercent(discount.ratePercent)),
-              child: MoneyText(
-                -preview.discountLaari,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.colorScheme.secondary,
+              label: l10n.payableCashback,
+              laari: preview.cashbackTotalLaari,
+            ),
+            MoneyRow(
+              label: l10n.payableFee,
+              child: DiscountedFeeAmount(
+                feeLaari: preview.feeTotalLaari,
+                feeDiscountLaari: discount?.feeDiscountLaari ?? 0,
+              ),
+            ),
+            MoneyRow(
+              label: l10n.payableGst,
+              child: DiscountedFeeAmount(
+                feeLaari: preview.feeGstTotalLaari,
+                feeDiscountLaari: discount?.gstReliefLaari ?? 0,
+              ),
+            ),
+            if (discount != null && preview.discountLaari > 0) ...[
+              const Divider(height: Gap.lg),
+              MoneyRow(
+                label: l10n.discountRow(trimRatePercent(discount.ratePercent)),
+                child: MoneyText(
+                  -preview.discountLaari,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.colorScheme.secondary,
+                  ),
                 ),
               ),
-            ),
-            Text(
-              l10n.discountAdvisoryNote(discount.maxAgeDays),
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
-          ],
-          if (preview.creditAppliedLaari > 0) ...[
-            const Divider(height: Gap.lg),
-            MoneyRow(
-              label: l10n.creditAppliedRow,
-              child: MoneyText(
-                -preview.creditAppliedLaari,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: ManfaaColors.green,
+              Text(
+                l10n.discountAdvisoryNote(discount.maxAgeDays),
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
                 ),
               ),
-            ),
-            Text(
-              l10n.creditAppliedHint,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
+            ],
+            if (preview.creditAppliedLaari > 0) ...[
+              const Divider(height: Gap.lg),
+              MoneyRow(
+                label: l10n.creditAppliedRow,
+                child: MoneyText(
+                  -preview.creditAppliedLaari,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: ManfaaColors.green,
+                  ),
+                ),
               ),
+              Text(
+                l10n.creditAppliedHint,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+            const Divider(height: Gap.xl),
+            MoneyRow(
+              label: l10n.totalDueLabel,
+              laari: preview.amountDueLaari,
+              emphasized: true,
             ),
           ],
-          const Divider(height: Gap.xl),
-          MoneyRow(
-            label: l10n.totalDueLabel,
-            laari: preview.amountDueLaari,
-            emphasized: true,
-          ),
         ],
       ),
     );
@@ -605,14 +644,27 @@ class PaymentInstructionsCard extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: Gap.sm),
-                for (final account in choices) ...[
-                  _BankChoice(
-                    account: account,
-                    selected: account.id == chosen?.id,
-                    onTap: () => onSelectAccount!(account.id ?? 0),
-                  ),
-                  const SizedBox(height: Gap.sm),
-                ],
+                // MR11 (owner report): small tiles side by side — the
+                // mark and the short name — instead of two full-width
+                // rows. The account number belongs to the CHOSEN bank and
+                // appears once, below. (start, not stretch: this Row lives
+                // in an unbounded column, and every tile is the same shape
+                // anyway.)
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    for (final (index, account) in choices.indexed) ...[
+                      if (index > 0) const SizedBox(width: Gap.sm),
+                      Expanded(
+                        child: _BankChoice(
+                          account: account,
+                          selected: account.id == chosen?.id,
+                          onTap: () => onSelectAccount!(account.id ?? 0),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
               ],
               if (chosen == null)
                 Padding(
@@ -649,6 +701,9 @@ class PaymentInstructionsCard extends StatelessWidget {
   }
 }
 
+/// One compact bank card: the bank's own mark over its short name (BML,
+/// MIB). No account number here — that is the chosen bank's business, shown
+/// once below the row.
 class _BankChoice extends StatelessWidget {
   const _BankChoice({
     required this.account,
@@ -668,7 +723,10 @@ class _BankChoice extends StatelessWidget {
       borderRadius: BorderRadius.circular(Corner.control),
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.all(Gap.md),
+        padding: const EdgeInsets.symmetric(
+          horizontal: Gap.sm,
+          vertical: Gap.md,
+        ),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(Corner.control),
           border: Border.all(
@@ -681,47 +739,66 @@ class _BankChoice extends StatelessWidget {
               ? theme.colorScheme.secondaryContainer.withValues(alpha: 0.4)
               : Colors.transparent,
         ),
-        child: Row(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            const IconTile(
-              Icons.account_balance_rounded,
-              tint: ManfaaTint.blue,
-              size: 36,
-              iconSize: 19,
-            ),
-            const SizedBox(width: Gap.md),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    bankDisplayName(account.bankName),
-                    style: theme.textTheme.titleSmall,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  Text(
-                    account.accountNo,
-                    textDirection: TextDirection.ltr,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                      fontFeatures: const [FontFeature.tabularFigures()],
-                    ),
-                  ),
-                ],
+            BankLogoTile(bankName: account.bankName),
+            const SizedBox(height: Gap.sm),
+            Text(
+              bankShortName(account.bankName),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: theme.textTheme.titleSmall?.copyWith(
+                color: selected
+                    ? theme.colorScheme.onSurface
+                    : theme.colorScheme.onSurfaceVariant,
               ),
-            ),
-            Icon(
-              selected
-                  ? Icons.radio_button_checked_rounded
-                  : Icons.radio_button_off_rounded,
-              size: 20,
-              color: selected
-                  ? theme.colorScheme.secondary
-                  : theme.colorScheme.onSurfaceVariant,
             ),
           ],
         ),
       ),
+    );
+  }
+}
+
+/// A bank's mark on a WHITE rounded tile — white in both themes on purpose:
+/// MIB's PNG is transparent and vanishes on a dark surface. A bank Manfaa
+/// ships no art for gets the neutral glyph instead of an invented logo.
+class BankLogoTile extends StatelessWidget {
+  const BankLogoTile({super.key, required this.bankName, this.size = 44});
+
+  final String bankName;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    final asset = bankLogoAsset(bankName);
+
+    return Container(
+      width: size,
+      height: size,
+      padding: EdgeInsets.all(size * 0.14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(Corner.tile),
+        border: Border.all(color: const Color(0x14000000)),
+      ),
+      child: asset == null
+          ? Icon(
+              Icons.account_balance_rounded,
+              size: size * 0.5,
+              color: ManfaaColors.ink,
+            )
+          : Image.asset(
+              asset,
+              fit: BoxFit.contain,
+              errorBuilder: (_, _, _) => Icon(
+                Icons.account_balance_rounded,
+                size: size * 0.5,
+                color: ManfaaColors.ink,
+              ),
+            ),
     );
   }
 }
@@ -887,14 +964,9 @@ class _ReceiptFormState extends State<ReceiptForm> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        // MR11 (owner report): the heading stands alone — the sentence
+        // under it explained what the picker below already shows.
         Text(l10n.uploadSlipTitle, style: theme.textTheme.titleMedium),
-        const SizedBox(height: 4),
-        Text(
-          l10n.uploadSlipLead,
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: theme.colorScheme.onSurfaceVariant,
-          ),
-        ),
         const SizedBox(height: Gap.md),
         Container(
           padding: const EdgeInsets.all(Gap.lg),
@@ -997,9 +1069,9 @@ class _ReceiptFormState extends State<ReceiptForm> {
                           onPressed: widget.busy
                               ? null
                               : () => setState(() {
-                                    _slip = null;
-                                    _slipError = null;
-                                  }),
+                                  _slip = null;
+                                  _slipError = null;
+                                }),
                           child: Text(l10n.slipRemove),
                         ),
                       ],
@@ -1034,8 +1106,9 @@ class _ReceiptFormState extends State<ReceiptForm> {
           onChanged: (_) => setState(() {}),
           decoration: InputDecoration(
             prefixText: 'MVR ',
-            errorText:
-                _amountInvalid && _touched ? l10n.transferredAmountInvalid : null,
+            errorText: _amountInvalid && _touched
+                ? l10n.transferredAmountInvalid
+                : null,
             helperText: _amountInvalid ? null : l10n.transferredAmountHint,
             helperMaxLines: 3,
           ),
@@ -1119,13 +1192,13 @@ class SettlementRow extends StatelessWidget {
               settled
                   ? Icons.check_circle_outline_rounded
                   : attention
-                      ? Icons.error_outline_rounded
-                      : Icons.hourglass_empty_rounded,
+                  ? Icons.error_outline_rounded
+                  : Icons.hourglass_empty_rounded,
               tint: settled
                   ? ManfaaTint.green
                   : attention
-                      ? ManfaaTint.coral
-                      : ManfaaTint.amber,
+                  ? ManfaaTint.coral
+                  : ManfaaTint.amber,
               size: 38,
               iconSize: 19,
             ),
