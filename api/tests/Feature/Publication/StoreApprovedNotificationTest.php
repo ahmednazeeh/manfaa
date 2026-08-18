@@ -113,18 +113,27 @@ it('sends nothing when the approval is refused', function () {
     Queue::assertNotPushed(SendPushNotification::class);
 });
 
-it('keeps SMS off every other merchant moment', function () {
-    // The default is the important half: a settlement reminder that texted
-    // the store every month would be a bill and a nuisance.
-    expect(NotificationTemplateKey::StoreApproved->smsToMerchantContact())
-        ->toBeTrue();
-
+it('texts the store for every merchant moment, not just approval', function () {
+    // ON by default (owner decision 2026-08-18): every merchant moment is
+    // one the shop must act on or account for, and a push to a handset
+    // nobody is holding is not a delivered message. This walks the whole
+    // catalogue so a future key cannot quietly opt itself out.
     foreach (NotificationTemplateKey::cases() as $key) {
-        if ($key === NotificationTemplateKey::StoreApproved) {
+        if (! $key->isForMerchantStaff()) {
             continue;
         }
 
         expect($key->smsToMerchantContact())
-            ->toBeFalse("{$key->value} must not text the store");
+            ->toBeTrue("{$key->value} must reach the store by SMS as well");
     }
+});
+
+it('leaves the customer channels exactly as they were', function () {
+    // The merchant switch must not have moved the customer one. Store
+    // pause/resume stay push-only — they are news about someone else's shop,
+    // on a switch the merchant controls and the platform pays for.
+    expect(NotificationTemplateKey::StorePaused->usesSms())->toBeFalse()
+        ->and(NotificationTemplateKey::StoreResumed->usesSms())->toBeFalse()
+        ->and(NotificationTemplateKey::CashbackEarned->usesSms())->toBeTrue()
+        ->and(NotificationTemplateKey::PayoutPaid->usesSms())->toBeTrue();
 });

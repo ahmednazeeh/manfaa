@@ -217,19 +217,25 @@ enum NotificationTemplateKey: string
      * Whether a MERCHANT-facing moment also earns an SMS, sent to the store's
      * own contact number.
      *
-     * Off by default, and that default is the important half. Merchant staff
-     * have no phone numbers on file — only the STORE does, the number given
-     * at signup and verified by OTP — and a settlement reminder that texted
-     * that number every month would be a bill and a nuisance. Approval is
-     * the exception the owner asked for: it is once per store, it ends a
-     * wait the merchant cannot chase, and it may well arrive before they
-     * have ever opened the app.
+     * ON by default (owner decision 2026-08-18). Every merchant moment we
+     * raise is one the shop has to act on or account for — a settlement
+     * falling due, a receipt refused, a change approved, the store going
+     * live — and a push that lands on a handset nobody is holding is not a
+     * message that was delivered. Merchant staff carry no phone numbers, so
+     * the destination is the STORE'S number: the one given at signup and
+     * verified by OTP, which is also the number the shop already answers.
+     *
+     * These are per-store and event-driven, not a broadcast: the busiest of
+     * them is the settlement cycle, so a merchant who pays on time hears
+     * from us a few times a month at most. If a future key is chatty enough
+     * to be a nuisance, name it here and return false — the exception is
+     * cheaper to write than the apology.
      */
     public function smsToMerchantContact(): bool
     {
         return match ($this) {
-            self::StoreApproved => true,
-            default => false,
+            // Name a key here to keep it push-only.
+            default => true,
         };
     }
 
