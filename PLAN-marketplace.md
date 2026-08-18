@@ -123,35 +123,67 @@ store flow through the existing MR9 change-request gate? **No** — see §11
 open question Q3. Provisional answer: price and stock are operational and
 apply instantly; name, images and description are claims and are gated.
 
-### 2.3 Delivery rules (the per-island matrix)
+### 2.3 Delivery rules — per BRANCH, per destination island
 
-Owner: *"Allow stores in Male region and Hulhumale region to set delivery
-free minimum for each island."*
+Owner, clarified 2026-08-18:
 
-Modelled generally, so it covers every reading of that sentence and what a
-real marketplace needs:
+> *"Shops in Male deliver to both Male and Hulhumale. But for Male they
+> require smaller minimum than delivery to Hulhumale. And shops in Hulhumale
+> require smaller minimum to deliver to Hulhumale than to Male. So each
+> branch should have function to add delivery islands among supported
+> islands by platform and order minimum for each for free delivery."*
+
+So the rule is owned by the **branch**, not the merchant — a chain with a
+Malé shop and a Hulhumalé shop has two different sets of terms, and each
+shop's own island is the cheap one. And the number the merchant sets per
+island is the **order minimum that earns free delivery**.
 
 ```
-merchant_delivery_rules
-  merchant_id
-  zone_id                         destination island (zones table, live: 5)
-  delivers                        bool — false = we do not serve that island
-  delivery_fee_laari              integer
-  free_delivery_over_laari        nullable — basket value that waives the fee
-  order_minimum_laari             integer — the "Min MVR 200" chip
-  eta_min/eta_max                 minutes, per destination
-  unique (merchant_id, zone_id)
+branch_delivery_rules
+  branch_id                       merchant_branches — NOT merchant_id
+  zone_id                         destination island, from the platform list
+  free_delivery_over_laari        the number the merchant sets per island
+  delivery_fee_laari              charged below that threshold
+  order_minimum_laari             nullable — below this the branch will not
+                                  deliver at all (the "Min MVR 200" chip)
+  eta_min/eta_max                 minutes to THAT island
+  unique (branch_id, zone_id)
 ```
 
-A Malé shop can therefore say: Malé — fee 25, free over 300, minimum 200;
-Hulhumalé — fee 60, free over 500, minimum 500; elsewhere — `delivers=false`.
-The zone comes from the **delivery address**, resolved by the existing
-`ZoneAssigner` against the address pin.
+A row exists only for an island the branch serves; adding a row *is* "add a
+delivery island". The platform's island list is the existing `zones` table
+(live: Malé, Hulhumalé, K Maafushi, HDh Kurinbi, HDh Kulhudhuffushi), so
+enabling a new island for everyone is one zone row.
 
-> **Confirm before build:** whether "delivery free minimum 25 / 500" means
-> *free-delivery threshold* (modelled as `free_delivery_over_laari`) or a
-> *flat fee per island* (`delivery_fee_laari`). Both columns exist either
-> way; only the wizard copy and defaults change.
+Worked example, exactly the owner's case:
+
+| Branch          | → Malé            | → Hulhumalé        |
+|-----------------|-------------------|--------------------|
+| Island Mart, Malé      | free over 25   | free over 500  |
+| Horizon, Hulhumalé     | free over 500  | free over 25   |
+
+#### 2.3.1 Two consequences of going per-branch
+
+**(a) The cart must choose a branch.** A merchant with shops on two islands
+now has two sets of terms, so a suborder is against a BRANCH, not just a
+merchant: `suborders.branch_id` is required, and the cart picks the serving
+branch from the delivery address — the branch whose rules cover that zone,
+cheapest terms winning a tie. This is a real improvement rather than a cost:
+a Hulhumalé customer gets served by the Hulhumalé shop, which is what any
+shopper would expect and what makes the cheap threshold reachable.
+
+**(b) The store page is address-dependent.** The `Delivery MVR 25 · 30–60
+min · Min MVR 200` chips in `Market View.png` are not properties of the
+store — they are properties of *store → your address*. So:
+
+- with a delivery address chosen, the chips show that branch's terms to
+  that island, and the cart's progress bar counts toward that island's
+  threshold;
+- with no address yet, show the terms for the customer's current zone if we
+  have a location fix, otherwise the branch's own island, with a quiet
+  "set your address for exact delivery terms" line;
+- a store no branch of which delivers to the chosen island is shown as
+  **pickup only**, never hidden — the customer may still collect.
 
 ### 2.4 Addresses
 
@@ -196,8 +228,9 @@ orders                            the payment, one per checkout
                                   | completed | cancelled
   placed_at
 
-suborders                         one per merchant — the unit of fulfilment
+suborders                         one per SERVING BRANCH — the unit of fulfilment
   order_id, merchant_id
+  branch_id                       which shop fulfils it (§2.3.1a)
   reference                       MF-1084-01
   fulfilment                      delivery | pickup
   items_laari, delivery_laari, subtotal_laari
@@ -307,8 +340,9 @@ desktop.
 ### 4.3 Merchant web panel — the full estate
 
 Everything the app has, plus what it deliberately lacks: catalogue CRUD with
-images and bulk edit, category mapping, the **per-island delivery matrix**
-(§2.3) as an editable grid, prep times, marketplace opt-in and KYB upload,
+images and bulk edit, category mapping, the **per-branch delivery matrix**
+(§2.3) — one grid per branch, a row per island it serves — prep times,
+marketplace opt-in and KYB upload,
 and order management with printable pick lists.
 
 ### 4.4 Customer web
@@ -518,8 +552,10 @@ Marketplace is **off** for every merchant until they opt in. The flow:
 3. **KYB documents** — business registration, owner ID, bank letter, TIN
    certificate. Uploaded, then reviewed by an admin in a queue that reuses
    the store-review sheet.
-4. **Profile sheet** — fulfilment modes, prep times, the per-island delivery
-   matrix (§2.3), and the store's marketplace description.
+4. **Profile sheet** — fulfilment modes, prep times, and the store's
+   marketplace description. Then, **per branch**, the islands it delivers to
+   and the free-delivery minimum for each (§2.3). A store with no delivery
+   rules on any branch is pickup-only, which is a valid way to open.
 5. Admin approves → `state = active` → the store appears in Market and its
    Products/Orders surfaces unlock.
 
@@ -562,7 +598,12 @@ when it is off. A hidden button that still answers is not hidden.
    item by item; recommendation is **instant, with admin takedown**.
 4. **Netting** — should a merchant's cashback settlement debt be netted
    against their marketplace payout? Plan says no for v1.
-5. **Delivery semantics** — confirm the reading in §2.3.
+5. ~~Delivery semantics~~ — **settled 2026-08-18**: per branch, per
+   destination island, and the number is the free-delivery threshold. See
+   §2.3. What remains open is whether a branch may also refuse to deliver
+   below a floor (`order_minimum_laari`), or whether every below-threshold
+   order is simply charged the fee. Plan keeps the column nullable so both
+   work.
 6. **GST** on the marketplace fee — assumed to follow the existing platform
    fee treatment.
 7. **Ratings** — the mockups show 4.7 (1,248). Who can rate, and when?
@@ -578,7 +619,7 @@ Each round ships end-to-end and green, in the house style.
 |-------|-------|
 | **MP1** | Foundations: migrations, `marketplace_enabled` kill switch, opt-in + KYB, admin review queue. No shopping yet. |
 | **MP2** | Catalogue: products, categories, images, stock. Merchant web CRUD + app quick edits. |
-| **MP3** | Delivery matrix and addresses: per-island rules, `customer_addresses`, zone resolution. |
+| **MP3** | Delivery and addresses: per-branch/per-island rules, `customer_addresses`, zone resolution, and the branch-selection rule (§2.3.1a). |
 | **MP4** | Browse and cart: Market tab, store page, floating cart, collapsible multi-vendor cart with minimum warnings. |
 | **MP5** | Checkout and orders: the four steps, receipt-first payment, order + suborder creation, Order Received. |
 | **MP6** | Fulfilment: merchant Orders tab and details, accept/reject, statuses, pickup codes, notifications. |
