@@ -911,3 +911,58 @@ Two things learned in the build, worth carrying into MP2:
 
 **Not in MP1:** any customer-visible surface, the catalogue, delivery rules,
 the panels' UI. Those are MP2+.
+
+---
+
+## 14. MP2 — the catalogue (in progress)
+
+Product definitions on the merchant, listings on the branch (§2.2, §2.3),
+and the edit split the owner settled (§11.1 Q3). Still no shopper-facing
+surface: this round is what a vendor stocks, not what a customer sees.
+
+**Server**
+
+- [x] Migration + seed: `marketplace_categories`, the platform-curated tree
+      from `Market View Tablet.png` (Rice & Grains … Others).
+- [x] Migration: `products` (definition) and `product_images`.
+- [x] Migration: `branch_products` (listing — price, stock, availability).
+- [x] Migration: `merchant_change_requests` gains `product_id` and the
+      `product_update` kind, so gated product edits reuse MR9 rather than
+      growing a second review queue.
+- [x] Models and relations.
+- [x] `ChangeKind::ProductUpdate` — label, governing permission.
+- [x] Merchant API: browse categories; create / update / archive a product;
+      upload and remove images; set a branch's price, stock and availability.
+- [x] **The edit split, enforced server-side**: `price_laari`, `stock_qty`
+      and `state` apply instantly; `name`, `description` and images queue
+      through MR9 on a store already selling. Fail-closed, like the profile
+      gate — an unrecognised key is gated, never waved through.
+
+**Proof**
+
+- [x] Tests: a listing prices per branch; stock is per branch; an instant
+      field applies on a live store; a gated field queues and leaves the
+      product untouched; a pre-approval store writes straight through;
+      archiving hides a product without deleting order history.
+- [x] Full API suite green, pint clean.
+
+**Shipped 2026-08-18.** 17 catalogue tests; full API suite **1443 green**;
+live behind the switch.
+
+**One rule changed during the build, and it is a better one.** The gate asks
+about the PRODUCT, not merely the store: a product no branch lists as
+`active` has never been in front of a shopper, so its name is not yet a
+public claim and nothing queues. Gating from the moment of creation would
+mean a vendor loading a 124-line catalogue queues 124 review requests for
+typos in things nobody can buy — which teaches everyone to rubber-stamp the
+queue, and a queue only works if it is read. The moment a shelf carries the
+product, every word about it is gated.
+
+Also learned: the MR9 shape constraint predates products and had to be
+widened, and my first attempt widened it WRONGLY — requiring a branch on
+every branch-shaped change. Deleting a branch NULLS `branch_id` on the
+history that referenced it, and that history is exactly what must outlive
+the branch. The suite caught it; the constraint now only ever says which
+kinds may NOT carry a branch.
+
+**Not in MP2:** the panels' UI, the customer-facing Market. MP4 onward.

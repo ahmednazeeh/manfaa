@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Admin\MarketplaceKybController;
 use App\Http\Controllers\Merchant\MarketplaceEnrolmentController;
+use App\Http\Controllers\Merchant\ProductController;
 use App\Http\Middleware\EnsureMerchantApproved;
 use App\Http\Middleware\EnsureSuperadmin;
 use Illuminate\Support\Facades\Route;
@@ -38,6 +39,33 @@ Route::prefix('merchant/marketplace')
 
         Route::post('submit', [MarketplaceEnrolmentController::class, 'submit'])
             ->middleware(['merchant.can:marketplace.manage', EnsureMerchantApproved::class]);
+    });
+
+/*
+ * The catalogue (MP2). Definitions are the merchant's; listings belong to a
+ * branch. Reads are open to anyone who may manage the shop; writes join the
+ * approval gate like every other write.
+ */
+Route::prefix('merchant/marketplace')
+    ->middleware(['auth:merchant', 'marketplace', 'merchant.can:marketplace.manage'])
+    ->group(function (): void {
+        Route::get('categories', [ProductController::class, 'categories']);
+        Route::get('products', [ProductController::class, 'index']);
+
+        Route::middleware(EnsureMerchantApproved::class)->group(function (): void {
+            Route::post('products', [ProductController::class, 'store']);
+            Route::patch('products/{product}', [ProductController::class, 'update'])->whereNumber('product');
+            Route::delete('products/{product}', [ProductController::class, 'archive'])->whereNumber('product');
+
+            // The operational half — instant by decision, and the reason a
+            // shop can react to its own shelves without waiting for us.
+            Route::put('products/{product}/listing', [ProductController::class, 'listing'])->whereNumber('product');
+
+            Route::post('products/{product}/images', [ProductController::class, 'uploadImage'])
+                ->whereNumber('product')->middleware('throttle:60,1');
+            Route::delete('products/{product}/images/{image}', [ProductController::class, 'destroyImage'])
+                ->whereNumber(['product', 'image']);
+        });
     });
 
 Route::prefix('admin/marketplace')

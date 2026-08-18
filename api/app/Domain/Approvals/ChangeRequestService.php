@@ -13,6 +13,7 @@ use App\Models\Merchant;
 use App\Models\MerchantBranch;
 use App\Models\MerchantChangeRequest;
 use App\Models\MerchantUser;
+use App\Models\Product;
 use App\Models\Promotion;
 use App\Models\Transaction;
 use Carbon\CarbonImmutable;
@@ -151,6 +152,36 @@ final class ChangeRequestService
     }
 
     /**
+     * A product's public CLAIMS — name, description, artwork.
+     *
+     * Price, stock and availability never arrive here: they are operational,
+     * they live on `branch_products`, and a shop that had to wait a day to
+     * mark something out of stock would simply oversell (owner decision
+     * 2026-08-18). This method is only ever handed the gated half.
+     *
+     * Returns null when nothing actually changed, so re-saving an untouched
+     * product cannot park it in a review queue.
+     */
+    public function submitProductChange(
+        Merchant $merchant,
+        MerchantUser $actor,
+        Product $product,
+        array $proposed,
+    ): ?MerchantChangeRequest {
+        $current = fn (string $key): mixed => $product->getAttribute($key);
+
+        return $this->submit(
+            $merchant,
+            $actor,
+            ChangeKind::ProductUpdate,
+            null,
+            $this->changedOnly($proposed, $current),
+            $current,
+            product: $product,
+        );
+    }
+
+    /**
      * Apply the change and mark the row reviewed — atomically, so a request
      * can never read `approved` while the store still says otherwise.
      */
@@ -170,6 +201,7 @@ final class ChangeRequestService
                 ChangeKind::BranchCreate => $this->applyBranchCreate($merchant, $locked),
                 ChangeKind::BranchUpdate => $this->applyBranchUpdate($merchant, $locked),
                 ChangeKind::BranchDelete => $this->applyBranchDelete($merchant, $locked),
+                ChangeKind::ProductUpdate => $this->applyProductUpdate($locked),
             };
 
             $locked->forceFill([
@@ -186,6 +218,24 @@ final class ChangeRequestService
         $this->notify($request, NotificationTemplateKey::StoreChangeApproved, $merchant->refresh());
 
         return $request->refresh();
+    }
+
+    /**
+     * The approved words land on the product.
+     *
+     * A product deleted while its change waited leaves nothing to apply —
+     * the request is still marked approved, because the reviewer did decide,
+     * and refusing here would strand the row as pending forever.
+     */
+    private function applyProductUpdate(MerchantChangeRequest $request): void
+    {
+        $product = Product::query()->whereKey($request->product_id)->lockForUpdate()->first();
+
+        if ($product === null) {
+            return;
+        }
+
+        $product->fill((array) $request->payload)->save();
     }
 
     /** Refused, with the reason the merchant is owed. Nothing is applied. */
@@ -259,9 +309,10 @@ final class ChangeRequestService
         callable $current,
         ?array $snapshotKeys = null,
         bool $always = false,
+        ?Product $product = null,
     ): ?MerchantChangeRequest {
-        return DB::transaction(function () use ($merchant, $actor, $kind, $branch, $proposed, $current, $snapshotKeys, $always): ?MerchantChangeRequest {
-            $existing = $this->lockPendingSiblings($merchant, $kind, $branch);
+        return DB::transaction(function () use ($merchant, $actor, $kind, $branch, $proposed, $current, $snapshotKeys, $always, $product): ?MerchantChangeRequest {
+            $existing = $this->lockPendingSiblings($merchant, $kind, $branch, $product);
 
             if ($proposed === [] && ! $always) {
                 // Nothing proposed that is not already true. The earlier
@@ -311,10 +362,19 @@ final class ChangeRequestService
                 $snapshot['id'] = $branch->id;
             }
 
+            if ($product !== null) {
+                // Same reason, and one more: the reviewer is judging words
+                // about a product, so its name has to be on the row even
+                // when the name is not what changed.
+                $snapshot['id'] = $product->id;
+                $snapshot['product_name'] = $product->name;
+            }
+
             return MerchantChangeRequest::query()->create([
                 'merchant_id' => $merchant->id,
                 'kind' => $kind,
                 'branch_id' => $branch?->id,
+                'product_id' => $product?->id,
                 'payload' => $proposed,
                 'snapshot' => $snapshot,
                 'status' => MerchantChangeRequest::PENDING,
@@ -331,8 +391,12 @@ final class ChangeRequestService
      *
      * @return Collection<int, MerchantChangeRequest>
      */
-    private function lockPendingSiblings(Merchant $merchant, ChangeKind $kind, ?MerchantBranch $branch): Collection
-    {
+    private function lockPendingSiblings(
+        Merchant $merchant,
+        ChangeKind $kind,
+        ?MerchantBranch $branch,
+        ?Product $product = null,
+    ): Collection {
         if ($kind === ChangeKind::BranchCreate) {
             // Each queued branch is a distinct new place, not a revision of
             // the last one — two shops opening in the same week must both
@@ -344,6 +408,17 @@ final class ChangeRequestService
             ->where('merchant_id', $merchant->id)
             ->where('status', MerchantChangeRequest::PENDING)
             ->lockForUpdate();
+
+        if ($product !== null) {
+            // Product changes collapse onto the PRODUCT: two queued edits to
+            // one product are two answers to one question, and the newest is
+            // the merchant's. Edits to a different product are unrelated and
+            // must not supersede each other.
+            return $query
+                ->where('kind', ChangeKind::ProductUpdate->value)
+                ->where('product_id', $product->id)
+                ->get();
+        }
 
         if ($branch === null) {
             return $query->where('kind', $kind->value)->get();

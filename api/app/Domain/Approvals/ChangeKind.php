@@ -17,6 +17,11 @@ enum ChangeKind: string
     case BranchUpdate = 'branch_update';
     case BranchDelete = 'branch_delete';
 
+    // A marketplace product's public CLAIMS — its name, description and
+    // artwork. Its price, stock and availability are operational and never
+    // come through here (owner decision 2026-08-18, PLAN-marketplace §11.1).
+    case ProductUpdate = 'product_update';
+
     /** What the merchant sees this called, and what the notification names. */
     public function label(): string
     {
@@ -25,6 +30,7 @@ enum ChangeKind: string
             self::BranchCreate => 'new branch',
             self::BranchUpdate => 'branch update',
             self::BranchDelete => 'branch removal',
+            self::ProductUpdate => 'product change',
         };
     }
 
@@ -44,12 +50,18 @@ enum ChangeKind: string
             self::BranchCreate => Permission::BranchesCreate,
             self::BranchUpdate => Permission::BranchesEdit,
             self::BranchDelete => Permission::BranchesDelete,
+            self::ProductUpdate => Permission::MarketplaceManage,
         };
     }
 
     public function isBranch(): bool
     {
-        return $this !== self::Profile;
+        return in_array($this, [self::BranchCreate, self::BranchUpdate, self::BranchDelete], true);
+    }
+
+    public function isProduct(): bool
+    {
+        return $this === self::ProductUpdate;
     }
 
     /**

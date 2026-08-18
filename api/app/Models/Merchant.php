@@ -119,6 +119,12 @@ class Merchant extends Model
         return $this->hasMany(MerchantKybDocument::class);
     }
 
+    /** Product DEFINITIONS. What each branch charges lives on the listing. */
+    public function products(): HasMany
+    {
+        return $this->hasMany(Product::class);
+    }
+
     /**
      * Selling on the marketplace right now.
      *
