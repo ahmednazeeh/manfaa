@@ -12,6 +12,7 @@ import '../../widgets/osm_map.dart';
 import '../settlements/settlement_widgets.dart' show ToneBanner;
 import 'estate_widgets.dart';
 import 'more_providers.dart';
+import 'pending_change_card.dart';
 
 /// Manage Branches (MR5) — Branches.png's LAYOUT restyled into the violet
 /// system, minus the mockup chrome with no backing data (RULE ZERO): no
@@ -55,12 +56,12 @@ class _BranchesScreenState extends ConsumerState<BranchesScreen> {
     if (saved) ref.invalidate(branchesProvider);
   }
 
-  Widget _pane(List<MerchantBranch> branches) {
+  Widget _pane(MerchantBranchEstate estate) {
     final l10n = context.l10n;
 
     if (_paneOpen) {
       MerchantBranch? editing;
-      for (final branch in branches) {
+      for (final branch in estate.branches) {
         if (branch.id == _paneBranchId) editing = branch;
       }
       if (_paneBranchId == null || editing != null) {
@@ -69,6 +70,7 @@ class _BranchesScreenState extends ConsumerState<BranchesScreen> {
           child: _BranchSheet(
             key: ValueKey('branch-${editing?.id ?? 'new'}'),
             existing: editing,
+            pending: editing == null ? null : estate.pendingFor(editing.id),
             onFinished: _onPaneFinished,
           ),
         );
@@ -85,13 +87,14 @@ class _BranchesScreenState extends ConsumerState<BranchesScreen> {
   Future<void> _openEditor(
     BuildContext context, {
     MerchantBranch? existing,
+    MerchantChangeRequest? pending,
   }) async {
     final saved = await showModalBottomSheet<bool>(
       context: context,
       useRootNavigator: true, // over the floating nav bar
       isScrollControlled: true,
       showDragHandle: true,
-      builder: (_) => _BranchSheet(existing: existing),
+      builder: (_) => _BranchSheet(existing: existing, pending: pending),
     );
     if (saved ?? false) ref.invalidate(branchesProvider);
   }
@@ -126,8 +129,16 @@ class _BranchesScreenState extends ConsumerState<BranchesScreen> {
     if (!(confirmed ?? false) || !mounted) return;
 
     try {
-      await ref.read(apiProvider).deleteBranch(branch.id);
-      messenger.showSnackBar(SnackBar(content: Text(l10n.branchDeleted)));
+      // MR9: for a live store the removal QUEUES — the branch stays on the
+      // list, and saying "Branch deleted" would be a plain lie.
+      final result = await ref.read(apiProvider).deleteBranch(branch.id);
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            result.pending ? l10n.branchRemovalSentForReview : l10n.branchDeleted,
+          ),
+        ),
+      );
       ref.invalidate(branchesProvider);
     } on MobileApiException catch (e) {
       // The 409 refusal as a SENTENCE a shopkeeper can act on — a known
@@ -207,7 +218,8 @@ class _BranchesScreenState extends ConsumerState<BranchesScreen> {
                       error: error,
                       onRetry: () => ref.invalidate(branchesProvider),
                     ),
-                    data: (branches) {
+                    data: (estate) {
+                      final branches = estate.branches;
                       final pinned = branches.where((b) => b.pinned).length;
                       final query = _query.trim().toLowerCase();
                       final filtered = query.isEmpty
@@ -220,6 +232,18 @@ class _BranchesScreenState extends ConsumerState<BranchesScreen> {
                                         .contains(query))
                                   branch,
                             ];
+                      // MR9 — branches the owner asked for that have no row
+                      // yet. They match the search on their PROPOSED name,
+                      // because that is the only name they have.
+                      final creating = [
+                        for (final change in estate.pendingCreates)
+                          if (query.isEmpty ||
+                              '${change.proposed['name'] ?? ''} '
+                                      '${change.proposed['address'] ?? ''}'
+                                  .toLowerCase()
+                                  .contains(query))
+                            change,
+                      ];
 
                       final list = Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -251,7 +275,17 @@ class _BranchesScreenState extends ConsumerState<BranchesScreen> {
                                 setState(() => _query = value),
                           ),
                           const SizedBox(height: Gap.md),
-                          if (filtered.isEmpty)
+                          // Queued NEW branches lead the list: they are the
+                          // owner's most recent act and the one the list
+                          // itself cannot show — no row exists for them yet.
+                          for (final change in creating) ...[
+                            PendingChangeCard(
+                              request: change,
+                              note: l10n.pendingCreateNote,
+                            ),
+                            const SizedBox(height: Gap.md),
+                          ],
+                          if (filtered.isEmpty && creating.isEmpty)
                             ManfaaCard(
                               child: Text(
                                 l10n.branchesEmpty,
@@ -279,12 +313,26 @@ class _BranchesScreenState extends ConsumerState<BranchesScreen> {
                                           : _openEditor(
                                               context,
                                               existing: branch,
+                                              pending: estate.pendingFor(
+                                                branch.id,
+                                              ),
                                             )
                                     : null,
                                 onDelete: canDelete
                                     ? () => _confirmDelete(branch)
                                     : null,
                               ),
+                              // The change waiting against THIS address, under
+                              // the card that still shows what a shopper sees.
+                              if (estate.pendingFor(branch.id) case final change?) ...[
+                                const SizedBox(height: Gap.sm),
+                                PendingChangeCard(
+                                  request: change,
+                                  note: change.isBranchDelete
+                                      ? l10n.pendingRemovalNote
+                                      : l10n.pendingBranchNote,
+                                ),
+                              ],
                             ],
                         ],
                       );
@@ -295,7 +343,7 @@ class _BranchesScreenState extends ConsumerState<BranchesScreen> {
                         children: [
                           Expanded(child: list),
                           const SizedBox(width: Gap.lg),
-                          Expanded(child: _pane(branches)),
+                          Expanded(child: _pane(estate)),
                         ],
                       );
                     },
@@ -499,9 +547,18 @@ class _BranchCard extends StatelessWidget {
 /// setup location step's drag-under-a-fixed-pin picker, reused. Pops `true`
 /// after a landed save.
 class _BranchSheet extends ConsumerStatefulWidget {
-  const _BranchSheet({super.key, this.existing, this.onFinished});
+  const _BranchSheet({
+    super.key,
+    this.existing,
+    this.pending,
+    this.onFinished,
+  });
 
   final MerchantBranch? existing;
+
+  /// MR9 — the change already waiting against THIS branch, if any. Shown at
+  /// the top of the editor because saving again supersedes it.
+  final MerchantChangeRequest? pending;
 
   /// MR7 — set when the editor lives inline in the expanded pane:
   /// completion calls back instead of popping a sheet route.
@@ -558,26 +615,33 @@ class _BranchSheetState extends ConsumerState<_BranchSheet> {
       final lat = _pinSet ? _round7(_center.latitude) : null;
       final lng = _pinSet ? _round7(_center.longitude) : null;
       final existing = widget.existing;
-      if (existing == null) {
-        await api.createBranch(
-          name: name,
-          address: address.isEmpty ? null : address,
-          lat: lat,
-          lng: lng,
-        );
-      } else {
-        await api.updateBranch(
-          existing.id,
-          name: name,
-          address: address.isEmpty ? null : address,
-          lat: lat,
-          lng: lng,
-        );
-      }
+      final result = existing == null
+          ? await api.createBranch(
+              name: name,
+              address: address.isEmpty ? null : address,
+              lat: lat,
+              lng: lng,
+            )
+          : await api.updateBranch(
+              existing.id,
+              name: name,
+              address: address.isEmpty ? null : address,
+              lat: lat,
+              lng: lng,
+            );
       if (!mounted) return;
+      // MR9: a live store's branch writes QUEUE. The list will not have
+      // grown, and the branch will not have moved — say so.
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(existing == null ? l10n.branchAdded : l10n.branchSaved),
+          content: Text(
+            switch ((existing == null, result.pending)) {
+              (true, true) => l10n.branchSentForReview,
+              (true, false) => l10n.branchAdded,
+              (false, true) => l10n.branchChangeSentForReview,
+              (false, false) => l10n.branchSaved,
+            },
+          ),
         ),
       );
       if (widget.onFinished != null) {
@@ -626,6 +690,15 @@ class _BranchSheetState extends ConsumerState<_BranchSheet> {
                 ),
               ),
               const SizedBox(height: Gap.lg),
+              if (widget.pending case final pending?) ...[
+                PendingChangeCard(
+                  request: pending,
+                  note: pending.isBranchDelete
+                      ? l10n.pendingRemovalNote
+                      : l10n.pendingReplaceNote,
+                ),
+                const SizedBox(height: Gap.lg),
+              ],
               Text(l10n.branchNameLabel, style: theme.textTheme.labelLarge),
               const SizedBox(height: Gap.sm),
               TextField(

@@ -4,14 +4,17 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Merchant;
 
+use App\Domain\Approvals\ChangeRequestService;
 use App\Domain\Discovery\DiscoveryService;
 use App\Domain\Onboarding\OnboardingService;
 use App\Http\Controllers\Controller;
+use App\Http\Resources\MerchantChangeRequestResource;
 use App\Http\Resources\MerchantProfileResource;
 use App\Models\Merchant;
 use App\Models\MerchantUser;
 use App\Models\StoreCategory;
 use Closure;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
@@ -26,15 +29,22 @@ use Illuminate\Validation\Rule;
  * That divergence is the point, not a defect: `/store/tea-plus` reading
  * "Chai House" is a store that renamed, while a slug that followed the
  * name would be a store nobody can find again.
+ *
+ * MR9 splits the PATCH in two: a live store's public claims queue for admin
+ * review (202), its contact details apply on the spot (200). The split lives
+ * in ChangeRequestService, and it is applied HERE — once — because the web
+ * panel and the merchant app mount this same controller.
  */
 class ProfileController extends Controller
 {
+    public function __construct(private readonly ChangeRequestService $changes) {}
+
     public function show(Request $request): MerchantProfileResource
     {
         return new MerchantProfileResource($this->merchant($request));
     }
 
-    public function update(Request $request): MerchantProfileResource
+    public function update(Request $request): MerchantProfileResource|JsonResponse
     {
         $merchant = $this->merchant($request);
 
@@ -55,19 +65,51 @@ class ProfileController extends Controller
             'website_url' => ['sometimes', 'nullable', 'string', 'max:255'],
         ]);
 
-        $merchant->fill($validated)->save();
+        // MR9. A LIVE store's public identity — name, Dhivehi name, category,
+        // channel, the "what earns cashback" promise, website — is a claim a
+        // shopper reads and trusts, so it queues for admin review instead of
+        // going live silently. The contact numbers do NOT: a wrong number
+        // means customers cannot reach the store, and holding that fix for a
+        // reviewer would only prolong the harm.
+        //
+        // Both halves of a mixed write are honoured in the one request: the
+        // instant keys apply now, the gated ones become a change request, and
+        // the response says which happened (202 + change_request when
+        // anything queued). A store that is NOT live writes straight through
+        // — see ChangeRequestService::gates().
+        $split = ChangeRequestService::splitProfileInput($validated);
+        $gates = ChangeRequestService::gates($merchant);
+
+        $merchant->fill($gates ? $split['instant'] : $validated)->save();
 
         // Category, channel and the terms text all render on the public
         // card and store page, which are read models cached for 60s
-        // (DiscoveryService). The logo path has always dropped them; a
-        // profile save did not, so the storefront kept serving the previous
-        // category or channel for up to a minute after the owner changed
-        // it. Unconditional: a save is a rare owner action, and reasoning
-        // about which field is public is exactly the kind of subtlety that
-        // rots the next time a field is added here.
+        // (DiscoveryService) — and so do the contact numbers that apply
+        // instantly here. The logo path has always dropped them; a profile
+        // save did not, so the storefront kept serving the previous category
+        // or channel for up to a minute after the owner changed it.
+        // Unconditional: a save is a rare owner action, and reasoning about
+        // which field is public is exactly the kind of subtlety that rots the
+        // next time a field is added here.
         DiscoveryService::forgetMerchant($merchant);
 
-        return new MerchantProfileResource($merchant->refresh());
+        /** @var MerchantUser $actor */
+        $actor = $request->user('merchant');
+
+        $queued = $gates && $split['gated'] !== []
+            ? $this->changes->submitProfileChange($merchant, $actor, $split['gated'])
+            : null;
+
+        // Built AFTER the submission, so `pending_change` on the profile it
+        // carries is the state the request just created.
+        $profile = new MerchantProfileResource($merchant->refresh());
+
+        // A null queue means nothing genuinely changed — the panels PATCH the
+        // whole form, so a phone-number save arrives carrying the store's own
+        // name back at us. That is a 200, not a review queue.
+        return $queued === null
+            ? $profile
+            : MerchantChangeRequestResource::accepted($queued, ['profile' => $profile->resolve($request)]);
     }
 
     /**

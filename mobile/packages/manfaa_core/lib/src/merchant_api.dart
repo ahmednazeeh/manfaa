@@ -22,6 +22,27 @@ import 'settlement_models.dart';
 class MerchantApi extends ManfaaApiBase<MerchantSession> {
   MerchantApi({required super.session, super.dio});
 
+  /// MR9 — the queued half of a gated write, or null.
+  ///
+  /// The STATUS LINE is the signal: 202 means "submitted for review", any
+  /// other success means it landed. Reading the code rather than sniffing
+  /// the body is deliberate — it is the contract the server documents, and
+  /// it keeps a 200 whose body happens to gain a key one day from being
+  /// mistaken for a queue.
+  static MerchantChangeRequest? _queued(
+    Response<Map<String, dynamic>> response,
+  ) {
+    if (response.statusCode != 202) return null;
+
+    final data = (response.data?['data'] as Map?)?.cast<String, dynamic>();
+    final queued = (data?['change_request'] as Map?)?.cast<String, dynamic>();
+
+    return queued == null ? null : MerchantChangeRequest.fromJson(queued);
+  }
+
+  static Map<String, dynamic> _data(Response<Map<String, dynamic>> response) =>
+      (response.data?['data'] as Map?)?.cast<String, dynamic>() ?? {};
+
   // ------------------------------------------------------------- auth
 
   /// Password sign-in (guide §2: merchants are email+password; 90-day
@@ -204,13 +225,18 @@ class MerchantApi extends ManfaaApiBase<MerchantSession> {
       ));
 
   /// Upload the store logo (multipart field `logo`; jpg/png/webp, ≤2048 KB,
-  /// 64..4096 px). Gate: `branding.update`. Answers the new versioned URL.
+  /// 64..4096 px). Gate: `branding.update`.
   /// `logo_write_failed` (503) is a storage hiccup — retryable as-is.
-  Future<String?> uploadSetupLogo({
+  ///
+  /// MR9: a LIVE store's logo is a public claim, so the file is STAGED and
+  /// the answer is 202 with the change request. `logo_url` in that answer is
+  /// the logo the store is STILL SERVING — the caller must keep showing it,
+  /// because nothing a shopper sees has moved yet.
+  Future<LogoUploadResult> uploadSetupLogo({
     required Uint8List bytes,
     required String filename,
   }) async {
-    final data = await run(
+    final response = await send(
       () => dio.post<Map<String, dynamic>>(
         '/merchant/setup/logo',
         data: FormData.fromMap({
@@ -219,7 +245,10 @@ class MerchantApi extends ManfaaApiBase<MerchantSession> {
       ),
     );
 
-    return (data?['data'] as Map?)?['logo_url'] as String?;
+    return LogoUploadResult(
+      logoUrl: _data(response)['logo_url'] as String?,
+      queued: _queued(response),
+    );
   }
 
   /// Submit for review. Success answers the full state with
@@ -632,7 +661,16 @@ class MerchantApi extends ManfaaApiBase<MerchantSession> {
   /// itself as [supportPhone] — the support field is always materialised
   /// server-side so the storefront always has a real number to show.
   /// Gate: `profile.edit` + approved store.
-  Future<MerchantProfile> updateProfile({
+  ///
+  /// MR9 splits the answer in two. For a LIVE store the public claims (name,
+  /// Dhivehi name, category, channel, the terms text, website, logo) QUEUE
+  /// for admin review — 202, with the change request — while the contact
+  /// details apply on the spot. Both halves can happen in the one request,
+  /// which is why the result carries the fresh profile AS WELL AS the queue:
+  /// the phone number really did change, the shop name really did not.
+  /// A save whose gated keys match the live row queues nothing (the form
+  /// PATCHes everything, so most saves are exactly that) and answers 200.
+  Future<ProfileSaveResult> updateProfile({
     required String name,
     String? nameDv,
     required String channel,
@@ -644,7 +682,7 @@ class MerchantApi extends ManfaaApiBase<MerchantSession> {
     bool categoryChanged = false,
     String? category,
   }) async {
-    final data = await run(
+    final response = await send(
       () => dio.patch<Map<String, dynamic>>('/merchant/profile', data: {
         'name': name,
         'name_dv': nameDv,
@@ -658,8 +696,18 @@ class MerchantApi extends ManfaaApiBase<MerchantSession> {
       }),
     );
 
-    return MerchantProfile.fromJson(
-      (data?['data'] as Map?)?.cast<String, dynamic>() ?? {},
+    final data = _data(response);
+    final queued = _queued(response);
+
+    return ProfileSaveResult(
+      // 200 answers the profile resource itself; 202 nests it beside the
+      // change request, because the instant keys are already applied.
+      profile: MerchantProfile.fromJson(
+        queued == null
+            ? data
+            : (data['profile'] as Map?)?.cast<String, dynamic>() ?? const {},
+      ),
+      queued: queued,
     );
   }
 
@@ -954,28 +1002,29 @@ class MerchantApi extends ManfaaApiBase<MerchantSession> {
   Future<void> deleteRole(int id) async =>
       run(() => dio.delete<Map<String, dynamic>>('/merchant/roles/$id'));
 
-  /// The store's branches, id order. Gate: `branches.view`.
-  Future<List<MerchantBranch>> branches() async {
+  /// The store's branches, id order, WITH the branch changes waiting on a
+  /// reviewer (`meta.pending_changes`, MR9). Gate: `branches.view`.
+  Future<MerchantBranchEstate> branches() async {
     final data = await run(
       () => dio.get<Map<String, dynamic>>('/merchant/branches'),
     );
 
-    return [
-      for (final item in (data?['data'] as List? ?? const []))
-        MerchantBranch.fromJson((item as Map).cast<String, dynamic>()),
-    ];
+    return MerchantBranchEstate.fromJson(data ?? const {});
   }
 
   /// Create a branch. The pin travels as a nullable PAIR — both halves or
   /// neither (the server refuses a lone coordinate); every key is sent so
   /// the write is explicit. Gate: `branches.create` + approved store.
-  Future<MerchantBranch> createBranch({
+  ///
+  /// MR9: for a LIVE store this QUEUES (202) — a branch is an address a
+  /// shopper travels to, so no row is created until an admin approves.
+  Future<BranchSaveResult> createBranch({
     required String name,
     String? address,
     double? lat,
     double? lng,
   }) async {
-    final data = await run(
+    final response = await send(
       () => dio.post<Map<String, dynamic>>('/merchant/branches', data: {
         'name': name,
         'address': address,
@@ -984,8 +1033,13 @@ class MerchantApi extends ManfaaApiBase<MerchantSession> {
       }),
     );
 
-    return MerchantBranch.fromJson(
-      (data?['data'] as Map?)?.cast<String, dynamic>() ?? {},
+    final queued = _queued(response);
+
+    return BranchSaveResult(
+      branch: queued == null
+          ? MerchantBranch.fromJson(_data(response))
+          : null,
+      queued: queued,
     );
   }
 
@@ -993,14 +1047,18 @@ class MerchantApi extends ManfaaApiBase<MerchantSession> {
   /// panel's exactly): explicit nulls clear the address and take the pin
   /// away, which this surface is the ONLY one able to do.
   /// Gate: `branches.edit` + approved store.
-  Future<MerchantBranch> updateBranch(
+  ///
+  /// MR9: for a LIVE store this QUEUES (202) unless nothing actually moved,
+  /// which answers 200 with the branch unchanged — the dialog PATCHes every
+  /// key, so re-saving an untouched branch must not park a request.
+  Future<BranchSaveResult> updateBranch(
     int id, {
     required String name,
     String? address,
     double? lat,
     double? lng,
   }) async {
-    final data = await run(
+    final response = await send(
       () => dio.patch<Map<String, dynamic>>('/merchant/branches/$id', data: {
         'name': name,
         'address': address,
@@ -1009,8 +1067,13 @@ class MerchantApi extends ManfaaApiBase<MerchantSession> {
       }),
     );
 
-    return MerchantBranch.fromJson(
-      (data?['data'] as Map?)?.cast<String, dynamic>() ?? {},
+    final queued = _queued(response);
+
+    return BranchSaveResult(
+      branch: queued == null
+          ? MerchantBranch.fromJson(_data(response))
+          : null,
+      queued: queued,
     );
   }
 
@@ -1018,8 +1081,18 @@ class MerchantApi extends ManfaaApiBase<MerchantSession> {
   /// branch-scoped promotions is history that must keep resolving — the
   /// server answers 409 `branch_referenced` and the soft alternative is
   /// simply to stop using it. Gate: `branches.delete` + approved store.
-  Future<void> deleteBranch(int id) async =>
-      run(() => dio.delete<Map<String, dynamic>>('/merchant/branches/$id'));
+  ///
+  /// MR9: for a LIVE store the removal QUEUES (202) and the branch STAYS on
+  /// the list until an admin approves. The `branch_referenced` refusal is
+  /// still raised at submit — a removal that can never be honoured is
+  /// refused to the person asking, not parked for an admin to discover.
+  Future<BranchDeleteResult> deleteBranch(int id) async {
+    final response = await send(
+      () => dio.delete<Map<String, dynamic>>('/merchant/branches/$id'),
+    );
+
+    return BranchDeleteResult(queued: _queued(response));
+  }
 
   /// The store's promotions, newest first, optionally filtered by
   /// [status] (draft|published|ended|cancelled). Gate: `promotions.view`

@@ -175,7 +175,9 @@ it('opens branch writes and staff invites the moment the store is approved', fun
     $owner = MerchantUser::query()->where('merchant_id', $merchant->id)->firstOrFail();
     $this->actingAs($owner, 'merchant');
 
-    $this->postJson('/api/merchant/branches', ['name' => 'Now Allowed'])->assertCreated();
+    // Open, but no longer instant: past approval the estate is a public
+    // claim and each change queues for review (MR9) — 202, not 409.
+    $this->postJson('/api/merchant/branches', ['name' => 'Now Allowed'])->assertStatus(202);
     $this->postJson('/api/merchant/staff', [
         'name' => 'Now Allowed',
         'email' => 'now.allowed@example.com',

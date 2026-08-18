@@ -10,6 +10,7 @@ import '../../widgets/adaptive.dart';
 import '../../widgets/merchant_brand.dart';
 import 'more_providers.dart';
 import 'more_widgets.dart';
+import 'pending_change_card.dart';
 import 'profile_edit_screen.dart';
 
 /// The store profile (MR5), drawn to Profile.png: the lavender header card
@@ -141,6 +142,8 @@ class ProfileScreen extends ConsumerWidget {
       _ => channel,
     };
 
+    final pending = profile.pendingChange;
+
     return [
       _HeaderCard(
         profile: profile,
@@ -148,6 +151,17 @@ class ProfileScreen extends ConsumerWidget {
         canEdit: canEdit,
         onEdit: () => _openEdit(context, ref, profile),
       ),
+      // MR9 — what the owner already asked to change, above the rows that
+      // still hold the LIVE values. Without it a queued save reads as a
+      // save that never happened.
+      if (pending != null) ...[
+        const SizedBox(height: Gap.lg),
+        PendingChangeCard(
+          request: pending,
+          note: l10n.pendingProfileNote,
+          categoryLabel: categoryLabel,
+        ),
+      ],
       const SizedBox(height: Gap.lg),
       ManfaaCard(
         padding: const EdgeInsets.symmetric(

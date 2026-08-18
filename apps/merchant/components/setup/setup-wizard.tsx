@@ -454,7 +454,13 @@ export function LogoUploader({
   onUploaded,
 }: {
   currentUrl: string | null;
-  upload: (file: File, onSuccess: () => void) => void;
+  /**
+   * `onSuccess(queued)` — pass true when the upload did NOT become the
+   * store's logo but queued for review instead (MR9, live stores). The local
+   * preview is then dropped so the tile keeps showing what shoppers see; the
+   * proposed image belongs in the pending-review banner, not here.
+   */
+  upload: (file: File, onSuccess: (queued?: boolean) => void) => void;
   uploading: boolean;
   onUploaded?: () => void;
 }) {
@@ -486,8 +492,14 @@ export function LogoUploader({
     // screen is not the picture on the server, which is exactly the state
     // someone leaves the wizard in when they assume the preview meant saved.
     // The preview stays until the upload lands, so the swap is invisible.
-    upload(picked, () => {
+    upload(picked, (queued = false) => {
       setFile(null);
+      if (queued) {
+        setPreviewUrl((previous) => {
+          if (previous !== null) URL.revokeObjectURL(previous);
+          return null;
+        });
+      }
       onUploaded?.();
     });
   };

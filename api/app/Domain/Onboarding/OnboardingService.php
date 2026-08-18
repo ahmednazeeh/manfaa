@@ -177,25 +177,11 @@ final class OnboardingService
      */
     public function storeLogo(Merchant $merchant, UploadedFile $file): string
     {
-        $extension = strtolower($file->extension());
-
-        if ($extension === 'jpeg') {
-            $extension = 'jpg';
-        }
-
         $disk = Storage::disk(MerchantLogo::DISK);
 
         $previous = $merchant->logo_path;
 
-        $path = $file->storeAs(
-            'merchants/'.$merchant->id,
-            Str::uuid()->toString().'.'.$extension,
-            MerchantLogo::DISK,
-        );
-
-        if ($path === false) {
-            throw OnboardingException::logoWriteFailed();
-        }
+        $path = $this->stageLogo($merchant, $file);
 
         // Only after the replacement is safely on disk: a failed write must
         // never leave the store with no logo at all.
@@ -214,6 +200,39 @@ final class OnboardingService
         }
 
         return (string) MerchantLogo::url($merchant->slug, $path);
+    }
+
+    /**
+     * Puts the bytes on the disk and answers WHERE, touching no row.
+     *
+     * The upload half of storeLogo(), split out for MR9: a live store's logo
+     * change queues for review, and the file has to exist somewhere in the
+     * meantime — a change request cannot hold a multipart body, and asking
+     * the merchant to re-upload at approval time would put the decision in
+     * the wrong hands. The path is a uuid under the store's own private
+     * directory, unreachable over HTTP (MerchantLogo) and readable only
+     * through an authorising controller, so a staged logo is no more public
+     * than an unapproved store's is.
+     */
+    public function stageLogo(Merchant $merchant, UploadedFile $file): string
+    {
+        $extension = strtolower($file->extension());
+
+        if ($extension === 'jpeg') {
+            $extension = 'jpg';
+        }
+
+        $path = $file->storeAs(
+            'merchants/'.$merchant->id,
+            Str::uuid()->toString().'.'.$extension,
+            MerchantLogo::DISK,
+        );
+
+        if ($path === false) {
+            throw OnboardingException::logoWriteFailed();
+        }
+
+        return $path;
     }
 
     /**

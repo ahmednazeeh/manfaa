@@ -63,6 +63,13 @@ void main() {
       );
     });
 
+    test('a store-change verdict lands on the estate hub (MR9)', () {
+      // Profile and Manage Branches both live one tap from /more, and the
+      // push carries no kind key to choose between them.
+      expect(routeForPushData({'template': 'store_change_approved'}), '/more');
+      expect(routeForPushData({'template': 'store_change_rejected'}), '/more');
+    });
+
     test('an unknown or missing template navigates nowhere', () {
       expect(routeForPushData({'template': 'party_time'}), isNull);
       expect(routeForPushData({'template': ''}), isNull);

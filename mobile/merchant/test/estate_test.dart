@@ -373,6 +373,9 @@ class _FakeApi extends MerchantApi {
   final List<String> permissions;
   final List<Map<String, dynamic>> staffJson;
 
+  /// MR9 — `meta.pending_changes` on the branches index.
+  var pendingBranchChanges = const <MerchantChangeRequest>[];
+
   /// Every POST /merchant/staff body, verbatim.
   final invites = <Map<String, dynamic>>[];
 
@@ -502,18 +505,21 @@ class _FakeApi extends MerchantApi {
       });
 
   @override
-  Future<List<MerchantBranch>> branches() async => [
-    MerchantBranch.fromJson(const {
-      'id': 3,
-      'name': 'Tropical Mart — Main',
-      'address': 'Majeedhee Magu, Malé',
-      'lat': 4.1755354,
-      'lng': 73.5093474,
-    }),
-  ];
+  Future<MerchantBranchEstate> branches() async => MerchantBranchEstate(
+    branches: [
+      MerchantBranch.fromJson(const {
+        'id': 3,
+        'name': 'Tropical Mart — Main',
+        'address': 'Majeedhee Magu, Malé',
+        'lat': 4.1755354,
+        'lng': 73.5093474,
+      }),
+    ],
+    pendingChanges: pendingBranchChanges,
+  );
 
   @override
-  Future<void> deleteBranch(int id) async {
+  Future<BranchDeleteResult> deleteBranch(int id) async {
     throw MobileApiException(
       code: 'branch_referenced',
       message:

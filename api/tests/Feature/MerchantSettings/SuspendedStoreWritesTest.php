@@ -131,7 +131,11 @@ it('still lets a suspended store fix its profile, branches and settlements — t
         ->assertOk()
         ->assertJsonPath('data.contact_phone', '+9607771234');
 
-    $this->postJson('/api/merchant/branches', ['name' => 'Hulhumale'])->assertCreated();
+    // A suspended store is LIVE, so its estate is reviewed like any other
+    // (MR9) — the point here is that it is never REFUSED: 202, not 409.
+    $this->postJson('/api/merchant/branches', ['name' => 'Hulhumale'])
+        ->assertStatus(202)
+        ->assertJsonPath('data.status', 'pending_review');
 
     // The settlement path answers on its own terms (nothing to settle), but
     // never with the offer freeze.

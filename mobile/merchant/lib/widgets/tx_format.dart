@@ -147,6 +147,17 @@ String formatBusinessDate(String iso) {
   return formatDateDisplay(parsed.toUtc().add(const Duration(hours: 5)));
 }
 
+/// A wire instant → "18 Aug 2026, 02:32 PM" in BUSINESS wall time (+05:00,
+/// Indian/Maldives — no DST). Used for the MR9 "submitted at" line: the
+/// moment a change request was raised is a moment the merchant and the
+/// reviewer must read identically, and the DEVICE's zone would have an owner
+/// abroad reading a different time than the admin sees on the same row.
+String formatBusinessDateTime(String iso) {
+  final parsed = DateTime.tryParse(iso);
+  if (parsed == null) return iso;
+  return formatDateTimeDisplay(parsed.toUtc().add(const Duration(hours: 5)));
+}
+
 /// The PLAN §1 discount deadline: the day the OLDEST clock-started line
 /// stops qualifying — its clock_start_at plus the window the API reported,
 /// printed as a business date. The one piece of date arithmetic the app

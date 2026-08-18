@@ -698,12 +698,18 @@ void main() {
           }, 200));
       final api = _api(adapter);
 
-      final url = await api.uploadSetupLogo(
+      final result = await api.uploadSetupLogo(
         bytes: Uint8List.fromList([1, 2, 3]),
         filename: 'logo.png',
       );
 
-      expect(url, 'https://manfaa.app/api/merchants/fresh-mart/logo?v=abc');
+      expect(
+        result.logoUrl,
+        'https://manfaa.app/api/merchants/fresh-mart/logo?v=abc',
+      );
+      // A draft store's logo goes live on the spot — nothing queued.
+      expect(result.queued, isNull);
+      expect(result.pending, isFalse);
       final data = adapter.requests.single.data;
       expect(data, isA<FormData>());
       expect((data as FormData).files.single.key, 'logo');

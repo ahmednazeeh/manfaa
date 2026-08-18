@@ -9,17 +9,18 @@ import {
   Banknote,
   ClipboardCheck,
   CreditCard,
+  FileDiff,
   Landmark,
   LogOut,
   Map as MapIcon,
   Megaphone,
   MessageSquare,
+  Palette,
   Percent,
   Scale,
   ShieldAlert,
   ShieldCheck,
   SlidersHorizontal,
-  Palette,
   Smartphone,
   Store,
   Tags,
@@ -29,6 +30,7 @@ import {
 import { toast } from 'sonner';
 import { adminLogout } from '@/lib/admin-auth';
 import { apiErrorMessage } from '@/lib/api-error';
+import { listChangeRequests } from '@/lib/change-requests';
 import { adminRoleLabel } from '@/lib/labels';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
@@ -63,6 +65,33 @@ function PendingStoreReviewsBadge() {
   });
 
   const count = query.data?.meta.counts.pending_review ?? 0;
+  if (count === 0) {
+    return null;
+  }
+  return (
+    <Badge variant="warning" size="sm" shape="circle">
+      {count}
+    </Badge>
+  );
+}
+
+/**
+ * How many LIVE stores are waiting on a decision about what they want to
+ * change (MR9). Sits beside the store-approval badge on purpose: the two
+ * queues are one job, and a change nobody looks at is a store stuck serving
+ * a claim it has already stopped standing behind. Shares its query key with
+ * the /change-requests default view (pending, all kinds). Nothing at zero.
+ */
+function PendingChangeRequestsBadge() {
+  const query = useQuery({
+    queryKey: ['admin', 'change-requests', 'pending', 'all'],
+    queryFn: ({ signal }) =>
+      listChangeRequests({ status: 'pending' }, { signal }),
+    refetchInterval: 60_000,
+    staleTime: 30_000,
+  });
+
+  const count = query.data?.meta.counts.pending ?? 0;
   if (count === 0) {
     return null;
   }
@@ -115,6 +144,12 @@ const NAV_ITEMS: NavItem[] = [
     label: 'Store reviews',
     icon: ClipboardCheck,
     badge: PendingStoreReviewsBadge,
+  },
+  {
+    href: '/change-requests',
+    label: 'Change requests',
+    icon: FileDiff,
+    badge: PendingChangeRequestsBadge,
   },
   { href: '/payouts', label: 'Payout batches', icon: Banknote },
   { href: '/reconciliation', label: 'Reconciliation', icon: Scale },

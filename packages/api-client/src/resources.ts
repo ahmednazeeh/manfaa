@@ -136,6 +136,114 @@ export const MerchantChannelSchema = z.enum(['in_store', 'online', 'both']);
 export type MerchantChannel = z.infer<typeof MerchantChannelSchema>;
 
 // ---------------------------------------------------------------------------
+// Queued store changes (MR9 — admin approval for store edits + new branches)
+// ---------------------------------------------------------------------------
+
+/**
+ * What a LIVE store asked to change about the claims a shopper reads: its
+ * name, Dhivehi name, category, channel, logo, website, its "what earns
+ * cashback" promise, or its branch estate. One shape on every surface — the
+ * admin review queue, the merchant panel's pending-review banner and the
+ * merchant app's — so the diff is built once, server-side.
+ *
+ * PLAN-merchant-app.md §MR9 draws the line: claims queue, operations stay
+ * instant (contact email/phone, support phone, the cashback rate, staff,
+ * roles, bank account, preferences, promotions). Gating applies only while
+ * the store is `active` or `suspended`; a store still onboarding writes
+ * straight through the wizard.
+ */
+export const ChangeRequestKindSchema = z.enum([
+  'profile',
+  'branch_create',
+  'branch_update',
+  'branch_delete',
+]);
+export type ChangeRequestKind = z.infer<typeof ChangeRequestKindSchema>;
+
+export const ChangeRequestStatusSchema = z.enum([
+  'pending',
+  'approved',
+  'rejected',
+  /** Replaced by a newer submission against the same target — never applied. */
+  'superseded',
+]);
+export type ChangeRequestStatus = z.infer<typeof ChangeRequestStatusSchema>;
+
+/**
+ * One field's before/after. `field` is the wire's own column name (`name`,
+ * `name_dv`, `category`, `channel`, `eligibility_basis`, `website_url`, or
+ * `name`/`address`/`lat`/`lng` on a branch) with ONE rename: a logo change
+ * arrives as `logo`, both sides being preview URLs rather than paths.
+ *
+ * The values stay `unknown` on purpose. They are raw JSON out of the stored
+ * payload/snapshot, so the same field can be a float on one side and the
+ * column's decimal STRING on the other (coordinates above all) — a caller
+ * formats them, never trusting a type the wire does not guarantee.
+ */
+export const ChangeRequestDiffSchema = z.object({
+  field: z.string(),
+  from: z.unknown(),
+  to: z.unknown(),
+});
+export type ChangeRequestDiff = z.infer<typeof ChangeRequestDiffSchema>;
+
+export const MerchantChangeRequestSchema = z.object({
+  id: z.number().int(),
+  merchant_id: z.number().int(),
+  kind: ChangeRequestKindSchema,
+  /**
+   * The server's English name for the kind — what the merchant's push
+   * notification called it. Localised surfaces map `kind` themselves.
+   */
+  kind_label: z.string(),
+  status: ChangeRequestStatusSchema,
+  /** Null for `profile` and `branch_create`, and nulled once a removal applies. */
+  branch_id: z.number().int().nullable(),
+  /**
+   * The branch's name AS SNAPSHOTTED. Null on a create (there is no branch
+   * yet) and also on an update that did not touch the name — the snapshot
+   * holds only the fields in play — so a surface with the branch list in
+   * hand should fall back to resolving `branch_id`.
+   */
+  branch_name: z.string().nullable(),
+  changes: z.array(ChangeRequestDiffSchema),
+  /** The proposed values; `logo_path` is published as `logo_url`. */
+  proposed: z.record(z.string(), z.unknown()),
+  /** The SUBMIT-TIME snapshot, so the diff survives later edits. */
+  current: z.record(z.string(), z.unknown()),
+  submitted_at: z.string().nullable(),
+  /** Admin surfaces only — absent on the merchant's own reads. */
+  submitted_by: z.object({ id: z.number().int(), name: z.string() }).optional(),
+  reviewed_at: z.string().nullable(),
+  reviewed_by: z.number().int().nullable(),
+  /** The words the admin owed the merchant on a refusal. */
+  rejected_reason: z.string().nullable(),
+  /** Admin surfaces only — absent on the merchant's own reads. */
+  merchant: z
+    .object({
+      id: z.number().int(),
+      name: z.string(),
+      slug: z.string(),
+      status: z.string(),
+      logo_url: z.string().nullable(),
+    })
+    .optional(),
+});
+export type MerchantChangeRequest = z.infer<typeof MerchantChangeRequestSchema>;
+
+/**
+ * The 202 body every gated write answers with. The status line alone tells a
+ * client "queued" from "saved"; this is the detail behind it. Mixed writes
+ * add their instant half beside it (the profile PATCH adds `profile`, the
+ * logo upload adds the `logo_url` STILL being served).
+ */
+export const QueuedChangeSchema = z.object({
+  status: z.literal('pending_review'),
+  change_request: MerchantChangeRequestSchema,
+});
+export type QueuedChange = z.infer<typeof QueuedChangeSchema>;
+
+// ---------------------------------------------------------------------------
 // Banks
 // ---------------------------------------------------------------------------
 

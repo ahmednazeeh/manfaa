@@ -4,6 +4,7 @@ import { MerchantBranchSchema, MerchantRoleSummarySchema } from './merchant';
 import {
   CashbackPercentInputSchema,
   dataWrapped,
+  MerchantChangeRequestSchema,
   MerchantChannelSchema,
   MerchantStatusSchema,
   PercentSchema,
@@ -362,10 +363,20 @@ export function updateMerchantSetupLocation(
   );
 }
 
+/**
+ * Both logo endpoints answer this. For a store still onboarding it is the
+ * plain 200: the file IS the logo now. For a LIVE store (MR9) it is a 202 —
+ * the file is staged, the change is queued, and `logo_url` is the logo STILL
+ * being served, which is null when the store never had one. Read
+ * `change_request` to tell the two apart.
+ */
 export const MerchantLogoResponseSchema = dataWrapped(
   z.object({
-    /** Absolute URL of the stored logo — cache-bust when re-rendering. */
-    logo_url: z.string(),
+    /** Absolute URL of the logo on display — cache-bust when re-rendering. */
+    logo_url: z.string().nullable(),
+    status: z.literal('pending_review').optional(),
+    /** Present exactly when the upload queued rather than applied. */
+    change_request: MerchantChangeRequestSchema.optional(),
   }),
 );
 export type MerchantLogoResponse = z.infer<typeof MerchantLogoResponseSchema>;

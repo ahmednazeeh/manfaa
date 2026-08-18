@@ -39,6 +39,12 @@ String? routeForPushData(Map<String, Object?> data) {
     'urgent_day13' ||
     'due_day15' =>
       '/settlements',
+    // MR9 — a store change was approved or refused. The message names WHICH
+    // change ("store profile change", "new branch"…) but the wire carries no
+    // kind key, so the tap lands on the estate hub rather than guessing
+    // between Profile and Manage Branches: both are one tap from there, and
+    // neither destination can be the wrong one.
+    'store_change_approved' || 'store_change_rejected' => '/more',
     _ => null,
   };
 }

@@ -12,6 +12,7 @@ import '../../widgets/adaptive.dart';
 import '../setup/setup_common.dart';
 import 'more_providers.dart';
 import 'more_widgets.dart';
+import 'pending_change_card.dart';
 
 /// Edit the store profile — the same validation conventions as the setup
 /// wizard's profile step, because they save the same fields:
@@ -75,6 +76,12 @@ class _ProfileEditScreenState extends ConsumerState<ProfileEditScreen> {
   var _busy = false;
   String? _nameError;
 
+  /// MR9 — the store's claims waiting on a reviewer. Seeded from the profile
+  /// this screen was opened with, and replaced by the answer to a gated
+  /// write made HERE (a logo upload does not leave the form, so the card has
+  /// to move without a re-read).
+  late MerchantChangeRequest? _pending = widget.profile.pendingChange;
+
   @override
   void dispose() {
     _name.dispose();
@@ -90,6 +97,18 @@ class _ProfileEditScreenState extends ConsumerState<ProfileEditScreen> {
   String? _clean(TextEditingController controller) {
     final text = controller.text.trim();
     return text.isEmpty ? null : text;
+  }
+
+  /// The served curated list resolves a slug to its display name; one the
+  /// list no longer offers prints as the slug, exactly the view screen's
+  /// fallback. Used by the pending card, which shows PROPOSED values.
+  String _categoryLabel(String slug) {
+    final dhivehi = Localizations.localeOf(context).languageCode == 'dv';
+    final match = widget.setup?.categories
+        .where((category) => category.slug == slug)
+        .firstOrNull;
+
+    return match?.label(dhivehi: dhivehi) ?? slug;
   }
 
   Future<void> _pickLogo() async {
@@ -123,16 +142,32 @@ class _ProfileEditScreenState extends ConsumerState<ProfileEditScreen> {
     });
 
     try {
-      final url = await ref
+      final result = await ref
           .read(apiProvider)
           .uploadSetupLogo(bytes: bytes, filename: picked.name);
       if (!mounted) return;
-      setState(() => _logoUrl = url ?? _logoUrl);
-      // The logo is already live server-side — the read models must agree.
+      setState(() {
+        // `logoUrl` is ALWAYS the logo the store is still serving — for a
+        // queued upload that is the OLD one, so the preview of the new bytes
+        // has to go: painting it would say the new logo is live when nothing
+        // a shopper sees has moved.
+        _logoUrl = result.logoUrl ?? _logoUrl;
+        if (result.pending) {
+          _logoPreview = null;
+          _pending = result.queued;
+        }
+      });
+      // Live or staged, both read models move: the setup state carries the
+      // served logo, the profile carries the pending request.
       ref.invalidate(settingsSetupProvider);
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(l10n.logoUploaded)));
+      ref.invalidate(profileProvider);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            result.pending ? l10n.logoSentForReview : l10n.logoUploaded,
+          ),
+        ),
+      );
     } catch (e) {
       if (mounted) {
         setState(() {
@@ -158,7 +193,7 @@ class _ProfileEditScreenState extends ConsumerState<ProfileEditScreen> {
     setState(() => _busy = true);
     try {
       final contactPhone = _clean(_contactPhone);
-      await ref
+      final result = await ref
           .read(apiProvider)
           .updateProfile(
             name: name,
@@ -177,12 +212,18 @@ class _ProfileEditScreenState extends ConsumerState<ProfileEditScreen> {
             category: _category,
           );
       if (!mounted) return;
-      // Re-read the truth for the view screen underneath.
+      // Re-read the truth for the view screen underneath — which now
+      // includes the pending card, when the claims queued.
       ref.invalidate(profileProvider);
       ref.invalidate(settingsSetupProvider);
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(l10n.profileSaved)));
+      // MR9: a gated save is NOT a save. "Sent for Manfaa's review" is the
+      // only honest word for it — the fields below still read the old values
+      // because those are what a shopper sees until an admin approves.
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(result.pending ? l10n.sentForReview : l10n.profileSaved),
+        ),
+      );
       Navigator.of(context).pop();
     } catch (e) {
       if (mounted) {
@@ -257,6 +298,18 @@ class _ProfileEditScreenState extends ConsumerState<ProfileEditScreen> {
                 ],
               ),
               const SizedBox(height: Gap.md),
+              // MR9 — what is already waiting on a reviewer, before the
+              // fields (which hold the LIVE values, not the proposed ones):
+              // re-saving supersedes this request, and the owner should read
+              // that before typing, not after.
+              if (_pending != null) ...[
+                PendingChangeCard(
+                  request: _pending!,
+                  note: l10n.pendingReplaceNote,
+                  categoryLabel: _categoryLabel,
+                ),
+                const SizedBox(height: Gap.md),
+              ],
               // ---- logo -----------------------------------------------------
               ManfaaCard(
                 child: Column(

@@ -47,6 +47,13 @@ enum NotificationTemplateKey: string
     case UrgentDay13 = 'urgent_day13';
     case DueDay15 = 'due_day15';
 
+    // The MR9 review outcome. A live store's public claims — its name,
+    // category, logo, terms, branches — wait for an admin now, so the store
+    // has to be told when the wait ends, either way. Reaches the staff who
+    // hold the permission that governs the change (ChangeKind::permission).
+    case StoreChangeApproved = 'store_change_approved';
+    case StoreChangeRejected = 'store_change_rejected';
+
     public function label(): string
     {
         return match ($this) {
@@ -61,6 +68,8 @@ enum NotificationTemplateKey: string
             self::ReminderDay10 => 'Day-10 reminder',
             self::UrgentDay13 => 'Day-13 urgent reminder',
             self::DueDay15 => 'Day-15 payment due',
+            self::StoreChangeApproved => 'Store change approved',
+            self::StoreChangeRejected => 'Store change rejected',
         };
     }
 
@@ -79,6 +88,8 @@ enum NotificationTemplateKey: string
             self::ReminderDay10 => 'The §7 ladder\'s day-10 notice: the oldest unfunded sale has turned ten days old.',
             self::UrgentDay13 => 'The §7 ladder\'s day-13 urgent notice — two days before payment is due.',
             self::DueDay15 => 'The §7 ladder\'s day-15 payment-due notice. Automatic suspension follows on day 16, so this one earns an interruption.',
+            self::StoreChangeApproved => 'When an admin approves a queued store change — a profile edit, a logo, a new or changed branch. The change is live at that moment.',
+            self::StoreChangeRejected => 'When an admin refuses a queued store change, with the reason. The store has to act, so this one earns an interruption.',
         };
     }
 
@@ -127,6 +138,15 @@ enum NotificationTemplateKey: string
                 'amount' => 'The outstanding total, formatted with its currency',
                 'date' => 'The business-timezone date the oldest sale falls due',
             ],
+            self::StoreChangeApproved => [
+                'change' => 'What was reviewed, e.g. "store profile change" or "new branch"',
+                'store' => 'The store name',
+            ],
+            self::StoreChangeRejected => [
+                'change' => 'What was reviewed, e.g. "store profile change" or "new branch"',
+                'store' => 'The store name',
+                'reason' => 'Why the change was refused',
+            ],
         };
     }
 
@@ -143,7 +163,8 @@ enum NotificationTemplateKey: string
             self::CashbackEarned, self::CashbackConfirmed, self::PayoutPaid => false,
             self::SettlementDue, self::SettlementAccepted, self::SettlementRejected,
             self::PromptDiscountExpiring, self::SettlementDueSoon,
-            self::ReminderDay10, self::UrgentDay13, self::DueDay15 => true,
+            self::ReminderDay10, self::UrgentDay13, self::DueDay15,
+            self::StoreChangeApproved, self::StoreChangeRejected => true,
         };
     }
 
@@ -172,6 +193,8 @@ enum NotificationTemplateKey: string
             self::ReminderDay10 => ['en' => 'Settlement reminder', 'dv' => 'ސެޓްލްމަންޓް ހަނދާންކޮށްދިނުން'],
             self::UrgentDay13 => ['en' => 'Urgent reminder', 'dv' => 'އަވަސް ހަނދާންކޮށްދިނުން'],
             self::DueDay15 => ['en' => 'Payment due', 'dv' => 'ފައިސާ ދައްކަންޖެހޭ'],
+            self::StoreChangeApproved => ['en' => 'Change approved', 'dv' => 'ބަދަލު ފާސްވެއްޖެ'],
+            self::StoreChangeRejected => ['en' => 'Change refused', 'dv' => 'ބަދަލު ބަލައިނުގަނެވުނު'],
         };
     }
 

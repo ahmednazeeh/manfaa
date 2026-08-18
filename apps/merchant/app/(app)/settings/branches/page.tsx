@@ -2,16 +2,27 @@
 
 import { useState } from 'react';
 import { ApiError, type MerchantBranch } from '@manfaa/api-client';
-import { LoaderCircle, MapPin, Pencil, Plus, Trash2 } from 'lucide-react';
+import {
+  Clock3,
+  LoaderCircle,
+  MapPin,
+  Pencil,
+  Plus,
+  Trash2,
+} from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
+import { isReviewedStatus } from '@/lib/api';
 import {
   apiErrorMessage,
   useBranches,
   useCreateBranch,
   useDeleteBranch,
+  useMe,
+  usePendingBranchChanges,
   useUpdateBranch,
 } from '@/lib/queries';
+import { Alert, AlertIcon, AlertTitle } from '@/components/ui/alert';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -60,6 +71,10 @@ import {
   LocationPicker,
   type LatLng,
 } from '@/components/app/location-picker';
+import {
+  PendingChangeAlert,
+  PendingChangeBadge,
+} from '@/components/app/pending-change';
 
 /**
  * Branch management. The pin is optional but travels as a PAIR — the customer
@@ -99,6 +114,7 @@ function BranchDialog({
   initial,
   open,
   busy,
+  reviewNote,
   onOpenChange,
   onSubmit,
 }: {
@@ -107,6 +123,8 @@ function BranchDialog({
   initial: BranchFormState;
   open: boolean;
   busy: boolean;
+  /** MR9: what happens to this write on a live store, said before the click. */
+  reviewNote?: string;
   onOpenChange: (open: boolean) => void;
   onSubmit: (body: {
     name: string;
@@ -142,6 +160,14 @@ function BranchDialog({
         {/* The map makes this dialog tall enough to run off a short viewport,
             and DialogBody does not scroll on its own. */}
         <DialogBody className="flex max-h-[65vh] flex-col gap-5 overflow-y-auto">
+          {reviewNote !== undefined && (
+            <Alert variant="info" appearance="light" size="sm">
+              <AlertIcon>
+                <Clock3 />
+              </AlertIcon>
+              <AlertTitle>{reviewNote}</AlertTitle>
+            </Alert>
+          )}
           <div className="flex flex-col gap-2.5">
             <Label htmlFor="branch-name">{t('branches.nameLabel')}</Label>
             <Input
@@ -216,6 +242,13 @@ function BranchDialog({
 export default function BranchesSettingsPage() {
   const { t } = useTranslation();
   const branches = useBranches();
+  // MR9. The same GET's other half: what this store has queued for Manfaa's
+  // review. The TABLE below is always the estate as it stands — a queued
+  // branch has no row yet, a queued rename or removal has not moved one —
+  // so the pending state is a banner plus a per-row marker, never a row
+  // rendered as though it were live.
+  const pending = usePendingBranchChanges();
+  const me = useMe();
   const createBranch = useCreateBranch();
   const updateBranch = useUpdateBranch();
   const deleteBranch = useDeleteBranch();
@@ -224,10 +257,35 @@ export default function BranchesSettingsPage() {
   const [editing, setEditing] = useState<MerchantBranch | null>(null);
   const [deleting, setDeleting] = useState<MerchantBranch | null>(null);
 
+  const pendingChanges = pending.data ?? [];
+  // A live store's estate is reviewed before it moves; a store still
+  // onboarding writes straight through. Used ONLY to word the dialogs — the
+  // server's answer decides what actually happened.
+  const reviewed =
+    me.data !== undefined && isReviewedStatus(me.data.merchant.status);
+
+  /**
+   * The branch a queued change is about. `branch_name` is the SNAPSHOT's
+   * name, which only exists when the name itself is in play — an edit to an
+   * address alone leaves it null — so the live row answers for the rest.
+   */
+  const subjectName = (branchId: number | null, snapshot: string | null) =>
+    snapshot ??
+    branches.data?.find((branch) => branch.id === branchId)?.name ??
+    undefined;
+
+  /** The queued change against a branch that still has a row, if any. */
+  const pendingFor = (branchId: number) =>
+    pendingChanges.find((change) => change.branch_id === branchId);
+
   const handleDelete = (branch: MerchantBranch) => {
     deleteBranch.mutate(branch.id, {
-      onSuccess: () => {
-        toast.success(t('branches.deleted', { name: branch.name }));
+      onSuccess: (queued) => {
+        toast.success(
+          queued !== null
+            ? t('branches.deleteQueued', { name: branch.name })
+            : t('branches.deleted', { name: branch.name }),
+        );
         setDeleting(null);
       },
       onError: (error) => {
@@ -256,6 +314,18 @@ export default function BranchesSettingsPage() {
           </Button>
         </ToolbarActions>
       </Toolbar>
+
+      {pendingChanges.length > 0 && (
+        <div className="mb-5 flex flex-col gap-3">
+          {pendingChanges.map((change) => (
+            <PendingChangeAlert
+              key={change.id}
+              change={change}
+              subject={subjectName(change.branch_id, change.branch_name)}
+            />
+          ))}
+        </div>
+      )}
 
       <Card className="mb-7.5">
         <CardHeader>
@@ -287,56 +357,65 @@ export default function BranchesSettingsPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {branches.data.map((branch) => (
-                    <TableRow key={branch.id}>
-                      <TableCell className="font-medium">
-                        {branch.name}
-                      </TableCell>
-                      <TableCell className="text-secondary-foreground">
-                        {branch.address ?? (
-                          <span className="text-muted-foreground">—</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-secondary-foreground whitespace-nowrap">
-                        {branch.lat !== null && branch.lng !== null ? (
-                          <span className="inline-flex items-center gap-1.5 tabular-nums">
-                            <MapPin className="size-3.5 text-muted-foreground" />
-                            {formatPin({ lat: branch.lat, lng: branch.lng })}
+                  {branches.data.map((branch) => {
+                    const queued = pendingFor(branch.id);
+
+                    return (
+                      <TableRow key={branch.id}>
+                        <TableCell className="font-medium">
+                          <span className="flex flex-wrap items-center gap-2">
+                            {branch.name}
+                            {queued !== undefined && (
+                              <PendingChangeBadge kind={queued.kind} />
+                            )}
                           </span>
-                        ) : (
-                          <span className="text-muted-foreground">
-                            {t('branches.notPinned')}
-                          </span>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-end">
-                        <div className="inline-flex gap-1">
-                          <Button
-                            variant="ghost"
-                            mode="icon"
-                            size="sm"
-                            aria-label={t('branches.editAria', {
-                              name: branch.name,
-                            })}
-                            onClick={() => setEditing(branch)}
-                          >
-                            <Pencil />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            mode="icon"
-                            size="sm"
-                            aria-label={t('branches.deleteAria', {
-                              name: branch.name,
-                            })}
-                            onClick={() => setDeleting(branch)}
-                          >
-                            <Trash2 />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                        </TableCell>
+                        <TableCell className="text-secondary-foreground">
+                          {branch.address ?? (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-secondary-foreground whitespace-nowrap">
+                          {branch.lat !== null && branch.lng !== null ? (
+                            <span className="inline-flex items-center gap-1.5 tabular-nums">
+                              <MapPin className="size-3.5 text-muted-foreground" />
+                              {formatPin({ lat: branch.lat, lng: branch.lng })}
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground">
+                              {t('branches.notPinned')}
+                            </span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-end">
+                          <div className="inline-flex gap-1">
+                            <Button
+                              variant="ghost"
+                              mode="icon"
+                              size="sm"
+                              aria-label={t('branches.editAria', {
+                                name: branch.name,
+                              })}
+                              onClick={() => setEditing(branch)}
+                            >
+                              <Pencil />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              mode="icon"
+                              size="sm"
+                              aria-label={t('branches.deleteAria', {
+                                name: branch.name,
+                              })}
+                              onClick={() => setDeleting(branch)}
+                            >
+                              <Trash2 />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </div>
@@ -351,11 +430,20 @@ export default function BranchesSettingsPage() {
         initial={emptyForm()}
         open={creating}
         busy={createBranch.isPending}
+        reviewNote={reviewed ? t('branches.addReviewNote') : undefined}
         onOpenChange={setCreating}
         onSubmit={(body) =>
           createBranch.mutate(body, {
-            onSuccess: (response) => {
-              toast.success(t('branches.added', { name: response.data.name }));
+            // A queued create has no branch row to name — the name the
+            // merchant just typed is the one that is waiting.
+            onSuccess: (result) => {
+              toast.success(
+                result.queued !== null
+                  ? t('branches.addQueued', { name: body.name })
+                  : t('branches.added', {
+                      name: result.branch?.name ?? body.name,
+                    }),
+              );
               setCreating(false);
             },
             onError: (error) =>
@@ -371,6 +459,15 @@ export default function BranchesSettingsPage() {
         initial={editing ? formFromBranch(editing) : emptyForm()}
         open={editing !== null}
         busy={updateBranch.isPending}
+        reviewNote={
+          reviewed
+            ? // Editing a branch that already has something queued replaces
+              // that request rather than adding a second one.
+              editing !== null && pendingFor(editing.id) !== undefined
+              ? t('branches.editReplaceNote')
+              : t('branches.editReviewNote')
+            : undefined
+        }
         onOpenChange={(open) => {
           if (!open) setEditing(null);
         }}
@@ -379,8 +476,12 @@ export default function BranchesSettingsPage() {
           updateBranch.mutate(
             { id: editing.id, body },
             {
-              onSuccess: () => {
-                toast.success(t('branches.saved'));
+              onSuccess: (result) => {
+                toast.success(
+                  result.queued !== null
+                    ? t('branches.saveQueued')
+                    : t('branches.saved'),
+                );
                 setEditing(null);
               },
               onError: (error) =>
@@ -403,6 +504,7 @@ export default function BranchesSettingsPage() {
             </AlertDialogTitle>
             <AlertDialogDescription>
               {t('branches.deleteBody')}
+              {reviewed && ` ${t('branches.deleteReviewNote')}`}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

@@ -445,14 +445,16 @@ void main() {
         }, 200),
       );
 
-      final branches = await _api(adapter).branches();
+      final estate = await _api(adapter).branches();
 
       expect(adapter.requests.single.path, '/merchant/branches');
-      expect(branches, hasLength(2));
-      expect(branches.first.pinned, isTrue);
-      expect(branches.first.lat, 4.1755354);
-      expect(branches.last.pinned, isFalse);
-      expect(branches.last.address, isNull);
+      expect(estate.branches, hasLength(2));
+      expect(estate.branches.first.pinned, isTrue);
+      expect(estate.branches.first.lat, 4.1755354);
+      expect(estate.branches.last.pinned, isFalse);
+      expect(estate.branches.last.address, isNull);
+      // No `meta` at all is an empty queue, never a crash.
+      expect(estate.pendingChanges, isEmpty);
     });
 
     test('create and update send every key — the pin an explicit PAIR of '
@@ -470,9 +472,12 @@ void main() {
       );
       final api = _api(adapter);
 
-      await api.createBranch(name: 'Villimalé');
+      final created = await api.createBranch(name: 'Villimalé');
       expect(adapter.requests.last.data,
           {'name': 'Villimalé', 'address': null, 'lat': null, 'lng': null});
+      // 201 — a store that is not live still writes straight through.
+      expect(created.queued, isNull);
+      expect(created.branch?.id, 6);
 
       await api.updateBranch(6,
           name: 'Villimalé', address: 'Ameenee Magu', lat: 4.17, lng: 73.50);

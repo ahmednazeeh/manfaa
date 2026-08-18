@@ -188,9 +188,13 @@ via the polymorphic device_tokens path the customer app already exercises
 - MR8 Owner feedback round — DONE 2026-08-17 (all ten reported items
   fixed across server, app and web; suites green: api 1349, merchant 101,
   core 111, ui 3, customer 35)
-- **MR9 Admin approval for store edits + new branches — IN FLIGHT**
-  (design decided 2026-08-18, §MR9: claims queue, operations stay
-  instant)
+- MR9 Admin approval for store edits + new branches — DONE 2026-08-18
+  (90-cell gating truth table proven; adversarial verify caught branch
+  removal shipped-broken on both web surfaces — an empty payload encoded
+  as a JSON list, which zod refused — plus an unrelated save re-queueing
+  a pending change; both fixed. Known gaps left deliberately: no
+  merchant-facing rejection history and no merchant-side cancel of a
+  pending request — same model, separate surfaces.)
 
 - WL merchant.manfaa.app landing — SHIPPED 2026-08-17 (landing + split
   auth panels + real-Dashboard mockup; also retired the METRONIC template
@@ -604,14 +608,14 @@ Design decided 2026-08-18 — the line is **claims vs operations**.
 - Merchant surfaces show a "pending review" state carrying the proposed
   values, so the owner sees exactly what is waiting.
 
-- [ ] Server: `merchant_change_requests` + domain service, gating in the
+- [x] Server: `merchant_change_requests` + domain service, gating in the
       merchant Profile/Branches controllers (web AND mobile mounts share
       the controllers), admin review endpoints mirroring store-reviews
       (list for admins, approve/reject for superadmin), two notification
       template keys, tests incl. the onboarding-not-gated case.
-- [ ] Admin panel: review queue + before/after diff, approve / reject.
-- [ ] Merchant web panel: pending-review states on profile + branches.
-- [ ] Merchant app: same pending states; MR7's panes included.
+- [x] Admin panel: review queue + before/after diff, approve / reject.
+- [x] Merchant web panel: pending-review states on profile + branches.
+- [x] Merchant app: same pending states; MR7's panes included.
 
 ## Settlement reference — findings from the owner's 2026-08-18 question
 

@@ -64,8 +64,10 @@ final permissionCatalogueProvider =
   (ref) => ref.watch(apiProvider).permissionCatalogue(),
 );
 
-/// GET /merchant/branches (`branches.view`).
-final branchesProvider = FutureProvider.autoDispose<List<MerchantBranch>>(
+/// GET /merchant/branches (`branches.view`) — the estate AND the branch
+/// changes waiting on a reviewer (MR9). A live store's branch writes queue,
+/// so the list alone would show a screen that ignored the owner's last save.
+final branchesProvider = FutureProvider.autoDispose<MerchantBranchEstate>(
   (ref) => ref.watch(apiProvider).branches(),
 );
 
@@ -83,6 +85,6 @@ final branchNamesProvider =
     FutureProvider.autoDispose<Map<int, String>?>((ref) async {
   ref.watch(sessionTickProvider);
   if (!ref.watch(sessionProvider).can('branches.view')) return null;
-  final branches = await ref.watch(apiProvider).branches();
-  return {for (final branch in branches) branch.id: branch.name};
+  final estate = await ref.watch(apiProvider).branches();
+  return {for (final branch in estate.branches) branch.id: branch.name};
 });

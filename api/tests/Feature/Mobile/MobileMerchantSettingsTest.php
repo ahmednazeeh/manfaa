@@ -15,6 +15,7 @@ use App\Models\MerchantUser;
 use App\Models\Transaction;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
+use Tests\Support\Approvals;
 use Tests\TestCase;
 
 uses(TestCase::class, RefreshDatabase::class);
@@ -195,17 +196,38 @@ it('shows and edits the profile, keeping the support-phone convention', function
         ->assertOk()
         ->assertJsonPath('data.support_phone', '+9601112233');
 
-    // The ordinary identity edit rides the same PATCH; the slug never moves.
+    // The identity edit rides the same PATCH but is a CLAIM, so on a live
+    // store it queues for review (MR9): 202 with the change request, and the
+    // app renders the pending state from it. The slug never moves either way.
     $slugBefore = $merchant->refresh()->slug;
 
     $this->withHeaders($headers)
         ->patchJson('/api/mobile/v1/merchant/profile', ['name' => 'Chai House', 'channel' => 'both'])
-        ->assertOk()
-        ->assertJsonPath('data.name', 'Chai House')
-        ->assertJsonPath('data.channel', 'both');
+        ->assertStatus(202)
+        ->assertJsonPath('data.status', 'pending_review')
+        ->assertJsonPath('data.change_request.proposed.name', 'Chai House')
+        ->assertJsonPath('data.change_request.proposed.channel', 'both')
+        ->assertJsonPath('data.profile.name', 'Original Name');
+
+    expect($merchant->refresh()->name)->toBe('Original Name');
+
+    Approvals::approveAll($merchant);
 
     expect($merchant->refresh()->slug)->toBe($slugBefore)
+        ->and($merchant->name)->toBe('Chai House')
+        ->and($merchant->channel)->toBe('both')
         ->and($merchant->support_phone)->toBe('+9601112233');
+
+    // And the pending state is published on the READ the app opens with.
+    $this->withHeaders($headers)
+        ->patchJson('/api/mobile/v1/merchant/profile', ['name' => 'Chai House Two'])
+        ->assertStatus(202);
+
+    $this->withHeaders($headers)
+        ->getJson('/api/mobile/v1/merchant/profile')
+        ->assertOk()
+        ->assertJsonPath('data.name', 'Chai House')
+        ->assertJsonPath('data.pending_change.proposed.name', 'Chai House Two');
 });
 
 it('keeps the profile readable while the store waits, but refuses the write', function () {
@@ -235,21 +257,38 @@ it('creates, edits and deletes a branch, and refuses to delete history', functio
     $owner = MerchantUser::factory()->for($merchant)->owner()->create();
     $headers = settingsHeadersMr5($owner);
 
-    $branchId = $this->withHeaders($headers)
+    // MR9: on a live store the estate moves through review, so each write
+    // answers 202 with the queued request — the app's own pending state.
+    $this->withHeaders($headers)
         ->postJson('/api/mobile/v1/merchant/branches', [
             'name' => 'Hulhumalé',
             'address' => 'Nirolhu Magu',
             'lat' => 4.2105,
             'lng' => 73.5409,
         ])
-        ->assertCreated()
-        ->assertJsonPath('data.name', 'Hulhumalé')
-        ->json('data.id');
+        ->assertStatus(202)
+        ->assertJsonPath('data.status', 'pending_review')
+        ->assertJsonPath('data.change_request.proposed.name', 'Hulhumalé');
+
+    Approvals::approveAll($merchant);
+
+    $branchId = $this->withHeaders($headers)
+        ->getJson('/api/mobile/v1/merchant/branches')
+        ->assertOk()
+        ->assertJsonPath('data.0.name', 'Hulhumalé')
+        ->json('data.0.id');
 
     $this->withHeaders($headers)
         ->patchJson("/api/mobile/v1/merchant/branches/{$branchId}", ['name' => 'Hulhumalé Phase 2'])
+        ->assertStatus(202)
+        ->assertJsonPath('data.change_request.kind', 'branch_update');
+
+    Approvals::approveAll($merchant);
+
+    $this->withHeaders($headers)
+        ->getJson('/api/mobile/v1/merchant/branches')
         ->assertOk()
-        ->assertJsonPath('data.name', 'Hulhumalé Phase 2');
+        ->assertJsonPath('data.0.name', 'Hulhumalé Phase 2');
 
     // The coordinate pair stays a pair: unpairing is a validation refusal,
     // in the envelope.
@@ -275,10 +314,17 @@ it('creates, edits and deletes a branch, and refuses to delete history', functio
     expect($refusal->json('error.code'))->toBe('branch_referenced');
     expect(MerchantBranch::query()->whereKey($referenced->id)->exists())->toBeTrue();
 
-    // The unreferenced one deletes fine.
+    // The unreferenced one goes — through review, like every other change.
     $this->withHeaders($headers)
         ->deleteJson("/api/mobile/v1/merchant/branches/{$branchId}")
-        ->assertNoContent();
+        ->assertStatus(202)
+        ->assertJsonPath('data.change_request.kind', 'branch_delete');
+
+    expect(MerchantBranch::query()->whereKey($branchId)->exists())->toBeTrue();
+
+    Approvals::approveAll($merchant);
+
+    expect(MerchantBranch::query()->whereKey($branchId)->exists())->toBeFalse();
 });
 
 // ------------------------------------------------------------ bank account
@@ -739,8 +785,15 @@ it('freezes the commercial offer of a suspended store but not its estate', funct
 
     // But the DEFAULT gate admits it: suspension is credit control, never a
     // locked panel — the store still fixes its profile while it settles up.
+    // A suspended store is LIVE, so a rename is reviewed (202) rather than
+    // refused (409); the contact number it might need corrected is instant.
     $this->withHeaders($headers)
         ->patchJson('/api/mobile/v1/merchant/profile', ['name' => 'Still My Shop'])
+        ->assertStatus(202)
+        ->assertJsonPath('data.change_request.proposed.name', 'Still My Shop');
+
+    $this->withHeaders($headers)
+        ->patchJson('/api/mobile/v1/merchant/profile', ['contact_phone' => '+9607778899'])
         ->assertOk()
-        ->assertJsonPath('data.name', 'Still My Shop');
+        ->assertJsonPath('data.contact_phone', '+9607778899');
 });

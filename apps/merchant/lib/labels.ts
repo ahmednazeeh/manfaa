@@ -2,6 +2,7 @@ import {
   isTransactionReasonCode,
   isVendorAbility,
   isWalletMovementType,
+  type ChangeRequestKind,
   type MerchantChannel,
   type MerchantRoleErrorCode,
   type MerchantRoleSummary,
@@ -404,4 +405,91 @@ const SETUP_MISSING_LABEL_KEYS: Record<SetupMissingKey, string> = {
 
 export function setupMissingLabel(t: TFunction, key: SetupMissingKey): string {
   return t(SETUP_MISSING_LABEL_KEYS[key]);
+}
+
+/**
+ * MR9 queued store changes. The API publishes an English `kind_label` on
+ * every change request — it is what the merchant's push notification called
+ * the change — but this panel is bilingual, so the words come from the KIND
+ * and the locale files, exactly as everywhere else here.
+ */
+const CHANGE_KIND_KEYS: Record<ChangeRequestKind, string> = {
+  profile: 'pending.kind.profile',
+  branch_create: 'pending.kind.branch_create',
+  branch_update: 'pending.kind.branch_update',
+  branch_delete: 'pending.kind.branch_delete',
+};
+
+export function changeKindLabel(t: TFunction, kind: ChangeRequestKind): string {
+  return t(CHANGE_KIND_KEYS[kind]);
+}
+
+/**
+ * What is true WHILE a change of this kind waits — and what a second save
+ * does. The two halves are one sentence per kind because they differ per
+ * kind: a queued rename means shoppers keep reading the old name, a queued
+ * new branch means there is no branch to read yet, and a queued removal
+ * means the branch is still open for business.
+ */
+const CHANGE_KIND_NOTE_KEYS: Record<ChangeRequestKind, string> = {
+  profile: 'pending.note.profile',
+  branch_create: 'pending.note.branch_create',
+  branch_update: 'pending.note.branch_update',
+  branch_delete: 'pending.note.branch_delete',
+};
+
+export function changeKindNote(t: TFunction, kind: ChangeRequestKind): string {
+  return t(CHANGE_KIND_NOTE_KEYS[kind]);
+}
+
+/**
+ * The fields a change request can carry, per kind. `name` is in both lists
+ * and means two different things — the store's name, or a branch's — which
+ * is precisely why the label is resolved through the kind rather than from
+ * the field alone.
+ *
+ * A change request's `field` is a free string on the wire (an API that grows
+ * a gated field ships before this panel does), so an unrecognised one falls
+ * back to neutral prose rather than printing itself as snake_case.
+ */
+type ProfileChangeField =
+  | 'name'
+  | 'name_dv'
+  | 'category'
+  | 'channel'
+  | 'eligibility_basis'
+  | 'website_url'
+  | 'logo';
+
+type BranchChangeField = 'name' | 'address' | 'lat' | 'lng';
+
+const PROFILE_CHANGE_FIELD_KEYS: Record<ProfileChangeField, string> = {
+  name: 'pending.field.name',
+  name_dv: 'pending.field.name_dv',
+  category: 'pending.field.category',
+  channel: 'pending.field.channel',
+  eligibility_basis: 'pending.field.eligibility_basis',
+  website_url: 'pending.field.website_url',
+  logo: 'pending.field.logo',
+};
+
+const BRANCH_CHANGE_FIELD_KEYS: Record<BranchChangeField, string> = {
+  name: 'pending.field.branchName',
+  address: 'pending.field.address',
+  // Never shown apart: the pending banner collapses the pair into one
+  // "Location" row, because half a pin is not a place. Kept mapped so a
+  // server that ever sends one alone still reads as words.
+  lat: 'pending.field.location',
+  lng: 'pending.field.location',
+};
+
+export function changeFieldLabel(
+  t: TFunction,
+  kind: ChangeRequestKind,
+  field: string,
+): string {
+  const keys: Record<string, string> =
+    kind === 'profile' ? PROFILE_CHANGE_FIELD_KEYS : BRANCH_CHANGE_FIELD_KEYS;
+
+  return field in keys ? t(keys[field]) : t('pending.field.unknown');
 }

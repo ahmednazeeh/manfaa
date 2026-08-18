@@ -36,3 +36,24 @@ export function formatBusinessDate(value: Date): string {
     year: 'numeric',
   }).format(value);
 }
+
+const businessDateTimeFormat = new Intl.DateTimeFormat('en-GB', {
+  timeZone: BUSINESS_TIMEZONE,
+  day: '2-digit',
+  month: 'short',
+  year: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit',
+  hour12: false,
+});
+
+/**
+ * An API instant as "18 Aug 2026, 14:32" in BUSINESS wall time — the clock
+ * the merchant and the reviewer share. "You submitted this at" is a moment,
+ * not a rule boundary, but printing it in the browser's own zone would still
+ * have an owner on holiday reading a submission time that is not the one the
+ * admin sees on the same request.
+ */
+export function formatBusinessDateTime(iso: string): string {
+  return businessDateTimeFormat.format(new Date(iso));
+}

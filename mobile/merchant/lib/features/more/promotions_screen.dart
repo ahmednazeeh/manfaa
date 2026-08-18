@@ -684,8 +684,11 @@ class _PromotionBuilderSheetState
     final theme = Theme.of(context);
     final muted = theme.colorScheme.onSurfaceVariant;
     final session = ref.watch(sessionProvider);
+    // The estate's ROWS only: a branch waiting on MR9 approval has no id to
+    // scope a promotion to, and offering one would build an offer against a
+    // branch that may never exist.
     final branches = session.can('branches.view')
-        ? ref.watch(branchesProvider).valueOrNull
+        ? ref.watch(branchesProvider).valueOrNull?.branches
         : null;
 
     // Compared as integer bp — "must boost" is a comparison and 4.99 vs

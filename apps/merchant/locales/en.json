@@ -388,7 +388,11 @@
     "storeNameDvHint": "Shown to shoppers reading Manfaa in Dhivehi. Leave it blank and they see your name above. Your public link never changes.",
     "copyStoreLink": "Copy store link",
     "storeNameLabel": "Store name",
-    "storeNameHint": "Your public name. Your store link never changes with it, so anything already shared keeps working."
+    "storeNameHint": "Your public name. Your store link never changes with it, so anything already shared keeps working.",
+    "profileQueued": "Sent to Manfaa for review — your store keeps its current details until it's approved",
+    "logoQueued": "Logo sent to Manfaa for review",
+    "logoPendingNote": "This logo is waiting for Manfaa's review. Your store keeps showing the current one until it is approved.",
+    "reviewedFieldsNote": "Manfaa reviews your store name, Dhivehi name, logo, category, channel, website and cashback terms before customers see them. Contact details save straight away."
   },
   "branches": {
     "title": "Branches",
@@ -420,7 +424,49 @@
     "deleteReferenced": "This branch has recorded sales or promotions, so it must stay on file. Stop using it instead.",
     "deleteTitle": "Delete {{name}}?",
     "deleteBody": "The branch disappears from discovery and from new sales. A branch that already has recorded sales or promotions cannot be deleted — history must keep resolving.",
-    "deleteConfirm": "Delete branch"
+    "deleteConfirm": "Delete branch",
+    "addQueued": "Branch {{name}} sent to Manfaa for review",
+    "saveQueued": "Branch change sent to Manfaa for review",
+    "deleteQueued": "Removal of {{name}} sent to Manfaa for review",
+    "addReviewNote": "Manfaa reviews new branches — this one appears to customers once it is approved.",
+    "editReviewNote": "Manfaa reviews branch changes — customers keep seeing this branch as it is until it is approved.",
+    "editReplaceNote": "This branch already has a change waiting for review. Saving replaces that request with this one.",
+    "deleteReviewNote": "Manfaa reviews removals — the branch stays open to customers until it is approved."
+  },
+  "pending": {
+    "title": "Waiting for Manfaa's review",
+    "submittedAt": "Submitted {{when}}",
+    "notSet": "Not set",
+    "noPin": "No pin",
+    "badge": "Waiting for review",
+    "badgeRemoval": "Removal waiting",
+    "logoCurrentAlt": "Current logo",
+    "logoProposedAlt": "Logo waiting for review",
+    "kind": {
+      "profile": "Store profile change",
+      "branch_create": "New branch",
+      "branch_update": "Branch update",
+      "branch_delete": "Branch removal"
+    },
+    "note": {
+      "profile": "Customers keep seeing your current details until Manfaa approves this. Saving again replaces the request with your newest version.",
+      "branch_create": "The branch appears on your store page and in Nearby once Manfaa approves it.",
+      "branch_update": "Customers keep seeing this branch as it is until Manfaa approves the change. Editing it again replaces the request.",
+      "branch_delete": "The branch stays open to customers until Manfaa approves the removal. Editing it again replaces the request."
+    },
+    "field": {
+      "name": "Store name",
+      "name_dv": "Dhivehi name",
+      "category": "Category",
+      "channel": "Channel",
+      "eligibility_basis": "What earns cashback",
+      "website_url": "Website",
+      "logo": "Logo",
+      "branchName": "Branch name",
+      "address": "Address",
+      "location": "Location",
+      "unknown": "Another detail"
+    }
   },
   "apiAccess": {
     "title": "API access",
@@ -643,7 +689,6 @@
     "oldestDue": "Oldest due date: {{date}}",
     "referenceLabel": "Payment reference",
     "referenceHint": "Quote this on the transfer — it is how we recognise your payment.",
-    "referencePreviewNote": "This reference is assigned when you submit your receipt. If the settlement then shows a different one, that is the reference of record.",
     "transferTo": "Transfer to",
     "bankName": "Bank",
     "accountNo": "Account number",
@@ -747,7 +792,8 @@
     "stepTransfer": "Transfer & confirm",
     "chooseBank": "Choose where to send it",
     "chooseBankHint": "Sending to your own bank is usually free and same-day.",
-    "chooseBankFirst": "Choose a bank above to see where to send it."
+    "chooseBankFirst": "Choose a bank above to see where to send it.",
+    "referenceComesLater": "No reference is needed for the transfer — Manfaa creates one when you upload the receipt, and you'll see it on the settlement."
   },
   "credit": {
     "backdatedTitle": "Backdated sale — this credit is final",

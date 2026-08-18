@@ -2,7 +2,9 @@
 
 namespace App\Http\Resources;
 
+use App\Domain\Approvals\ChangeKind;
 use App\Models\Merchant;
+use App\Models\MerchantChangeRequest;
 use App\Models\StoreCategory;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -42,7 +44,30 @@ class MerchantProfileResource extends JsonResource
             'contact_phone' => $this->contact_phone,
             'support_phone' => $this->support_phone,
             'website_url' => $this->website_url,
+            // MR9: the store's own public claims waiting on a reviewer, with
+            // the proposed values. Null when nothing is queued. Both panels
+            // render their "pending review" state from this — the form still
+            // shows the LIVE values, because those are what a shopper sees
+            // until the change is approved.
+            'pending_change' => $this->pendingChange($request),
         ];
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function pendingChange(Request $request): ?array
+    {
+        $pending = MerchantChangeRequest::query()
+            ->where('merchant_id', $this->id)
+            ->where('kind', ChangeKind::Profile->value)
+            ->where('status', MerchantChangeRequest::PENDING)
+            ->latest('id')
+            ->first();
+
+        return $pending === null
+            ? null
+            : (new MerchantChangeRequestResource($pending))->resolve($request);
     }
 
     /**

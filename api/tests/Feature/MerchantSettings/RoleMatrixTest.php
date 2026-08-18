@@ -162,7 +162,10 @@ function merchantPermissionMatrix(): array
         'branch update' => ['method' => 'PATCH', 'uri' => '/api/merchant/branches/999999', 'payload' => [], 'permission' => 'branches.edit', 'allowed' => 404],
         'branch delete' => ['method' => 'DELETE', 'uri' => '/api/merchant/branches/999999', 'payload' => [], 'permission' => 'branches.delete', 'allowed' => 404],
         'profile read' => ['method' => 'GET', 'uri' => '/api/merchant/profile', 'payload' => [], 'permission' => 'profile.view', 'allowed' => 200],
-        'profile write' => ['method' => 'PATCH', 'uri' => '/api/merchant/profile', 'payload' => ['channel' => 'both'], 'permission' => 'profile.edit', 'allowed' => 200],
+        // 202: on a LIVE store the channel is a public claim, so a permitted
+        // write queues for admin review instead of applying (MR9). The
+        // permission is still the FIRST answer — 403 without it.
+        'profile write' => ['method' => 'PATCH', 'uri' => '/api/merchant/profile', 'payload' => ['channel' => 'both'], 'permission' => 'profile.edit', 'allowed' => 202],
         'setup read' => ['method' => 'GET', 'uri' => '/api/merchant/setup', 'payload' => [], 'permission' => 'setup.view', 'allowed' => 200],
         // The wizard's writes answer 409 setup_not_editable on an approved
         // store — past the wizard, but past it for a reason that is not

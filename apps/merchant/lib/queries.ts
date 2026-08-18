@@ -594,13 +594,20 @@ export function useProfile() {
   });
 }
 
+/**
+ * A profile save answers with the LIVE profile plus, when a public claim
+ * moved, the change request now waiting on an admin (MR9). The live profile
+ * is cached either way — it is what a shopper reads and therefore what the
+ * form shows — and it already carries `pending_change`, so the pending-review
+ * banner appears from this one response without a refetch.
+ */
 export function useUpdateProfile() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (body: UpdateMerchantProfileRequest) =>
       updateMerchantProfile(body),
-    onSuccess: (response) => {
-      queryClient.setQueryData(queryKeys.profile, response);
+    onSuccess: (result) => {
+      queryClient.setQueryData(queryKeys.profile, { data: result.profile });
     },
   });
 }
@@ -628,6 +635,28 @@ export function useBranches(enabled = true) {
   });
 }
 
+/**
+ * The same GET read for its OTHER half: the branch changes waiting on a
+ * reviewer (MR9). A second observer on the one query key rather than a
+ * second request — react-query dedupes them — which keeps `useBranches`
+ * returning the estate as it stands to the three screens that only want a
+ * list of branches.
+ */
+export function usePendingBranchChanges(enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.branches,
+    queryFn: ({ signal }) => listMerchantBranches({ signal }),
+    select: (response) => response.meta.pending_changes,
+    retry: false,
+    enabled,
+  });
+}
+
+/**
+ * Every branch write invalidates the list — and that is load-bearing for a
+ * QUEUED write too, where the estate has not moved an inch: `meta` is what
+ * changed, and it is what the pending-review banner renders from.
+ */
 export function useCreateBranch() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -1028,13 +1057,21 @@ export function useUploadSetupLogo() {
   });
 }
 
-/** The identical logo action mounted under Settings for ACTIVE merchants. */
+/**
+ * The identical logo action mounted under Settings for ACTIVE merchants —
+ * except that for a live store the upload does not become the logo (MR9):
+ * the file is staged and a profile change request queues, so the PROFILE is
+ * invalidated too. Its `pending_change` is where the proposed logo lives,
+ * and it is the one read that knows whether an earlier pending rename rode
+ * along with it (the server carries unmentioned keys forward).
+ */
 export function useUploadSettingsLogo() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (file: File) => uploadMerchantSettingsLogo(file),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.setup });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.profile });
     },
   });
 }

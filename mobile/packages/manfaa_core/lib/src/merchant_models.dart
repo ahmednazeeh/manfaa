@@ -769,6 +769,7 @@ class MerchantProfile {
     this.contactPhone,
     this.supportPhone,
     this.websiteUrl,
+    this.pendingChange,
   });
 
   factory MerchantProfile.fromJson(Map<String, dynamic> json) =>
@@ -786,6 +787,11 @@ class MerchantProfile {
         contactPhone: json['contact_phone'] as String?,
         supportPhone: json['support_phone'] as String?,
         websiteUrl: json['website_url'] as String?,
+        pendingChange: json['pending_change'] is Map
+            ? MerchantChangeRequest.fromJson(
+                (json['pending_change'] as Map).cast<String, dynamic>(),
+              )
+            : null,
       );
 
   final int id;
@@ -818,6 +824,12 @@ class MerchantProfile {
   /// a COMPARISON the app makes, never a separate stored flag.
   final String? supportPhone;
   final String? websiteUrl;
+
+  /// MR9 — the store's own public claims waiting on a reviewer, or null.
+  /// The fields ABOVE stay the LIVE values while this is set: they are what
+  /// a shopper sees until an admin approves, and a form that pre-filled the
+  /// proposed values instead would re-submit them on the next unrelated save.
+  final MerchantChangeRequest? pendingChange;
 }
 
 /// PATCH /merchant/preferences — the owner-editable earning knobs
@@ -1158,6 +1170,236 @@ class MerchantBranch {
   final double? lng;
 
   bool get pinned => lat != null && lng != null;
+}
+
+/// GET /merchant/branches, whole: the estate itself plus `meta`'s pending
+/// branch change requests (MR9). A live store's branch writes never land
+/// directly, so the list alone is only half the truth — what is QUEUED is
+/// the other half, and the two must arrive together or the screen would
+/// paint a store that silently ignored the owner's last three saves.
+class MerchantBranchEstate {
+  const MerchantBranchEstate({
+    required this.branches,
+    this.pendingChanges = const [],
+  });
+
+  factory MerchantBranchEstate.fromJson(Map<String, dynamic> json) =>
+      MerchantBranchEstate(
+        branches: [
+          for (final item in (json['data'] as List? ?? const []))
+            MerchantBranch.fromJson((item as Map).cast<String, dynamic>()),
+        ],
+        pendingChanges: [
+          for (final item in ((json['meta'] as Map?)?['pending_changes']
+                  as List? ??
+              const []))
+            MerchantChangeRequest.fromJson(
+              (item as Map).cast<String, dynamic>(),
+            ),
+        ],
+      );
+
+  final List<MerchantBranch> branches;
+
+  /// Pending branch requests only — the server filters the profile kind out
+  /// of this collection (BranchesController::index).
+  final List<MerchantChangeRequest> pendingChanges;
+
+  /// New branches waiting on a reviewer: they have no row in [branches] yet,
+  /// so a screen that only draws the list would show nothing at all for a
+  /// save the owner just made.
+  List<MerchantChangeRequest> get pendingCreates => [
+        for (final change in pendingChanges)
+          if (change.kind == MerchantChangeRequest.kindBranchCreate) change,
+      ];
+
+  /// The request waiting against an EXISTING branch (update or removal), or
+  /// null. One pending request per target is the server's law (MR9
+  /// supersede), so the first match is the answer.
+  MerchantChangeRequest? pendingFor(int branchId) {
+    for (final change in pendingChanges) {
+      if (change.branchId == branchId) return change;
+    }
+    return null;
+  }
+}
+
+/// One queued store change (MerchantChangeRequestResource) — MR9.
+///
+/// A LIVE store's public claims (its name, category, channel, logo, website,
+/// the what-earns-cashback promise) and its whole branch estate do not move
+/// when the owner saves: they queue for admin review and the store keeps
+/// serving the CURRENT values until someone approves. This is that queued
+/// request, in the one shape every surface reads it.
+///
+/// [current] is the SUBMIT-TIME snapshot, not the live row, so the diff
+/// survives later edits. A logo change rides [changes] as the field `logo`
+/// whose `from`/`to` are authorising preview URLs (they need the caller's
+/// bearer token, so they are not plain image sources).
+class MerchantChangeRequest {
+  const MerchantChangeRequest({
+    required this.id,
+    required this.merchantId,
+    required this.kind,
+    required this.kindLabel,
+    required this.status,
+    this.branchId,
+    this.branchName,
+    this.changes = const [],
+    this.proposed = const {},
+    this.current = const {},
+    this.submittedAt,
+    this.reviewedAt,
+    this.rejectedReason,
+  });
+
+  factory MerchantChangeRequest.fromJson(Map<String, dynamic> json) =>
+      MerchantChangeRequest(
+        id: json['id'] as int? ?? 0,
+        merchantId: json['merchant_id'] as int? ?? 0,
+        kind: _s(json['kind']),
+        kindLabel: _s(json['kind_label']),
+        status: _s(json['status']),
+        branchId: json['branch_id'] as int?,
+        branchName: json['branch_name'] as String?,
+        changes: [
+          for (final item in (json['changes'] as List? ?? const []))
+            ChangeRequestDiff.fromJson((item as Map).cast<String, dynamic>()),
+        ],
+        // `is Map`, not a cast: a request that proposes NOTHING — a branch
+        // removal — carries an empty PHP array, which json_encode writes as
+        // `[]`, and casting that to a Map would throw on the one kind whose
+        // whole point is that it proposes no fields.
+        proposed: json['proposed'] is Map
+            ? (json['proposed'] as Map).cast<String, dynamic>()
+            : const {},
+        current: json['current'] is Map
+            ? (json['current'] as Map).cast<String, dynamic>()
+            : const {},
+        submittedAt: json['submitted_at'] as String?,
+        reviewedAt: json['reviewed_at'] as String?,
+        rejectedReason: json['rejected_reason'] as String?,
+      );
+
+  static const kindProfile = 'profile';
+  static const kindBranchCreate = 'branch_create';
+  static const kindBranchUpdate = 'branch_update';
+  static const kindBranchDelete = 'branch_delete';
+
+  final int id;
+  final int merchantId;
+
+  /// profile | branch_create | branch_update | branch_delete. A STRING, like
+  /// every other enum on this wire: a kind a later deploy adds must still
+  /// parse and render, never crash this build.
+  final String kind;
+
+  /// The server's English name for the kind. The apps localize from [kind]
+  /// and keep this as the fallback for a kind they do not know yet.
+  final String kindLabel;
+
+  /// pending | approved | rejected | superseded.
+  final String status;
+
+  /// Null for a profile change and for a new branch (there is no row yet);
+  /// nulled again once a removal is approved.
+  final int? branchId;
+
+  /// The snapshot's `name`, which for a BRANCH kind is the branch's name as
+  /// submitted — a removal's whole subject, and the only name a rename still
+  /// remembers. For a PROFILE change the same key holds the STORE's name, so
+  /// read this only when [isBranch].
+  final String? branchName;
+
+  final List<ChangeRequestDiff> changes;
+
+  /// The proposed values, wire-keyed (`logo_path` published as `logo_url`).
+  final Map<String, dynamic> proposed;
+
+  /// The submit-time snapshot the diff was built against.
+  final Map<String, dynamic> current;
+
+  /// ISO 8601 UTC (the row's created_at).
+  final String? submittedAt;
+  final String? reviewedAt;
+  final String? rejectedReason;
+
+  bool get isPending => status == 'pending';
+  bool get isProfile => kind == kindProfile;
+  bool get isBranch => kind != kindProfile;
+  bool get isBranchDelete => kind == kindBranchDelete;
+  bool get isBranchCreate => kind == kindBranchCreate;
+}
+
+/// One before/after line of a queued change. [from] and [to] are whatever
+/// the field holds on the wire — a string, a number, or null for "not set"
+/// — never re-typed here.
+class ChangeRequestDiff {
+  const ChangeRequestDiff({required this.field, this.from, this.to});
+
+  factory ChangeRequestDiff.fromJson(Map<String, dynamic> json) =>
+      ChangeRequestDiff(
+        field: _s(json['field']),
+        from: json['from'],
+        to: json['to'],
+      );
+
+  /// The wire key — `logo` for a logo change, the column name otherwise.
+  final String field;
+  final Object? from;
+  final Object? to;
+}
+
+/// The answer to a gated write: what landed, and what is now waiting.
+///
+/// A profile PATCH can do BOTH in one request — the instant contact keys
+/// apply on the spot (and are reflected in [profile]) while the claims queue
+/// — which is why this carries the fresh profile as well as [queued].
+class ProfileSaveResult {
+  const ProfileSaveResult({required this.profile, this.queued});
+
+  final MerchantProfile profile;
+
+  /// The change request the gated half created, or null when everything the
+  /// save carried applied immediately (nothing gated actually differed, or
+  /// the store is not live yet).
+  final MerchantChangeRequest? queued;
+
+  bool get pending => queued != null;
+}
+
+/// The answer to a branch create/update: the row when it landed, the queued
+/// request when it did not. Exactly one of the two is set.
+class BranchSaveResult {
+  const BranchSaveResult({this.branch, this.queued});
+
+  /// The saved branch — null when the write queued instead (a new branch
+  /// has no row at all until an admin approves it).
+  final MerchantBranch? branch;
+  final MerchantChangeRequest? queued;
+
+  bool get pending => queued != null;
+}
+
+/// The answer to a branch delete: 204 (gone) or 202 (queued, still present).
+class BranchDeleteResult {
+  const BranchDeleteResult({this.queued});
+
+  final MerchantChangeRequest? queued;
+
+  bool get pending => queued != null;
+}
+
+/// The answer to a logo upload. [logoUrl] is always the logo the STORE IS
+/// STILL SERVING: a gated upload stages the file privately and changes
+/// nothing a shopper sees, so painting the new bytes as live would be a lie.
+class LogoUploadResult {
+  const LogoUploadResult({this.logoUrl, this.queued});
+
+  final String? logoUrl;
+  final MerchantChangeRequest? queued;
+
+  bool get pending => queued != null;
 }
 
 /// One promotion (PromotionResource): a time-boxed cashback BOOST above the

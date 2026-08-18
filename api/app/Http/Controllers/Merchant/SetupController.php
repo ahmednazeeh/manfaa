@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Merchant;
 
+use App\Domain\Approvals\ChangeRequestService;
 use App\Domain\Money\Percent;
 use App\Domain\Onboarding\OnboardingException;
 use App\Domain\Onboarding\OnboardingService;
 use App\Domain\Platform\RateNotPricedException;
 use App\Http\Controllers\Controller;
+use App\Http\Resources\MerchantChangeRequestResource;
 use App\Models\Merchant;
 use App\Models\MerchantUser;
 use App\Rules\PercentRate;
@@ -26,7 +28,10 @@ use Illuminate\Validation\Rule;
  */
 class SetupController extends Controller
 {
-    public function __construct(private readonly OnboardingService $onboarding) {}
+    public function __construct(
+        private readonly OnboardingService $onboarding,
+        private readonly ChangeRequestService $changes,
+    ) {}
 
     public function show(Request $request): JsonResponse
     {
@@ -92,6 +97,13 @@ class SetupController extends Controller
      * Logo upload — wizard AND post-approval settings. Strictly raster
      * images (jpg/png/webp): SVG is scriptable content served from our
      * origin and is refused outright. 2 MB cap, dimension sanity bounds.
+     *
+     * MR9: a LIVE store's logo is public identity, so the upload STAGES the
+     * file and queues it for review (202) rather than replacing the shop's
+     * face on the storefront. The bytes are stored either way — the file is
+     * the change request's payload, and a client cannot re-send it later —
+     * and the live `logo_url` in the response keeps pointing at the logo
+     * that is actually being served until an admin approves the new one.
      */
     public function storeLogo(Request $request): JsonResponse
     {
@@ -113,6 +125,19 @@ class SetupController extends Controller
         ]);
 
         try {
+            if (ChangeRequestService::gates($merchant)) {
+                /** @var MerchantUser $actor */
+                $actor = $request->user('merchant');
+
+                $queued = $this->changes->submitProfileChange($merchant, $actor, [
+                    'logo_path' => $this->onboarding->stageLogo($merchant, $request->file('logo')),
+                ]);
+
+                return MerchantChangeRequestResource::accepted($queued, [
+                    'logo_url' => $this->onboarding->logoUrl($merchant),
+                ]);
+            }
+
             $url = $this->onboarding->storeLogo($merchant, $request->file('logo'));
         } catch (OnboardingException $e) {
             return $this->onboardingError($e);

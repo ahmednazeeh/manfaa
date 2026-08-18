@@ -242,7 +242,7 @@ class _FakeApi extends MerchantApi {
       MerchantProfile.fromJson(profileJson);
 
   @override
-  Future<MerchantProfile> updateProfile({
+  Future<ProfileSaveResult> updateProfile({
     required String name,
     String? nameDv,
     required String channel,
@@ -265,12 +265,14 @@ class _FakeApi extends MerchantApi {
       'website_url': websiteUrl,
       if (categoryChanged) 'category': category,
     });
-    return MerchantProfile.fromJson({
-      ...profileJson,
-      'name': name,
-      'contact_phone': contactPhone,
-      'support_phone': supportPhone,
-    });
+    // The instant half only — this fixture's store queues nothing.
+    return ProfileSaveResult(
+      profile: MerchantProfile.fromJson({
+        ...profileJson,
+        'contact_phone': contactPhone,
+        'support_phone': supportPhone,
+      }),
+    );
   }
 
   @override

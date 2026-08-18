@@ -9,6 +9,7 @@ import {
 import { ExternalLink, LoaderCircle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
+import { isReviewedStatus } from '@/lib/api';
 import { merchantChannelLabel, merchantStatusLabel } from '@/lib/labels';
 import {
   apiErrorMessage,
@@ -44,6 +45,7 @@ import {
   ToolbarPageTitle,
 } from '@/components/app-layout/toolbar';
 import { ErrorBlock, LoadingBlock } from '@/components/app/async-states';
+import { PendingChangeAlert } from '@/components/app/pending-change';
 import { LogoUploader } from '@/components/setup/setup-wizard';
 
 const STATUS_VARIANT = {
@@ -145,6 +147,36 @@ function ProfileForm({
   const showRetiredHint =
     profile.category_retired && category === profile.category;
 
+  // MR9. Whether this store's public claims are reviewed before they move —
+  // used to word the form, never to decide what happened: the server's 202
+  // is what says a save queued.
+  const reviewed = isReviewedStatus(profile.status);
+
+  // What this store has queued for Manfaa's review. The fields above stay
+  // the LIVE values on purpose (they are what a shopper reads until an admin
+  // approves), so the banner is the only place the proposed values appear.
+  // The logo rides the same request: the tile keeps showing the logo in
+  // service and the proposal appears beside it.
+  const pending = profile.pending_change;
+  const pendingLogoUrl =
+    typeof pending?.proposed.logo_url === 'string'
+      ? pending.proposed.logo_url
+      : null;
+
+  /**
+   * The diff in the same words the form uses: a category as its curated
+   * name, a channel as "In Store & Online" — never the slug the column
+   * holds. Anything else falls through to the banner's plain rendering.
+   */
+  const formatChangeValue = (field: string, value: unknown) => {
+    if (typeof value !== 'string') return undefined;
+    if (field === 'category') return categoryOptionLabel(value);
+    if (field === 'channel' && CHANNELS.includes(value as MerchantChannel)) {
+      return merchantChannelLabel(t, value as MerchantChannel);
+    }
+    return undefined;
+  };
+
   const save = () => {
     // Send `category` only when it actually changed. A retired category is
     // still accepted by the server when unchanged, so this is belt and
@@ -173,19 +205,32 @@ function ProfileForm({
         website_url: websiteUrl.trim() === '' ? null : websiteUrl.trim(),
       },
       {
-        onSuccess: () => toast.success(t('settings.profileSaved')),
+        // MR9: a save that moved a public claim did NOT go live — it queued.
+        // Saying "saved" here is the one thing this screen must not do.
+        onSuccess: (result) =>
+          toast.success(
+            result.queued !== null
+              ? t('settings.profileQueued')
+              : t('settings.profileSaved'),
+          ),
         onError: (error) =>
           toast.error(apiErrorMessage(error, t('settings.profileSaveFailed'))),
       },
     );
   };
 
-  const upload = (file: File, onSuccess: () => void) => {
+  const upload = (file: File, onSuccess: (queued?: boolean) => void) => {
     uploadLogo.mutate(file, {
       onSuccess: (response) => {
+        // For a live store the file is STAGED, not applied: `logo_url` is
+        // the logo still being served, and the uploader drops its local
+        // preview so the tile never claims a swap that has not happened.
+        const queued = response.data.change_request !== undefined;
         setLogoUrl(response.data.logo_url);
-        toast.success(t('settings.logoUpdated'));
-        onSuccess();
+        toast.success(
+          queued ? t('settings.logoQueued') : t('settings.logoUpdated'),
+        );
+        onSuccess(queued);
       },
       onError: (error) =>
         toast.error(apiErrorMessage(error, t('settings.logoUpdateFailed'))),
@@ -194,6 +239,14 @@ function ProfileForm({
 
   return (
     <>
+      {pending !== null && (
+        <PendingChangeAlert
+          change={pending}
+          formatValue={formatChangeValue}
+          className="mb-5"
+        />
+      )}
+
       <Card className="mb-5">
         <CardHeader>
           <CardTitle>{t('settings.identityTitle')}</CardTitle>
@@ -241,6 +294,18 @@ function ProfileForm({
             upload={upload}
             uploading={uploadLogo.isPending}
           />
+          {pendingLogoUrl !== null && (
+            <div className="flex items-center gap-3 rounded-lg border border-border bg-muted/40 p-3">
+              <img
+                src={pendingLogoUrl}
+                alt={t('pending.logoProposedAlt')}
+                className="size-12 shrink-0 rounded-md border border-border bg-background object-contain"
+              />
+              <p className="text-xs text-muted-foreground">
+                {t('settings.logoPendingNote')}
+              </p>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -407,8 +472,20 @@ function ProfileForm({
             </p>
           </div>
         </CardContent>
-        <CardFooter className="justify-end">
-          <Button disabled={updateProfile.isPending} onClick={save}>
+        <CardFooter className="flex-wrap items-center gap-3">
+          {/* Said BEFORE the click, not only after it: which half of this
+              form is a claim shoppers read (reviewed) and which half is the
+              store's own contact detail (instant). */}
+          {reviewed && (
+            <p className="max-w-md text-xs text-muted-foreground">
+              {t('settings.reviewedFieldsNote')}
+            </p>
+          )}
+          <Button
+            className="ms-auto"
+            disabled={updateProfile.isPending}
+            onClick={save}
+          >
             {updateProfile.isPending && (
               <LoaderCircle className="animate-spin" />
             )}

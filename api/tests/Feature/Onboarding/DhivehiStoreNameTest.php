@@ -6,6 +6,7 @@ use App\Models\MerchantRate;
 use App\Models\MerchantUser;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\Support\Approvals;
 use Tests\TestCase;
 
 uses(TestCase::class, RefreshDatabase::class);
@@ -106,10 +107,14 @@ it('lets the owner set the Dhivehi name later and drops the storefront cache', f
     // Warm the read model holding the OLD (absent) name.
     $this->getJson('/api/discover')->assertOk()->assertJsonPath('data.featured.0.name_dv', null);
 
+    // The Dhivehi name is the store's name in the other script — a claim, so
+    // it queues for review (MR9) and reaches the storefront on approval.
     $this->actingAs($owner, 'merchant')
         ->patchJson('/api/merchant/profile', ['name_dv' => 'ކާނު މާޓް'])
-        ->assertOk()
-        ->assertJsonPath('data.name_dv', 'ކާނު މާޓް');
+        ->assertStatus(202)
+        ->assertJsonPath('data.change_request.proposed.name_dv', 'ކާނު މާޓް');
+
+    Approvals::approveAll($merchant);
 
     // Immediately visible — not after the 60-second TTL expires.
     $this->getJson('/api/discover')
@@ -124,7 +129,9 @@ it('renames the store in both scripts while its slug stays put', function () {
 
     $this->actingAs($owner, 'merchant')
         ->patchJson('/api/merchant/profile', ['name' => 'Something Else', 'name_dv' => 'ކާނު'])
-        ->assertOk();
+        ->assertStatus(202);
+
+    Approvals::approveAll($merchant);
 
     expect($merchant->refresh()->name)->toBe('Something Else')
         ->and($merchant->name_dv)->toBe('ކާނު')

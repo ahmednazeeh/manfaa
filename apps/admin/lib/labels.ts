@@ -1,6 +1,8 @@
 import {
   isTransactionReasonCode,
   type AdminRole,
+  type ChangeRequestKind,
+  type ChangeRequestStatus,
   type ClaimState,
   type CustomerStatus,
   type MerchantChannel,
@@ -211,6 +213,100 @@ const ADMIN_ROLES: Record<AdminRole, string> = {
 };
 
 const UNKNOWN_ADMIN_ROLE = 'Staff';
+
+/**
+ * MR9 store-change review queue. The four things a live store can ask to
+ * change, and the four states the request can be in. Sentence-case here and
+ * capitalised where a chip renders it — the server's own `kind_label` is
+ * lower-case prose written for the merchant's notification, not for a table
+ * column, which is why the console keeps its own words.
+ */
+const CHANGE_KINDS: Record<ChangeRequestKind, string> = {
+  profile: 'Store profile',
+  branch_create: 'New branch',
+  branch_update: 'Branch update',
+  branch_delete: 'Branch removal',
+};
+
+const CHANGE_REQUEST_STATUSES: Record<ChangeRequestStatus, string> = {
+  pending: 'Pending',
+  approved: 'Approved',
+  rejected: 'Rejected',
+  superseded: 'Superseded',
+};
+
+/**
+ * What a changed field is called in front of a reviewer. Keyed by the wire
+ * name; `name` deliberately reads differently on a branch request, where it
+ * is an address's name and not the shop's.
+ *
+ * A free `Record<string, string>` rather than an exhaustive one: the payload
+ * is JSON whose keys follow whatever the merchant endpoints validate, so an
+ * unlisted key degrades to a de-snake_cased word instead of failing a build
+ * that cannot know the server's next field.
+ */
+const CHANGE_FIELDS: Record<string, string> = {
+  name: 'Store name',
+  name_dv: 'Dhivehi name',
+  category: 'Category',
+  channel: 'Channel',
+  eligibility_basis: 'Terms & exclusions',
+  website_url: 'Website',
+  logo: 'Logo',
+  address: 'Address',
+  lat: 'Latitude',
+  lng: 'Longitude',
+};
+
+const BRANCH_CHANGE_FIELDS: Record<string, string> = {
+  name: 'Branch name',
+};
+
+export function changeKindLabel(kind: ChangeRequestKind): string {
+  return CHANGE_KINDS[kind];
+}
+
+export function changeRequestStatusLabel(status: ChangeRequestStatus): string {
+  return CHANGE_REQUEST_STATUSES[status];
+}
+
+/** "eligibility_basis" -> "Terms & exclusions"; "some_new_key" -> "Some new key". */
+export function changeFieldLabel(
+  kind: ChangeRequestKind,
+  field: string,
+): string {
+  if (kind !== 'profile' && field in BRANCH_CHANGE_FIELDS) {
+    return BRANCH_CHANGE_FIELDS[field]!;
+  }
+  if (field in CHANGE_FIELDS) {
+    return CHANGE_FIELDS[field]!;
+  }
+  const words = field.replace(/_/g, ' ');
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
+/**
+ * A refusal from the decision endpoints, in words. The server sends its own
+ * `message` too — these exist so the console can add what the admin should
+ * DO about a code, which the API has no business knowing.
+ */
+const CHANGE_REQUEST_REFUSALS: Record<string, string> = {
+  change_not_pending:
+    'This request was already decided — most likely in another tab, or the merchant replaced it with a newer one.',
+  branch_missing:
+    'The branch this request targets no longer exists, so there is nothing to change.',
+  branch_referenced:
+    'This branch is referenced by transactions or promotions, so it can never be deleted. Refuse the request and tell the store to stop using the branch instead.',
+};
+
+/** Null when the refusal carries no code this console has advice for. */
+export function changeRequestRefusalLabel(
+  code: string | null | undefined,
+): string | null {
+  return code != null && code in CHANGE_REQUEST_REFUSALS
+    ? CHANGE_REQUEST_REFUSALS[code]!
+    : null;
+}
 
 export function transactionStateLabel(state: TransactionState): string {
   return TRANSACTION_STATES[state];

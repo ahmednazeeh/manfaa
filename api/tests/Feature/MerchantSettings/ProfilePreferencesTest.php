@@ -9,6 +9,7 @@ use App\Models\MerchantUser;
 use App\Models\StoreCategory;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
+use Tests\Support\Approvals;
 use Tests\TestCase;
 
 uses(TestCase::class, RefreshDatabase::class);
@@ -25,11 +26,12 @@ beforeEach(function () {
     $this->actingAs($this->owner, 'merchant');
 });
 
-it('shows and updates the profile', function () {
+it('shows and updates the profile — claims queue, contact details do not (MR9)', function () {
     $this->getJson('/api/merchant/profile')
         ->assertOk()
         ->assertJsonPath('data.name', 'Original Name')
-        ->assertJsonPath('data.contact_email', null);
+        ->assertJsonPath('data.contact_email', null)
+        ->assertJsonPath('data.pending_change', null);
 
     $this->patchJson('/api/merchant/profile', [
         'category' => 'restaurant',
@@ -37,17 +39,30 @@ it('shows and updates the profile', function () {
         'eligibility_basis' => 'Food and drink, excluding service charge.',
         'contact_email' => 'owner@store.mv',
         'contact_phone' => '+9607771234',
-    ])->assertOk()
-        ->assertJsonPath('data.category', 'restaurant')
-        ->assertJsonPath('data.channel', 'both')
-        ->assertJsonPath('data.contact_email', 'owner@store.mv');
+    ])->assertStatus(202)
+        ->assertJsonPath('data.status', 'pending_review')
+        ->assertJsonPath('data.change_request.kind', 'profile')
+        ->assertJsonPath('data.change_request.proposed.category', 'restaurant')
+        ->assertJsonPath('data.change_request.proposed.channel', 'both')
+        // The instant half applied in the SAME request, and the response
+        // reports the profile as it now stands.
+        ->assertJsonPath('data.profile.contact_email', 'owner@store.mv')
+        ->assertJsonPath('data.profile.category', null);
 
     $merchant = $this->merchant->refresh();
 
+    expect($merchant->category)->toBeNull()
+        ->and($merchant->channel)->toBe('in_store')
+        ->and($merchant->contact_email)->toBe('owner@store.mv')
+        ->and($merchant->contact_phone)->toBe('+9607771234');
+
+    Approvals::approveAll($merchant);
+
+    $merchant->refresh();
+
     expect($merchant->category)->toBe('restaurant')
         ->and($merchant->channel)->toBe('both')
-        ->and($merchant->eligibility_basis)->toBe('Food and drink, excluding service charge.')
-        ->and($merchant->contact_phone)->toBe('+9607771234');
+        ->and($merchant->eligibility_basis)->toBe('Food and drink, excluding service charge.');
 });
 
 it('rejects a category outside the curated list and an unknown channel', function () {
@@ -62,17 +77,25 @@ it('rejects a category outside the curated list and an unknown channel', functio
 it('clears nullable profile fields explicitly', function () {
     $this->merchant->update(['contact_email' => 'old@store.mv', 'category' => 'grocery']);
 
+    // Clearing an INSTANT field is instant; clearing a gated one is a
+    // proposal like any other, and `null` is a value the payload can hold.
     $this->patchJson('/api/merchant/profile', ['contact_email' => null, 'category' => null])
-        ->assertOk()
-        ->assertJsonPath('data.contact_email', null)
-        ->assertJsonPath('data.category', null);
+        ->assertStatus(202)
+        ->assertJsonPath('data.profile.contact_email', null)
+        ->assertJsonPath('data.change_request.proposed.category', null);
+
+    Approvals::approveAll($this->merchant);
+
+    expect($this->merchant->refresh()->category)->toBeNull();
 });
 
 it('renames the business without moving its slug', function () {
     $slugBefore = $this->merchant->slug;
 
     $this->patchJson('/api/merchant/profile', ['name' => 'Sneaky Rebrand', 'category' => 'cafe'])
-        ->assertOk();
+        ->assertStatus(202);
+
+    Approvals::approveAll($this->merchant);
 
     // The name is the store's to change; the slug is not, because it is the
     // address already printed on QR codes and shared in messages.
@@ -89,7 +112,7 @@ it('drops the discovery read model so the storefront never serves a stale card',
         'category' => 'cafe',
         'channel' => 'online',
         'eligibility_basis' => 'New terms.',
-    ])->assertOk();
+    ])->assertStatus(202);
 
     // The card (category, channel) and the store page (terms) both render
     // these — a 60s stale window would show the previous values. The logo
@@ -104,14 +127,17 @@ it('keeps saving when the store holds a category the superadmin has since retire
 
     // The panel PATCHes the whole form, so before this fix editing a phone
     // number 422'd on `category` until the owner re-picked one — a save trap
-    // triggered by an admin action the merchant never saw.
+    // triggered by an admin action the merchant never saw. Re-sending the
+    // UNCHANGED category is not a proposal either (MR9): the phone applies
+    // and nothing reaches the review queue.
     $this->patchJson('/api/merchant/profile', [
         'category' => 'beauty',
         'contact_phone' => '+9607779999',
     ])->assertOk()
         ->assertJsonPath('data.category', 'beauty')
         ->assertJsonPath('data.category_retired', true)
-        ->assertJsonPath('data.contact_phone', '+9607779999');
+        ->assertJsonPath('data.contact_phone', '+9607779999')
+        ->assertJsonPath('data.pending_change', null);
 
     // Omitting it entirely — what the panel now sends — works too.
     $this->patchJson('/api/merchant/profile', ['contact_phone' => '+9607778888'])
@@ -124,8 +150,16 @@ it('keeps saving when the store holds a category the superadmin has since retire
     StoreCategory::query()->where('slug', 'grocery')->update(['active' => false]);
     $this->patchJson('/api/merchant/profile', ['category' => 'grocery'])->assertUnprocessable();
 
-    $this->patchJson('/api/merchant/profile', ['category' => 'cafe'])
+    $this->patchJson('/api/merchant/profile', ['category' => 'cafe'])->assertStatus(202);
+
+    Approvals::approveAll($this->merchant);
+
+    // actingAs holds one user instance for the whole test, so its merchant
+    // relation must be re-resolved after the approval writes the row.
+    $this->actingAs($this->owner->fresh(), 'merchant')
+        ->getJson('/api/merchant/profile')
         ->assertOk()
+        ->assertJsonPath('data.category', 'cafe')
         ->assertJsonPath('data.category_retired', false);
 });
 
@@ -233,8 +267,10 @@ it('renames the store without moving its link', function () {
     $slugBefore = $this->merchant->slug;
 
     $this->patchJson('/api/merchant/profile', ['name' => 'Chai House'])
-        ->assertOk()
-        ->assertJsonPath('data.name', 'Chai House');
+        ->assertStatus(202)
+        ->assertJsonPath('data.change_request.proposed.name', 'Chai House');
+
+    Approvals::approveAll($this->merchant);
 
     $merchant = $this->merchant->refresh();
 

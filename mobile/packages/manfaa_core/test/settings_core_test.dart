@@ -60,6 +60,8 @@ const _profileFixture = {
     'contact_phone': '+9607781234',
     'support_phone': '+9603334455',
     'website_url': 'https://www.tropicalmart.mv',
+    // MR9 — the key is ALWAYS on the wire; null is "nothing queued".
+    'pending_change': null,
   },
 };
 
@@ -122,6 +124,7 @@ void main() {
       expect(profile.contactPhone, '+9607781234');
       expect(profile.supportPhone, '+9603334455');
       expect(profile.websiteUrl, 'https://www.tropicalmart.mv');
+      expect(profile.pendingChange, isNull);
     });
 
     test('PATCH sends every editable key — explicit nulls clear', () async {
