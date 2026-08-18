@@ -410,10 +410,9 @@ explainable, which is exactly what those chips promise.
    cannot. Cache parsed queries by normalised string; most searches repeat.
 2. **Retrieval — Postgres, which we already run.**
    - `pg_trgm` + `tsvector` full-text for names and descriptions.
-   - **`pgvector`** for semantic matching, embeddings from **Voyage
-     (`voyage-3`)** or OpenAI `text-embedding-3-small`. No new
-     infrastructure, no third-party search service, no data leaving our
-     database.
+   - **`pgvector`** for semantic matching — but **not in the first
+     release**, and not on trust. See §6.1: the vendor question is settled
+     by a test, not by a price list.
    - Hybrid score: text match, vector distance, then deterministic business
      ranking — price, rating, delivery ETA, stock — which is what "Why
      these?" honestly explains.
@@ -425,6 +424,49 @@ explainable, which is exactly what those chips promise.
 Cost note: a Haiku call per *uncached* search at typical volumes is
 negligible next to one delivery, but the cache and the FTS fallback are what
 keep it that way at scale.
+
+### 6.1 On embeddings, and Voyage specifically
+
+Checked 2026-08-18. Voyage is now **Voyage AI by MongoDB**, and the current
+generation is **voyage-4 / -4-lite / -4-large** (January 2026) — the
+`voyage-3` named in an earlier draft of this plan is superseded. Pricing is
+$0.02–$0.12 per million tokens with **200M free tokens** on the voyage-4
+generation, and a 33% batch discount.
+
+**Cost is not the deciding factor.** A product row is perhaps 100 tokens; a
+catalogue of 100,000 products across every store we could plausibly sign is
+~10M tokens — inside the free allocation, once. Query embeddings are ~10
+tokens each. Whichever vendor we pick, this is not where the money goes.
+
+**The deciding factor is Dhivehi**, and it is undocumented. Voyage's model
+page describes "multilingual retrieval quality" but publishes **no language
+list**, and Dhivehi (Thaana, ~350k speakers) is the kind of low-resource
+language that multilingual embedding sets routinely omit. This matters more
+than it sounds: a model that has not learned Thaana does not fail loudly —
+it returns vectors that are near-noise, so semantic search confidently
+retrieves *wrong* products. That is worse than full-text search returning
+nothing, because nothing is honest.
+
+**So: test before buying.** The same discipline as the OSM and Google Maps
+questions on 2026-08-18 — embed a set of real Dhivehi product names with
+their English equivalents and unrelated controls, and check that the
+translation pairs sit closer together than the controls do. If Thaana is not
+represented, that shows up immediately. A morning's work, before a vendor,
+a key or a re-embedding pipeline exists.
+
+**Recommendation: ship MP10 without vectors.** The Claude parser already
+solves the part Postgres cannot — it reads a Dhivehi or transliterated query
+and returns English structured filters — and `pg_trgm` + `tsvector` answers
+those filters well at the catalogue size we will actually have for the first
+year. Add pgvector when the catalogue is big enough for semantic recall to
+beat filtering, and pick the provider then, on evidence.
+
+**When that day comes, the shortlist:** Voyage voyage-4-lite (cheapest,
+strong retrieval), OpenAI `text-embedding-3-small` (widest published
+language coverage), Cohere `embed-multilingual` (explicitly multilingual by
+design), or **self-hosted BGE-M3** on our own server — no per-call cost, no
+catalogue leaving our infrastructure, and worth a look precisely because we
+already run the box.
 
 ---
 
