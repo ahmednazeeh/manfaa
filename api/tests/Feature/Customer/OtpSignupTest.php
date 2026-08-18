@@ -55,10 +55,11 @@ it('signs up a customer end to end: request-otp, verify-otp, register', function
 
     expect($token)->toBeString()->not->toBeEmpty();
 
+    // Passwordless (owner decision 2026-08-18): a name is all register asks
+    // for — the code the member just proved IS the credential.
     $response = $this->postJson('/api/customer/auth/register', [
         'signup_token' => $token,
         'name' => 'Aishath Manike',
-        'password' => 'correct-horse-battery',
     ])->assertCreated();
 
     $customer = Customer::query()->where('phone', '+9607712345')->firstOrFail();
@@ -71,12 +72,35 @@ it('signs up a customer end to end: request-otp, verify-otp, register', function
     $this->assertAuthenticatedAs($customer, 'customer');
     $this->getJson('/api/customer/auth/me')->assertOk();
 
-    // The existing password login path still works for the new account.
+    // And signing back in is the same one code — no password anywhere.
     $this->postJson('/api/customer/auth/logout')->assertNoContent();
-    $this->postJson('/api/customer/auth/login', [
+    $this->postJson('/api/customer/auth/request-otp', ['phone' => '+9607712345'])->assertOk();
+    $this->postJson('/api/customer/auth/otp/verify', [
         'phone' => '+9607712345',
-        'password' => 'correct-horse-battery',
-    ])->assertOk();
+        'code' => lastOtpCodeFor($this->sms, '+9607712345'),
+    ])->assertOk()->assertJsonPath('data.customer_code', $customer->customer_code);
+    $this->assertAuthenticatedAs($customer, 'customer');
+});
+
+it('signs an UNKNOWN number up instead: one code, both journeys', function () {
+    $this->postJson('/api/customer/auth/request-otp', ['phone' => '+9607779000'])->assertOk();
+
+    $signup = $this->postJson('/api/customer/auth/otp/verify', [
+        'phone' => '+9607779000',
+        'code' => lastOtpCodeFor($this->sms, '+9607779000'),
+    ])->assertOk()->json('data');
+
+    // No account yet, so the same call hands back the token that finishes
+    // registration — the page asks for a name and nothing else.
+    expect($signup['signup_token'])->toBeString()->not->toBeEmpty();
+    $this->assertGuest('customer');
+
+    $this->postJson('/api/customer/auth/register', [
+        'signup_token' => $signup['signup_token'],
+        'name' => 'Hassan Ali',
+    ])->assertCreated();
+
+    $this->assertAuthenticated('customer');
 });
 
 it('rejects a malformed phone number', function () {

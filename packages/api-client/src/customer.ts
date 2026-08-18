@@ -200,11 +200,39 @@ export function verifyCustomerOtp(
 export const RegisterCustomerRequestSchema = z.object({
   signup_token: z.string().min(1),
   name: z.string().min(1).max(120),
-  password: z.string().min(8).max(255),
 });
 export type RegisterCustomerRequest = z.infer<
   typeof RegisterCustomerRequestSchema
 >;
+
+/**
+ * POST /api/customer/auth/otp/verify — the passwordless sign-in (owner
+ * decision 2026-08-18). A KNOWN number is signed straight into the session
+ * and comes back as the customer; an unknown one comes back with a
+ * `signup_token` to finish registration with a name. 422 keys:
+ * `otp_invalid`, `otp_attempts_exceeded`.
+ */
+export const OtpAccessResponseSchema = z.union([
+  CustomerResponseSchema,
+  z.object({
+    data: z.object({
+      signup_token: z.string(),
+      expires_in_minutes: z.number().int(),
+    }),
+  }),
+]);
+export type OtpAccessResponse = z.infer<typeof OtpAccessResponseSchema>;
+
+export function verifyOtpForAccess(
+  body: { phone: string; code: string },
+  options: RequestOptions = {},
+): Promise<OtpAccessResponse> {
+  return apiFetch("/api/customer/auth/otp/verify", OtpAccessResponseSchema, {
+    method: "POST",
+    body,
+    signal: options.signal,
+  });
+}
 
 /**
  * POST /api/customer/auth/register — creates the account (201) and logs the

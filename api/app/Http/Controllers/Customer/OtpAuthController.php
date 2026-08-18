@@ -14,6 +14,7 @@ use App\Http\Support\OtpRequestLimiter;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -91,6 +92,48 @@ class OtpAuthController extends Controller
         ]);
     }
 
+    /**
+     * The WEB's passwordless sign-in (owner decision 2026-08-18): the same
+     * OtpService::verifyForAccess the customer app has always used, landing
+     * in the SESSION guard instead of minting a token. A known number is
+     * signed in; an unknown one comes back with a signup token so the page
+     * can collect a name and finish — one code, both journeys, no password
+     * anywhere.
+     */
+    public function verifyAccess(Request $request): JsonResponse
+    {
+        $this->withNormalisedPhone($request);
+
+        $validated = $request->validate([
+            'phone' => ['required', 'string', self::PHONE_RULE],
+            'code' => ['required', 'string', 'digits:6'],
+        ]);
+
+        try {
+            $outcome = $this->otp->verifyForAccess($validated['phone'], $validated['code']);
+        } catch (TooManyOtpAttemptsException) {
+            throw ValidationException::withMessages(['code' => 'otp_attempts_exceeded']);
+        } catch (InvalidOtpException) {
+            throw ValidationException::withMessages(['code' => 'otp_invalid']);
+        }
+
+        if ($outcome->customer !== null) {
+            Auth::guard('customer')->login($outcome->customer);
+            $request->session()->regenerate();
+
+            return (new CustomerResource($outcome->customer))
+                ->response($request)
+                ->setStatusCode(200);
+        }
+
+        return response()->json([
+            'data' => [
+                'signup_token' => $outcome->signupToken,
+                'expires_in_minutes' => OtpService::SIGNUP_TOKEN_TTL_MINUTES,
+            ],
+        ]);
+    }
+
     public function register(Request $request): JsonResponse
     {
         $this->withNormalisedPhone($request);
@@ -98,14 +141,17 @@ class OtpAuthController extends Controller
         $validated = $request->validate([
             'signup_token' => ['required', 'string'],
             'name' => ['required', 'string', 'max:120'],
-            'password' => ['required', 'string', 'min:8', 'max:255'],
         ]);
 
         try {
             $customer = $this->otp->register(
                 $validated['signup_token'],
                 $validated['name'],
-                $validated['password'],
+                // Passwordless (owner decision 2026-08-18): the column is
+                // NOT NULL and the guard needs SOMETHING, so the account
+                // gets an unusable random secret — exactly what the
+                // customer app has always done. Sign-in is the OTP.
+                Str::password(40),
             );
         } catch (InvalidSignupTokenException) {
             throw ValidationException::withMessages(['signup_token' => 'signup_token_invalid']);

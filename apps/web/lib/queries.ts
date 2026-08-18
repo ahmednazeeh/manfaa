@@ -5,7 +5,6 @@ import {
   ApiError,
   bootstrapCsrf,
   createCustomerClaim,
-  customerLogin,
   customerLogout,
   getCustomerBalance,
   getCustomerMe,
@@ -19,12 +18,12 @@ import {
   listCustomerTransactions,
   registerCustomer,
   requestCustomerOtp,
+  verifyOtpForAccess,
   requestPayoutAccountOtp,
   saveCustomerPayoutAccount,
   verifyCustomerOtp,
   type CreateClaimRequest,
   type Customer,
-  type CustomerLoginRequest,
   type DirectoryParams,
   type RegisterCustomerRequest,
   type SavePayoutAccountRequest,
@@ -164,15 +163,22 @@ export function useSignedIn(): boolean {
   return me != null || (isPending && hint);
 }
 
-export function useLogin() {
+/**
+ * The passwordless sign-in (owner decision 2026-08-18): one code either
+ * signs a known number in — the response IS the customer — or hands back a
+ * signup_token so the page can collect a name and finish. The caller
+ * distinguishes the two by looking for `customer_code`.
+ */
+export function useVerifyOtpForAccess() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (body: CustomerLoginRequest): Promise<Customer> => {
-      await bootstrapCsrf();
-      return (await customerLogin(body)).data;
-    },
-    onSuccess: (me) => {
-      queryClient.setQueryData(queryKeys.me, me);
+    mutationFn: (body: { phone: string; code: string }) =>
+      verifyOtpForAccess(body),
+    onSuccess: (response) => {
+      const data = response.data as Partial<Customer>;
+      if (data.customer_code !== undefined) {
+        queryClient.setQueryData(queryKeys.me, data as Customer);
+      }
     },
   });
 }

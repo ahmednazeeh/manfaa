@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { ApiError } from '@manfaa/api-client';
-import { Eye, EyeOff, LoaderCircle, TriangleAlert } from 'lucide-react';
+import { LoaderCircle, TriangleAlert } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { z } from 'zod';
@@ -40,7 +40,9 @@ import {
 type Step = 'phone' | 'code' | 'details' | 'bank';
 
 /**
- * Signup (§10 apps/web): phone -> SMS OTP -> name/password. The register
+ * Signup (§10 apps/web): phone -> SMS OTP -> name. PASSWORDLESS since
+ * 2026-08-18 (owner decision) — the code the member just proved IS the
+ * credential, exactly as the customer app has always worked. The register
  * call logs the session in, so success lands straight on the dashboard.
  */
 export default function SignupPage() {
@@ -133,13 +135,11 @@ export default function SignupPage() {
   // ------------------------------------------------------------------ details
   const DetailsSchema = z.object({
     name: z.string().min(1, t('auth.nameRequired')).max(120),
-    password: z.string().min(8, t('auth.passwordTooShort')).max(255),
   });
   const detailsForm = useForm<z.infer<typeof DetailsSchema>>({
     resolver: zodResolver(DetailsSchema),
-    defaultValues: { name: '', password: '' },
+    defaultValues: { name: '' },
   });
-  const [showPassword, setShowPassword] = useState(false);
 
   const finishSignup = (values: z.infer<typeof DetailsSchema>) => {
     setErrorMessage(null);
@@ -344,45 +344,6 @@ export default function SignupPage() {
                           placeholder={t('auth.namePlaceholder')}
                           {...field}
                         />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={detailsForm.control}
-                  name="password"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{t('auth.newPasswordLabel')}</FormLabel>
-                      <FormControl>
-                        <div className="relative">
-                          <Input
-                            type={showPassword ? 'text' : 'password'}
-                            autoComplete="new-password"
-                            placeholder={t('auth.passwordPlaceholder')}
-                            {...field}
-                          />
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            mode="icon"
-                            size="sm"
-                            aria-label={
-                              showPassword
-                                ? t('common.hidePassword')
-                                : t('common.showPassword')
-                            }
-                            className="absolute end-1 top-1/2 -translate-y-1/2 h-6 w-6 text-muted-foreground"
-                            onClick={() => setShowPassword((value) => !value)}
-                          >
-                            {showPassword ? (
-                              <EyeOff className="size-3.5!" />
-                            ) : (
-                              <Eye className="size-3.5!" />
-                            )}
-                          </Button>
-                        </div>
                       </FormControl>
                       <FormMessage />
                     </FormItem>

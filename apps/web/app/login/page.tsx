@@ -3,85 +3,136 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { zodResolver } from '@hookform/resolvers/zod';
 import { ApiError } from '@manfaa/api-client';
-import { Eye, EyeOff, LoaderCircle, TriangleAlert } from 'lucide-react';
-import { useForm } from 'react-hook-form';
+import { LoaderCircle, TriangleAlert } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { z } from 'zod';
 import { normalizeMaldivesPhone } from '@/lib/format';
 import { toAbsoluteUrl } from '@/lib/helpers';
-import { useLogin } from '@/lib/queries';
+import {
+  useRegister,
+  useRequestOtp,
+  useVerifyOtpForAccess,
+  validationErrorKeys,
+} from '@/lib/queries';
 import { Alert, AlertIcon, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
-import { PhoneInput } from '@/components/app/phone-input';
+import { Label } from '@/components/ui/label';
+
+/**
+ * Passwordless sign-in (owner decision 2026-08-18). There is no password on
+ * a Manfaa membership at all — the customer app has always worked this way,
+ * and the web now matches it: a phone number, the code we text, and you are
+ * in. A number we have never seen finishes with a name in the same flow, so
+ * "sign in" and "sign up" stop being a question the member has to answer.
+ */
+type Step = 'phone' | 'code' | 'name';
 
 export default function LoginPage() {
-  const router = useRouter();
-  const loginMutation = useLogin();
-  const [showPassword, setShowPassword] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const { t } = useTranslation();
+  const router = useRouter();
 
-  const LoginFormSchema = z.object({
-    phone: z
-      .string()
-      .refine((value) => normalizeMaldivesPhone(value) !== null, {
-        message: t('auth.phoneInvalid'),
-      }),
-    password: z.string().min(1, t('auth.passwordRequired')),
-  });
-  type LoginFormValues = z.infer<typeof LoginFormSchema>;
+  const requestOtp = useRequestOtp();
+  const verify = useVerifyOtpForAccess();
+  const register = useRegister();
 
-  const form = useForm<LoginFormValues>({
-    resolver: zodResolver(LoginFormSchema),
-    defaultValues: { phone: '', password: '' },
-  });
+  const [step, setStep] = useState<Step>('phone');
+  const [phone, setPhone] = useState('');
+  const [code, setCode] = useState('');
+  const [name, setName] = useState('');
+  const [signupToken, setSignupToken] = useState('');
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const onSubmit = (values: LoginFormValues) => {
+  const busy =
+    requestOtp.isPending || verify.isPending || register.isPending;
+
+  const describe = (error: unknown, fallback: string): string => {
+    const keys = validationErrorKeys(error);
+    if (keys.includes('otp_attempts_exceeded')) {
+      return t('auth.codeAttemptsExceeded');
+    }
+    if (keys.includes('otp_invalid')) return t('auth.codeInvalid');
+    if (keys.includes('signup_token_invalid')) {
+      return t('auth.codeExpiredOrInvalidToken');
+    }
+    if (keys.includes('phone_already_registered')) {
+      return t('auth.phoneAlreadyRegistered');
+    }
+    if (error instanceof ApiError && error.status === 429) {
+      return t('common.tooManyAttempts');
+    }
+    return fallback;
+  };
+
+  const sendCode = () => {
+    const normalized = normalizeMaldivesPhone(phone);
+    if (normalized === null) {
+      setErrorMessage(t('auth.phoneInvalid'));
+      return;
+    }
     setErrorMessage(null);
-    loginMutation.mutate(
-      {
-        phone: normalizeMaldivesPhone(values.phone) ?? values.phone,
-        password: values.password,
+    requestOtp.mutate(normalized, {
+      onSuccess: () => {
+        setPhone(normalized);
+        setStep('code');
       },
+      onError: (error) =>
+        setErrorMessage(describe(error, t('common.serverUnreachable'))),
+    });
+  };
+
+  const submitCode = () => {
+    if (!/^\d{6}$/.test(code)) return;
+    setErrorMessage(null);
+    verify.mutate(
+      { phone, code },
       {
-        onSuccess: () => {
-          router.replace('/dashboard');
-        },
-        onError: (error) => {
-          if (error instanceof ApiError && error.status === 422) {
-            setErrorMessage(t('auth.invalidCredentials'));
-          } else if (error instanceof ApiError && error.status === 429) {
-            setErrorMessage(t('common.tooManyAttempts'));
-          } else {
-            setErrorMessage(t('common.serverUnreachable'));
+        onSuccess: (response) => {
+          const data = response.data as Record<string, unknown>;
+          // A known number is already signed in; an unknown one comes back
+          // with the token that finishes registration.
+          if (typeof data.signup_token === 'string') {
+            setSignupToken(data.signup_token);
+            setStep('name');
+            return;
           }
+          router.replace('/');
         },
+        onError: (error) =>
+          setErrorMessage(describe(error, t('common.serverUnreachable'))),
+      },
+    );
+  };
+
+  const finish = () => {
+    if (name.trim() === '') {
+      setErrorMessage(t('auth.nameRequired'));
+      return;
+    }
+    setErrorMessage(null);
+    register.mutate(
+      { signup_token: signupToken, name: name.trim() },
+      {
+        onSuccess: () => router.replace('/'),
+        onError: (error) =>
+          setErrorMessage(describe(error, t('common.serverUnreachable'))),
       },
     );
   };
 
   return (
-    <div className="grow flex items-center justify-center min-h-screen w-full bg-muted/40 p-5">
+    <div className="relative grow flex items-center justify-center min-h-screen w-full bg-muted/40 p-5">
       <Card className="w-full max-w-[400px]">
         <CardContent className="p-8 flex flex-col gap-6">
           <div className="flex flex-col items-center gap-3">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={toAbsoluteUrl('/media/app/default-logo.svg?v=mf2')}
               className="dark:hidden h-[26px]"
               alt={t('common.appName')}
             />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={toAbsoluteUrl('/media/app/default-logo-dark.svg?v=mf2')}
               className="hidden dark:block h-[26px]"
@@ -92,7 +143,9 @@ export default function LoginPage() {
                 {t('auth.loginTitle')}
               </h1>
               <p className="text-sm text-muted-foreground">
-                {t('auth.loginSubtitle')}
+                {step === 'name'
+                  ? t('auth.stepDetails')
+                  : t('auth.loginSubtitle')}
               </p>
             </div>
           </div>
@@ -106,86 +159,87 @@ export default function LoginPage() {
             </Alert>
           )}
 
-          <Form {...form}>
-            <form
-              onSubmit={form.handleSubmit(onSubmit)}
-              className="flex flex-col gap-5"
-            >
-              <FormField
-                control={form.control}
-                name="phone"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>{t('auth.phoneLabel')}</FormLabel>
-                    <FormControl>
-                      <PhoneInput
-                        placeholder={t('auth.phonePlaceholder')}
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="password"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>{t('auth.passwordLabel')}</FormLabel>
-                    <FormControl>
-                      <div className="relative">
-                        <Input
-                          type={showPassword ? 'text' : 'password'}
-                          autoComplete="current-password"
-                          placeholder={t('auth.passwordPlaceholder')}
-                          {...field}
-                        />
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          mode="icon"
-                          size="sm"
-                          aria-label={
-                            showPassword
-                              ? t('common.hidePassword')
-                              : t('common.showPassword')
-                          }
-                          className="absolute end-1 top-1/2 -translate-y-1/2 h-6 w-6 text-muted-foreground"
-                          onClick={() => setShowPassword((value) => !value)}
-                        >
-                          {showPassword ? (
-                            <EyeOff className="size-3.5!" />
-                          ) : (
-                            <Eye className="size-3.5!" />
-                          )}
-                        </Button>
-                      </div>
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <Button
-                type="submit"
-                className="w-full"
-                disabled={loginMutation.isPending}
-              >
-                {loginMutation.isPending && (
-                  <LoaderCircle className="animate-spin" />
-                )}
-                {t('auth.signIn')}
+          {step === 'phone' && (
+            <div className="flex flex-col gap-5">
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="phone">{t('auth.phoneLabel')}</Label>
+                <Input
+                  id="phone"
+                  dir="ltr"
+                  inputMode="tel"
+                  autoComplete="tel"
+                  placeholder={t('auth.phonePlaceholder')}
+                  value={phone}
+                  onChange={(event) => setPhone(event.target.value)}
+                  onKeyDown={(event) => event.key === 'Enter' && sendCode()}
+                />
+                <p className="text-xs text-muted-foreground">
+                  {t('auth.stepPhoneHint')}
+                </p>
+              </div>
+              <Button className="w-full" onClick={sendCode} disabled={busy}>
+                {busy && <LoaderCircle className="animate-spin" />}
+                {t('auth.sendCode')}
               </Button>
-            </form>
-          </Form>
+            </div>
+          )}
+
+          {step === 'code' && (
+            <div className="flex flex-col gap-5">
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="code">{t('auth.stepCode')}</Label>
+                <Input
+                  id="code"
+                  dir="ltr"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  maxLength={6}
+                  placeholder="123456"
+                  value={code}
+                  onChange={(event) => setCode(event.target.value)}
+                  onKeyDown={(event) => event.key === 'Enter' && submitCode()}
+                />
+                <p className="text-xs text-muted-foreground">
+                  {t('auth.stepCodeHint')}
+                </p>
+              </div>
+              <Button className="w-full" onClick={submitCode} disabled={busy}>
+                {busy && <LoaderCircle className="animate-spin" />}
+                {t('auth.verifyCode')}
+              </Button>
+              <Button
+                variant="ghost"
+                className="w-full"
+                onClick={sendCode}
+                disabled={busy}
+              >
+                {t('auth.resendCode')}
+              </Button>
+            </div>
+          )}
+
+          {step === 'name' && (
+            <div className="flex flex-col gap-5">
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="name">{t('auth.nameLabel')}</Label>
+                <Input
+                  id="name"
+                  placeholder={t('auth.namePlaceholder')}
+                  value={name}
+                  onChange={(event) => setName(event.target.value)}
+                  onKeyDown={(event) => event.key === 'Enter' && finish()}
+                />
+              </div>
+              <Button className="w-full" onClick={finish} disabled={busy}>
+                {busy && <LoaderCircle className="animate-spin" />}
+                {t('auth.finishSignup')}
+              </Button>
+            </div>
+          )}
 
           <p className="text-sm text-muted-foreground text-center">
-            {t('auth.noAccountYet')}{' '}
-            <Link
-              href="/signup"
-              className="text-primary font-medium hover:underline"
-            >
-              {t('auth.createAccount')}
+            <Link href="/discover" className="hover:text-foreground">
+              {t('nav.discover')}
             </Link>
           </p>
         </CardContent>

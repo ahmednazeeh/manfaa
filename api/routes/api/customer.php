@@ -25,6 +25,9 @@ Route::prefix('customer/auth')->group(function () {
     // inside the controller; this route throttle is a coarse backstop.
     Route::post('request-otp', [OtpAuthController::class, 'requestOtp'])->middleware('throttle:30,1');
     Route::post('verify-otp', [OtpAuthController::class, 'verifyOtp'])->middleware('throttle:10,1');
+    // Passwordless sign-in for the web (owner decision 2026-08-18): one
+    // code either signs a known number in or hands back a signup token.
+    Route::post('otp/verify', [OtpAuthController::class, 'verifyAccess'])->middleware('throttle:10,1');
     Route::post('register', [OtpAuthController::class, 'register'])->middleware('throttle:10,1');
 });
 
