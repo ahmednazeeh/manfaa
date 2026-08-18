@@ -188,8 +188,9 @@ via the polymorphic device_tokens path the customer app already exercises
 - MR8 Owner feedback round — DONE 2026-08-17 (all ten reported items
   fixed across server, app and web; suites green: api 1349, merchant 101,
   core 111, ui 3, customer 35)
-- **MR9 Admin approval for store edits + new branches — NEXT** (needs the
-  design pass first; §MR8 carries the scope note)
+- **MR9 Admin approval for store edits + new branches — IN FLIGHT**
+  (design decided 2026-08-18, §MR9: claims queue, operations stay
+  instant)
 
 - WL merchant.manfaa.app landing — SHIPPED 2026-08-17 (landing + split
   auth panels + real-Dashboard mockup; also retired the METRONIC template
@@ -572,6 +573,45 @@ fix lives.
       what stays instant: operational settings), the admin review queue
       UI, and the merchant-side "pending approval" states across web and
       app. Server + admin panel + both merchant surfaces.
+
+## MR9 — Admin approval for store edits + new branches
+
+The owner's ask: public-facing store changes should not go live silently.
+Design decided 2026-08-18 — the line is **claims vs operations**.
+
+**QUEUES for admin review** (what a shopper reads and trusts):
+- Store name, Dhivehi name, category, channel, logo, website
+- "What earns cashback" (eligibility_basis) — the promise to shoppers
+- NEW branches, and edits to a branch's name/address/pin; branch delete
+
+**STAYS INSTANT** (the merchant's own business — never blocked):
+- Cashback rate (§7 timing + pricing guards already govern it, and "you
+  set the rate" is the platform's pitch), product-category rules, minimum
+  eligible sale, validation window
+- Staff, roles, bank account, preferences, promotions (own lifecycle)
+- Contact email/phone + support phone: CORRECTIVE, not a claim — a wrong
+  number means customers cannot reach the store, so review would only
+  prolong the harm
+
+**Rules:**
+- Gating applies only to LIVE stores (active/suspended). Draft /
+  pending_review / rejected keep writing directly or onboarding deadlocks.
+- Admin-panel edits apply directly — admins are the approvers.
+- One pending request per merchant per type; re-submitting SUPERSEDES so a
+  merchant is never stuck behind their own earlier request.
+- Approve applies atomically, busts the discovery cache, notifies the
+  merchant; reject requires a reason and notifies.
+- Merchant surfaces show a "pending review" state carrying the proposed
+  values, so the owner sees exactly what is waiting.
+
+- [ ] Server: `merchant_change_requests` + domain service, gating in the
+      merchant Profile/Branches controllers (web AND mobile mounts share
+      the controllers), admin review endpoints mirroring store-reviews
+      (list for admins, approve/reject for superadmin), two notification
+      template keys, tests incl. the onboarding-not-gated case.
+- [ ] Admin panel: review queue + before/after diff, approve / reject.
+- [ ] Merchant web panel: pending-review states on profile + branches.
+- [ ] Merchant app: same pending states; MR7's panes included.
 
 ## Store readiness (App Store / Play — from the 2026-08-17 approval review)
 
