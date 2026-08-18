@@ -1,6 +1,8 @@
 <?php
 
 use App\Http\Controllers\Admin\MarketplaceKybController;
+use App\Http\Controllers\Customer\AddressController;
+use App\Http\Controllers\Merchant\DeliveryRuleController;
 use App\Http\Controllers\Merchant\MarketplaceEnrolmentController;
 use App\Http\Controllers\Merchant\ProductController;
 use App\Http\Middleware\EnsureMerchantApproved;
@@ -66,6 +68,39 @@ Route::prefix('merchant/marketplace')
             Route::delete('products/{product}/images/{image}', [ProductController::class, 'destroyImage'])
                 ->whereNumber(['product', 'image']);
         });
+    });
+
+/*
+ * A branch's delivery matrix (MP3). Instant, not gated: a fee is
+ * operational, and unlike a store's name it is not a claim a shopper has
+ * already relied on — the cart re-quotes at checkout.
+ */
+Route::prefix('merchant/marketplace')
+    ->middleware(['auth:merchant', 'marketplace', 'merchant.can:marketplace.manage'])
+    ->group(function (): void {
+        Route::get('branches/{branch}/delivery', [DeliveryRuleController::class, 'index'])
+            ->whereNumber('branch');
+
+        Route::middleware(EnsureMerchantApproved::class)->group(function (): void {
+            Route::put('branches/{branch}/delivery', [DeliveryRuleController::class, 'upsert'])
+                ->whereNumber('branch');
+            Route::delete('branches/{branch}/delivery/{zone}', [DeliveryRuleController::class, 'destroy'])
+                ->whereNumber(['branch', 'zone']);
+        });
+    });
+
+/*
+ * Customer delivery addresses (MP3). Behind the kill switch like everything
+ * else: an address book exists to be delivered to, and with no marketplace
+ * there is nothing to deliver.
+ */
+Route::prefix('customer')
+    ->middleware(['auth:customer', 'marketplace'])
+    ->group(function (): void {
+        Route::get('addresses', [AddressController::class, 'index']);
+        Route::post('addresses', [AddressController::class, 'store'])->middleware('throttle:30,1');
+        Route::patch('addresses/{address}', [AddressController::class, 'update'])->whereNumber('address');
+        Route::delete('addresses/{address}', [AddressController::class, 'destroy'])->whereNumber('address');
     });
 
 Route::prefix('admin/marketplace')

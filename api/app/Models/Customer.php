@@ -57,6 +57,13 @@ class Customer extends Authenticatable implements MobileTokenSubject
      * Strict comparison against the string, not a `!== 'suspended'` test: a
      * status added later defaults to refused rather than silently allowed.
      */
+
+    /** Saved delivery addresses (PLAN-marketplace.md §2.5). */
+    public function addresses(): HasMany
+    {
+        return $this->hasMany(CustomerAddress::class);
+    }
+
     public function mayUseMobileApp(): bool
     {
         return $this->status === 'active';

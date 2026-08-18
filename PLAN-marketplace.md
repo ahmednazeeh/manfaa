@@ -966,3 +966,59 @@ the branch. The suite caught it; the constraint now only ever says which
 kinds may NOT carry a branch.
 
 **Not in MP2:** the panels' UI, the customer-facing Market. MP4 onward.
+
+---
+
+## 15. MP3 — delivery rules and addresses (in progress)
+
+The per-branch, per-island matrix (§2.4) and the addresses it is measured
+against (§2.5). Still nothing a shopper can see: this is what a branch
+promises and where a customer says to bring it.
+
+**Server**
+
+- [x] Migration: `branch_delivery_rules` — a row per island a branch serves,
+      carrying the free-delivery threshold, the fee below it, an optional
+      floor, and the ETA to THAT island.
+- [x] Migration: `customer_addresses`, with the zone resolved from the pin
+      rather than typed.
+- [x] Models and relations.
+- [x] `DeliveryQuote` — given a branch, a destination zone and a basket
+      value, answer: does this branch serve there, what is the fee, is it
+      waived, is the minimum met, how far short.
+- [x] Merchant API: read and write one branch's matrix (add an island,
+      change its numbers, stop serving it).
+- [x] Customer API: address CRUD, default address, zone resolution.
+
+**Proof**
+
+- [x] Tests: the owner's worked example (§2.4) priced both directions; a
+      branch that does not serve an island; the threshold waiving the fee
+      exactly at the boundary; an unset floor never refusing; an address
+      outside every zone; a customer cannot read another's addresses.
+- [x] Full API suite green, pint clean.
+
+**Shipped 2026-08-18.** 14 delivery tests; full API suite **1457 green**;
+live behind the switch.
+
+Decisions taken in the build:
+
+- **The threshold is met AT the number, not past it.** "Free delivery over
+  500" that still charges at exactly 500 reads as broken whatever the
+  wording says. Pinned by a test at 49999 / 50000 / 50001.
+- **`DeliveryQuote` is the only place the arithmetic lives.** The store
+  page's chips, the subcart's fee line and the progress bar all read one
+  object, so the three cannot drift apart.
+- **A null zone is an honest answer, not an error.** The Maldives is bigger
+  than the islands we have drawn; an address outside all of them saves fine
+  and simply cannot be quoted for delivery yet.
+- **The typed island decides nothing.** It is kept verbatim as the
+  customer's own words, but the zone comes from the pin — the island a
+  courier drives to and the island a rule prices against must be the same
+  one, and free text cannot guarantee that.
+- Validation bug found and fixed: `sometimes` + `required_with` cancel each
+  other, so a lone `lat` reached the database constraint as a 500. The
+  constraint is the backstop; validation is the front stop, and the customer
+  deserves the 422.
+
+**Not in MP3:** carts, orders, any customer-facing Market surface.

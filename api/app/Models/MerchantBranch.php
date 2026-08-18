@@ -42,6 +42,15 @@ class MerchantBranch extends Model
         ];
     }
 
+    /**
+     * What this branch will deliver, and where to — one row per island it
+     * serves (PLAN-marketplace.md §2.4). No row means it does not go there.
+     */
+    public function deliveryRules(): HasMany
+    {
+        return $this->hasMany(BranchDeliveryRule::class, 'branch_id');
+    }
+
     public function merchant(): BelongsTo
     {
         return $this->belongsTo(Merchant::class);
