@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\EnsureMarketplaceEnabled;
 use App\Http\Middleware\EnsureMerchantPermission;
 use App\Http\Middleware\EnsureMerchantRole;
 use App\Http\Middleware\EnsureMobileToken;
@@ -39,6 +40,11 @@ return Application::configure(basePath: dirname(__DIR__))
             // four models do — so this is what proves which app is calling.
             // See EnsureMobileToken; no /api/mobile route may skip it.
             'mobile.token' => EnsureMobileToken::class,
+
+            // The marketplace kill switch. Every marketplace route wears it,
+            // so "hidden" is enforced by the server rather than trusted to
+            // four clients (PLAN-marketplace.md §10).
+            'marketplace' => EnsureMarketplaceEnabled::class,
         ]);
 
         // Origin sits behind nginx (same host) with Cloudflare in front;

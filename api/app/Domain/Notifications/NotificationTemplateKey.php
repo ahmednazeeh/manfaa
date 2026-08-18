@@ -69,6 +69,12 @@ enum NotificationTemplateKey: string
     // not have the app open — or installed — when it lands.
     case StoreApproved = 'store_approved';
 
+    // Marketplace enrolment outcomes (PLAN-marketplace.md §9). The merchant
+    // handed us identity documents and waited on a human; silence after
+    // that is the one thing this must not be.
+    case MarketplaceApproved = 'marketplace_approved';
+    case MarketplaceRejected = 'marketplace_rejected';
+
     public function label(): string
     {
         return match ($this) {
@@ -88,6 +94,8 @@ enum NotificationTemplateKey: string
             self::StorePaused => 'Store paused cashback',
             self::StoreResumed => 'Store resumed cashback',
             self::StoreApproved => 'Store approved',
+            self::MarketplaceApproved => 'Marketplace approved',
+            self::MarketplaceRejected => 'Marketplace not approved',
         };
     }
 
@@ -110,6 +118,8 @@ enum NotificationTemplateKey: string
             self::StoreChangeRejected => 'When an admin refuses a queued store change, with the reason. The store has to act, so this one earns an interruption.',
             self::StorePaused => 'When a store takes itself off the app. Goes to customers who have earned cashback there before, so they do not make a trip for an offer that is not running.',
             self::StoreResumed => 'When a store that had paused puts itself back on the app. Goes to the same customers — the ones who already know the shop.',
+            self::MarketplaceApproved => 'When an admin approves a store to sell on the marketplace. The shop can list products from that moment.',
+            self::MarketplaceRejected => 'When an admin refuses a marketplace application, with the reason. The store has to act, so it earns an interruption.',
             self::StoreApproved => 'When an admin approves a new store and it goes live. Sent by SMS as well as push — the merchant has been waiting on a decision and may not have the app open.',
         };
     }
@@ -168,8 +178,13 @@ enum NotificationTemplateKey: string
                 'store' => 'The store name',
                 'reason' => 'Why the change was refused',
             ],
-            self::StorePaused, self::StoreResumed, self::StoreApproved => [
+            self::StorePaused, self::StoreResumed, self::StoreApproved,
+            self::MarketplaceApproved => [
                 'store' => 'The store name',
+            ],
+            self::MarketplaceRejected => [
+                'store' => 'The store name',
+                'reason' => 'Why the application was refused',
             ],
         };
     }
@@ -191,7 +206,8 @@ enum NotificationTemplateKey: string
             self::StoreChangeApproved, self::StoreChangeRejected => true,
             // Customer-facing: these go to shoppers, not to the store's till.
             self::StorePaused, self::StoreResumed => false,
-            self::StoreApproved => true,
+            self::StoreApproved,
+            self::MarketplaceApproved, self::MarketplaceRejected => true,
         };
     }
 
@@ -269,6 +285,8 @@ enum NotificationTemplateKey: string
             self::StorePaused => ['en' => 'Cashback paused', 'dv' => 'ކޭޝްބެކް މެދުކެނޑިއްޖެ'],
             self::StoreResumed => ['en' => 'Cashback is back', 'dv' => 'ކޭޝްބެކް އަލުން ފެށިއްޖެ'],
             self::StoreApproved => ['en' => 'Store approved', 'dv' => 'ފިހާރަ ފާސްވެއްޖެ'],
+            self::MarketplaceApproved => ['en' => 'Marketplace approved', 'dv' => 'މާކެޓްޕްލޭސް ފާސްވެއްޖެ'],
+            self::MarketplaceRejected => ['en' => 'Application refused', 'dv' => 'ހުށަހެޅުން ބަލައިނުގަނެވުނު'],
         };
     }
 

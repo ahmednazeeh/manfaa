@@ -56,6 +56,12 @@ enum Permission: string
     // every customer in the country are not the same authority, and the
     // second one belongs with whoever answers for the shop.
     case StorePublication = 'store.publication';
+
+    // Opening the shop on the marketplace, and everything that follows from
+    // it — enrolment, KYB papers, the catalogue, delivery terms. Separate
+    // from profile.edit because it commits the business to selling online
+    // and to handing us identity documents.
+    case MarketplaceManage = 'marketplace.manage';
     case BrandingUpdate = 'branding.update';
 
     case BranchesView = 'branches.view';
@@ -131,6 +137,7 @@ enum Permission: string
             self::ProfileView => 'View the store profile',
             self::ProfileEdit => 'Edit the store profile',
             self::StorePublication => 'Pause and resume the store on the app',
+            self::MarketplaceManage => 'Manage the marketplace shop',
             self::BrandingUpdate => 'Change the store logo',
 
             self::BranchesView => 'View branches',
@@ -194,6 +201,7 @@ enum Permission: string
             self::ProfileView,
             self::ProfileEdit,
             self::StorePublication,
+            self::MarketplaceManage,
             self::BrandingUpdate,
             self::SetupView,
             self::SetupEdit,

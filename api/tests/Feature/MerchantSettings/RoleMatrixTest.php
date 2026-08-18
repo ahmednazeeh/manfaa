@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Domain\MerchantAccess\Permission;
 use App\Domain\MerchantSettings\StaffService;
+use App\Domain\Platform\PlatformConfig;
 use App\Models\Customer;
 use App\Models\Merchant;
 use App\Models\MerchantRate;
@@ -20,6 +21,12 @@ uses(TestCase::class, RefreshDatabase::class);
 
 beforeEach(function () {
     $this->seed(LedgerAccountSeeder::class);
+
+    // The marketplace kill switch wins over every permission by design: with
+    // it off, its routes 404 for everyone, so a permission gate behind it
+    // could never be the first answer. Switch it ON here so the matrix is
+    // actually testing authority rather than the switch.
+    app(PlatformConfig::class)->set('marketplace_enabled', 1);
 
     $this->merchant = Merchant::factory()->create([
         'validation_window_days' => 3,
@@ -169,6 +176,10 @@ function merchantPermissionMatrix(): array
         // The store's own on/off switch. 200: an active store may pause
         // itself with no queue and no admin — but only with the authority.
         'publication' => ['method' => 'POST', 'uri' => '/api/merchant/publication', 'payload' => ['published' => true], 'permission' => 'store.publication', 'allowed' => 200],
+        // Opening a shop on the marketplace: 200 for a permitted read of an
+        // enrolment that does not exist yet (state `not_enrolled`), 403
+        // without the authority.
+        'marketplace enrolment' => ['method' => 'GET', 'uri' => '/api/merchant/marketplace/enrolment', 'payload' => [], 'permission' => 'marketplace.manage', 'allowed' => 200],
         'setup read' => ['method' => 'GET', 'uri' => '/api/merchant/setup', 'payload' => [], 'permission' => 'setup.view', 'allowed' => 200],
         // The wizard's writes answer 409 setup_not_editable on an approved
         // store — past the wizard, but past it for a reason that is not

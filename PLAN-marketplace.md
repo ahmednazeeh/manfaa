@@ -860,34 +860,54 @@ enrolment, and the review queue that lets a store *become* a vendor.
 
 **Server**
 
-- [ ] Platform settings: `marketplace_enabled` (0/1, default **0**) and
+- [x] Platform settings: `marketplace_enabled` (0/1, default **0**) and
       `marketplace_fee_bp` (default **200** = 2.00%, wire name
       `marketplace_fee_percent` per the PERCENT_KEYS rule).
-- [ ] Migration: `merchant_marketplace_profiles` (§2.1).
-- [ ] Migration: `merchant_kyb_documents` (§2.1).
-- [ ] Models + casts, `Merchant::marketplace()` relation.
-- [ ] `store.marketplace` permission, owner-tier.
-- [ ] `EnsureMarketplaceEnabled` middleware — every marketplace route
+- [x] Migration: `merchant_marketplace_profiles` (§2.1).
+- [x] Migration: `merchant_kyb_documents` (§2.1).
+- [x] Models + casts, `Merchant::marketplace()` relation.
+- [x] `marketplace.manage` permission, owner-tier (named `marketplace.manage`,
+      not `store.marketplace`).
+- [x] `EnsureMarketplaceEnabled` middleware — every marketplace route
       refuses with a machine-readable code while the switch is off, so a
       hidden button that still answers cannot exist (§10).
-- [ ] Expose `marketplace_enabled` on `/mobile/v1/config` and both panel
+- [x] Expose `marketplace_enabled` on `/mobile/v1/config` and both panel
       bootstraps.
-- [ ] Merchant API: read enrolment state, opt in (business type, fulfilment,
+- [x] Merchant API: read enrolment state, opt in (business type, fulfilment,
       prep times), upload/replace/delete KYB documents, submit for review.
-- [ ] Admin API: KYB queue — list pending, show one with its documents,
+- [x] Admin API: KYB queue — list pending, show one with its documents,
       approve, reject with a reason.
-- [ ] Notification keys `kyb_approved` / `kyb_rejected`, seeded, push + SMS
-      (merchant moments text the store, 2026-08-18).
-- [ ] Document storage on the private disk, served through a signed route —
-      KYB papers are identity documents and never public.
+- [x] Notification keys `marketplace_approved` / `marketplace_rejected`,
+      seeded, push + SMS (merchant moments text the store, 2026-08-18).
+- [x] Document storage on the private disk, streamed through an
+      AUTHENTICATED route rather than a signed URL — a signed link can be
+      forwarded, and an identity document should stop at the account that
+      owns it. Replacing a paper deletes the file it supersedes.
 
 **Proof**
 
-- [ ] Tests: the switch refuses every marketplace route when off; a
+- [x] Tests: the switch refuses every marketplace route when off; a
       non-owner cannot enrol; a store cannot submit KYB twice; approval
       moves the state and notifies; rejection carries its reason; documents
       are unreadable without auth.
-- [ ] Full API suite green, pint clean.
+- [x] Full API suite green, pint clean.
+
+**Shipped 2026-08-18.** 18 marketplace tests; full API suite 1426 green;
+live behind the switch (`features.marketplace: false`, every marketplace
+route 404 to an authenticated caller).
+
+Two things learned in the build, worth carrying into MP2:
+
+- `EnrolmentService` reads the profile with a QUERY, never through
+  `$merchant->marketplace`. A relation is a snapshot of whenever it was
+  first touched, and enrolment moves several times inside one flow — the
+  cached null made "submit" report every document missing when the honest
+  answer was "you have not opted in". `NotEnrolledException` now separates
+  those two sentences.
+- The kill switch outranks permissions, so `RoleMatrixTest` turns it on.
+  With it off the routes 404 for everyone, and a permission gate behind a
+  404 can never be the first answer — which is correct, and had to be said
+  somewhere the matrix could see it.
 
 **Not in MP1:** any customer-visible surface, the catalogue, delivery rules,
 the panels' UI. Those are MP2+.

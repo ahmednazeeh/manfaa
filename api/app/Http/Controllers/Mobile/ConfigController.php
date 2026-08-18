@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Mobile;
 
 use App\Domain\Platform\AppReleaseConfig;
+use App\Domain\Platform\PlatformConfig;
 use App\Http\Controllers\Controller;
 use App\Http\Responses\CacheableJson;
 use Carbon\CarbonImmutable;
@@ -69,6 +70,13 @@ final class ConfigController extends Controller
                 // store, which credits the missed sale.
                 'features' => [
                     'customer_claims' => (bool) config('features.customer_claims'),
+                    // The marketplace kill switch (PLAN-marketplace.md §10).
+                    // Both apps read this to decide whether the Market tab,
+                    // the order-tracking section and every merchant
+                    // marketplace menu exist at all. The routes refuse
+                    // independently, so this is what stops a screen being
+                    // drawn — not what stops it working.
+                    'marketplace' => app(PlatformConfig::class)->marketplaceEnabled(),
                 ],
             ],
         ]);

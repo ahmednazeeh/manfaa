@@ -108,6 +108,29 @@ class Merchant extends Model
         return $this->hasMany(MerchantBranch::class);
     }
 
+    /** Marketplace enrolment — absent for a store that never opted in. */
+    public function marketplace(): HasOne
+    {
+        return $this->hasOne(MerchantMarketplaceProfile::class);
+    }
+
+    public function kybDocuments(): HasMany
+    {
+        return $this->hasMany(MerchantKybDocument::class);
+    }
+
+    /**
+     * Selling on the marketplace right now.
+     *
+     * Deliberately asks BOTH questions: the store must be trading as a
+     * merchant at all (active, not suspended, not paused by its own owner)
+     * AND enrolled and approved as a vendor. Neither implies the other.
+     */
+    public function sellsOnMarketplace(): bool
+    {
+        return $this->isPublished() && ($this->marketplace?->isLive() ?? false);
+    }
+
     public function users(): HasMany
     {
         return $this->hasMany(MerchantUser::class);

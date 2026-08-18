@@ -51,6 +51,16 @@ final class PlatformConfig
         // on the due date would qualify. Capped at 15 so it can never be
         // set beyond the clock itself.
         'prompt_discount_max_age_days' => ['default' => 10, 'min' => 1, 'max' => 15],
+        // MARKETPLACE (PLAN-marketplace.md §10). A 0/1 flag rather than a
+        // new settings mechanism: the table stores integers, and a boolean
+        // is an integer with a narrow range. OFF until launch — and "off"
+        // means every marketplace route refuses and every surface hides it,
+        // not merely that the buttons are grey.
+        'marketplace_enabled' => ['default' => 0, 'min' => 0, 'max' => 1],
+        // The platform's cut of a marketplace order, charged on items and
+        // never on delivery (§5.1). 2.00% by owner decision. A store may be
+        // given its own rate; null there means "follow this".
+        'marketplace_fee_bp' => ['default' => 200, 'min' => 0, 'max' => 2000],
     ];
 
     /**
@@ -73,11 +83,30 @@ final class PlatformConfig
      */
     public const array PERCENT_KEYS = [
         'prompt_discount_rate_bp' => 'prompt_discount_rate_percent',
+        'marketplace_fee_bp' => 'marketplace_fee_percent',
     ];
 
     public function minPayoutLaari(): int
     {
         return $this->get('min_payout_laari');
+    }
+
+    /**
+     * Is the marketplace switched on at all?
+     *
+     * Read by the middleware in front of every marketplace route and
+     * published to both apps and both panels, so one setting decides what
+     * the platform will answer AND what any surface will draw.
+     */
+    public function marketplaceEnabled(): bool
+    {
+        return $this->get('marketplace_enabled') === 1;
+    }
+
+    /** The platform's default cut of a marketplace order, in basis points. */
+    public function marketplaceFeeBp(): int
+    {
+        return $this->get('marketplace_fee_bp');
     }
 
     public function settlementDueDays(): int
