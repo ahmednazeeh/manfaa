@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Merchant;
 
-use App\Rules\MaxWords;
 use App\Domain\Approvals\ChangeRequestService;
 use App\Domain\Money\Percent;
 use App\Domain\Onboarding\OnboardingException;
@@ -14,6 +13,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\MerchantChangeRequestResource;
 use App\Models\Merchant;
 use App\Models\MerchantUser;
+use App\Rules\MaxWords;
 use App\Rules\PercentRate;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -83,6 +83,10 @@ class SetupController extends Controller
         $validated = $request->validate([
             'lat' => ['required', 'numeric', 'between:-90,90'],
             'lng' => ['required', 'numeric', 'between:-180,180'],
+            // The pin and the words that go with it are set together — the
+            // step that drops the pin is the one that knows the address, and
+            // the wizard offers it pre-filled from the pin.
+            'address' => ['required', 'string', 'max:1000'],
         ]);
 
         $merchant = $this->merchant($request);

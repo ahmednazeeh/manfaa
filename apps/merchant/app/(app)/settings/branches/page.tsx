@@ -20,6 +20,7 @@ import {
   useDeleteBranch,
   useMe,
   usePendingBranchChanges,
+  useReverseGeocode,
   useUpdateBranch,
 } from '@/lib/queries';
 import { Alert, AlertIcon, AlertTitle } from '@/components/ui/alert';
@@ -128,7 +129,7 @@ function BranchDialog({
   onOpenChange: (open: boolean) => void;
   onSubmit: (body: {
     name: string;
-    address: string | null;
+    address: string;
     lat: number | null;
     lng: number | null;
   }) => void;
@@ -137,8 +138,12 @@ function BranchDialog({
   // The parent remounts this dialog (via `key`) whenever it opens, so the
   // initial values are fresh per open.
   const [form, setForm] = useState(initial);
+  const geocode = useReverseGeocode();
 
-  const canSubmit = form.name.trim() !== '' && !busy;
+  // Address joined name as required (owner decision 2026-08-18): a pin with
+  // no address reads as a coordinate in every map app we hand off to.
+  const canSubmit =
+    form.name.trim() !== '' && form.address.trim() !== '' && !busy;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -181,15 +186,58 @@ function BranchDialog({
             />
           </div>
           <div className="flex flex-col gap-2.5">
-            <Label htmlFor="branch-address">{t('branches.addressLabel')}</Label>
+            <div className="flex items-center justify-between gap-2.5">
+              <Label htmlFor="branch-address">
+                {t('branches.addressLabel')}
+              </Label>
+              {form.pin !== null && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  disabled={geocode.isPending}
+                  onClick={() => {
+                    const pin = form.pin;
+                    if (pin === null) return;
+                    geocode.mutate(
+                      { lat: pin.lat, lng: pin.lng },
+                      {
+                        onSuccess: (address) => {
+                          if (address === null) {
+                            toast.info(t('branches.addressFromPinEmpty'));
+                            return;
+                          }
+                          // Pre-fill, never overwrite silently: the merchant
+                          // sees it land in a field they can retype.
+                          setForm((current) => ({ ...current, address }));
+                        },
+                        onError: () =>
+                          toast.info(t('branches.addressFromPinEmpty')),
+                      },
+                    );
+                  }}
+                >
+                  {geocode.isPending ? (
+                    <LoaderCircle className="animate-spin" />
+                  ) : (
+                    <MapPin />
+                  )}
+                  {t('branches.addressFromPin')}
+                </Button>
+              )}
+            </div>
             <Input
               id="branch-address"
               value={form.address}
               maxLength={1000}
+              placeholder={t('branches.addressPlaceholder')}
               onChange={(event) =>
                 setForm({ ...form, address: event.target.value })
               }
             />
+            <p className="text-xs text-muted-foreground">
+              {t('branches.addressHint')}
+            </p>
           </div>
           <div className="flex flex-col gap-2.5">
             <div className="flex items-center justify-between gap-2.5">
@@ -223,8 +271,7 @@ function BranchDialog({
             onClick={() =>
               onSubmit({
                 name: form.name.trim(),
-                address:
-                  form.address.trim() === '' ? null : form.address.trim(),
+                address: form.address.trim(),
                 lat: form.pin?.lat ?? null,
                 lng: form.pin?.lng ?? null,
               })

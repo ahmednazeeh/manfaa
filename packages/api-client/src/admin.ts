@@ -273,6 +273,42 @@ export function setAdminMerchantFeatured(
   );
 }
 
+/**
+ * PATCH /api/admin/merchants/{merchant}/branches/{branch} — correct a branch
+ * (owner request 2026-08-18).
+ *
+ * A DIRECT write, not a change request: MR9 queues what a MERCHANT proposes
+ * so an admin can judge it, and this is the admin. The case that asked for
+ * it is a wrong address — merchants type these by hand, and a wrong one
+ * sends customers to the wrong door — but the pin and the name are the same
+ * class of public mistake, so all three are repairable here.
+ */
+export const AdminBranchUpdateResponseSchema = dataWrapped(
+  z.object({
+    id: z.number().int(),
+    name: z.string(),
+    address: z.string().nullable(),
+    lat: z.number().nullable(),
+    lng: z.number().nullable(),
+  }),
+);
+export type AdminBranchUpdateResponse = z.infer<
+  typeof AdminBranchUpdateResponseSchema
+>;
+
+export function updateAdminMerchantBranch(
+  merchantId: number,
+  branchId: number,
+  body: { name?: string; address?: string; lat?: number | null; lng?: number | null },
+  options: RequestOptions = {},
+): Promise<AdminBranchUpdateResponse> {
+  return apiFetch(
+    `/api/admin/merchants/${merchantId}/branches/${branchId}`,
+    AdminBranchUpdateResponseSchema,
+    { method: 'PATCH', body, signal: options.signal },
+  );
+}
+
 export const MerchantNoticeTypeSchema = z.enum([
   'reminder_day10',
   'urgent_day13',

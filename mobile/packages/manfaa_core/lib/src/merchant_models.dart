@@ -797,6 +797,30 @@ class MerchantCreditResult {
 
 /// GET/PATCH /merchant/profile — the store's public identity
 /// (MerchantProfileResource, verbatim). The slug never moves with a rename:
+/// The answer to POST /merchant/publication — the store's own on/off switch.
+class StorePublication {
+  const StorePublication({
+    required this.published,
+    required this.unpublishedAt,
+    required this.customersNotified,
+  });
+
+  factory StorePublication.fromJson(Map<String, dynamic> json) =>
+      StorePublication(
+        published: json['published'] as bool? ?? true,
+        unpublishedAt: json['unpublished_at'] as String?,
+        customersNotified: json['customers_notified'] as bool? ?? false,
+      );
+
+  final bool published;
+  final String? unpublishedAt;
+
+  /// Whether THIS call reached any customer. False means either nothing
+  /// changed, or the day's message has already gone out — the screen says
+  /// so rather than letting the merchant assume a broadcast.
+  final bool customersNotified;
+}
+
 /// it is the address on every shared link and printed card.
 class MerchantProfile {
   MerchantProfile({
@@ -805,6 +829,7 @@ class MerchantProfile {
     this.nameDv,
     required this.slug,
     required this.status,
+    this.published = true,
     this.category,
     required this.categoryRetired,
     required this.channel,
@@ -824,6 +849,10 @@ class MerchantProfile {
         nameDv: json['name_dv'] as String?,
         slug: _s(json['slug']),
         status: _s(json['status']),
+        // Defaults TRUE for an older server that does not send the key: a
+        // store the app cannot prove is paused is treated as trading, which
+        // is the state it was in before this field existed.
+        published: json['published'] as bool? ?? true,
         category: json['category'] as String?,
         categoryRetired: json['category_retired'] as bool? ?? false,
         channel: _s(json['channel']),
@@ -847,6 +876,11 @@ class MerchantProfile {
 
   /// draft | pending_review | rejected | active | suspended | closed.
   final String status;
+
+  /// On the app right now. INDEPENDENT of [status]: publication is the
+  /// merchant's own switch and status is the account lifecycle, so an
+  /// `active` store may be paused. Never infer one from the other.
+  final bool published;
 
   /// A curated category slug, or null while unpicked.
   final String? category;

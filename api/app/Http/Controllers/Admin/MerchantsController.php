@@ -216,6 +216,53 @@ class MerchantsController extends Controller
      * The append-only notice trail for one merchant — the evidence that every
      * §7 clock step was recorded.
      */
+    /**
+     * Correct one branch (owner request 2026-08-18).
+     *
+     * Admins already SEE the estate on the merchant sheet; this lets them
+     * fix it. The case that asked for it is an address — merchants type
+     * these by hand, and a wrong one sends customers to the wrong door — but
+     * the pin and the branch name are the same class of public-facing
+     * mistake, so the same screen repairs all three.
+     *
+     * A direct write, not a change request: MR9 queues what a MERCHANT
+     * proposes so an admin can judge it. This IS the admin. Discovery is
+     * invalidated on the way out, because the address the customer reads is
+     * served from that cache.
+     */
+    public function updateBranch(Request $request, Merchant $merchant, int $branch): JsonResponse
+    {
+        $validated = $request->validate([
+            'name' => ['sometimes', 'string', 'max:255'],
+            'address' => ['sometimes', 'string', 'max:1000'],
+            'lat' => ['sometimes', 'nullable', 'numeric', 'between:-90,90'],
+            'lng' => ['sometimes', 'nullable', 'numeric', 'between:-180,180'],
+        ]);
+
+        $row = $merchant->branches()->whereKey($branch)->firstOrFail();
+
+        // The pair rule the merchant's own endpoint enforces, enforced here
+        // too: half a coordinate places a pin in the sea off Africa.
+        $lat = array_key_exists('lat', $validated) ? $validated['lat'] : $row->lat;
+        $lng = array_key_exists('lng', $validated) ? $validated['lng'] : $row->lng;
+
+        if (($lat === null) !== ($lng === null)) {
+            abort(422, 'lat and lng must be provided together or both be null.');
+        }
+
+        $row->fill($validated)->save();
+
+        DiscoveryService::forgetMerchant($merchant);
+
+        return new JsonResponse(['data' => [
+            'id' => $row->id,
+            'name' => $row->name,
+            'address' => $row->address,
+            'lat' => $row->lat === null ? null : (float) $row->lat,
+            'lng' => $row->lng === null ? null : (float) $row->lng,
+        ]]);
+    }
+
     public function notices(Merchant $merchant): JsonResponse
     {
         $notices = MerchantNotice::query()

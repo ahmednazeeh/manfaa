@@ -271,6 +271,18 @@ void main() {
     // sheet's own name field follows it in tree order.
     await tester.enterText(find.byType(TextField).at(1), 'Tropical Mart — Addu');
     await tester.pumpAndSettle();
+
+    // Address is REQUIRED now (owner decision 2026-08-18) and the dialog
+    // refuses before the wire — so a save with only a name must not queue.
+    await tester.tap(find.text('Add branch').last);
+    await tester.pumpAndSettle();
+    expect(find.text("New branch sent for Manfaa's review"), findsNothing);
+
+    await tester.enterText(
+      find.byType(TextField).at(2),
+      'Majeedhee Magu, Hithadhoo',
+    );
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Add branch').last);
     await tester.pumpAndSettle();
 

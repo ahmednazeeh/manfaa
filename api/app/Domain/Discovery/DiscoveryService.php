@@ -608,6 +608,11 @@ final class DiscoveryService
 
         $merchants = Merchant::query()
             ->where('status', 'active')
+            // Self-unpublished stores vanish from every shelf, the directory
+            // and search alike (owner decision 2026-08-18). Listing a store
+            // that is not offering cashback is the one thing discovery must
+            // never do — the customer walks there for nothing.
+            ->whereNull('unpublished_at')
             ->when($q !== null, fn ($query) => $query->where(
                 'name',
                 'ilike',
@@ -726,6 +731,12 @@ final class DiscoveryService
 
         $merchant = Merchant::query()
             ->where('status', 'active')
+            // Same rule as the shelves, and for the same reason the 404 is
+            // indistinguishable from a missing slug: an unpublished store is
+            // not the public's business, and a store page that resolved
+            // while the shelves hid it would be a link that outlives the
+            // decision to take it down.
+            ->whereNull('unpublished_at')
             ->where('slug', $slug)
             ->first(['id', 'name', 'name_dv', 'slug', 'category', 'logo_path', 'featured', 'channel', 'eligibility_basis', 'description', 'description_dv', 'contact_phone', 'support_phone', 'website_url', 'created_at']);
 

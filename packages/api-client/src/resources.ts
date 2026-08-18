@@ -376,6 +376,10 @@ export type TransactionOrigin = z.infer<typeof TransactionOriginSchema>;
  *                           eligible sale; recorded, zeroed, closed
  *   merchant_suspended      ApiCreditService — §7 suspended store; ingested
  *                           and recorded ineligible so the till sees truth
+ *   merchant_unpublished    ApiCreditService — the store PAUSED ITSELF
+ *                           (2026-08-18); same ingestion semantics as a
+ *                           suspension, a different sentence to the reader:
+ *                           nothing is wrong with the account
  *   settlement_allocated    LineAllocator — the store's payment covered this
  *                           line, so the reward confirmed
  *   payout_completed        ItemResultService — the bank confirmed the
@@ -402,6 +406,7 @@ export const TRANSACTION_REASON_CODES = [
   'backdated_final',
   'below_minimum',
   'merchant_suspended',
+  'merchant_unpublished',
   'settlement_allocated',
   'payout_completed',
   'merchant_default_90d',

@@ -54,6 +54,15 @@ enum NotificationTemplateKey: string
     case StoreChangeApproved = 'store_change_approved';
     case StoreChangeRejected = 'store_change_rejected';
 
+    // A store took ITSELF off the app, or put itself back (owner decision
+    // 2026-08-18). Reaches the customers who have actually earned cashback
+    // there — someone who has shopped at a store has a reason to be told it
+    // has paused, and someone who never has does not. Rate-limited to one of
+    // each per store per day, in the database, so a merchant playing with
+    // the switch cannot turn it into a broadcast.
+    case StorePaused = 'store_paused';
+    case StoreResumed = 'store_resumed';
+
     public function label(): string
     {
         return match ($this) {
@@ -70,6 +79,8 @@ enum NotificationTemplateKey: string
             self::DueDay15 => 'Day-15 payment due',
             self::StoreChangeApproved => 'Store change approved',
             self::StoreChangeRejected => 'Store change rejected',
+            self::StorePaused => 'Store paused cashback',
+            self::StoreResumed => 'Store resumed cashback',
         };
     }
 
@@ -90,6 +101,8 @@ enum NotificationTemplateKey: string
             self::DueDay15 => 'The §7 ladder\'s day-15 payment-due notice. Automatic suspension follows on day 16, so this one earns an interruption.',
             self::StoreChangeApproved => 'When an admin approves a queued store change — a profile edit, a logo, a new or changed branch. The change is live at that moment.',
             self::StoreChangeRejected => 'When an admin refuses a queued store change, with the reason. The store has to act, so this one earns an interruption.',
+            self::StorePaused => 'When a store takes itself off the app. Goes to customers who have earned cashback there before, so they do not make a trip for an offer that is not running.',
+            self::StoreResumed => 'When a store that had paused puts itself back on the app. Goes to the same customers — the ones who already know the shop.',
         };
     }
 
@@ -147,6 +160,9 @@ enum NotificationTemplateKey: string
                 'store' => 'The store name',
                 'reason' => 'Why the change was refused',
             ],
+            self::StorePaused, self::StoreResumed => [
+                'store' => 'The store name',
+            ],
         };
     }
 
@@ -165,6 +181,26 @@ enum NotificationTemplateKey: string
             self::PromptDiscountExpiring, self::SettlementDueSoon,
             self::ReminderDay10, self::UrgentDay13, self::DueDay15,
             self::StoreChangeApproved, self::StoreChangeRejected => true,
+            // Customer-facing: these go to shoppers, not to the store's till.
+            self::StorePaused, self::StoreResumed => false,
+        };
+    }
+
+    /**
+     * Whether this moment may spend an SMS.
+     *
+     * SMS costs money per message and interrupts a phone that may not have
+     * the app on it, so it is reserved for moments about the CUSTOMER'S OWN
+     * money — cashback earned, confirmed, paid out. A store pausing is news
+     * about someone else's shop: worth a push to the people who know that
+     * shop, never worth texting every one of them, least of all on a switch
+     * the merchant controls and we do not pay for.
+     */
+    public function usesSms(): bool
+    {
+        return match ($this) {
+            self::StorePaused, self::StoreResumed => false,
+            default => true,
         };
     }
 
@@ -195,6 +231,8 @@ enum NotificationTemplateKey: string
             self::DueDay15 => ['en' => 'Payment due', 'dv' => 'ފައިސާ ދައްކަންޖެހޭ'],
             self::StoreChangeApproved => ['en' => 'Change approved', 'dv' => 'ބަދަލު ފާސްވެއްޖެ'],
             self::StoreChangeRejected => ['en' => 'Change refused', 'dv' => 'ބަދަލު ބަލައިނުގަނެވުނު'],
+            self::StorePaused => ['en' => 'Cashback paused', 'dv' => 'ކޭޝްބެކް މެދުކެނޑިއްޖެ'],
+            self::StoreResumed => ['en' => 'Cashback is back', 'dv' => 'ކޭޝްބެކް އަލުން ފެށިއްޖެ'],
         };
     }
 

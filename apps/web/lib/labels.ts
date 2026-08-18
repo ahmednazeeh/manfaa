@@ -50,6 +50,7 @@ const REASON_KEYS: Record<CustomerStatusReasonKey, string> = {
   backdated_final: 'reasons.backdated_final',
   below_minimum: 'reasons.below_minimum',
   merchant_suspended: 'reasons.merchant_suspended',
+  merchant_unpublished: 'reasons.merchant_unpublished',
   settlement_allocated: 'reasons.settlement_allocated',
   payout_completed: 'reasons.payout_completed',
   merchant_default_90d: 'reasons.merchant_not_settled',

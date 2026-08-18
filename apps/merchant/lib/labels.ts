@@ -62,6 +62,7 @@ const REASON_KEYS: Record<TransactionReasonCode, string> = {
   backdated_final: 'labels.reason.backdated_final',
   below_minimum: 'labels.reason.below_minimum',
   merchant_suspended: 'labels.reason.merchant_suspended',
+  merchant_unpublished: 'labels.reason.merchant_unpublished',
   settlement_allocated: 'labels.reason.settlement_allocated',
   payout_completed: 'labels.reason.payout_completed',
   merchant_default_90d: 'labels.reason.merchant_default_90d',

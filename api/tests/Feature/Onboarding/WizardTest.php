@@ -184,7 +184,7 @@ it('validates the profile step against the curated list and the channel enum', f
 it('pins the primary branch, creating it once and MOVING it on every later visit', function () {
     $owner = wizardOwner(['name' => 'Reef Mart']);
 
-    $this->patchJson('/api/merchant/setup/location', ['lat' => 4.1755, 'lng' => 73.5093])
+    $this->patchJson('/api/merchant/setup/location', ['lat' => 4.1755, 'lng' => 73.5093, 'address' => 'Majeedhee Magu, Malé'])
         ->assertOk()
         ->assertJsonPath('data.steps.location', true)
         // No branch name is asked for in the wizard: the first pin takes the
@@ -196,7 +196,7 @@ it('pins the primary branch, creating it once and MOVING it on every later visit
     // Walking back through the step is one click on the step indicator, and
     // the owner does it on every resume. The pin moves; the branch count
     // does not.
-    $this->patchJson('/api/merchant/setup/location', ['lat' => 4.2, 'lng' => 73.6])->assertOk();
+    $this->patchJson('/api/merchant/setup/location', ['lat' => 4.2, 'lng' => 73.6, 'address' => 'Majeedhee Magu, Malé'])->assertOk();
 
     $branches = MerchantBranch::query()->where('merchant_id', $owner->merchant->id)->get();
     expect($branches)->toHaveCount(1)
@@ -209,7 +209,7 @@ it('moves the LOWEST-id branch — the primary one — and leaves the rest alone
     $primary = MerchantBranch::factory()->for($owner->merchant)->create(['lat' => null, 'lng' => null]);
     $other = MerchantBranch::factory()->for($owner->merchant)->create(['lat' => 4.3, 'lng' => 73.4]);
 
-    $this->patchJson('/api/merchant/setup/location', ['lat' => 4.1755, 'lng' => 73.5093])->assertOk();
+    $this->patchJson('/api/merchant/setup/location', ['lat' => 4.1755, 'lng' => 73.5093, 'address' => 'Majeedhee Magu, Malé'])->assertOk();
 
     expect((float) $primary->refresh()->lat)->toBe(4.1755)
         ->and((float) $other->refresh()->lat)->toBe(4.3)
@@ -219,10 +219,10 @@ it('moves the LOWEST-id branch — the primary one — and leaves the rest alone
 it('requires a complete, bounded coordinate pair — this step exists to set a pin', function () {
     wizardOwner();
 
-    $this->patchJson('/api/merchant/setup/location', ['lat' => 4.1755])->assertUnprocessable();
-    $this->patchJson('/api/merchant/setup/location', ['lng' => 73.5093])->assertUnprocessable();
-    $this->patchJson('/api/merchant/setup/location', ['lat' => 91, 'lng' => 73.5093])->assertUnprocessable();
-    $this->patchJson('/api/merchant/setup/location', ['lat' => 4.1755, 'lng' => 181])->assertUnprocessable();
+    $this->patchJson('/api/merchant/setup/location', ['lat' => 4.1755, 'address' => 'Majeedhee Magu, Malé'])->assertUnprocessable();
+    $this->patchJson('/api/merchant/setup/location', ['lng' => 73.5093, 'address' => 'Majeedhee Magu, Malé'])->assertUnprocessable();
+    $this->patchJson('/api/merchant/setup/location', ['lat' => 91, 'lng' => 73.5093, 'address' => 'Majeedhee Magu, Malé'])->assertUnprocessable();
+    $this->patchJson('/api/merchant/setup/location', ['lat' => 4.1755, 'lng' => 181, 'address' => 'Majeedhee Magu, Malé'])->assertUnprocessable();
 
     expect(MerchantBranch::query()->count())->toBe(0);
 });
@@ -233,7 +233,7 @@ it('locks every wizard write while the store is pending review', function () {
 
     $this->patchJson('/api/merchant/setup/profile', ['category' => 'grocery'])
         ->assertStatus(409)->assertJsonPath('code', 'setup_not_editable');
-    $this->patchJson('/api/merchant/setup/location', ['lat' => 4.1755, 'lng' => 73.5093])
+    $this->patchJson('/api/merchant/setup/location', ['lat' => 4.1755, 'lng' => 73.5093, 'address' => 'Majeedhee Magu, Malé'])
         ->assertStatus(409)->assertJsonPath('code', 'setup_not_editable');
     $this->patchJson('/api/merchant/setup/rate', ['cashback_rate_percent' => '2.00'])
         ->assertStatus(409)->assertJsonPath('code', 'setup_not_editable');

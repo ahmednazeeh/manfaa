@@ -61,7 +61,22 @@ class Merchant extends Model
             'submitted_at' => 'immutable_datetime',
             'approved_at' => 'immutable_datetime',
             'rejected_at' => 'immutable_datetime',
+            'unpublished_at' => 'immutable_datetime',
+            'unpublish_notified_at' => 'immutable_datetime',
+            'republish_notified_at' => 'immutable_datetime',
         ];
+    }
+
+    /**
+     * Publicly listed RIGHT NOW: approved, still trading, and not taken down
+     * by its own owner. The two halves are independent — an unpublished
+     * store is not suspended, and a suspended store is not unpublished — so
+     * every public query must ask both. This is the one place that spells
+     * the answer out.
+     */
+    public function isPublished(): bool
+    {
+        return $this->status === 'active' && $this->unpublished_at === null;
     }
 
     /**

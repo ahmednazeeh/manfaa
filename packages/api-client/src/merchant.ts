@@ -970,6 +970,15 @@ export const MerchantProfileSchema = z.object({
   name_dv: z.string().nullable().catch(null),
   slug: z.string(),
   status: MerchantStatusSchema,
+  /**
+   * Whether the store is on the app RIGHT NOW. Independent of `status`: a
+   * store may be `active` and unpublished, because publication is the
+   * merchant's own switch and status is the account lifecycle. Read this,
+   * never infer it from status.
+   */
+  published: z.boolean().catch(true),
+  /** When the store took itself off; null while it is published. */
+  unpublished_at: z.string().nullable().catch(null),
   category: z.string().nullable(),
   /**
    * True when the store still holds a curated category the superadmin has
@@ -1208,6 +1217,41 @@ export type MerchantBranchListResponse = z.infer<
   typeof MerchantBranchListResponseSchema
 >;
 
+/**
+ * POST /api/merchant/publication — the store's own on/off switch. No review
+ * queue in either direction (owner decision 2026-08-18).
+ *
+ * `customers_notified` reports whether THIS call reached anyone: the
+ * platform sends at most one pause and one resume message per store per day,
+ * so a second toggle is honoured but silent, and the panel says so rather
+ * than letting the merchant assume a broadcast went out.
+ */
+export const MerchantPublicationResponseSchema = dataWrapped(
+  z.object({
+    published: z.boolean(),
+    unpublished_at: z.string().nullable(),
+    customers_notified: z.boolean(),
+  }),
+);
+export type MerchantPublicationResponse = z.infer<
+  typeof MerchantPublicationResponseSchema
+>;
+
+/**
+ * GET /api/merchant/branches/reverse-geocode — the pin, in words.
+ *
+ * `address` is null when the geocoder had nothing for that spot or was
+ * unreachable; that is an ordinary answer, not an error. The merchant types
+ * the address instead, and the field they type into is the authority either
+ * way — this only ever pre-fills it.
+ */
+export const ReverseGeocodeResponseSchema = dataWrapped(
+  z.object({ address: z.string().nullable() }),
+);
+export type ReverseGeocodeResponse = z.infer<
+  typeof ReverseGeocodeResponseSchema
+>;
+
 export const MerchantBranchResponseSchema = dataWrapped(MerchantBranchSchema);
 export type MerchantBranchResponse = z.infer<
   typeof MerchantBranchResponseSchema
@@ -1220,7 +1264,14 @@ export type MerchantBranchResponse = z.infer<
  */
 export const CreateMerchantBranchRequestSchema = z.object({
   name: z.string().min(1).max(255),
-  address: z.string().max(1000).nullable().optional(),
+  /**
+   * REQUIRED on create (owner decision 2026-08-18). A branch on the map with
+   * no address is a pin a customer cannot read — the map app we hand off to
+   * titles a bare coordinate with the coordinate itself. Optional on UPDATE
+   * (the partial below), so a PATCH that only moves the pin need not resend
+   * it; the server refuses an empty one either way.
+   */
+  address: z.string().min(1).max(1000),
   lat: z.number().min(-90).max(90).nullable().optional(),
   lng: z.number().min(-180).max(180).nullable().optional(),
 });
@@ -1268,6 +1319,43 @@ function branchSaveResult(
   return 'change_request' in response.data
     ? { queued: response.data.change_request, branch: null }
     : { queued: null, branch: response.data };
+}
+
+/**
+ * POST /api/merchant/publication — take the store off the app, or put it
+ * back. No review either way; see the response schema for the daily cap on
+ * customer messages.
+ */
+export async function setMerchantPublication(
+  published: boolean,
+  options: RequestOptions = {},
+): Promise<MerchantPublicationResponse['data']> {
+  const response = await apiFetch(
+    '/api/merchant/publication',
+    MerchantPublicationResponseSchema,
+    { method: 'POST', body: { published }, signal: options.signal },
+  );
+
+  return response.data;
+}
+
+/**
+ * GET /api/merchant/branches/reverse-geocode — the words for a dropped pin.
+ * Returns null when nothing is known about that spot; the caller pre-fills
+ * an editable field with it and never blocks on it.
+ */
+export async function reverseGeocodeBranchPin(
+  lat: number,
+  lng: number,
+  options: RequestOptions = {},
+): Promise<string | null> {
+  const response = await apiFetch(
+    `/api/merchant/branches/reverse-geocode?lat=${lat}&lng=${lng}`,
+    ReverseGeocodeResponseSchema,
+    { signal: options.signal },
+  );
+
+  return response.data.address;
 }
 
 /** POST /api/merchant/branches — creates a branch (201), or queues one (202). */

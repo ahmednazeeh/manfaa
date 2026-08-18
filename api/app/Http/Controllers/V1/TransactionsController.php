@@ -164,7 +164,9 @@ class TransactionsController extends V1Controller
         }
 
         [$status, $httpStatus] = match ($transaction->reason_code) {
-            'merchant_suspended' => ['recorded_ineligible', 200],
+            // Both mean the same thing to a till: recorded, priced at zero.
+            // Why it was zero is in reason_code, which the response carries.
+            'merchant_suspended', 'merchant_unpublished' => ['recorded_ineligible', 200],
             'below_minimum' => ['below_minimum', 200],
             default => ['created', 201],
         };

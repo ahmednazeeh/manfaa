@@ -162,6 +162,16 @@ class ProfileScreen extends ConsumerWidget {
           categoryLabel: categoryLabel,
         ),
       ],
+      // The store's own on/off switch (owner decision 2026-08-18). Only for
+      // a store that HAS something to pause — before approval there is
+      // nothing on the app to take down — and only for staff who hold the
+      // authority: going dark to every customer in the country is not the
+      // same power as editing a phone number.
+      if (profile.status == 'active' &&
+          ref.watch(sessionProvider).can('store.publication')) ...[
+        const SizedBox(height: Gap.lg),
+        _VisibilityCard(profile: profile),
+      ],
       const SizedBox(height: Gap.lg),
       ManfaaCard(
         padding: const EdgeInsets.symmetric(
@@ -257,6 +267,131 @@ class ProfileScreen extends ConsumerWidget {
 /// A full-width paragraph row: icon tile, label, and the text underneath —
 /// the shape a description or the terms text needs, where a value squeezed
 /// into the end column would ellipsize away the whole point.
+/// Pause / resume, with the consequence stated before the tap that causes
+/// it. The confirm exists for one direction only: pausing goes dark to every
+/// customer and messages the ones who have earned here, while resuming just
+/// puts things back.
+class _VisibilityCard extends ConsumerStatefulWidget {
+  const _VisibilityCard({required this.profile});
+
+  final MerchantProfile profile;
+
+  @override
+  ConsumerState<_VisibilityCard> createState() => _VisibilityCardState();
+}
+
+class _VisibilityCardState extends ConsumerState<_VisibilityCard> {
+  var _busy = false;
+
+  Future<void> _toggle() async {
+    final l10n = context.l10n;
+    final messenger = ScaffoldMessenger.of(context);
+    final published = widget.profile.published;
+
+    if (published) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text(l10n.visibilityPauseConfirm),
+          content: Text(l10n.visibilityPauseConfirmBody),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: Text(l10n.cancel),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: Text(l10n.visibilityPause),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true) return;
+    }
+
+    setState(() => _busy = true);
+    try {
+      final result = await ref.read(apiProvider).setPublished(!published);
+      ref.invalidate(profileProvider);
+      if (!mounted) return;
+      // Say whether anyone was actually told: at most one message of each
+      // kind goes out per day, so a second toggle is honoured but silent.
+      messenger.showSnackBar(SnackBar(
+        content: Text(switch ((result.published, result.customersNotified)) {
+          (true, true) => l10n.visibilityResumedNotified,
+          (true, false) => l10n.visibilityResumed,
+          (false, true) => l10n.visibilityPausedNotified,
+          (false, false) => l10n.visibilityPaused,
+        }),
+      ));
+    } catch (e) {
+      if (!mounted) return;
+      messenger.showSnackBar(SnackBar(
+        content: Text(e is MobileApiException ? e.message : l10n.errorGeneric),
+      ));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    final theme = Theme.of(context);
+    final published = widget.profile.published;
+
+    return ManfaaCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              IconTile(
+                published
+                    ? Icons.visibility_outlined
+                    : Icons.visibility_off_outlined,
+                tint: published ? ManfaaTint.green : ManfaaTint.amber,
+                size: 36,
+                iconSize: 18,
+              ),
+              const SizedBox(width: Gap.md),
+              Expanded(
+                child: Text(
+                  l10n.visibilityTitle,
+                  style: theme.textTheme.titleSmall,
+                ),
+              ),
+              StatusChip(
+                label: published ? l10n.visibilityOn : l10n.visibilityOff,
+                tone: published ? StatusTone.confirmed : StatusTone.pending,
+              ),
+            ],
+          ),
+          const SizedBox(height: Gap.md),
+          Text(
+            published ? l10n.visibilityOnHint : l10n.visibilityOffHint,
+            style: theme.textTheme.bodySmall
+                ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+          ),
+          const SizedBox(height: Gap.md),
+          SizedBox(
+            width: double.infinity,
+            child: published
+                ? OutlinedButton(
+                    onPressed: _busy ? null : _toggle,
+                    child: Text(l10n.visibilityPause),
+                  )
+                : FilledButton(
+                    onPressed: _busy ? null : _toggle,
+                    child: Text(l10n.visibilityResume),
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _TextBlock extends StatelessWidget {
   const _TextBlock({
     required this.icon,

@@ -731,11 +731,12 @@ class _SetupFakeApi extends MerchantApi {
   Future<MerchantSetupState> saveSetupLocation({
     required double lat,
     required double lng,
+    required String address,
   }) async {
     _values['primary_branch'] = {
       'id': 1,
       'name': 'Fresh Mart',
-      'address': null,
+      'address': address,
       'lat': lat,
       'lng': lng,
     };

@@ -40,6 +40,13 @@ final readonly class ManualCreditService
             throw MerchantNotActiveException::for($merchant);
         }
 
+        // A self-paused store stops giving cashback (owner decision
+        // 2026-08-18) — that is exactly what its customers were told when it
+        // paused, and a till that kept crediting would make that a lie.
+        if ($merchant->unpublished_at !== null) {
+            throw MerchantNotActiveException::paused($merchant);
+        }
+
         return $this->recorder->record(
             merchant: $merchant,
             actor: Actor::merchantUser($actor->id),

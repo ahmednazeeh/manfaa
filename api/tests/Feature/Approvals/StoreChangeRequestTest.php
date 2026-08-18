@@ -121,7 +121,7 @@ it('lets a pre-approval store write straight through — the onboarding wizard m
 
     // And the wizard's branch pin — the location step — writes directly too.
     $this->actingAs($owner, 'merchant')
-        ->patchJson('/api/merchant/setup/location', ['lat' => 4.1755, 'lng' => 73.5093])
+        ->patchJson('/api/merchant/setup/location', ['lat' => 4.1755, 'lng' => 73.5093, 'address' => 'Majeedhee Magu, Malé'])
         ->assertOk();
 
     expect($draft->branches()->count())->toBe(1)
@@ -131,7 +131,7 @@ it('lets a pre-approval store write straight through — the onboarding wizard m
 // ---------------------------------------------------------------- branches
 
 it('queues branch create, update and delete, and applies each on approval', function () {
-    $this->postJson('/api/merchant/branches', ['name' => 'Hulhumalé', 'lat' => 4.2105, 'lng' => 73.5409])
+    $this->postJson('/api/merchant/branches', ['name' => 'Hulhumalé', 'lat' => 4.2105, 'lng' => 73.5409, 'address' => 'Majeedhee Magu, Malé'])
         ->assertStatus(202)
         ->assertJsonPath('data.change_request.kind', 'branch_create');
 
@@ -172,8 +172,8 @@ it('keeps two queued new branches apart instead of superseding one with the othe
     // "One pending request per type" exists so nobody is stuck behind their
     // own earlier request — and a second shop opening is not stuck behind
     // the first, it is a different place.
-    $this->postJson('/api/merchant/branches', ['name' => 'Hulhumalé'])->assertStatus(202);
-    $this->postJson('/api/merchant/branches', ['name' => 'Addu'])->assertStatus(202);
+    $this->postJson('/api/merchant/branches', ['name' => 'Hulhumalé', 'address' => 'Majeedhee Magu, Malé'])->assertStatus(202);
+    $this->postJson('/api/merchant/branches', ['name' => 'Addu', 'address' => 'Majeedhee Magu, Malé'])->assertStatus(202);
 
     expect(MerchantChangeRequest::query()->where('status', 'pending')->count())->toBe(2);
 
@@ -399,7 +399,7 @@ it('tells the store when a change is approved, and why when it is refused', func
         ->and($pushes[0]['key'])->toBe('store_change_approved')
         ->and($pushes[0]['body'])->toBe('Your store profile change was approved and is now live on Manfaa.');
 
-    $this->postJson('/api/merchant/branches', ['name' => 'Addu'])->assertStatus(202);
+    $this->postJson('/api/merchant/branches', ['name' => 'Addu', 'address' => 'Majeedhee Magu, Malé'])->assertStatus(202);
     app(ChangeRequestService::class)->reject(
         MerchantChangeRequest::query()->where('kind', 'branch_create')->sole(),
         Approvals::superadmin(),

@@ -2704,4 +2704,65 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get monthAverage => 'Avg. transaction';
+
+  @override
+  String get branchAddressRequired =>
+      'Add the address so customers know where to go.';
+
+  @override
+  String get branchAddressFromPin => 'Use the pin';
+
+  @override
+  String get branchAddressFromPinEmpty =>
+      'No address found for that spot — please type it in.';
+
+  @override
+  String get branchAddressHint => 'Customers see this on your store page.';
+
+  @override
+  String get visibilityOn => 'On the app';
+
+  @override
+  String get visibilityOff => 'Paused';
+
+  @override
+  String get visibilityOnHint =>
+      'Customers can find your store and earn cashback.';
+
+  @override
+  String get visibilityOffHint =>
+      'Your store is hidden from the app and is not giving cashback. Your history, settlements and staff are untouched.';
+
+  @override
+  String get visibilityPause => 'Pause store';
+
+  @override
+  String get visibilityResume => 'Put store back on the app';
+
+  @override
+  String get visibilityPauseConfirm => 'Pause your store?';
+
+  @override
+  String get visibilityPauseConfirmBody =>
+      'Customers will not find you on the app and you will not be able to give cashback until you turn it back on. Customers who have earned cashback with you will be told.';
+
+  @override
+  String get visibilityPaused => 'Your store is paused.';
+
+  @override
+  String get visibilityPausedNotified =>
+      'Your store is paused. Customers who have earned cashback with you have been told.';
+
+  @override
+  String get visibilityResumed => 'Your store is back on the app.';
+
+  @override
+  String get visibilityResumedNotified =>
+      'Your store is back on the app. Customers who have earned cashback with you have been told.';
+
+  @override
+  String get reasonMerchantUnpublished => 'Store paused';
+
+  @override
+  String get branchAddressFinding => 'Finding…';
 }

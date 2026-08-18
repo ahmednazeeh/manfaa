@@ -133,7 +133,7 @@ it('still lets a suspended store fix its profile, branches and settlements — t
 
     // A suspended store is LIVE, so its estate is reviewed like any other
     // (MR9) — the point here is that it is never REFUSED: 202, not 409.
-    $this->postJson('/api/merchant/branches', ['name' => 'Hulhumale'])
+    $this->postJson('/api/merchant/branches', ['name' => 'Hulhumale', 'address' => 'Majeedhee Magu, Malé'])
         ->assertStatus(202)
         ->assertJsonPath('data.status', 'pending_review');
 

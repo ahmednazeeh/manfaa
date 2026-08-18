@@ -14,6 +14,7 @@ import { merchantChannelLabel, merchantStatusLabel } from '@/lib/labels';
 import {
   apiErrorMessage,
   useProfile,
+  useSetPublication,
   useSetupState,
   useUpdateProfile,
   useUploadSettingsLogo,
@@ -79,6 +80,7 @@ function ProfileForm({
   const { t, i18n } = useTranslation();
   const updateProfile = useUpdateProfile();
   const uploadLogo = useUploadSettingsLogo();
+  const publication = useSetPublication();
 
   const [nameDv, setNameDv] = useState(profile.name_dv ?? '');
   const [category, setCategory] = useState(profile.category ?? '');
@@ -287,6 +289,71 @@ function ProfileForm({
           </div>
         </CardContent>
       </Card>
+
+      {/*
+        The store's own on/off switch (owner decision 2026-08-18). Deliberately
+        NOT in the identity card above: that card is what the store IS, this is
+        whether it is trading today, and the two get confused if they share a
+        box. Only rendered for a store that has something to pause — the switch
+        is meaningless before approval.
+      */}
+      {profile.status === 'active' && (
+        <Card className="mb-5">
+          <CardHeader>
+            <CardTitle>{t('settings.visibilityTitle')}</CardTitle>
+            <Badge
+              variant={profile.published ? 'success' : 'warning'}
+              appearance="light"
+            >
+              {profile.published
+                ? t('settings.visibilityOn')
+                : t('settings.visibilityOff')}
+            </Badge>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4">
+            <p className="text-sm text-muted-foreground">
+              {profile.published
+                ? t('settings.visibilityOnHint')
+                : t('settings.visibilityOffHint')}
+            </p>
+            <div>
+              <Button
+                variant={profile.published ? 'outline' : 'primary'}
+                disabled={publication.isPending}
+                onClick={() =>
+                  publication.mutate(!profile.published, {
+                    onSuccess: (result) => {
+                      // Say whether anyone was actually told. The platform
+                      // sends at most one message of each kind per day, so a
+                      // second toggle is honoured but silent — and a merchant
+                      // who assumed otherwise would be misled.
+                      const key = result.published
+                        ? result.customers_notified
+                          ? 'settings.visibilityResumedNotified'
+                          : 'settings.visibilityResumed'
+                        : result.customers_notified
+                          ? 'settings.visibilityPausedNotified'
+                          : 'settings.visibilityPaused';
+                      toast.success(t(key));
+                    },
+                    onError: (error) =>
+                      toast.error(
+                        apiErrorMessage(error, t('common.errorGeneric')),
+                      ),
+                  })
+                }
+              >
+                {publication.isPending && (
+                  <LoaderCircle className="animate-spin" />
+                )}
+                {profile.published
+                  ? t('settings.visibilityPause')
+                  : t('settings.visibilityResume')}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <Card className="mb-5">
         <CardHeader>

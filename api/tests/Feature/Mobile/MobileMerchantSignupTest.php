@@ -263,7 +263,7 @@ it('walks the wizard on the token: profile, location, rate, submit → pending_r
     // Location — the primary branch pin.
     app('auth')->forgetGuards();
     $this->withHeaders($headers)
-        ->patchJson('/api/mobile/v1/merchant/setup/location', ['lat' => 4.1755, 'lng' => 73.5093])
+        ->patchJson('/api/mobile/v1/merchant/setup/location', ['lat' => 4.1755, 'lng' => 73.5093, 'address' => 'Majeedhee Magu, Malé'])
         ->assertOk()
         ->assertJsonPath('data.steps.location', true)
         ->assertJsonPath('data.values.primary_branch.name', 'Reef Mart')

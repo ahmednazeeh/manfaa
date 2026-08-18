@@ -442,6 +442,105 @@ void main() {
     });
   });
 
+  group('store publication', () {
+    test('the switch posts the boolean and reads back what was sent',
+        () async {
+      final adapter = _RecordingAdapter((_) => _json({
+            'data': {
+              'published': false,
+              'unpublished_at': '2026-08-18T10:00:00+00:00',
+              'customers_notified': true,
+            },
+          }, 200));
+      final api = _api(adapter);
+
+      final result = await api.setPublished(false);
+
+      expect(adapter.requests.last.path, '/merchant/publication');
+      expect(adapter.requests.last.data, {'published': false});
+      expect(result.published, isFalse);
+      expect(result.customersNotified, isTrue);
+    });
+
+    test('a silent second toggle is reported as reaching nobody', () async {
+      // The platform caps customer messages at one of each per store per
+      // day. The merchant is told the toggle worked AND that nobody was
+      // messaged — assuming a broadcast went out would be worse than silence.
+      final adapter = _RecordingAdapter((_) => _json({
+            'data': {
+              'published': true,
+              'unpublished_at': null,
+              'customers_notified': false,
+            },
+          }, 200));
+
+      final result = await _api(adapter).setPublished(true);
+
+      expect(result.published, isTrue);
+      expect(result.customersNotified, isFalse);
+    });
+
+    test('a profile with no published key is read as trading', () async {
+      // Older server, newer app: a store the app cannot prove is paused must
+      // be treated as on the app, which is the state before the field.
+      final profile = MerchantProfile.fromJson({
+        'id': 1,
+        'name': 'Tea Plus',
+        'slug': 'tea-plus',
+        'status': 'active',
+        'category_retired': false,
+        'channel': 'both',
+      });
+
+      expect(profile.published, isTrue);
+    });
+
+    test('reverse geocode returns the address, and null is an ordinary answer',
+        () async {
+      final found = _RecordingAdapter(
+        (_) => _json({'data': {'address': 'Majeedhee Magu, Malé'}}, 200),
+      );
+      expect(
+        await _api(found).reverseGeocodePin(lat: 4.1755, lng: 73.5093),
+        'Majeedhee Magu, Malé',
+      );
+      expect(found.requests.last.queryParameters,
+          {'lat': 4.1755, 'lng': 73.5093});
+
+      // Nothing known about that spot: the merchant types it instead.
+      final empty = _RecordingAdapter(
+        (_) => _json({'data': {'address': null}}, 200),
+      );
+      expect(
+        await _api(empty).reverseGeocodePin(lat: 0, lng: 0),
+        isNull,
+      );
+    });
+
+    test('the wizard location step sends the address with the pin', () async {
+      final adapter = _RecordingAdapter((_) => _json({
+            'data': {
+              'status': 'draft',
+              'steps': <String, dynamic>{},
+              'values': <String, dynamic>{},
+              'categories': <dynamic>[],
+            },
+          }, 200));
+
+      await _api(adapter).saveSetupLocation(
+        lat: 4.1755,
+        lng: 73.5093,
+        address: 'Majeedhee Magu, Malé',
+      );
+
+      expect(adapter.requests.last.data, {
+        'lat': 4.1755,
+        'lng': 73.5093,
+        'address': 'Majeedhee Magu, Malé',
+      });
+    });
+  });
+
   group('merchant api', () {
     test('createCredit carries the Idempotency-Key header and wire names',
         () async {

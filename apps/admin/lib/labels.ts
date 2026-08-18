@@ -68,6 +68,7 @@ const TRANSACTION_REASONS: Record<TransactionReasonCode, string> = {
   backdated_final: 'Backdated — cannot be reversed',
   below_minimum: 'Below minimum sale',
   merchant_suspended: 'Store suspended',
+  merchant_unpublished: 'Store paused',
   settlement_allocated: 'Paid by store',
   payout_completed: 'Paid out',
   merchant_default_90d: 'Written off — store never paid',

@@ -32,6 +32,8 @@ import {
   revokeMerchantCredential,
   submitMerchantSetup,
   updateMerchantBankAccount,
+  reverseGeocodeBranchPin,
+  setMerchantPublication,
   updateMerchantBranch,
   updateMerchantPreferences,
   updateMerchantProductCategory,
@@ -665,6 +667,32 @@ export function useCreateBranch() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.branches });
     },
+  });
+}
+
+/**
+ * The store's own on/off switch. Invalidates the profile, because
+ * `published` lives on it and the header badge reads from there.
+ */
+export function useSetPublication() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (published: boolean) => setMerchantPublication(published),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.profile });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.me });
+    },
+  });
+}
+
+/**
+ * Pin → address. Not a query: it runs when the merchant asks for it, and its
+ * answer lands in a field they can overwrite.
+ */
+export function useReverseGeocode() {
+  return useMutation({
+    mutationFn: ({ lat, lng }: { lat: number; lng: number }) =>
+      reverseGeocodeBranchPin(lat, lng),
   });
 }
 

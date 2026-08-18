@@ -15,6 +15,7 @@ use App\Http\Controllers\Merchant\ProductCategoriesController;
 use App\Http\Controllers\Merchant\ProfileController;
 use App\Http\Controllers\Merchant\PromotionController;
 use App\Http\Controllers\Merchant\RateController;
+use App\Http\Controllers\Merchant\ReverseGeocodeController;
 use App\Http\Controllers\Merchant\RolesController;
 use App\Http\Controllers\Merchant\SettlementController;
 use App\Http\Controllers\Merchant\SetupController;
@@ -435,6 +436,10 @@ Route::prefix('mobile/v1')
                 // contact value itself.
                 Route::patch('profile', [ProfileController::class, 'update'])
                     ->middleware(['merchant.can:profile.edit', EnsureMerchantApproved::class]);
+
+                // Pin → written address (web parity, same throttle).
+                Route::get('branches/reverse-geocode', ReverseGeocodeController::class)
+                    ->middleware(['merchant.can:branches.view', 'throttle:60,1']);
 
                 Route::get('branches', [BranchesController::class, 'index'])
                     ->middleware('merchant.can:branches.view');

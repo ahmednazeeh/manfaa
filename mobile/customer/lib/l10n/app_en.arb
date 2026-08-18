@@ -300,6 +300,7 @@
       }
     }
   },
+  "storeDirections": "Directions",
   "storeCall": "Call",
   "storeWebsite": "Website",
   "storeMap": "On the map",

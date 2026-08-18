@@ -472,9 +472,17 @@ void main() {
       );
       final api = _api(adapter);
 
-      final created = await api.createBranch(name: 'Villimalé');
-      expect(adapter.requests.last.data,
-          {'name': 'Villimalé', 'address': null, 'lat': null, 'lng': null});
+      // The address travels with every create — required since 2026-08-18.
+      final created = await api.createBranch(
+        name: 'Villimalé',
+        address: 'Bodu Magu, Villimalé',
+      );
+      expect(adapter.requests.last.data, {
+        'name': 'Villimalé',
+        'address': 'Bodu Magu, Villimalé',
+        'lat': null,
+        'lng': null,
+      });
       // 201 — a store that is not live still writes straight through.
       expect(created.queued, isNull);
       expect(created.branch?.id, 6);

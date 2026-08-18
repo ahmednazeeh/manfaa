@@ -2740,4 +2740,67 @@ class AppLocalizationsDv extends AppLocalizations {
 
   @override
   String get monthAverage => 'އެވްރެޖް މުޢާމަލާތް';
+
+  @override
+  String get branchAddressRequired =>
+      'ކަސްޓަމަރުންނަށް ތަން އެނގުމަށްޓަކައި އެޑްރެސް ލިޔުއްވާ.';
+
+  @override
+  String get branchAddressFromPin => 'ޕިން ބޭނުންކުރޭ';
+
+  @override
+  String get branchAddressFromPinEmpty =>
+      'އެ ތަނަށް އެޑްރެހެއް ނުފެނުނު — އަމިއްލައަށް ލިޔުއްވާ.';
+
+  @override
+  String get branchAddressHint =>
+      'ފިހާރައިގެ ޞަފްޙާގައި ކަސްޓަމަރުންނަށް މިއެއް ފެންނާނެ.';
+
+  @override
+  String get visibilityOn => 'އެޕްގައި';
+
+  @override
+  String get visibilityOff => 'މެދުކަނޑާލެވިފައި';
+
+  @override
+  String get visibilityOnHint =>
+      'ކަސްޓަމަރުންނަށް ތިޔަ ފިހާރަ ފެނި، ކޭޝްބެކް ލިބޭނެއެވެ.';
+
+  @override
+  String get visibilityOffHint =>
+      'ތިޔަ ފިހާރަ އެޕުން ނުފެންނާނެ، އަދި ކޭޝްބެކެއް ނުދޭނެއެވެ. ރެކޯޑްތަކާއި ސެޓްލްމަންޓްތަކާއި މުވައްޒަފުން ހަމަ އެގޮތުގައި ހުންނާނެއެވެ.';
+
+  @override
+  String get visibilityPause => 'ފިހާރަ މެދުކަނޑާލާ';
+
+  @override
+  String get visibilityResume => 'އަލުން އެޕްގައި ދައްކާ';
+
+  @override
+  String get visibilityPauseConfirm => 'ފިހާރަ މެދުކަނޑާލަންތޯ؟';
+
+  @override
+  String get visibilityPauseConfirmBody =>
+      'އަލުން ފަށަންދެން ކަސްޓަމަރުންނަށް ތިޔަ ފިހާރަ އެޕުން ނުފެންނާނެ، އަދި ކޭޝްބެކެއް ނުދެވޭނެއެވެ. ކުރިން ކޭޝްބެކް ލިބިފައިވާ ކަސްޓަމަރުންނަށް އަންގާލެވޭނެއެވެ.';
+
+  @override
+  String get visibilityPaused => 'ތިޔަ ފިހާރަ މެދުކަނޑާލެވިއްޖެ.';
+
+  @override
+  String get visibilityPausedNotified =>
+      'ތިޔަ ފިހާރަ މެދުކަނޑާލެވިއްޖެ. ކުރިން ކޭޝްބެކް ލިބިފައިވާ ކަސްޓަމަރުންނަށް އަންގާލެވިއްޖެ.';
+
+  @override
+  String get visibilityResumed =>
+      'ތިޔަ ފިހާރަ އަލުން އެޕްގައި ދައްކަން ފެށިއްޖެ.';
+
+  @override
+  String get visibilityResumedNotified =>
+      'ތިޔަ ފިހާރަ އަލުން އެޕްގައި ދައްކަން ފެށިއްޖެ. ކުރިން ކޭޝްބެކް ލިބިފައިވާ ކަސްޓަމަރުންނަށް އަންގާލެވިއްޖެ.';
+
+  @override
+  String get reasonMerchantUnpublished => 'ފިހާރަ މެދުކަނޑާލެވިފައި';
+
+  @override
+  String get branchAddressFinding => 'ހޯދަނީ…';
 }

@@ -107,14 +107,14 @@ it('re-saving an untouched branch queues nothing', function () {
 it('rejects out-of-range and lone coordinates', function () {
     $base = ['name' => 'Bad Branch'];
 
-    $this->postJson('/api/merchant/branches', [...$base, 'lat' => 91, 'lng' => 73])->assertUnprocessable();
-    $this->postJson('/api/merchant/branches', [...$base, 'lat' => -91, 'lng' => 73])->assertUnprocessable();
-    $this->postJson('/api/merchant/branches', [...$base, 'lat' => 4, 'lng' => 181])->assertUnprocessable();
-    $this->postJson('/api/merchant/branches', [...$base, 'lat' => 4, 'lng' => -181])->assertUnprocessable();
+    $this->postJson('/api/merchant/branches', [...$base, 'lat' => 91, 'lng' => 73, 'address' => 'Majeedhee Magu, Malé'])->assertUnprocessable();
+    $this->postJson('/api/merchant/branches', [...$base, 'lat' => -91, 'lng' => 73, 'address' => 'Majeedhee Magu, Malé'])->assertUnprocessable();
+    $this->postJson('/api/merchant/branches', [...$base, 'lat' => 4, 'lng' => 181, 'address' => 'Majeedhee Magu, Malé'])->assertUnprocessable();
+    $this->postJson('/api/merchant/branches', [...$base, 'lat' => 4, 'lng' => -181, 'address' => 'Majeedhee Magu, Malé'])->assertUnprocessable();
 
     // The pair rule: one coordinate alone is meaningless.
-    $this->postJson('/api/merchant/branches', [...$base, 'lat' => 4.17])->assertUnprocessable();
-    $this->postJson('/api/merchant/branches', [...$base, 'lng' => 73.5])->assertUnprocessable();
+    $this->postJson('/api/merchant/branches', [...$base, 'lat' => 4.17, 'address' => 'Majeedhee Magu, Malé'])->assertUnprocessable();
+    $this->postJson('/api/merchant/branches', [...$base, 'lng' => 73.5, 'address' => 'Majeedhee Magu, Malé'])->assertUnprocessable();
 
     expect(MerchantBranch::query()->count())->toBe(0);
 });

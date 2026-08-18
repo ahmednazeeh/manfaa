@@ -55,7 +55,7 @@ it('answers the app the same 202, the same pending state and the same refusals',
         ->assertJsonPath('data.contact_phone', '+9607779999');
 
     $this->withHeaders($headers)
-        ->postJson('/api/mobile/v1/merchant/branches', ['name' => 'Addu'])
+        ->postJson('/api/mobile/v1/merchant/branches', ['name' => 'Addu', 'address' => 'Majeedhee Magu, Malé'])
         ->assertStatus(202)
         ->assertJsonPath('data.change_request.kind', 'branch_create');
 

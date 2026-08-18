@@ -211,14 +211,53 @@ class MerchantApi extends ManfaaApiBase<MerchantSession> {
 
   /// Pin (or move) the primary branch. Creates it named after the store on
   /// the first pin.
+  /// The pin AND the words that go with it: `address` is required by the
+  /// server (owner decision 2026-08-18), because a pin with no address
+  /// reads as a raw coordinate in every map app we hand a customer off to.
   Future<MerchantSetupState> saveSetupLocation({
     required double lat,
     required double lng,
+    required String address,
   }) async =>
       _setupState(await run(
         () => dio.patch<Map<String, dynamic>>('/merchant/setup/location',
-            data: {'lat': lat, 'lng': lng}),
+            data: {'lat': lat, 'lng': lng, 'address': address}),
       ));
+
+  /// Turn a dropped pin into a written address, so meeting the address
+  /// requirement is a tap rather than typing.
+  ///
+  /// Returns null when the geocoder knows nothing about that spot or could
+  /// not be reached — an ordinary answer, not an error: the merchant types
+  /// the address instead, and the field is the authority either way.
+  Future<String?> reverseGeocodePin({
+    required double lat,
+    required double lng,
+  }) async {
+    final response = await send(
+      () => dio.get<Map<String, dynamic>>(
+        '/merchant/branches/reverse-geocode',
+        queryParameters: {'lat': lat, 'lng': lng},
+      ),
+    );
+
+    return _data(response)['address'] as String?;
+  }
+
+  /// Take the store off the app, or put it back. No review either way.
+  ///
+  /// Returns the fresh publication state. `customersNotified` reports
+  /// whether THIS call reached anyone: at most one pause and one resume
+  /// message goes out per store per day, so a second toggle is honoured but
+  /// silent — and a merchant who assumed otherwise would be misled.
+  Future<StorePublication> setPublished(bool published) async {
+    final response = await send(
+      () => dio.post<Map<String, dynamic>>('/merchant/publication',
+          data: {'published': published}),
+    );
+
+    return StorePublication.fromJson(_data(response));
+  }
 
   /// Save the advertised cashback rate as the exact percent STRING typed
   /// (§11 — never a float). Refusals: `validation_failed` (shape/bounds),
@@ -1032,7 +1071,7 @@ class MerchantApi extends ManfaaApiBase<MerchantSession> {
   /// shopper travels to, so no row is created until an admin approves.
   Future<BranchSaveResult> createBranch({
     required String name,
-    String? address,
+    required String address,
     double? lat,
     double? lng,
   }) async {

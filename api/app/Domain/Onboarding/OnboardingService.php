@@ -148,9 +148,14 @@ final class OnboardingService
                     'name' => $merchant->name,
                     'lat' => $validated['lat'],
                     'lng' => $validated['lng'],
+                    'address' => $validated['address'] ?? null,
                 ]);
             } else {
-                $branch->fill(['lat' => $validated['lat'], 'lng' => $validated['lng']])->save();
+                $branch->fill(array_filter([
+                    'lat' => $validated['lat'],
+                    'lng' => $validated['lng'],
+                    'address' => $validated['address'] ?? null,
+                ], fn ($value): bool => $value !== null))->save();
             }
 
             $this->markStep($merchant, 'location');
@@ -478,6 +483,21 @@ final class OnboardingService
         // a shopper cannot judge.
         if (trim((string) $merchant->description) === '') {
             $missing[] = 'description';
+        }
+
+        // A pinned branch must also SAY where it is (owner decision
+        // 2026-08-18). Conditional on a branch existing, not on the channel:
+        // an online-only store never sets a location and is never asked for
+        // an address, while a store that dropped a pin owes the customer the
+        // street that goes with it. The wizard offers to fill this from the
+        // pin itself, so meeting it is a tap.
+        $pinned = $merchant->branches()
+            ->whereNotNull('lat')
+            ->whereNotNull('lng')
+            ->exists();
+
+        if ($pinned && $merchant->branches()->whereRaw("coalesce(trim(address), '') = ''")->exists()) {
+            $missing[] = 'address';
         }
 
         return $missing;

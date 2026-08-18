@@ -50,6 +50,12 @@ enum Permission: string
 
     case ProfileView = 'profile.view';
     case ProfileEdit = 'profile.edit';
+
+    // Taking the whole store off the app, and putting it back. Separate from
+    // profile.edit on purpose: editing a phone number and going dark to
+    // every customer in the country are not the same authority, and the
+    // second one belongs with whoever answers for the shop.
+    case StorePublication = 'store.publication';
     case BrandingUpdate = 'branding.update';
 
     case BranchesView = 'branches.view';
@@ -124,6 +130,7 @@ enum Permission: string
 
             self::ProfileView => 'View the store profile',
             self::ProfileEdit => 'Edit the store profile',
+            self::StorePublication => 'Pause and resume the store on the app',
             self::BrandingUpdate => 'Change the store logo',
 
             self::BranchesView => 'View branches',
@@ -186,6 +193,7 @@ enum Permission: string
             self::BranchesDelete,
             self::ProfileView,
             self::ProfileEdit,
+            self::StorePublication,
             self::BrandingUpdate,
             self::SetupView,
             self::SetupEdit,

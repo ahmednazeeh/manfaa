@@ -26,6 +26,11 @@ Route::prefix('admin')->middleware('auth:admin')->group(function () {
         Route::patch('merchants/{merchant}', [MerchantsController::class, 'update'])->whereNumber('merchant');
         Route::post('merchants/{merchant}/suspend', [MerchantsController::class, 'suspend'])->whereNumber('merchant');
         Route::post('merchants/{merchant}/reinstate', [MerchantsController::class, 'reinstate'])->whereNumber('merchant');
+
+        // Correcting a branch — its address above all — is admin authority,
+        // so it sits with the other superadmin writes on this sheet.
+        Route::patch('merchants/{merchant}/branches/{branch}', [MerchantsController::class, 'updateBranch'])
+            ->whereNumber(['merchant', 'branch']);
         Route::post('merchants/{merchant}/staff/{user}/reset-password', [MerchantStaffController::class, 'resetPassword'])
             ->whereNumber('merchant')->whereNumber('user');
         Route::patch('merchants/{merchant}/staff/{user}', [MerchantStaffController::class, 'update'])

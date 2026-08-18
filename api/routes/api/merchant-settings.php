@@ -6,6 +6,8 @@ use App\Http\Controllers\Merchant\BranchesController;
 use App\Http\Controllers\Merchant\CustomerLookupController;
 use App\Http\Controllers\Merchant\PreferencesController;
 use App\Http\Controllers\Merchant\ProfileController;
+use App\Http\Controllers\Merchant\PublicationController;
+use App\Http\Controllers\Merchant\ReverseGeocodeController;
 use App\Http\Controllers\Merchant\RolesController;
 use App\Http\Controllers\Merchant\StaffController;
 use App\Http\Middleware\EnsureMerchantApproved;
@@ -45,6 +47,23 @@ Route::prefix('merchant')->middleware('auth:merchant')->group(function () {
     // the superadmin queue is reviewing (EnsureMerchantApproved).
     Route::patch('profile', [ProfileController::class, 'update'])
         ->middleware(['merchant.can:profile.edit', EnsureMerchantApproved::class]);
+
+    // The store's own on/off switch. TRADING tier: only a store that is
+    // actually active has anything to pause, and a suspended one must not be
+    // able to "republish" itself into a listing it is not entitled to.
+    Route::post('publication', PublicationController::class)
+        ->middleware([
+            'merchant.can:store.publication',
+            EnsureMerchantApproved::class.':'.EnsureMerchantApproved::TRADING,
+            'throttle:20,1',
+        ]);
+
+    // Pin → written address, so a required field can be filled by tapping a
+    // map instead of typing. Open to anyone who may touch the estate, in the
+    // wizard as well as in settings — a draft store has branches to describe
+    // too. Throttled because it stands in front of somebody else's service.
+    Route::get('branches/reverse-geocode', ReverseGeocodeController::class)
+        ->middleware(['merchant.can:branches.view', 'throttle:60,1']);
 
     Route::get('branches', [BranchesController::class, 'index'])
         ->middleware('merchant.can:branches.view');

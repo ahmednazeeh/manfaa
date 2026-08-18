@@ -175,7 +175,11 @@ class BranchesController extends Controller
     {
         return $request->validate([
             'name' => [$creating ? 'required' : 'sometimes', 'string', 'max:255'],
-            'address' => ['sometimes', 'nullable', 'string', 'max:1000'],
+            // Required now (owner decision 2026-08-18): a branch on the map
+            // with no address is a pin a customer cannot read. `sometimes`
+            // on edit so a PATCH that only moves the pin need not resend it
+            // — but if it IS sent, it may not be sent empty.
+            'address' => [$creating ? 'required' : 'sometimes', 'string', 'max:1000'],
             'lat' => ['sometimes', 'nullable', 'numeric', 'between:-90,90'],
             'lng' => ['sometimes', 'nullable', 'numeric', 'between:-180,180'],
         ]);

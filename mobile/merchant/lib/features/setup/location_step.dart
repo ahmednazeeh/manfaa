@@ -49,10 +49,58 @@ class _LocationStepState extends ConsumerState<LocationStep> {
       : null;
 
   late LatLng _center = _saved ?? _fallbackCenter;
+
+  /// The address that goes with the pin — REQUIRED alongside it (owner
+  /// decision 2026-08-18). Pre-filled from whatever the branch already
+  /// carries, and fillable from the pin itself.
+  late final _address = TextEditingController(
+    text: widget.state.values.primaryBranch?.address ?? '',
+  );
+
   var _busy = false;
   var _locating = false;
+  var _geocoding = false;
+  String? _addressError;
+
+  @override
+  void dispose() {
+    _address.dispose();
+    super.dispose();
+  }
 
   double _round7(double value) => double.parse(value.toStringAsFixed(7));
+
+  /// Ask the server what this pin is called. A suggestion, landing in a
+  /// field the merchant may retype — the shop's address is the shop's claim.
+  Future<void> _fillAddressFromPin() async {
+    final l10n = context.l10n;
+    final messenger = ScaffoldMessenger.of(context);
+    setState(() => _geocoding = true);
+    try {
+      final address = await ref.read(apiProvider).reverseGeocodePin(
+            lat: _round7(_center.latitude),
+            lng: _round7(_center.longitude),
+          );
+      if (!mounted) return;
+      if (address == null || address.isEmpty) {
+        messenger.showSnackBar(
+          SnackBar(content: Text(l10n.branchAddressFromPinEmpty)),
+        );
+        return;
+      }
+      setState(() {
+        _address.text = address;
+        _addressError = null;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(content: Text(l10n.branchAddressFromPinEmpty)),
+      );
+    } finally {
+      if (mounted) setState(() => _geocoding = false);
+    }
+  }
 
   Future<void> _useMyLocation() async {
     final l10n = context.l10n;
@@ -88,12 +136,22 @@ class _LocationStepState extends ConsumerState<LocationStep> {
   }
 
   Future<void> _save() async {
-    // Nothing moved since the last visit — passing back through the step,
-    // not re-pinning. Plain navigation, no write (web parity).
+    final l10n = context.l10n;
+    final address = _address.text.trim();
+
+    if (address.isEmpty) {
+      setState(() => _addressError = l10n.branchAddressRequired);
+      return;
+    }
+
+    // Nothing moved since the last visit AND the address is unchanged —
+    // passing back through the step, not re-pinning. Plain navigation, no
+    // write (web parity).
     final saved = _saved;
     if (saved != null &&
         _round7(_center.latitude) == _round7(saved.latitude) &&
-        _round7(_center.longitude) == _round7(saved.longitude)) {
+        _round7(_center.longitude) == _round7(saved.longitude) &&
+        address == (widget.state.values.primaryBranch?.address ?? '').trim()) {
       widget.onSaved(widget.state);
       return;
     }
@@ -103,6 +161,7 @@ class _LocationStepState extends ConsumerState<LocationStep> {
       final fresh = await ref.read(apiProvider).saveSetupLocation(
             lat: _round7(_center.latitude),
             lng: _round7(_center.longitude),
+            address: address,
           );
       if (mounted) widget.onSaved(fresh);
     } catch (e) {
@@ -178,6 +237,42 @@ class _LocationStepState extends ConsumerState<LocationStep> {
               ),
             ),
           ],
+        ),
+        const SizedBox(height: Gap.lg),
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                l10n.branchAddressLabel,
+                style: theme.textTheme.labelLarge,
+              ),
+            ),
+            TextButton(
+              onPressed: _geocoding ? null : _fillAddressFromPin,
+              child: Text(
+                _geocoding ? l10n.branchAddressFinding : l10n.branchAddressFromPin,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: Gap.sm),
+        TextField(
+          controller: _address,
+          maxLines: 2,
+          minLines: 1,
+          onChanged: (_) {
+            if (_addressError != null) setState(() => _addressError = null);
+          },
+          decoration: InputDecoration(
+            prefixIcon: const Icon(Icons.location_on_outlined),
+            errorText: _addressError,
+          ),
+        ),
+        const SizedBox(height: Gap.xs),
+        Text(
+          l10n.branchAddressHint,
+          style: theme.textTheme.bodySmall
+              ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
         ),
       ],
     );

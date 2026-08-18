@@ -151,7 +151,8 @@
     "admin_release": "Manfaa reviewed this purchase and cleared it.",
     "admin_reject": "Manfaa could not approve this purchase, so its cashback was cancelled.",
     "stale_timestamp": "This purchase was recorded late, so Manfaa reviewed it first.",
-    "fallback": "Awaiting an update from {{merchant}}."
+    "fallback": "Awaiting an update from {{merchant}}.",
+    "merchant_unpublished": "{{merchant}} had paused cashback when this purchase was made, so it earned nothing."
   },
   "payout": {
     "title": "Payout account",

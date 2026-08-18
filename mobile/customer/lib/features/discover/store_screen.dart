@@ -8,6 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../app/app.dart';
 import '../../app/providers.dart';
+import 'directions.dart';
 import 'store_widgets.dart';
 
 /// One store's public page: the store's own words, the rate, the terms, the
@@ -274,8 +275,12 @@ class _StoreBody extends StatelessWidget {
                 if (page.branches.any((b) => b.pinned)) ...[
                   const SizedBox(height: Gap.md),
                   _BranchMap(
-                      branches:
-                          page.branches.where((b) => b.pinned).toList()),
+                    branches: page.branches.where((b) => b.pinned).toList(),
+                    // OUR label, drawn by us. Google cannot title a bare
+                    // coordinate and we are not asking it to — see
+                    // directions.dart.
+                    storeName: store.displayName(dhivehi),
+                  ),
                 ],
                 const SizedBox(height: Gap.sm),
                 for (final branch in page.branches)
@@ -303,6 +308,28 @@ class _StoreBody extends StatelessWidget {
                             ],
                           ),
                         ),
+                        // Only a pinned branch can be navigated to. The
+                        // button carries the store's NAME, which is what
+                        // makes the handoff readable even when the map app
+                        // shows our coordinate as its title.
+                        if (branch.pinned) ...[
+                          const SizedBox(width: Gap.sm),
+                          TextButton.icon(
+                            onPressed: () => openDirections(
+                              lat: branch.lat!,
+                              lng: branch.lng!,
+                              label: store.displayName(dhivehi),
+                            ),
+                            icon: const Icon(Icons.directions_rounded, size: 18),
+                            label: Text(l10n.storeDirections),
+                            style: TextButton.styleFrom(
+                              foregroundColor: theme.colorScheme.secondary,
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: Gap.sm),
+                              visualDensity: VisualDensity.compact,
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                   ),
@@ -388,9 +415,15 @@ class _CardLabel extends StatelessWidget {
 /// camera fits every pin; gestures stay OFF so the ListView scrolls past
 /// without fighting the map.
 class _BranchMap extends StatelessWidget {
-  const _BranchMap({required this.branches});
+  const _BranchMap({required this.branches, required this.storeName});
 
   final List<StoreBranch> branches;
+
+  /// Drawn beside every pin. This is the whole answer to "why does the map
+  /// say 4°10'30.4"N": the label is ours to render, so we render it, and it
+  /// is right for every merchant whether or not any place database has ever
+  /// heard of them.
+  final String storeName;
 
   @override
   Widget build(BuildContext context) {
@@ -438,17 +471,12 @@ class _BranchMap extends StatelessWidget {
                 for (final point in points)
                   Marker(
                     point: point,
-                    width: 36,
-                    height: 36,
+                    // Wide enough for a shop name, tall enough for the name
+                    // to sit above the pin without covering it.
+                    width: 180,
+                    height: 58,
                     alignment: Alignment.topCenter,
-                    child: const Icon(
-                      Icons.place_rounded,
-                      size: 34,
-                      color: ManfaaColors.coral,
-                      shadows: [
-                        Shadow(color: Color(0x40000000), blurRadius: 6),
-                      ],
-                    ),
+                    child: _NamedPin(name: storeName),
                   ),
               ],
             ),
@@ -466,6 +494,52 @@ class _BranchMap extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// A map pin that says whose door it is.
+///
+/// The name rides in a small opaque chip rather than as bare text: map tiles
+/// are busy and a label without a backing plate is unreadable over a road.
+class _NamedPin extends StatelessWidget {
+  const _NamedPin({required this.name});
+
+  final String name;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surface,
+            borderRadius: BorderRadius.circular(999),
+            boxShadow: const [
+              BoxShadow(color: Color(0x33000000), blurRadius: 4),
+            ],
+          ),
+          child: Text(
+            name,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.labelSmall?.copyWith(
+              fontWeight: FontWeight.w700,
+              color: theme.colorScheme.onSurface,
+            ),
+          ),
+        ),
+        const Icon(
+          Icons.place_rounded,
+          size: 30,
+          color: ManfaaColors.coral,
+          shadows: [Shadow(color: Color(0x40000000), blurRadius: 6)],
+        ),
+      ],
     );
   }
 }

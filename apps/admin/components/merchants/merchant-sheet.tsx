@@ -35,6 +35,7 @@ import {
 } from '@/components/ui/sheet';
 import { Skeleton } from '@/components/ui/skeleton';
 import { MerchantStatusBadge } from '@/components/admin/state-badge';
+import { BranchEditor } from '@/components/merchants/branch-editor';
 import { EditMerchantDialog } from '@/components/merchants/edit-merchant-dialog';
 import { MerchantStatusActions } from '@/components/merchants/merchant-status-actions';
 import { StaffActions } from '@/components/merchants/staff-actions';
@@ -294,6 +295,11 @@ export function MerchantSheet({ merchant }: { merchant: MerchantStanding }) {
                               </span>
                             )}
                           </div>
+                          <div className="flex shrink-0 items-center gap-1.5">
+                            <BranchEditor
+                              merchantId={detail.id}
+                              branch={branch}
+                            />
                           {branch.zone !== null ? (
                             <Badge
                               variant="secondary"
@@ -311,6 +317,7 @@ export function MerchantSheet({ merchant }: { merchant: MerchantStanding }) {
                               Unzoned
                             </Badge>
                           )}
+                          </div>
                         </li>
                       ))}
                     </ul>

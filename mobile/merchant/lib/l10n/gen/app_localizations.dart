@@ -4741,6 +4741,114 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Avg. transaction'**
   String get monthAverage;
+
+  /// No description provided for @branchAddressRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Add the address so customers know where to go.'**
+  String get branchAddressRequired;
+
+  /// No description provided for @branchAddressFromPin.
+  ///
+  /// In en, this message translates to:
+  /// **'Use the pin'**
+  String get branchAddressFromPin;
+
+  /// No description provided for @branchAddressFromPinEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No address found for that spot — please type it in.'**
+  String get branchAddressFromPinEmpty;
+
+  /// No description provided for @branchAddressHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Customers see this on your store page.'**
+  String get branchAddressHint;
+
+  /// No description provided for @visibilityOn.
+  ///
+  /// In en, this message translates to:
+  /// **'On the app'**
+  String get visibilityOn;
+
+  /// No description provided for @visibilityOff.
+  ///
+  /// In en, this message translates to:
+  /// **'Paused'**
+  String get visibilityOff;
+
+  /// No description provided for @visibilityOnHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Customers can find your store and earn cashback.'**
+  String get visibilityOnHint;
+
+  /// No description provided for @visibilityOffHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Your store is hidden from the app and is not giving cashback. Your history, settlements and staff are untouched.'**
+  String get visibilityOffHint;
+
+  /// No description provided for @visibilityPause.
+  ///
+  /// In en, this message translates to:
+  /// **'Pause store'**
+  String get visibilityPause;
+
+  /// No description provided for @visibilityResume.
+  ///
+  /// In en, this message translates to:
+  /// **'Put store back on the app'**
+  String get visibilityResume;
+
+  /// No description provided for @visibilityPauseConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Pause your store?'**
+  String get visibilityPauseConfirm;
+
+  /// No description provided for @visibilityPauseConfirmBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Customers will not find you on the app and you will not be able to give cashback until you turn it back on. Customers who have earned cashback with you will be told.'**
+  String get visibilityPauseConfirmBody;
+
+  /// No description provided for @visibilityPaused.
+  ///
+  /// In en, this message translates to:
+  /// **'Your store is paused.'**
+  String get visibilityPaused;
+
+  /// No description provided for @visibilityPausedNotified.
+  ///
+  /// In en, this message translates to:
+  /// **'Your store is paused. Customers who have earned cashback with you have been told.'**
+  String get visibilityPausedNotified;
+
+  /// No description provided for @visibilityResumed.
+  ///
+  /// In en, this message translates to:
+  /// **'Your store is back on the app.'**
+  String get visibilityResumed;
+
+  /// No description provided for @visibilityResumedNotified.
+  ///
+  /// In en, this message translates to:
+  /// **'Your store is back on the app. Customers who have earned cashback with you have been told.'**
+  String get visibilityResumedNotified;
+
+  /// No description provided for @reasonMerchantUnpublished.
+  ///
+  /// In en, this message translates to:
+  /// **'Store paused'**
+  String get reasonMerchantUnpublished;
+
+  /// No description provided for @branchAddressFinding.
+  ///
+  /// In en, this message translates to:
+  /// **'Finding…'**
+  String get branchAddressFinding;
 }
 
 class _AppLocalizationsDelegate

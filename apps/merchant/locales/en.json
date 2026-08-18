@@ -16,7 +16,8 @@
     "language": "Language",
     "toggleDarkMode": "Toggle dark mode",
     "notSet": "Not set",
-    "optional": "optional"
+    "optional": "optional",
+    "errorGeneric": "Something went wrong. Please try again."
   },
   "location": {
     "searchLabel": "Search for a place",
@@ -400,7 +401,18 @@
     "profileQueued": "Sent to Manfaa for review — your store keeps its current details until it's approved",
     "logoQueued": "Logo sent to Manfaa for review",
     "logoPendingNote": "This logo is waiting for Manfaa's review. Your store keeps showing the current one until it is approved.",
-    "reviewedFieldsNote": "Manfaa reviews your store name, Dhivehi name, logo, category, channel, description, website and cashback terms before customers see them. Contact details save straight away."
+    "reviewedFieldsNote": "Manfaa reviews your store name, Dhivehi name, logo, category, channel, description, website and cashback terms before customers see them. Contact details save straight away.",
+    "visibilityTitle": "Store visibility",
+    "visibilityOn": "On the app",
+    "visibilityOff": "Paused",
+    "visibilityOnHint": "Customers can find your store and earn cashback. Pause it if you need to stop for a while — a renovation, a closed season, a supply problem. You can turn it back on yourself, whenever you like.",
+    "visibilityOffHint": "Your store is hidden from the app and is not giving cashback. Nothing else changes: your history, settlements and staff are untouched, and you can put the store back whenever you are ready.",
+    "visibilityPause": "Pause store",
+    "visibilityResume": "Put store back on the app",
+    "visibilityPaused": "Your store is paused.",
+    "visibilityPausedNotified": "Your store is paused. Customers who have earned cashback with you have been told.",
+    "visibilityResumed": "Your store is back on the app.",
+    "visibilityResumedNotified": "Your store is back on the app. Customers who have earned cashback with you have been told."
   },
   "branches": {
     "title": "Branches",
@@ -439,7 +451,11 @@
     "addReviewNote": "Manfaa reviews new branches — this one appears to customers once it is approved.",
     "editReviewNote": "Manfaa reviews branch changes — customers keep seeing this branch as it is until it is approved.",
     "editReplaceNote": "This branch already has a change waiting for review. Saving replaces that request with this one.",
-    "deleteReviewNote": "Manfaa reviews removals — the branch stays open to customers until it is approved."
+    "deleteReviewNote": "Manfaa reviews removals — the branch stays open to customers until it is approved.",
+    "addressFromPin": "Use the pin",
+    "addressFromPinEmpty": "No address found for that spot — please type it in.",
+    "addressPlaceholder": "Majeedhee Magu, Henveiru, Malé",
+    "addressHint": "Required. Customers see this on your store page. Drop a pin and tap \"Use the pin\" to fill it in."
   },
   "pending": {
     "title": "Waiting for Manfaa's review",
@@ -877,7 +893,8 @@
       "admin_reject": "Rejected by Manfaa",
       "stale_timestamp": "Held — sale was backdated",
       "admin_release_stale": "Released by Manfaa after review",
-      "unknown": "Updated by Manfaa"
+      "unknown": "Updated by Manfaa",
+      "merchant_unpublished": "Store paused"
     },
     "settlementState": {
       "draft": "Draft",

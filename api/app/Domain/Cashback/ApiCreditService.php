@@ -85,7 +85,14 @@ final readonly class ApiCreditService
             occurredAt: $occurredAt,
             branchId: $branchId,
             idempotencyKey: $idempotencyKey,
-            ineligibleReason: $merchant->status === 'suspended' ? 'merchant_suspended' : null,
+            // §7 ingestion semantics, extended to a self-paused store: an
+            // integrated till keeps POSTing and gets a truthful recorded
+            // sale priced at zero, rather than an error it cannot act on.
+            ineligibleReason: match (true) {
+                $merchant->status === 'suspended' => 'merchant_suspended',
+                $merchant->unpublished_at !== null => 'merchant_unpublished',
+                default => null,
+            },
             lines: $lines,
             overrideRateBp: $overrideRateBp,
         );

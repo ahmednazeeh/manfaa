@@ -74,7 +74,7 @@ final class NotificationService
             // file can still hold a phone with the app on it, and the old
             // shape returned before either could be considered. Each channel
             // decides for itself whether it has somewhere to deliver.
-            if ($phone !== '') {
+            if ($phone !== '' && $key->usesSms()) {
                 SendCustomerSms::dispatch($phone, $body, $key->value, $customer->id);
             }
 

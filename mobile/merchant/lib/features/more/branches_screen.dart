@@ -597,6 +597,38 @@ class _BranchSheetState extends ConsumerState<_BranchSheet> {
 
   double _round7(double value) => double.parse(value.toStringAsFixed(7));
 
+  var _geocoding = false;
+
+  /// Ask the server what the dropped pin is called, and put the answer in
+  /// the field. A SUGGESTION: it lands somewhere the merchant can retype,
+  /// because an address is a claim about their own shop.
+  Future<void> _fillAddressFromPin() async {
+    final l10n = context.l10n;
+    setState(() => _geocoding = true);
+    try {
+      final address = await ref.read(apiProvider).reverseGeocodePin(
+            lat: _round7(_center.latitude),
+            lng: _round7(_center.longitude),
+          );
+      if (!mounted) return;
+      if (address == null || address.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(l10n.branchAddressFromPinEmpty)),
+        );
+        return;
+      }
+      _address.text = address;
+    } catch (_) {
+      if (!mounted) return;
+      // Never fatal — the merchant types it instead.
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.branchAddressFromPinEmpty)),
+      );
+    } finally {
+      if (mounted) setState(() => _geocoding = false);
+    }
+  }
+
   Future<void> _save() async {
     final l10n = context.l10n;
     final name = _name.text.trim();
@@ -605,6 +637,12 @@ class _BranchSheetState extends ConsumerState<_BranchSheet> {
       return;
     }
     final address = _address.text.trim();
+    // Required now (owner decision 2026-08-18): a pin with no address reads
+    // as a raw coordinate in every map app a customer is handed off to.
+    if (address.isEmpty) {
+      setState(() => _error = l10n.branchAddressRequired);
+      return;
+    }
 
     setState(() {
       _busy = true;
@@ -618,14 +656,14 @@ class _BranchSheetState extends ConsumerState<_BranchSheet> {
       final result = existing == null
           ? await api.createBranch(
               name: name,
-              address: address.isEmpty ? null : address,
+              address: address,
               lat: lat,
               lng: lng,
             )
           : await api.updateBranch(
               existing.id,
               name: name,
-              address: address.isEmpty ? null : address,
+              address: address,
               lat: lat,
               lng: lng,
             );
@@ -708,7 +746,26 @@ class _BranchSheetState extends ConsumerState<_BranchSheet> {
                 ),
               ),
               const SizedBox(height: Gap.lg),
-              Text(l10n.branchAddressLabel, style: theme.textTheme.labelLarge),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      l10n.branchAddressLabel,
+                      style: theme.textTheme.labelLarge,
+                    ),
+                  ),
+                  // Only offered once there is a pin to read: the address
+                  // comes FROM the pin, so without one there is nothing to
+                  // ask for.
+                  if (_pinSet)
+                    TextButton(
+                      onPressed: _geocoding ? null : _fillAddressFromPin,
+                      child: Text(
+                        _geocoding ? l10n.branchAddressFinding : l10n.branchAddressFromPin,
+                      ),
+                    ),
+                ],
+              ),
               const SizedBox(height: Gap.sm),
               TextField(
                 controller: _address,

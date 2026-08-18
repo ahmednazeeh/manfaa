@@ -36,6 +36,11 @@ class MerchantProfileResource extends JsonResource
             'name_dv' => $this->name_dv,
             'slug' => $this->slug,
             'status' => $this->status,
+            // Publication is INDEPENDENT of status: an active store may be
+            // paused by its own owner, and both panels need to render the
+            // switch in the right position without inferring it.
+            'published' => $this->unpublished_at === null,
+            'unpublished_at' => $this->unpublished_at?->toIso8601String(),
             'category' => $this->category,
             'category_retired' => $this->categoryRetired(),
             'channel' => $this->channel,
