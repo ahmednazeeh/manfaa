@@ -849,3 +849,45 @@ Each round ships end-to-end and green, in the house style.
 
 MP1–MP3 are invisible to customers and can ship behind the kill switch while
 the rest is built.
+
+---
+
+## 13. MP1 — foundations (in progress, branch `marketplace`)
+
+Everything here is invisible to customers and ships behind the kill switch.
+No shopping, no catalogue, no orders: this round is the switch, the
+enrolment, and the review queue that lets a store *become* a vendor.
+
+**Server**
+
+- [ ] Platform settings: `marketplace_enabled` (0/1, default **0**) and
+      `marketplace_fee_bp` (default **200** = 2.00%, wire name
+      `marketplace_fee_percent` per the PERCENT_KEYS rule).
+- [ ] Migration: `merchant_marketplace_profiles` (§2.1).
+- [ ] Migration: `merchant_kyb_documents` (§2.1).
+- [ ] Models + casts, `Merchant::marketplace()` relation.
+- [ ] `store.marketplace` permission, owner-tier.
+- [ ] `EnsureMarketplaceEnabled` middleware — every marketplace route
+      refuses with a machine-readable code while the switch is off, so a
+      hidden button that still answers cannot exist (§10).
+- [ ] Expose `marketplace_enabled` on `/mobile/v1/config` and both panel
+      bootstraps.
+- [ ] Merchant API: read enrolment state, opt in (business type, fulfilment,
+      prep times), upload/replace/delete KYB documents, submit for review.
+- [ ] Admin API: KYB queue — list pending, show one with its documents,
+      approve, reject with a reason.
+- [ ] Notification keys `kyb_approved` / `kyb_rejected`, seeded, push + SMS
+      (merchant moments text the store, 2026-08-18).
+- [ ] Document storage on the private disk, served through a signed route —
+      KYB papers are identity documents and never public.
+
+**Proof**
+
+- [ ] Tests: the switch refuses every marketplace route when off; a
+      non-owner cannot enrol; a store cannot submit KYB twice; approval
+      moves the state and notifies; rejection carries its reason; documents
+      are unreadable without auth.
+- [ ] Full API suite green, pint clean.
+
+**Not in MP1:** any customer-visible surface, the catalogue, delivery rules,
+the panels' UI. Those are MP2+.
