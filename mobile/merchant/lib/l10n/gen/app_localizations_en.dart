@@ -561,27 +561,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get invoiceLabel => 'Invoice number';
 
   @override
-  String get invoiceHint =>
-      'Required — one credit per invoice, exactly as printed on the receipt.';
-
-  @override
-  String get saleDateTimeLabel => 'Sale date & time';
-
-  @override
-  String get saleDateTimeNow => 'Recorded as right now unless you change it.';
-
-  @override
-  String get saleDateTimeEdited => 'Will be recorded at the time shown.';
-
-  @override
-  String get saleDateTimeSetNow => 'Set to now';
-
-  @override
   String get eligibleLabel => 'Eligible amount';
-
-  @override
-  String get eligibleHint =>
-      'The part of the bill cashback is computed on, per your agreement.';
 
   @override
   String get eligibleInvalid => 'Enter a valid amount, e.g. 1,250.00.';
@@ -590,19 +570,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get fullSaleLabel => 'Full sale amount';
 
   @override
-  String get fullSaleHint =>
-      'The whole invoice total — reference only, never used in computation.';
-
-  @override
   String get fullSaleInvalid =>
       'Must be a valid amount, at least the eligible amount.';
 
   @override
   String get customRateToggle => 'Custom cashback for this sale';
-
-  @override
-  String get customRateToggleHint =>
-      'Pay this customer more than your usual rate.';
 
   @override
   String get customRateLabel => 'Cashback for this sale';
@@ -648,9 +620,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get splitToggle => 'Split by category';
-
-  @override
-  String get splitToggleHint => 'Split this sale into product categories.';
 
   @override
   String get splitBreakdownTitle => 'Category breakdown';
@@ -726,8 +695,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get previewPerLine => 'per line';
 
   @override
-  String get previewEstimateNote =>
-      'Estimate — final amounts use the rate at the sale time.';
+  String get previewEstimateNote => 'Estimate — priced at the sale time.';
 
   @override
   String get previewNoRate =>
@@ -767,8 +735,7 @@ class AppLocalizationsEn extends AppLocalizations {
       'This backdated sale skipped the refund window. The customer\'s cashback is payable to Manfaa immediately, and neither you nor your POS can reverse it — contact Manfaa if it needs correcting.';
 
   @override
-  String get pendingNote =>
-      'Credited cashback will appear as pending. It will be validated and released to the customer after settlement.';
+  String get pendingNote => 'Cashback stays pending until settlement.';
 
   @override
   String get creditCta => 'Credit customer';
@@ -2638,4 +2605,13 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get referenceComesLaterNote =>
       'No reference is needed for the transfer — Manfaa creates one when you upload the receipt, and you\'ll see it on the settlement.';
+
+  @override
+  String get saleTimeLabel => 'Sale time';
+
+  @override
+  String get saleTimeNow => 'Now';
+
+  @override
+  String get saleTimeSetNow => 'Now';
 }

@@ -1100,47 +1100,11 @@ abstract class AppLocalizations {
   /// **'Invoice number'**
   String get invoiceLabel;
 
-  /// No description provided for @invoiceHint.
-  ///
-  /// In en, this message translates to:
-  /// **'Required — one credit per invoice, exactly as printed on the receipt.'**
-  String get invoiceHint;
-
-  /// No description provided for @saleDateTimeLabel.
-  ///
-  /// In en, this message translates to:
-  /// **'Sale date & time'**
-  String get saleDateTimeLabel;
-
-  /// No description provided for @saleDateTimeNow.
-  ///
-  /// In en, this message translates to:
-  /// **'Recorded as right now unless you change it.'**
-  String get saleDateTimeNow;
-
-  /// No description provided for @saleDateTimeEdited.
-  ///
-  /// In en, this message translates to:
-  /// **'Will be recorded at the time shown.'**
-  String get saleDateTimeEdited;
-
-  /// No description provided for @saleDateTimeSetNow.
-  ///
-  /// In en, this message translates to:
-  /// **'Set to now'**
-  String get saleDateTimeSetNow;
-
   /// No description provided for @eligibleLabel.
   ///
   /// In en, this message translates to:
   /// **'Eligible amount'**
   String get eligibleLabel;
-
-  /// No description provided for @eligibleHint.
-  ///
-  /// In en, this message translates to:
-  /// **'The part of the bill cashback is computed on, per your agreement.'**
-  String get eligibleHint;
 
   /// No description provided for @eligibleInvalid.
   ///
@@ -1154,12 +1118,6 @@ abstract class AppLocalizations {
   /// **'Full sale amount'**
   String get fullSaleLabel;
 
-  /// No description provided for @fullSaleHint.
-  ///
-  /// In en, this message translates to:
-  /// **'The whole invoice total — reference only, never used in computation.'**
-  String get fullSaleHint;
-
   /// No description provided for @fullSaleInvalid.
   ///
   /// In en, this message translates to:
@@ -1171,12 +1129,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Custom cashback for this sale'**
   String get customRateToggle;
-
-  /// No description provided for @customRateToggleHint.
-  ///
-  /// In en, this message translates to:
-  /// **'Pay this customer more than your usual rate.'**
-  String get customRateToggleHint;
 
   /// No description provided for @customRateLabel.
   ///
@@ -1243,12 +1195,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Split by category'**
   String get splitToggle;
-
-  /// No description provided for @splitToggleHint.
-  ///
-  /// In en, this message translates to:
-  /// **'Split this sale into product categories.'**
-  String get splitToggleHint;
 
   /// No description provided for @splitBreakdownTitle.
   ///
@@ -1379,7 +1325,7 @@ abstract class AppLocalizations {
   /// No description provided for @previewEstimateNote.
   ///
   /// In en, this message translates to:
-  /// **'Estimate — final amounts use the rate at the sale time.'**
+  /// **'Estimate — priced at the sale time.'**
   String get previewEstimateNote;
 
   /// No description provided for @previewNoRate.
@@ -1445,7 +1391,7 @@ abstract class AppLocalizations {
   /// No description provided for @pendingNote.
   ///
   /// In en, this message translates to:
-  /// **'Credited cashback will appear as pending. It will be validated and released to the customer after settlement.'**
+  /// **'Cashback stays pending until settlement.'**
   String get pendingNote;
 
   /// No description provided for @creditCta.
@@ -4651,6 +4597,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'No reference is needed for the transfer — Manfaa creates one when you upload the receipt, and you\'ll see it on the settlement.'**
   String get referenceComesLaterNote;
+
+  /// No description provided for @saleTimeLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Sale time'**
+  String get saleTimeLabel;
+
+  /// No description provided for @saleTimeNow.
+  ///
+  /// In en, this message translates to:
+  /// **'Now'**
+  String get saleTimeNow;
+
+  /// No description provided for @saleTimeSetNow.
+  ///
+  /// In en, this message translates to:
+  /// **'Now'**
+  String get saleTimeSetNow;
 }
 
 class _AppLocalizationsDelegate

@@ -567,28 +567,7 @@ class AppLocalizationsDv extends AppLocalizations {
   String get invoiceLabel => 'އިންވޮއިސް ނަންބަރު';
 
   @override
-  String get invoiceHint =>
-      'ލާޒިމް — ކޮންމެ އިންވޮއިސްއަކަށް އެއް ކްރެޑިޓް، ރަސީދުގައި ޗާޕުކުރެވިފައިވާ ގޮތަށް.';
-
-  @override
-  String get saleDateTimeLabel => 'ވިޔަފާރީގެ ތާރީޚާއި ވަގުތު';
-
-  @override
-  String get saleDateTimeNow =>
-      'ބަދަލުނުކުރައްވާނަމަ މިހާރުގެ ވަގުތަށް ރެކޯޑްވާނެއެވެ.';
-
-  @override
-  String get saleDateTimeEdited => 'ދައްކާފައިވާ ވަގުތަށް ރެކޯޑްވާނެއެވެ.';
-
-  @override
-  String get saleDateTimeSetNow => 'މިހާރުގެ ވަގުތު ލައްވާ';
-
-  @override
   String get eligibleLabel => 'ކޭޝްބެކް ލިބޭ ޢަދަދު';
-
-  @override
-  String get eligibleHint =>
-      'އެއްބަސްވުމާ އެއްގޮތަށް، ބިލުން ކޭޝްބެކް ހިސާބުކުރާ ބައި.';
 
   @override
   String get eligibleInvalid =>
@@ -598,19 +577,11 @@ class AppLocalizationsDv extends AppLocalizations {
   String get fullSaleLabel => 'މުޅި ވިޔަފާރީގެ ޢަދަދު';
 
   @override
-  String get fullSaleHint =>
-      'މުޅި އިންވޮއިސްގެ ޖުމްލަ — ރިފަރެންސަށް އެކަނި، ހިސާބުކުރުމުގައި ބޭނުމެއް ނުކުރެވޭނެ.';
-
-  @override
   String get fullSaleInvalid =>
       'ސައްޙަ އަދަދަކަށް ވާންޖެހޭނެ — މަދުވެގެން ކޭޝްބެކް ލިބޭ ޢަދަދު.';
 
   @override
   String get customRateToggle => 'މި ވިޔަފާރިއަށް ޚާއްޞަ ކޭޝްބެކެއް';
-
-  @override
-  String get customRateToggleHint =>
-      'މި ކަސްޓަމަރަށް އާންމު ރޭޓަށްވުރެ ބޮޑު ކޭޝްބެކެއް ދެއްވާ.';
 
   @override
   String get customRateLabel => 'މި ވިޔަފާރީގެ ކޭޝްބެކް';
@@ -656,9 +627,6 @@ class AppLocalizationsDv extends AppLocalizations {
 
   @override
   String get splitToggle => 'ބައިތަކަށް ބަހާލައްވާ';
-
-  @override
-  String get splitToggleHint => 'މި ވިޔަފާރި ޕްރޮޑަކްޓް ބައިތަކަށް ބަހާލައްވާ.';
 
   @override
   String get splitBreakdownTitle => 'ބައިތަކުގެ ތަފްޞީލު';
@@ -737,7 +705,7 @@ class AppLocalizationsDv extends AppLocalizations {
 
   @override
   String get previewEstimateNote =>
-      'އަންދާޒާއެއް — ފައިނަލް އަދަދުތައް ބިނާވާނީ ވިޔަފާރީގެ ވަގުތުގެ ރޭޓަށެވެ.';
+      'އަންދާސީ — އަގު ކަނޑައެޅޭނީ ވިޔަފާރީގެ ވަގުތުގައެވެ.';
 
   @override
   String get previewNoRate =>
@@ -779,7 +747,7 @@ class AppLocalizationsDv extends AppLocalizations {
 
   @override
   String get pendingNote =>
-      'ކްރެޑިޓްކުރެވުނު ކޭޝްބެކް ފުރަތަމަ ފެންނާނީ ޕެންޑިންގގައެވެ. ވެލިޑޭޓްވުމަށްފަހު، ސެޓްލްމަންޓަށްފަހު ކަސްޓަމަރަށް ދޫކުރެވޭނެއެވެ.';
+      'ސެޓްލްކުރެއްވުމާ ހަމައަށް ކޭޝްބެކް ހުންނާނީ ޕެންޑިންގައެވެ.';
 
   @override
   String get creditCta => 'ކަސްޓަމަރަށް ކްރެޑިޓްކުރައްވާ';
@@ -2672,4 +2640,13 @@ class AppLocalizationsDv extends AppLocalizations {
   @override
   String get referenceComesLaterNote =>
       'ފައިސާ ފޮނުއްވުމަށް ރެފަރެންސެއް ބޭނުމެއް ނުވާނެ — ރަސީދު އަޕްލޯޑްކުރެއްވުމުން މަންފާއިން ރެފަރެންސެއް ހަދާ، ސެޓްލްމަންޓްގައި ފެންނާނެއެވެ.';
+
+  @override
+  String get saleTimeLabel => 'ވިޔަފާރީގެ ވަގުތު';
+
+  @override
+  String get saleTimeNow => 'މިހާރު';
+
+  @override
+  String get saleTimeSetNow => 'މިހާރު';
 }

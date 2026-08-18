@@ -207,8 +207,8 @@ class _CreditScreenState extends ConsumerState<CreditScreen> {
   int? get _eligibleLaari => _splitEnabled
       ? (_splitComplete && _splitRows.isNotEmpty ? _splitSum : null)
       : (_eligible.text.trim().isEmpty
-          ? null
-          : parseMvrToLaari(_eligible.text));
+            ? null
+            : parseMvrToLaari(_eligible.text));
 
   bool get _eligibleInvalid =>
       !_splitEnabled &&
@@ -396,7 +396,7 @@ class _CreditScreenState extends ConsumerState<CreditScreen> {
       _buildFormCard(l10n, theme, rateAsync, activeCategories),
     ];
 
-    List<Widget> act() => [
+    List<Widget> act({bool expanded = false}) => [
       if (_splitEnabled) ...[
         SplitEditorCard(
           key: ValueKey('split-$_splitEpoch'),
@@ -418,26 +418,13 @@ class _CreditScreenState extends ConsumerState<CreditScreen> {
         const SizedBox(height: Gap.md),
         _buildErrorNotice(l10n, theme, _error!),
       ],
-      const SizedBox(height: Gap.md),
+      const SizedBox(height: Gap.sm),
       const PendingNote(),
-      const SizedBox(height: Gap.lg),
-      FilledButton(
-        onPressed: _submittable ? _submit : null,
-        child: _busy
-            ? const SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              )
-            : Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.receipt_long_outlined, size: 20),
-                  const SizedBox(width: Gap.sm),
-                  Text(l10n.creditCta),
-                ],
-              ),
-      ),
+      // On the wide canvas the CTA lives here, at the top of the right
+      // column where the eye already is. On a phone it is PINNED below the
+      // scroll instead (see the bar under the list) — a cashier should
+      // never scroll to find the button that ends the sale.
+      if (expanded) ...[const SizedBox(height: Gap.md), _buildCta(l10n)],
     ];
 
     return Scaffold(
@@ -450,7 +437,7 @@ class _CreditScreenState extends ConsumerState<CreditScreen> {
         child: LayoutBuilder(
           builder: (context, constraints) {
             final expanded = constraints.maxWidth >= kExpandedMinWidth;
-            return ContentRail(
+            final list = ContentRail(
               maxWidth: expanded ? kWideContentWidth : kContentRailWidth,
               child: ListView(
                 padding: EdgeInsets.fromLTRB(
@@ -519,7 +506,7 @@ class _CreditScreenState extends ConsumerState<CreditScreen> {
                       children: [
                         Expanded(child: Column(children: identify())),
                         const SizedBox(width: Gap.lg),
-                        Expanded(child: Column(children: act())),
+                        Expanded(child: Column(children: act(expanded: true))),
                       ],
                     )
                   else ...[
@@ -530,11 +517,52 @@ class _CreditScreenState extends ConsumerState<CreditScreen> {
                 ],
               ),
             );
+
+            if (expanded) return list;
+
+            // The till's ending, always within thumb reach: the button sits
+            // in its own bar under the scroll rather than at the bottom of
+            // it, so a long sale never hides the only action that matters.
+            return Column(
+              children: [
+                Expanded(child: list),
+                Container(
+                  width: double.infinity,
+                  color: theme.colorScheme.surface,
+                  padding: EdgeInsets.fromLTRB(
+                    Gap.xl,
+                    Gap.sm,
+                    Gap.xl,
+                    Gap.sm + bottomClearanceOf(context) / 2,
+                  ),
+                  child: ContentRail(child: _buildCta(l10n)),
+                ),
+              ],
+            );
           },
         ),
       ),
     );
   }
+
+  /// The one button that ends the sale.
+  Widget _buildCta(AppLocalizations l10n) => FilledButton(
+    onPressed: _submittable ? _submit : null,
+    child: _busy
+        ? const SizedBox(
+            width: 20,
+            height: 20,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          )
+        : Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.receipt_long_outlined, size: 20),
+              const SizedBox(width: Gap.sm),
+              Text(l10n.creditCta),
+            ],
+          ),
+  );
 
   bool get _submittable {
     final overrideBroken =
@@ -786,171 +814,141 @@ class _CreditScreenState extends ConsumerState<CreditScreen> {
     AsyncValue<MerchantRate> rateAsync,
     List<ProductCategory> active,
   ) {
-    final muted = theme.colorScheme.onSurfaceVariant;
-
-    return ManfaaCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _FieldLabel(
-            icon: Icons.receipt_long_outlined,
-            label: l10n.invoiceLabel,
+    // MR10 (owner report): the till's own field metrics. The house 15pt
+    // vertical padding suits a settings form; a counter wants the same
+    // touch target with less air, so this ONE card runs denser — still
+    // comfortably above the 44dp minimum tap target.
+    return Theme(
+      data: theme.copyWith(
+        inputDecorationTheme: theme.inputDecorationTheme.copyWith(
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 14,
+            vertical: 11,
           ),
-          const SizedBox(height: Gap.sm),
-          TextField(
-            controller: _invoice,
-            focusNode: _invoiceFocus,
-            maxLength: 64,
-            textInputAction: TextInputAction.done,
-            onChanged: (_) => setState(() => _error = null),
-            onSubmitted: (_) => _submitFromKeyboard(),
-            decoration: const InputDecoration(
-              hintText: 'INV-1001',
-              counterText: '',
+        ),
+      ),
+      child: ManfaaCard(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _FieldLabel(
+              icon: Icons.receipt_long_outlined,
+              label: l10n.invoiceLabel,
             ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            l10n.invoiceHint,
-            style: theme.textTheme.bodySmall?.copyWith(color: muted),
-          ),
-          const SizedBox(height: Gap.lg),
-          _FieldLabel(
-            icon: Icons.calendar_today_outlined,
-            label: l10n.saleDateTimeLabel,
-          ),
-          const SizedBox(height: Gap.sm),
-          InkWell(
-            borderRadius: BorderRadius.circular(Corner.control),
-            onTap: _pickOccurredAt,
-            child: InputDecorator(
-              decoration: const InputDecoration(),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      formatDateTimeDisplay(_occurredAt),
-                      textDirection: TextDirection.ltr,
-                      style: theme.textTheme.bodyLarge,
-                    ),
-                  ),
-                  Icon(Icons.edit_calendar_outlined, size: 20, color: muted),
-                ],
+            const SizedBox(height: Gap.sm),
+            TextField(
+              controller: _invoice,
+              focusNode: _invoiceFocus,
+              maxLength: 64,
+              textInputAction: TextInputAction.done,
+              onChanged: (_) => setState(() => _error = null),
+              onSubmitted: (_) => _submitFromKeyboard(),
+              decoration: const InputDecoration(
+                hintText: 'INV-1001',
+                counterText: '',
               ),
             ),
-          ),
-          const SizedBox(height: 6),
-          if (_occurredEdited)
-            Wrap(
-              crossAxisAlignment: WrapCrossAlignment.center,
-              spacing: Gap.sm,
-              children: [
+            // MR10 (owner report): the sale time is "now" for virtually every
+            // credit, so it costs ONE quiet line instead of a label, a
+            // full-height field and a sentence. Backdating is a deliberate
+            // detour: tap the time to open the picker, tap Now to come back.
+            const SizedBox(height: Gap.md),
+            _SaleTimeRow(
+              occurredAt: _occurredAt,
+              edited: _occurredEdited,
+              onPick: _pickOccurredAt,
+              onNow: () => setState(() {
+                _occurredAt = creditClock();
+                _occurredEdited = false;
+                _backdatedConfirmed = false;
+                _serverRequiresBackdated = false;
+              }),
+            ),
+            // MR8 (owner report): with the split ON the eligible amount IS
+            // the lines' sum — the field disappears so the two can never
+            // contradict ("doesn't add up"). The full-sale field below stays.
+            if (!_splitEnabled) ...[
+              const SizedBox(height: Gap.lg),
+              _FieldLabel(
+                icon: Icons.payments_outlined,
+                label: l10n.eligibleLabel,
+              ),
+              const SizedBox(height: Gap.sm),
+              _MvrField(
+                controller: _eligible,
+                invalid: _eligibleInvalid,
+                onChanged: (_) => setState(() => _error = null),
+                onSubmitted: (_) => _submitFromKeyboard(),
+              ),
+              if (_eligibleInvalid) ...[
+                const SizedBox(height: 6),
                 Text(
-                  l10n.saleDateTimeEdited,
-                  style: theme.textTheme.bodySmall?.copyWith(color: muted),
-                ),
-                InkWell(
-                  onTap: () => setState(() {
-                    _occurredAt = creditClock();
-                    _occurredEdited = false;
-                    _backdatedConfirmed = false;
-                    _serverRequiresBackdated = false;
-                  }),
-                  child: Text(
-                    l10n.saleDateTimeSetNow,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.secondary,
-                      fontWeight: FontWeight.w700,
-                    ),
+                  l10n.eligibleInvalid,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.error,
                   ),
                 ),
               ],
-            )
-          else
-            Text(
-              l10n.saleDateTimeNow,
-              style: theme.textTheme.bodySmall?.copyWith(color: muted),
-            ),
-          // MR8 (owner report): with the split ON the eligible amount IS
-          // the lines' sum — the field disappears so the two can never
-          // contradict ("doesn't add up"). The full-sale field below stays.
-          if (!_splitEnabled) ...[
+            ],
             const SizedBox(height: Gap.lg),
             _FieldLabel(
-              icon: Icons.payments_outlined,
-              label: l10n.eligibleLabel,
+              icon: Icons.request_quote_outlined,
+              label: l10n.fullSaleLabel,
+              suffix: '(${l10n.optionalLabel})',
             ),
             const SizedBox(height: Gap.sm),
             _MvrField(
-              controller: _eligible,
-              invalid: _eligibleInvalid,
+              controller: _sale,
+              invalid: _saleInvalid,
               onChanged: (_) => setState(() => _error = null),
               onSubmitted: (_) => _submitFromKeyboard(),
             ),
-            const SizedBox(height: 6),
-            Text(
-              _eligibleInvalid ? l10n.eligibleInvalid : l10n.eligibleHint,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: _eligibleInvalid ? theme.colorScheme.error : muted,
+            if (_saleInvalid) ...[
+              const SizedBox(height: 6),
+              Text(
+                l10n.fullSaleInvalid,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.error,
+                ),
               ),
-            ),
-          ],
-          const SizedBox(height: Gap.lg),
-          _FieldLabel(
-            icon: Icons.request_quote_outlined,
-            label: l10n.fullSaleLabel,
-            suffix: '(${l10n.optionalLabel})',
-          ),
-          const SizedBox(height: Gap.sm),
-          _MvrField(
-            controller: _sale,
-            invalid: _saleInvalid,
-            onChanged: (_) => setState(() => _error = null),
-            onSubmitted: (_) => _submitFromKeyboard(),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            _saleInvalid ? l10n.fullSaleInvalid : l10n.fullSaleHint,
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: _saleInvalid ? theme.colorScheme.error : muted,
-            ),
-          ),
-          // PLAN §1 per-sale override — rendered only for roles holding
-          // credits.custom_rate; the server refuses the FIELD regardless.
-          if (_canSetCustomRate) ...[
-            const SizedBox(height: Gap.lg),
-            _ToggleRow(
-              value: _overrideOpen,
-              title: l10n.customRateToggle,
-              subtitle: l10n.customRateToggleHint,
-              onChanged: (value) => setState(() {
-                _overrideOpen = value;
-                if (!value) _override.clear();
-              }),
-            ),
-            if (_overrideOpen) ...[
-              const SizedBox(height: Gap.md),
-              _buildOverrideField(l10n, theme),
+            ],
+            // PLAN §1 per-sale override — rendered only for roles holding
+            // credits.custom_rate; the server refuses the FIELD regardless.
+            if (_canSetCustomRate) ...[
+              const SizedBox(height: Gap.lg),
+              _ToggleRow(
+                value: _overrideOpen,
+                title: l10n.customRateToggle,
+                subtitle: null,
+                onChanged: (value) => setState(() {
+                  _overrideOpen = value;
+                  if (!value) _override.clear();
+                }),
+              ),
+              if (_overrideOpen) ...[
+                const SizedBox(height: Gap.md),
+                _buildOverrideField(l10n, theme),
+              ],
+            ],
+            if (active.isNotEmpty) ...[
+              const SizedBox(height: Gap.lg),
+              _ToggleRow(
+                value: _splitEnabled,
+                title: l10n.splitToggle,
+                subtitle: null,
+                onChanged: (value) => setState(() {
+                  _splitEnabled = value;
+                  // Either direction starts the split over: rows compose
+                  // against the CURRENT sale, never a previous one's.
+                  _splitRows = [];
+                  _splitComplete = false;
+                  _splitEpoch++;
+                  _error = null;
+                }),
+              ),
             ],
           ],
-          if (active.isNotEmpty) ...[
-            const SizedBox(height: Gap.lg),
-            _ToggleRow(
-              value: _splitEnabled,
-              title: l10n.splitToggle,
-              subtitle: l10n.splitToggleHint,
-              onChanged: (value) => setState(() {
-                _splitEnabled = value;
-                // Either direction starts the split over: rows compose
-                // against the CURRENT sale, never a previous one's.
-                _splitRows = [];
-                _splitComplete = false;
-                _splitEpoch++;
-                _error = null;
-              }),
-            ),
-          ],
-        ],
+        ),
       ),
     );
   }
@@ -1080,7 +1078,7 @@ class _CreditScreenState extends ConsumerState<CreditScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(l10n.costPreviewTitle, style: theme.textTheme.titleMedium),
-          const SizedBox(height: Gap.md),
+          const SizedBox(height: Gap.sm),
           body,
         ],
       ),
@@ -1143,7 +1141,7 @@ class _CreditScreenState extends ConsumerState<CreditScreen> {
     }
 
     Widget row(String label, int? laari, {bool strong = false}) => Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
+      padding: const EdgeInsets.symmetric(vertical: 2),
       child: Row(
         children: [
           Expanded(
@@ -1179,18 +1177,18 @@ class _CreditScreenState extends ConsumerState<CreditScreen> {
       children: [
         row(rateLabel, cashback),
         row(feeLabel, fee),
-        Divider(height: Gap.lg, color: theme.colorScheme.outlineVariant),
+        Divider(height: Gap.md, color: theme.colorScheme.outlineVariant),
         row(
           youPayLabel,
           cashback != null && fee != null ? cashback + fee : null,
           strong: true,
         ),
-        const SizedBox(height: Gap.sm),
+        const SizedBox(height: 6),
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(Icons.info_outline_rounded, size: 14, color: muted),
-            const SizedBox(width: 6),
+            Icon(Icons.info_outline_rounded, size: 13, color: muted),
+            const SizedBox(width: 5),
             Expanded(
               child: Text(
                 l10n.previewEstimateNote,
@@ -1440,13 +1438,13 @@ class _ToggleRow extends StatelessWidget {
   const _ToggleRow({
     required this.value,
     required this.title,
-    required this.subtitle,
+    this.subtitle,
     required this.onChanged,
   });
 
   final bool value;
   final String title;
-  final String subtitle;
+  final String? subtitle;
   final ValueChanged<bool> onChanged;
 
   @override
@@ -1466,13 +1464,15 @@ class _ToggleRow extends StatelessWidget {
                 padding: const EdgeInsets.only(top: 4),
                 child: Text(title, style: theme.textTheme.titleSmall),
               ),
-              const SizedBox(height: 2),
-              Text(
-                subtitle,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
+              if (subtitle != null) ...[
+                const SizedBox(height: 2),
+                Text(
+                  subtitle!,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
                 ),
-              ),
+              ],
             ],
           ),
         ),
@@ -1534,6 +1534,86 @@ class _InlineNotice extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// The sale time as ONE line (MR10 owner report): a credit is "now" almost
+/// every time, so the default costs a single quiet row instead of a label,
+/// a full-height field and a sentence. The whole row opens the picker;
+/// once edited it turns violet and offers "Now" to undo — backdating stays
+/// possible, it just stops charging every sale for the privilege.
+class _SaleTimeRow extends StatelessWidget {
+  const _SaleTimeRow({
+    required this.occurredAt,
+    required this.edited,
+    required this.onPick,
+    required this.onNow,
+  });
+
+  final DateTime occurredAt;
+  final bool edited;
+  final VoidCallback onPick;
+  final VoidCallback onNow;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final l10n = context.l10n;
+    final muted = theme.colorScheme.onSurfaceVariant;
+    final accent = theme.colorScheme.secondary;
+
+    return Row(
+      children: [
+        Expanded(
+          child: InkWell(
+            onTap: onPick,
+            borderRadius: BorderRadius.circular(Corner.tile),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.schedule_rounded,
+                    size: 16,
+                    color: edited ? accent : muted,
+                  ),
+                  const SizedBox(width: Gap.sm),
+                  Text(
+                    l10n.saleTimeLabel,
+                    style: theme.textTheme.bodySmall?.copyWith(color: muted),
+                  ),
+                  const SizedBox(width: Gap.sm),
+                  Expanded(
+                    child: Text(
+                      edited
+                          ? formatDateTimeDisplay(occurredAt)
+                          : l10n.saleTimeNow,
+                      textDirection: edited ? TextDirection.ltr : null,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: edited ? accent : theme.colorScheme.onSurface,
+                      ),
+                    ),
+                  ),
+                  if (!edited)
+                    Icon(Icons.edit_calendar_outlined, size: 18, color: muted),
+                ],
+              ),
+            ),
+          ),
+        ),
+        if (edited)
+          TextButton(
+            onPressed: onNow,
+            style: TextButton.styleFrom(
+              visualDensity: VisualDensity.compact,
+              padding: const EdgeInsets.symmetric(horizontal: Gap.sm),
+              minimumSize: const Size(0, 32),
+            ),
+            child: Text(l10n.saleTimeSetNow),
+          ),
+      ],
     );
   }
 }
