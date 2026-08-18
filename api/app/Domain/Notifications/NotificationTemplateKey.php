@@ -75,6 +75,17 @@ enum NotificationTemplateKey: string
     case MarketplaceApproved = 'marketplace_approved';
     case MarketplaceRejected = 'marketplace_rejected';
 
+    // Marketplace order moments. Each one is something the customer cannot
+    // see for themselves — they are not holding the screen when a shop
+    // accepts, cuts or hands over their shopping.
+    case OrderPlaced = 'order_placed';
+    case OrderAccepted = 'order_accepted';
+    case OrderRejected = 'order_rejected';
+    case OrderAmended = 'order_amended';
+    case OrderReady = 'order_ready';
+    case OrderOutForDelivery = 'order_out_for_delivery';
+    case OrderDelivered = 'order_delivered';
+
     public function label(): string
     {
         return match ($this) {
@@ -96,6 +107,13 @@ enum NotificationTemplateKey: string
             self::StoreApproved => 'Store approved',
             self::MarketplaceApproved => 'Marketplace approved',
             self::MarketplaceRejected => 'Marketplace not approved',
+            self::OrderPlaced => 'New order',
+            self::OrderAccepted => 'Order accepted',
+            self::OrderRejected => 'Order refused',
+            self::OrderAmended => 'Order changed',
+            self::OrderReady => 'Ready for pickup',
+            self::OrderOutForDelivery => 'Out for delivery',
+            self::OrderDelivered => 'Order delivered',
         };
     }
 
@@ -118,6 +136,13 @@ enum NotificationTemplateKey: string
             self::StoreChangeRejected => 'When an admin refuses a queued store change, with the reason. The store has to act, so this one earns an interruption.',
             self::StorePaused => 'When a store takes itself off the app. Goes to customers who have earned cashback there before, so they do not make a trip for an offer that is not running.',
             self::StoreResumed => 'When a store that had paused puts itself back on the app. Goes to the same customers — the ones who already know the shop.',
+            self::OrderPlaced => 'When a paid marketplace order reaches a shop. Goes to the staff who work the order queue.',
+            self::OrderAccepted => 'When a shop accepts a customer order and starts preparing it.',
+            self::OrderRejected => 'When a shop refuses an order, with the reason. The customer is owed their money back, so this earns an interruption.',
+            self::OrderAmended => 'When a shop reduces an order — an item out of stock, say. Names the refund, because the customer paid for goods they will not receive.',
+            self::OrderReady => 'When a collection order is ready at the counter.',
+            self::OrderOutForDelivery => 'When a delivery leaves the shop.',
+            self::OrderDelivered => 'When an order is handed over. Cashback follows validation.',
             self::MarketplaceApproved => 'When an admin approves a store to sell on the marketplace. The shop can list products from that moment.',
             self::MarketplaceRejected => 'When an admin refuses a marketplace application, with the reason. The store has to act, so it earns an interruption.',
             self::StoreApproved => 'When an admin approves a new store and it goes live. Sent by SMS as well as push — the merchant has been waiting on a decision and may not have the app open.',
@@ -186,6 +211,25 @@ enum NotificationTemplateKey: string
                 'store' => 'The store name',
                 'reason' => 'Why the application was refused',
             ],
+            self::OrderPlaced => [
+                'reference' => 'The order reference for this shop',
+                'amount' => 'What the order is worth, formatted with its currency',
+            ],
+            self::OrderAccepted, self::OrderReady,
+            self::OrderOutForDelivery, self::OrderDelivered => [
+                'store' => 'The store name',
+                'reference' => 'The order reference',
+            ],
+            self::OrderRejected => [
+                'store' => 'The store name',
+                'reference' => 'The order reference',
+                'reason' => 'Why the shop refused it',
+            ],
+            self::OrderAmended => [
+                'store' => 'The store name',
+                'reference' => 'The order reference',
+                'amount' => 'What is being refunded, formatted with its currency',
+            ],
         };
     }
 
@@ -204,6 +248,9 @@ enum NotificationTemplateKey: string
             self::PromptDiscountExpiring, self::SettlementDueSoon,
             self::ReminderDay10, self::UrgentDay13, self::DueDay15,
             self::StoreChangeApproved, self::StoreChangeRejected => true,
+            self::OrderPlaced => true,
+            self::OrderAccepted, self::OrderRejected, self::OrderAmended,
+            self::OrderReady, self::OrderOutForDelivery, self::OrderDelivered => false,
             // Customer-facing: these go to shoppers, not to the store's till.
             self::StorePaused, self::StoreResumed => false,
             self::StoreApproved,
@@ -225,6 +272,12 @@ enum NotificationTemplateKey: string
     {
         return match ($this) {
             self::StorePaused, self::StoreResumed => false,
+            // Order progress reaches a shopper who is probably holding their
+            // phone anyway, and a push is free. The two that COST them money
+            // — a refusal and a cut order — are the two worth a text, since
+            // those are the ones they must not miss.
+            self::OrderAccepted, self::OrderReady,
+            self::OrderOutForDelivery, self::OrderDelivered => false,
             default => true,
         };
     }
@@ -250,7 +303,15 @@ enum NotificationTemplateKey: string
     public function smsToMerchantContact(): bool
     {
         return match ($this) {
-            // Name a key here to keep it push-only.
+            // Customer-facing keys never reach this method (it is asked only
+            // inside sendToMerchantStaff), but answering honestly costs
+            // nothing and stops a future reader concluding the platform
+            // texts shops about their customers' deliveries.
+            self::CashbackEarned, self::CashbackConfirmed, self::PayoutPaid,
+            self::StorePaused, self::StoreResumed,
+            self::OrderAccepted, self::OrderRejected, self::OrderAmended,
+            self::OrderReady, self::OrderOutForDelivery, self::OrderDelivered => false,
+            // Name a key here to keep a MERCHANT moment push-only.
             default => true,
         };
     }
@@ -287,6 +348,13 @@ enum NotificationTemplateKey: string
             self::StoreApproved => ['en' => 'Store approved', 'dv' => 'ފިހާރަ ފާސްވެއްޖެ'],
             self::MarketplaceApproved => ['en' => 'Marketplace approved', 'dv' => 'މާކެޓްޕްލޭސް ފާސްވެއްޖެ'],
             self::MarketplaceRejected => ['en' => 'Application refused', 'dv' => 'ހުށަހެޅުން ބަލައިނުގަނެވުނު'],
+            self::OrderPlaced => ['en' => 'New order', 'dv' => 'އައު އޯޑަރެއް'],
+            self::OrderAccepted => ['en' => 'Order accepted', 'dv' => 'އޯޑަރު ބަލައިގަނެފި'],
+            self::OrderRejected => ['en' => 'Order refused', 'dv' => 'އޯޑަރު ބަލައިނުގަނެވުނު'],
+            self::OrderAmended => ['en' => 'Order changed', 'dv' => 'އޯޑަރަށް ބަދަލެއް'],
+            self::OrderReady => ['en' => 'Ready for pickup', 'dv' => 'ނަގަން ތައްޔާރު'],
+            self::OrderOutForDelivery => ['en' => 'On its way', 'dv' => 'ގެންދަނީ'],
+            self::OrderDelivered => ['en' => 'Delivered', 'dv' => 'ލިބިއްޖެ'],
         };
     }
 

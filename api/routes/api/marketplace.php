@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Admin\MarketplaceKybController;
 use App\Http\Controllers\Admin\OrderPaymentController;
+use App\Http\Controllers\Customer\ActivityController;
 use App\Http\Controllers\Customer\AddressController;
 use App\Http\Controllers\Customer\CartController;
 use App\Http\Controllers\Customer\MarketController;
@@ -142,6 +143,11 @@ Route::prefix('customer')
         Route::post('orders', [OrderController::class, 'place'])->middleware('throttle:20,1');
         Route::post('orders/{order}/receipt', [OrderController::class, 'uploadReceipt'])
             ->whereNumber('order')->middleware('throttle:20,1');
+        // One timeline: marketplace orders AND cashback, as the screen
+        // promises. Behind the switch with everything else — with no
+        // marketplace there are no orders to merge, and the plain
+        // transactions endpoint already serves that case.
+        Route::get('activity', [ActivityController::class, 'index']);
         Route::get('orders', [OrderController::class, 'index']);
         Route::get('orders/{order}', [OrderController::class, 'show'])->whereNumber('order');
     });

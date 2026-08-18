@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Domain\Marketplace;
 
+use App\Domain\Notifications\NotificationService;
+use App\Domain\Notifications\NotificationTemplateKey;
 use App\Models\CustomerRefund;
 use App\Models\MerchantUser;
 use App\Models\Suborder;
@@ -18,6 +20,8 @@ use Illuminate\Support\Facades\DB;
  */
 final readonly class FulfilmentService
 {
+    public function __construct(private NotificationService $notifications) {}
+
     /**
      * The only moves allowed, in order. A state machine rather than a free
      * write: "ready" before "accepted" is not a shortcut, it is a lie about
@@ -53,6 +57,8 @@ final readonly class FulfilmentService
                 : null,
         ])->save();
 
+        $this->tell($suborder, NotificationTemplateKey::OrderAccepted);
+
         return $suborder->refresh();
     }
 
@@ -83,6 +89,8 @@ final readonly class FulfilmentService
             ]);
         });
 
+        $this->tell($suborder, NotificationTemplateKey::OrderRejected, ['reason' => $reason]);
+
         return $suborder->refresh();
     }
 
@@ -99,6 +107,22 @@ final readonly class FulfilmentService
             'state' => $to,
             $stamps[$to] ?? 'state' => isset($stamps[$to]) ? CarbonImmutable::now() : $to,
         ]))->save();
+
+        // Only the moments a customer would want to know about. "Preparing"
+        // is the shop's own bookkeeping and interrupting a phone for it is
+        // how people learn to ignore us.
+        $key = match ($to) {
+            'ready' => $suborder->fulfilment === 'pickup'
+                ? NotificationTemplateKey::OrderReady
+                : null,
+            'out_for_delivery' => NotificationTemplateKey::OrderOutForDelivery,
+            'delivered' => NotificationTemplateKey::OrderDelivered,
+            default => null,
+        };
+
+        if ($key !== null) {
+            $this->tell($suborder, $key);
+        }
 
         return $suborder->refresh();
     }
@@ -190,8 +214,37 @@ final readonly class FulfilmentService
                 'state' => 'pending',
             ]);
 
+            $this->tell($locked, NotificationTemplateKey::OrderAmended, [
+                // The money is the point of the message.
+                'amount' => 'MVR '.number_format($refundTotal / 100, 2),
+            ]);
+
             return $locked->refresh();
         });
+    }
+
+    /**
+     * Tell the customer what just happened to their shopping.
+     *
+     * Never inside the transaction that changed it: NotificationService
+     * defers its whole body past commit for exactly this reason, and the
+     * money must not depend on a template lookup.
+     *
+     * @param  array<string, string>  $extra
+     */
+    private function tell(Suborder $suborder, NotificationTemplateKey $key, array $extra = []): void
+    {
+        $customer = $suborder->order?->customer;
+
+        if ($customer === null) {
+            return;
+        }
+
+        $this->notifications->send($key, $customer, [
+            'store' => (string) $suborder->merchant?->name,
+            'reference' => (string) $suborder->reference,
+            ...$extra,
+        ]);
     }
 
     /**

@@ -1182,10 +1182,7 @@ deliberate: half a wallet is worse than none.
       from `fulfilled_qty` against the FROZEN rates, and record the refund.
 - [x] Removing the last line offers rejection instead (§2.7).
 - [x] Admin: verify or refuse a payment proof (deferred from MP5).
-- [ ] Notifications for every moment the customer cannot see for themselves
-      — **deferred to MP7**, where the customer's own order-tracking screen
-      is built: writing the messages beside the screen they link into is how
-      the two end up saying the same thing.
+- [x] Notifications — done in MP7, beside the screen they link into.
 
 **Proof**
 
@@ -1216,3 +1213,38 @@ What the tests pin, beyond the happy path:
 - **A refused payment goes back for another receipt, not to the bin.** A
   wrong screenshot is a fixable mistake; cancelling would throw away a
   basket somebody built.
+
+---
+
+## 19. MP7 — one timeline, and the messages that reach a phone
+
+Shipped 2026-08-18. 11 tests; full API suite **1512 green**; live behind the
+switch.
+
+**The Activity feed merges in SQL, not in PHP.** A union over
+`(kind, id, at)` from orders and transactions, paged, then hydrated per kind.
+Fetching both lists and sorting in memory would silently drop whichever
+source is denser — a customer who shops a lot at the till would stop seeing
+their orders — and the bug would only appear for the busiest people.
+
+**A multi-vendor order shows its shops, not a summary word.** In an order
+spanning three stores the shops ARE the status: one word would hide that two
+are confirmed and one is not.
+
+**Seven order notifications**, each a moment the customer cannot see for
+themselves. The SMS policy is per-key and deliberate:
+
+| Moment | Push | SMS | Why |
+|---|---|---|---|
+| `order_placed` (to the shop) | ✓ | ✓ | Merchant moments text the store (2026-08-18) |
+| `order_accepted` | ✓ | — | Good news; they are probably holding the phone |
+| `order_ready` / `out_for_delivery` / `delivered` | ✓ | — | Progress, not money |
+| `order_rejected` | ✓ | ✓ | Costs them the whole order |
+| `order_amended` | ✓ | ✓ | Costs them goods they paid for |
+
+`preparing` sends nothing at all: it is the shop's own bookkeeping, and
+interrupting a phone for it is how people learn to ignore us.
+
+Both channels still decide for themselves whether they have anywhere to
+deliver — a customer with no device and no number is sent nothing, and that
+is ordinary rather than an error. There is a test for it.
