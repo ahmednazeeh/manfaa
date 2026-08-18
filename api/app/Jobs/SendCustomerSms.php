@@ -37,7 +37,14 @@ class SendCustomerSms implements ShouldQueue
         private readonly string $phone,
         private readonly string $body,
         private readonly string $templateKey,
-        private readonly int $customerId,
+        private readonly int $subjectId,
+        /**
+         * What $subjectId identifies. Almost always a customer; store
+         * approval texts the MERCHANT'S own number, and a failure logged as
+         * a customer id would send whoever reads it looking for the wrong
+         * row.
+         */
+        private readonly string $subjectType = 'customer',
     ) {}
 
     public function handle(SmsSender $sms): void
@@ -47,10 +54,11 @@ class SendCustomerSms implements ShouldQueue
 
     public function failed(?Throwable $exception): void
     {
-        // Customer id, not the number — see NotificationService::swallow.
-        Log::warning('Customer notification failed after retries.', [
+        // The id, never the number — see NotificationService::swallow.
+        Log::warning('SMS notification failed after retries.', [
             'template' => $this->templateKey,
-            'customer_id' => $this->customerId,
+            'subject_type' => $this->subjectType,
+            'subject_id' => $this->subjectId,
             'exception' => $exception?->getMessage(),
         ]);
     }

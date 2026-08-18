@@ -63,6 +63,12 @@ enum NotificationTemplateKey: string
     case StorePaused = 'store_paused';
     case StoreResumed = 'store_resumed';
 
+    // The store passed review and is LIVE (owner decision 2026-08-18). The
+    // one moment in a merchant's life with us that earns both channels: they
+    // have been waiting on a human decision they cannot chase, and they may
+    // not have the app open — or installed — when it lands.
+    case StoreApproved = 'store_approved';
+
     public function label(): string
     {
         return match ($this) {
@@ -81,6 +87,7 @@ enum NotificationTemplateKey: string
             self::StoreChangeRejected => 'Store change rejected',
             self::StorePaused => 'Store paused cashback',
             self::StoreResumed => 'Store resumed cashback',
+            self::StoreApproved => 'Store approved',
         };
     }
 
@@ -103,6 +110,7 @@ enum NotificationTemplateKey: string
             self::StoreChangeRejected => 'When an admin refuses a queued store change, with the reason. The store has to act, so this one earns an interruption.',
             self::StorePaused => 'When a store takes itself off the app. Goes to customers who have earned cashback there before, so they do not make a trip for an offer that is not running.',
             self::StoreResumed => 'When a store that had paused puts itself back on the app. Goes to the same customers — the ones who already know the shop.',
+            self::StoreApproved => 'When an admin approves a new store and it goes live. Sent by SMS as well as push — the merchant has been waiting on a decision and may not have the app open.',
         };
     }
 
@@ -160,7 +168,7 @@ enum NotificationTemplateKey: string
                 'store' => 'The store name',
                 'reason' => 'Why the change was refused',
             ],
-            self::StorePaused, self::StoreResumed => [
+            self::StorePaused, self::StoreResumed, self::StoreApproved => [
                 'store' => 'The store name',
             ],
         };
@@ -183,6 +191,7 @@ enum NotificationTemplateKey: string
             self::StoreChangeApproved, self::StoreChangeRejected => true,
             // Customer-facing: these go to shoppers, not to the store's till.
             self::StorePaused, self::StoreResumed => false,
+            self::StoreApproved => true,
         };
     }
 
@@ -201,6 +210,26 @@ enum NotificationTemplateKey: string
         return match ($this) {
             self::StorePaused, self::StoreResumed => false,
             default => true,
+        };
+    }
+
+    /**
+     * Whether a MERCHANT-facing moment also earns an SMS, sent to the store's
+     * own contact number.
+     *
+     * Off by default, and that default is the important half. Merchant staff
+     * have no phone numbers on file — only the STORE does, the number given
+     * at signup and verified by OTP — and a settlement reminder that texted
+     * that number every month would be a bill and a nuisance. Approval is
+     * the exception the owner asked for: it is once per store, it ends a
+     * wait the merchant cannot chase, and it may well arrive before they
+     * have ever opened the app.
+     */
+    public function smsToMerchantContact(): bool
+    {
+        return match ($this) {
+            self::StoreApproved => true,
+            default => false,
         };
     }
 
@@ -233,6 +262,7 @@ enum NotificationTemplateKey: string
             self::StoreChangeRejected => ['en' => 'Change refused', 'dv' => 'ބަދަލު ބަލައިނުގަނެވުނު'],
             self::StorePaused => ['en' => 'Cashback paused', 'dv' => 'ކޭޝްބެކް މެދުކެނޑިއްޖެ'],
             self::StoreResumed => ['en' => 'Cashback is back', 'dv' => 'ކޭޝްބެކް އަލުން ފެށިއްޖެ'],
+            self::StoreApproved => ['en' => 'Store approved', 'dv' => 'ފިހާރަ ފާސްވެއްޖެ'],
         };
     }
 

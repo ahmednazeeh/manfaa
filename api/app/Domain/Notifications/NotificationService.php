@@ -139,6 +139,27 @@ final class NotificationService
             foreach ($recipients as $user) {
                 $this->push($key, $user, $body);
             }
+
+            // The one merchant moment that also texts (owner decision
+            // 2026-08-18 — currently store approval, and nothing else).
+            //
+            // It goes to the STORE'S number, not a staff member's: merchant
+            // users carry no phone, while the merchant row carries the
+            // number given at signup and verified by OTP. Independent of the
+            // push loop above on purpose — a store approved before anyone
+            // has installed the app has no device to reach, and that is
+            // exactly the case this channel exists for.
+            if (! $key->smsToMerchantContact()) {
+                return;
+            }
+
+            $phone = trim((string) ($merchant->contact_phone ?: $merchant->support_phone));
+
+            if ($phone === '') {
+                return;
+            }
+
+            SendCustomerSms::dispatch($phone, $body, $key->value, (int) $merchant->getKey(), 'merchant');
         });
     }
 

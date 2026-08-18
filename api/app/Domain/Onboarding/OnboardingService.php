@@ -5,8 +5,11 @@ declare(strict_types=1);
 namespace App\Domain\Onboarding;
 
 use App\Domain\Discovery\DiscoveryService;
+use App\Domain\MerchantAccess\Permission;
 use App\Domain\Money\Percent;
 use App\Domain\Money\Rate;
+use App\Domain\Notifications\NotificationService;
+use App\Domain\Notifications\NotificationTemplateKey;
 use App\Domain\Platform\TierScheduleService;
 use App\Models\AdminUser;
 use App\Models\Merchant;
@@ -42,7 +45,10 @@ final class OnboardingService
 
     public const array CHANNELS = ['in_store', 'online', 'both'];
 
-    public function __construct(private readonly TierScheduleService $schedules) {}
+    public function __construct(
+        private readonly TierScheduleService $schedules,
+        private readonly NotificationService $notifications,
+    ) {}
 
     /**
      * Everything the wizard needs to resume: completed steps, current field
@@ -357,7 +363,25 @@ final class OnboardingService
 
         DiscoveryService::forgetMerchant($merchant);
 
-        return $merchant->refresh();
+        $merchant->refresh();
+
+        // The store is LIVE. Both channels (owner decision 2026-08-18): the
+        // merchant has been waiting on a human decision they cannot chase,
+        // and this may reach them before they have ever opened the app. The
+        // SMS half is opted into by the key itself
+        // (NotificationTemplateKey::smsToMerchantContact) and goes to the
+        // store's own verified number.
+        //
+        // Addressed to staff who can see the store profile: this is news
+        // about the whole shop, not about one screen.
+        $this->notifications->sendToMerchantStaff(
+            NotificationTemplateKey::StoreApproved,
+            $merchant,
+            ['store' => (string) $merchant->name],
+            Permission::ProfileView,
+        );
+
+        return $merchant;
     }
 
     /**
