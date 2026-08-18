@@ -129,10 +129,11 @@ still not have to type the product twice. Merchants with one branch (which
 is every merchant today) never see the distinction: the panel creates the
 listing alongside the definition.
 
-Products are a **public claim**, so edits to name/price/image on an enrolled
-store flow through the existing MR9 change-request gate? **No** — see §11
-open question Q3. Provisional answer: price and stock are operational and
-apply instantly; name, images and description are claims and are gated.
+Edits split by kind (owner decision 2026-08-18, §11.1 Q3): **price, stock
+and availability apply instantly** — a shop that cannot reprice or mark
+something out of stock without waiting a day will oversell — while **name,
+images and description queue through the existing MR9 review**, because
+those are the public claims a shopper judges the product by.
 
 ### 2.3 The branch is the storefront
 
@@ -450,6 +451,18 @@ done in v1: a merchant reading one number that silently mixes "what I owe"
 and "what I am owed" cannot check our arithmetic, and neither can we.
 *(Revisit: §11 Q4.)*
 
+### 5.4b Refunds — to the wallet
+
+A store rejecting a paid order returns that suborder's `subtotal_laari` to
+the customer's **Manfaa wallet**, immediately and without an admin
+(owner decision, §11.1 Q2). Withdrawal to a bank account then travels the
+customer payout path that already exists, so the platform keeps exactly one
+outbound money route rather than growing a second one that would need its
+own reconciliation.
+
+The credit is a ledger posting like any other and appears in Activity beside
+the order it came from. It is never a silent adjustment to the order total.
+
 ### 5.5 Admin → **Merchant Settlements** (new menu)
 
 Mirrors the customer payout system exactly, because that machinery already
@@ -632,32 +645,63 @@ when it is off. A hidden button that still answers is not hidden.
 
 ---
 
-## 11. Open questions for the owner
+## 11. Decisions and remaining defaults
 
-1. **Fee and cashback base** — charged on items only, or on items +
-   delivery? Plan assumes **items only**.
-2. **Refunds** — one store of three rejects after the customer has paid the
-   platform. Refund to bank (manual, slow), or credit to the Manfaa wallet
-   (instant, keeps the money in the ecosystem)? Wallet credit is
-   recommended, with bank refund on request.
-3. **Product edits** — do name/image/description changes on a live store go
-   through the MR9 review queue like other public claims, or apply
-   instantly? A catalogue of 124 products cannot realistically be reviewed
-   item by item; recommendation is **instant, with admin takedown**.
-4. **Netting** — should a merchant's cashback settlement debt be netted
-   against their marketplace payout? Plan says no for v1.
-5. ~~Delivery semantics~~ — **settled 2026-08-18**: per branch, per
-   destination island, and the number is the free-delivery threshold. See
-   §2.4. What remains open is whether a branch may also refuse to deliver
-   below a floor (`order_minimum_laari`), or whether every below-threshold
-   order is simply charged the fee. Plan keeps the column nullable so both
-   work.
-6. **GST** on the marketplace fee — assumed to follow the existing platform
-   fee treatment.
-7. **Ratings** — the mockups show 4.7 (1,248). Who can rate, and when?
-   Assumed: the customer, after `delivered`, once per suborder.
+### 11.1 Settled by the owner, 2026-08-18
 
----
+**Q1 — Fee and cashback base: ITEMS ONLY, never delivery.**
+Delivery is a merchant recovering a cost, not revenue. Taxing it would
+charge a store more for delivering further, and would pay the customer
+cashback on a courier. §5.1 already reads this way; it is now a decision
+rather than an assumption.
+
+**Q2 — Refunds: CREDIT THE MANFAA WALLET.**
+When a store rejects a paid order, the customer's money returns to their
+Manfaa wallet immediately — no admin action, no waiting. Withdrawal to their
+bank goes through the payout system they already use for cashback, so there
+is exactly one outbound money path to reconcile rather than two.
+
+Implications for MP5/MP8: a rejection posts a wallet credit for that
+suborder's `subtotal_laari`, the parent order recalculates its total, and
+the credit is a ledger posting like any other — visible in Activity, never
+a silent adjustment.
+
+**Q3 — Product edits: PRICE AND STOCK INSTANT, THE REST GATED.**
+Operational fields (`price_laari`, `stock_qty`, `state`) apply on the spot —
+a shop that cannot reprice or mark something out of stock without waiting a
+day will simply oversell. Name, images and description are public claims and
+queue through the existing MR9 change-request machinery, exactly as the
+store profile does. This resolves the provisional answer in §2.2.
+
+**Q4 — Netting: NO. Two ledgers, two screens.**
+A merchant's cashback settlement debt is never netted against their
+marketplace payout. Netting money owed against money due is where
+reconciliation bugs hide, and a merchant reading one combined figure cannot
+check either half. §5.4 stands as written.
+
+**Q5 — Delivery semantics: settled earlier the same day.** Per branch, per
+destination island, and the number the merchant sets is the free-delivery
+threshold (§2.3, §2.4).
+
+### 11.2 Defaults taken — say the word to change any of them
+
+These are decided but low-stakes; each is a small change if wrong.
+
+- **Below the free-delivery threshold** the branch charges
+  `delivery_fee_laari` and still takes the order. `order_minimum_laari` is
+  nullable and defaults to null, so a branch only refuses small orders if it
+  deliberately sets a floor.
+- **GST on the marketplace fee** follows the existing platform-fee
+  treatment, computed on the fee itself (`order_fee_gst_laari`).
+- **Ratings** — the customer who placed it, after `delivered`, once per
+  suborder. Merchants cannot reply in v1.
+- **Brand deduplication in browse** — where two branches of one brand serve
+  the same island, list the one with the better terms for the customer's
+  address (free-delivery threshold, then ETA); the others are reachable from
+  the store page.
+- **Cashback rate stays per merchant**, not per branch (§2.3).
+- **A brand-new marketplace store starts unrated** — no invented stars, and
+  the rating chip is absent rather than showing 0.0.
 
 ## 12. Phasing
 
