@@ -1623,9 +1623,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get viewProfile => 'View profile';
 
   @override
-  String get menuProfile => 'Profile';
-
-  @override
   String get menuEmployees => 'Manage Employees';
 
   @override

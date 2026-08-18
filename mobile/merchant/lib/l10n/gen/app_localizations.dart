@@ -2900,12 +2900,6 @@ abstract class AppLocalizations {
   /// **'View profile'**
   String get viewProfile;
 
-  /// No description provided for @menuProfile.
-  ///
-  /// In en, this message translates to:
-  /// **'Profile'**
-  String get menuProfile;
-
   /// No description provided for @menuEmployees.
   ///
   /// In en, this message translates to:

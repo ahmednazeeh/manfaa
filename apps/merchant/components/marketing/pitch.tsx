@@ -91,7 +91,14 @@ export function PitchPanel() {
   const { t } = useTranslation();
 
   return (
-    <div className="hidden min-h-screen flex-col justify-center gap-10 bg-violet-600/5 p-12 lg:flex xl:p-16">
+    // The panel needs ~1075px to draw everything, which is taller than most
+    // laptop viewports. `justify-center` overflowed symmetrically with no
+    // way to scroll, so a short monitor lost the wordmark off the top AND
+    // the phone off the bottom (owner report 2026-08-18). Now the column
+    // scrolls, and `m-auto` on the content centres it only when there is
+    // room to centre — below that it simply starts at the top.
+    <div className="hidden h-screen flex-col overflow-y-auto bg-violet-600/5 p-12 lg:flex xl:p-16">
+      <div className="m-auto flex w-full flex-col gap-10">
       <div className="flex items-center gap-2">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
@@ -115,7 +122,10 @@ export function PitchPanel() {
         <PitchPoints />
       </div>
 
-      <MerchantPhone className="hidden xl:flex" />
+      {/* The phone is the first thing worth dropping on a short screen:
+          it costs 531px and says nothing the words above do not. */}
+      <MerchantPhone className="hidden xl:[@media(min-height:900px)]:flex" />
+      </div>
     </div>
   );
 }

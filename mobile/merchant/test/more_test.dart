@@ -87,12 +87,15 @@ void main() {
     },
   );
 
-  testWidgets('a single held slug earns exactly its row', (tester) async {
+  testWidgets('a single held slug earns exactly its door', (tester) async {
     // profile.view only → More IS the landing tab (no other tab is held).
     await boot(tester, permissions: const ['profile.view']);
 
-    expect(find.text('Profile'), findsOneWidget);
+    // MR12 (owner report): the profile has ONE door — the identity card's
+    // "View profile". The duplicate menu row is gone, so holding the slug
+    // must still open the screen, and nothing else may appear.
     expect(find.text('View profile'), findsOneWidget);
+    expect(find.text('Profile'), findsNothing);
     expect(find.text('Manage Employees'), findsNothing);
     expect(find.text('Cashback Settings'), findsNothing);
   });

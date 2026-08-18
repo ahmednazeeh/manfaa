@@ -1647,9 +1647,6 @@ class AppLocalizationsDv extends AppLocalizations {
   String get viewProfile => 'ޕްރޮފައިލް ބައްލަވާ';
 
   @override
-  String get menuProfile => 'ޕްރޮފައިލް';
-
-  @override
   String get menuEmployees => 'މުވައްޒަފުން ބެލެހެއްޓުން';
 
   @override

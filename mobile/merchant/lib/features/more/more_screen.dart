@@ -45,14 +45,10 @@ class MoreScreen extends ConsumerWidget {
         ?.values
         .logoUrl;
 
+    // No Profile row (owner report 2026-08-18): the identity card above
+    // already opens the profile with "View profile", and two doors to one
+    // screen is a menu asking to be misread.
     final rows = <_MenuRow>[
-      if (session.can('profile.view'))
-        _MenuRow(
-          Icons.person_outline_rounded,
-          ManfaaTint.violet,
-          l10n.menuProfile,
-          '/more/profile',
-        ),
       if (session.can('staff.view'))
         _MenuRow(
           Icons.group_outlined,
