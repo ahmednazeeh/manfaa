@@ -64,6 +64,9 @@ it('runs signup → resume → submit → reject → resubmit → approve → pu
         'category' => 'grocery',
         'channel' => 'both',
         'eligibility_basis' => 'Full invoice total excluding delivery.',
+        // Required since 2026-08-18.
+        'description' => 'An island grocer stocking daily essentials, fresh '
+            .'produce and household goods.',
     ])->assertOk()->assertJsonPath('data.steps.profile', true);
 
     $this->postJson('/api/merchant/auth/logout')->assertNoContent();
@@ -105,6 +108,8 @@ it('runs signup → resume → submit → reject → resubmit → approve → pu
         'category' => 'restaurant',
         'channel' => 'in_store',
         'eligibility_basis' => 'Food and beverage only.',
+        'description' => 'A family restaurant serving Maldivian and Thai '
+            .'dishes for lunch and dinner.',
     ])->assertOk();
     $this->patchJson('/api/merchant/setup/rate', ['cashback_rate_percent' => '1.00'])->assertOk();
     $this->postJson('/api/merchant/setup/submit')->assertOk()

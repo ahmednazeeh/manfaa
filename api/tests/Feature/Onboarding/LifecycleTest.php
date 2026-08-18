@@ -56,6 +56,9 @@ it('takes a store from phone OTP to its first credited sale', function () {
         'category' => 'cafe',
         'channel' => 'in_store',
         'eligibility_basis' => 'Full bill excluding service charge.',
+        // Required since 2026-08-18: a live storefront must say what it is.
+        'description' => 'A harbour-front cafe serving espresso, fresh juice '
+            .'and short eats from early morning.',
     ])->assertOk();
 
     $this->patchJson('/api/merchant/setup/rate', ['cashback_rate_percent' => '2.00'])->assertOk();

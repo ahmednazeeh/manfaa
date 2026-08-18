@@ -390,7 +390,8 @@ class _BranchMap extends StatelessWidget {
           options: camera,
           children: [
             TileLayer(
-              urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+              // OUR origin, not OSM's — see ApiEnv.tileUrlTemplate.
+              urlTemplate: ApiEnv.tileUrlTemplate,
               userAgentPackageName: 'app.manfaa.customer',
             ),
             MarkerLayer(

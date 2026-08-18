@@ -79,7 +79,7 @@ final class DiscoveryService
     // v5: it gained the store's support number and website — a v4 value
     // would render the page with neither, so the bump is what makes the
     // new links appear rather than waiting out the TTL per slug.
-    public const string STORE_CACHE_PREFIX = 'discovery:store:v5:';
+    public const string STORE_CACHE_PREFIX = 'discovery:store:v6:';
 
     public const int DIRECTORY_DEFAULT_PER_PAGE = 12;
 
@@ -727,7 +727,7 @@ final class DiscoveryService
         $merchant = Merchant::query()
             ->where('status', 'active')
             ->where('slug', $slug)
-            ->first(['id', 'name', 'name_dv', 'slug', 'category', 'logo_path', 'featured', 'channel', 'eligibility_basis', 'contact_phone', 'support_phone', 'website_url', 'created_at']);
+            ->first(['id', 'name', 'name_dv', 'slug', 'category', 'logo_path', 'featured', 'channel', 'eligibility_basis', 'description', 'contact_phone', 'support_phone', 'website_url', 'created_at']);
 
         if ($merchant === null) {
             return null;
@@ -804,6 +804,10 @@ final class DiscoveryService
             ],
             // The merchant's own eligibility wording, verbatim (§11: shown to
             // customers, never used in computation). Null when unset.
+            // The store's own words about itself (owner decision
+            // 2026-08-18) — a claim, so it reaches here only through
+            // admin review like the rest of the storefront identity.
+            'description' => $merchant->description,
             'cashback_basis' => $merchant->eligibility_basis,
             // How a shopper reaches the store — served under BOTH keys,
             // because the web store page reads support_phone while the

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:manfaa_core/manfaa_core.dart';
 import 'package:manfaa_ui/manfaa_ui.dart';
 
 import '../app/app.dart';
@@ -77,7 +78,8 @@ class _PinPickerMapState extends State<PinPickerMap> {
           children: [
             TileLayer(
               key: ValueKey('tiles-$_epoch'),
-              urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+              // OUR origin, not OSM's — see ApiEnv.tileUrlTemplate.
+              urlTemplate: ApiEnv.tileUrlTemplate,
               userAgentPackageName: 'mv.manfaa.merchant',
               errorTileCallback: (_, _, _) => _noteTileError(),
               tileBuilder: (context, tileWidget, tile) {

@@ -18,6 +18,14 @@ abstract final class ApiEnv {
   /// The PUBLIC api root (discovery, storefront) — the same origin one level
   /// up from the mobile tree. Derived, so one --dart-define moves both.
   static final publicBaseUrl = baseUrl.replaceFirst(RegExp(r'/mobile/v1/?$'), '');
+
+  /// Map tiles, served by OUR origin rather than tile.openstreetmap.org
+  /// (2026-08-18). A merchant's pin picker drew a grey square while OSM
+  /// answered this server perfectly — an unreproducible failure on a path
+  /// we neither run nor can log. manfaa.app is the one host these apps have
+  /// already proven they reach, and the proxy caches, so this is also
+  /// gentler on OSM than every device fetching for itself.
+  static final tileUrlTemplate = '$publicBaseUrl/map/tiles/{z}/{x}/{y}.png';
 }
 
 /// The shared transport for /api/mobile/v1 — everything the two apps' typed

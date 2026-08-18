@@ -36,6 +36,10 @@ class MerchantFactory extends Factory
             // Every real store signs up with a phone number, and submit now
             // requires one — a phoneless fixture opts out explicitly.
             'contact_phone' => '+960'.fake()->numberBetween(7000000, 7999999),
+            // Likewise the store's own words: required before going live
+            // (2026-08-18), so a fixture without one opts out explicitly.
+            'description' => 'A neighbourhood shop stocking daily groceries, '
+                .'fresh produce and household essentials.',
         ];
     }
 

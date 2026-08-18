@@ -261,3 +261,35 @@ it('requires authentication for every setup route', function () {
     $this->getJson('/api/merchant/setup')->assertUnauthorized();
     $this->postJson('/api/merchant/setup/submit')->assertUnauthorized();
 });
+
+it('requires the store to describe itself before review, and holds the description to 180 words', function () {
+    $owner = wizardOwner([
+        'category' => 'cafe',
+        'eligibility_basis' => 'Everything.',
+        'description' => null,
+    ]);
+    MerchantRate::factory()->for($owner->merchant)->create([
+        'rate_bp' => 200,
+        'effective_from' => now()->subMinute(),
+    ]);
+
+    // A store with no words about itself cannot go live.
+    $this->postJson('/api/merchant/setup/submit')
+        ->assertUnprocessable()
+        ->assertJsonPath('code', 'setup_incomplete')
+        ->assertJsonPath('missing', ['description']);
+
+    // 181 words is refused; 180 is accepted — a WORD ceiling, so a long
+    // Dhivehi word costs the same as a short English one.
+    $this->patchJson('/api/merchant/setup/profile', [
+        'description' => implode(' ', array_fill(0, 181, 'word')),
+    ])->assertUnprocessable();
+
+    $this->patchJson('/api/merchant/setup/profile', [
+        'description' => implode(' ', array_fill(0, 180, 'word')),
+    ])->assertOk();
+
+    $this->postJson('/api/merchant/setup/submit')->assertOk();
+
+    expect($owner->merchant->fresh()->description)->toContain('word');
+});

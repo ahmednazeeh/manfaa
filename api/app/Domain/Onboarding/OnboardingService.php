@@ -69,6 +69,7 @@ final class OnboardingService
                 'category' => $merchant->category,
                 'channel' => $merchant->channel,
                 'eligibility_basis' => $merchant->eligibility_basis,
+                'description' => $merchant->description,
                 'contact_email' => $merchant->contact_email,
                 'contact_phone' => $merchant->contact_phone,
                 'support_phone' => $merchant->support_phone,
@@ -427,7 +428,8 @@ final class OnboardingService
     /**
      * The submit()/approve() completeness rules, evaluated from the actual
      * column values: curated-and-active category, channel enum, a phone
-     * number, live standing rate, non-empty terms. The logo stays optional.
+     * number, a description, live standing rate, non-empty terms. The logo
+     * stays optional.
      *
      * So does the map pin. The owner asked to ASK for one at signup, not to
      * gate approval on it (D17) — and adding it here would instantly make
@@ -468,6 +470,13 @@ final class OnboardingService
 
         if (trim((string) $merchant->eligibility_basis) === '') {
             $missing[] = 'terms';
+        }
+
+        // The store's own words, required before it can go live (owner
+        // decision 2026-08-18): a storefront with no description is a card
+        // a shopper cannot judge.
+        if (trim((string) $merchant->description) === '') {
+            $missing[] = 'description';
         }
 
         return $missing;

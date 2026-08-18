@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\MapTileController;
 use App\Http\Controllers\MerchantLogoController;
 use App\Http\Controllers\StoreCategoryIconController;
 use App\Http\Controllers\StoreOfferImageController;
@@ -37,3 +38,15 @@ Route::get('store-categories/{slug}/icon', StoreCategoryIconController::class)
 Route::get('store-offers/{id}/image', StoreOfferImageController::class)
     ->whereNumber('id')
     ->middleware('throttle:240,1');
+
+/*
+ * Map tiles through our own origin (2026-08-18). Public and unauthenticated
+ * like the logo routes beside it: the pin picker draws during signup before
+ * a store exists, and the storefront map is for shoppers. Throttled per IP
+ * so the proxy cannot be walked for the planet, and cheap after the first
+ * hit — the tile is on disk and the edge caches it for a month.
+ */
+Route::get('map/tiles/{z}/{x}/{y}.png', MapTileController::class)
+    ->whereNumber(['z', 'x', 'y'])
+    ->middleware('throttle:600,1')
+    ->name('map.tile');

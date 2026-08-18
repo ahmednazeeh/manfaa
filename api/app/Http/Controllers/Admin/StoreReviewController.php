@@ -57,6 +57,7 @@ class StoreReviewController extends Controller
                 'category' => $merchant->category,
                 'channel' => $merchant->channel,
                 'eligibility_basis' => $merchant->eligibility_basis,
+                'description' => $merchant->description,
                 'contact_email' => $merchant->contact_email,
                 'contact_phone' => $merchant->contact_phone,
                 'logo_url' => $this->onboarding->logoUrl($merchant),

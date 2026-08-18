@@ -40,6 +40,7 @@ class MerchantProfileResource extends JsonResource
             'category_retired' => $this->categoryRetired(),
             'channel' => $this->channel,
             'eligibility_basis' => $this->eligibility_basis,
+            'description' => $this->description,
             'contact_email' => $this->contact_email,
             'contact_phone' => $this->contact_phone,
             'support_phone' => $this->support_phone,
