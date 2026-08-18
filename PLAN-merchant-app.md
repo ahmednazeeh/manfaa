@@ -613,6 +613,41 @@ Design decided 2026-08-18 — the line is **claims vs operations**.
 - [ ] Merchant web panel: pending-review states on profile + branches.
 - [ ] Merchant app: same pending states; MR7's panes included.
 
+## Settlement reference — findings from the owner's 2026-08-18 question
+
+"If multiple merchants submit receipts at the same time, won't they all get
+ST-2026-00003?" Investigated and PROVEN with 8 concurrent processes against
+the test database: **no**. `SettlementBuilder::nextReference()` takes a
+Postgres transaction-scoped advisory lock (keyed per business-tz year)
+inside the `createDraft` transaction, so mints serialise — 8 racing
+processes produced 8 distinct sequential references. Counterfactual with
+the lock removed: all 8 computed 00001, one won and 7 died on the
+`settlements_reference_unique` index. Both layers work, and the unique
+index is a real backstop rather than decoration.
+
+Two genuine issues the investigation surfaced:
+
+- [ ] **The quoted reference can drift** (product, not correctness): the
+      pay screen shows `peekReference()` — deliberately lock-free — and
+      the merchant copies it into their BANK transfer before submitting
+      the slip. If another store submits first, the settlement lands with
+      the next number, so the purpose line at the bank no longer matches
+      the settlement. The UI already says the final one is official, and
+      admin reconciliation matches on merchant + amount + slip + the
+      merchant-entered `bank_ref`, so nothing breaks — but the quoted
+      string is a small lie. Options for the owner: (a) leave it (cheapest,
+      documented), (b) quote a STABLE merchant-scoped purpose instead
+      (e.g. `MANFAA <slug>` or the merchant code) which can never drift,
+      (c) reserve the number by creating the draft when the pay screen
+      opens (costs abandoned drafts + sequence gaps). RECOMMEND (b).
+- [ ] **String-max ceiling at 99,999 per year**: `peekReference()` picks
+      the next number via `max('reference')` on a 5-padded string. At
+      100,000 the padding breaks ordering ("…-99999" sorts above
+      "…-100000"), so the sequence would restart and collide against the
+      unique index. Far away at today's volume (2 settlements to date),
+      but it is a hard wall rather than a soft one — fix by ordering on a
+      derived integer, or widen the padding, before that year arrives.
+
 ## Store readiness (App Store / Play — from the 2026-08-17 approval review)
 
 The model itself is store-safe (cashback on physical retail = Rakuten's
