@@ -64,6 +64,12 @@ class Customer extends Authenticatable implements MobileTokenSubject
         return $this->hasMany(CustomerAddress::class);
     }
 
+    /** Marketplace orders — the payment, not the fulfilment (§2.6). */
+    public function orders(): HasMany
+    {
+        return $this->hasMany(Order::class);
+    }
+
     public function mayUseMobileApp(): bool
     {
         return $this->status === 'active';

@@ -4,19 +4,16 @@ declare(strict_types=1);
 
 use App\Domain\Platform\PlatformConfig;
 use App\Models\BranchDeliveryRule;
-use App\Models\BranchProduct;
 use App\Models\Customer;
 use App\Models\CustomerAddress;
 use App\Models\Merchant;
-use App\Models\MerchantBranch;
-use App\Models\MerchantMarketplaceProfile;
-use App\Models\MerchantRate;
-use App\Models\Product;
 use App\Models\Zone;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 uses(TestCase::class, RefreshDatabase::class);
+
+require_once __DIR__.'/fixtures.php';
 
 /**
  * MP4 — browse and the multi-vendor cart
@@ -25,40 +22,6 @@ uses(TestCase::class, RefreshDatabase::class);
  * The cart prices itself server-side, because every number it shows has to
  * be the number checkout charges.
  */
-function marketZone(): Zone
-{
-    return Zone::create(['name' => "Male'", 'polygon' => [
-        ['lat' => 4.16, 'lng' => 73.49],
-        ['lat' => 4.18, 'lng' => 73.49],
-        ['lat' => 4.18, 'lng' => 73.52],
-        ['lat' => 4.16, 'lng' => 73.52],
-    ]]);
-}
-
-/** A vendor with one shop, one product on the shelf, and a rate. */
-function vendor(string $name, int $rateBp = 200, int $priceLaari = 10000): array
-{
-    $merchant = Merchant::factory()->create(['status' => 'active', 'name' => $name]);
-    MerchantMarketplaceProfile::factory()->for($merchant)->create();
-    MerchantRate::factory()->for($merchant)->create([
-        'rate_bp' => $rateBp,
-        'effective_from' => now()->subYear(),
-        'effective_to' => null,
-    ]);
-
-    $branch = MerchantBranch::factory()->for($merchant)->create(['name' => 'Malé']);
-    $product = Product::factory()->for($merchant)->create(['name' => $name.' Rice']);
-    $listing = BranchProduct::factory()->create([
-        'branch_id' => $branch->id,
-        'product_id' => $product->id,
-        'price_laari' => $priceLaari,
-        'stock_qty' => 50,
-        'state' => 'active',
-    ]);
-
-    return compact('merchant', 'branch', 'product', 'listing');
-}
-
 beforeEach(function () {
     app(PlatformConfig::class)->set('marketplace_enabled', 1);
 

@@ -1082,3 +1082,63 @@ Decisions taken in the build:
 **Not in MP4:** checkout, orders, payment (MP5), and the Flutter/web
 surfaces that render all of this — the shape is fixed and tested, the
 drawing is not done.
+
+---
+
+## 17. MP5 — checkout, orders and receipt-first payment (in progress)
+
+The cart becomes an order: one payment the customer makes to us, and one
+suborder per shop that fulfils it (`Order Received.png`, `Payment Step.png`).
+
+**Server**
+
+- [x] Migration: `orders`, `suborders`, `suborder_items` (§2.6), with
+      `fulfilled_qty` already present for the amendments MP6 will apply.
+- [x] `MF-<year>-<seq>` for the order and `MF-<seq>-<nn>` per suborder,
+      generated under the same advisory-lock discipline as settlement
+      references.
+- [x] `CheckoutService` — validate the cart, FREEZE every rate and price
+      onto the order, and refuse anything the cart said could not be checked
+      out.
+- [x] Receipt-first payment: platform bank accounts, exact amount, receipt
+      upload, `awaiting_proof → proof_submitted → verified`.
+- [ ] Admin: verify or refuse a payment proof — **deferred to MP6**, where
+      it sits beside the fulfilment queue an admin actually works from.
+- [x] Customer: read own orders with per-store status.
+
+**Proof**
+
+- [x] Tests: a three-shop cart becomes one order and three suborders; every
+      rate is frozen so a later platform change cannot restate it; a cart
+      below a shop's minimum is refused; the cart empties only on success;
+      references are unique under concurrency; a customer cannot read
+      another's order.
+- [x] Full API suite green, pint clean.
+
+**Shipped 2026-08-18.** 15 checkout tests, 79 marketplace tests in total;
+full API suite **1487 green**; live behind the switch.
+
+Four snapshots, each stopping a different kind of history rewrite:
+
+- **Every rate frozen** — cashback bp, fee bp, delivery. Proven by a test
+  that moves the platform fee to 9% after placement and asserts the order
+  does not budge. This is also what makes MP6's amendments safe: they
+  recompute against the frozen rates, never today's.
+- **The address**, so editing it later cannot move where last month's order
+  went.
+- **The product name**, so a rename cannot rewrite what somebody ordered.
+- **`fulfilled_qty` seeded equal to `qty`**, so the amendment gap MP6 opens
+  starts closed.
+
+And one refusal worth keeping: **the basket survives a failed checkout.** A
+checkout that failed halfway and took the cart with it is the worst outcome
+available, so placement is one transaction and the cart empties only on
+success. Refusals name the shop — "Horizon Bookstore — Malé needs MVR 30.00
+more" rather than "checkout failed".
+
+GST is wired but zero, matching `CreditRecorder`: the platform has no GST
+treatment anywhere yet, and inventing one here would put a number on an
+invoice that nothing else in the system agrees with.
+
+**Not in MP5:** merchant fulfilment and amendments (MP6), cashback crediting
+(MP8).

@@ -4,6 +4,7 @@ use App\Http\Controllers\Admin\MarketplaceKybController;
 use App\Http\Controllers\Customer\AddressController;
 use App\Http\Controllers\Customer\CartController;
 use App\Http\Controllers\Customer\MarketController;
+use App\Http\Controllers\Customer\OrderController;
 use App\Http\Controllers\Merchant\DeliveryRuleController;
 use App\Http\Controllers\Merchant\MarketplaceEnrolmentController;
 use App\Http\Controllers\Merchant\ProductController;
@@ -125,6 +126,22 @@ Route::prefix('customer/cart')
         Route::patch('items/{item}', [CartController::class, 'update'])->whereNumber('item');
         Route::delete('items/{item}', [CartController::class, 'destroy'])->whereNumber('item');
         Route::delete('/', [CartController::class, 'clear']);
+    });
+
+/*
+ * Checkout and the customer's own orders (MP5). Payment is receipt-first —
+ * the same shape merchants already settle with — so nothing is confirmed
+ * until a human has seen the transfer.
+ */
+Route::prefix('customer')
+    ->middleware(['auth:customer', 'marketplace'])
+    ->group(function (): void {
+        Route::get('payment-accounts', [OrderController::class, 'paymentAccounts']);
+        Route::post('orders', [OrderController::class, 'place'])->middleware('throttle:20,1');
+        Route::post('orders/{order}/receipt', [OrderController::class, 'uploadReceipt'])
+            ->whereNumber('order')->middleware('throttle:20,1');
+        Route::get('orders', [OrderController::class, 'index']);
+        Route::get('orders/{order}', [OrderController::class, 'show'])->whereNumber('order');
     });
 
 Route::prefix('admin/marketplace')
