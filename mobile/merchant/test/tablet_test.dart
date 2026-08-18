@@ -292,6 +292,12 @@ class _FakeApi extends MerchantApi {
   Future<MerchantHome> home() async => MerchantHome.fromJson({
     'merchant': {'name': 'Tropical Mart', 'status': 'active'},
     'today': {'credit_count': 0, 'eligible_laari': 0, 'cashback_laari': 0},
+    'month': {
+      'credit_count': 0,
+      'eligible_laari': 0,
+      'cashback_laari': 0,
+      'average_eligible_laari': 0,
+    },
     'outstanding': null,
     'open_settlement': null,
   });

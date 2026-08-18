@@ -2614,4 +2614,39 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get saleTimeSetNow => 'Now';
+
+  @override
+  String discountSaveByTitle(String amount, String date) {
+    return 'Save $amount by settling before $date';
+  }
+
+  @override
+  String discountSaveBySub(String rate) {
+    return '$rate prompt-payment discount on platform fees';
+  }
+
+  @override
+  String get discountNoneSub =>
+      'The prompt-payment discount no longer applies to your oldest sale.';
+
+  @override
+  String get agingTitle => 'Aging';
+
+  @override
+  String get viewBreakdown => 'View breakdown';
+
+  @override
+  String get monthTitle => 'This month';
+
+  @override
+  String get monthSales => 'Sales through Manfaa';
+
+  @override
+  String get monthTransactions => 'Transactions';
+
+  @override
+  String get monthCashback => 'Cashback issued';
+
+  @override
+  String get monthAverage => 'Avg. transaction';
 }

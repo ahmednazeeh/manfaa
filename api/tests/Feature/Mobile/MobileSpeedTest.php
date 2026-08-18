@@ -346,3 +346,48 @@ it('serves an unchanged store directory as a 304', function () {
         ->getJson('/api/discover/merchants')
         ->assertStatus(304);
 });
+
+it('tallies THIS MONTH beside today, so the till can show what it earned', function () {
+    $merchant = Merchant::factory()->create();
+    $user = MerchantUser::factory()->for($merchant)->create();
+    $customer = Customer::factory()->create();
+
+    $timezone = (string) config('app.business_timezone', 'Indian/Maldives');
+    $monthStart = \Carbon\CarbonImmutable::now($timezone)->startOfMonth();
+
+    // Two sales earlier this month, one today: the month covers all three.
+    foreach ([$monthStart->addDay(), $monthStart->addDays(2), \Carbon\CarbonImmutable::now($timezone)] as $when) {
+        Transaction::factory()->for($merchant)->for($customer)->create([
+            'state' => TransactionState::Confirmed->value,
+            'occurred_at' => $when->utc(),
+            'eligible_laari' => 100000,
+            'cashback_laari' => 2000,
+        ]);
+    }
+
+    // Last month, and a reversed sale this month: neither counts.
+    Transaction::factory()->for($merchant)->for($customer)->create([
+        'state' => TransactionState::Confirmed->value,
+        'occurred_at' => $monthStart->subDays(2)->utc(),
+        'eligible_laari' => 500000,
+        'cashback_laari' => 10000,
+    ]);
+    Transaction::factory()->for($merchant)->for($customer)->create([
+        'state' => TransactionState::Reversed->value,
+        'occurred_at' => $monthStart->addDay()->utc(),
+        'eligible_laari' => 900000,
+        'cashback_laari' => 20000,
+    ]);
+
+    $month = $this->withHeaders(speedHeaders($user, MobileAudience::Merchant))
+        ->getJson('/api/mobile/v1/merchant/home')
+        ->assertOk()
+        ->json('data.month');
+
+    expect($month['credit_count'])->toBe(3)
+        ->and($month['eligible_laari'])->toBe(300000)
+        ->and($month['cashback_laari'])->toBe(6000)
+        // Integer laari, floored — an average that rounded up would
+        // overstate the takings.
+        ->and($month['average_eligible_laari'])->toBe(100000);
+});

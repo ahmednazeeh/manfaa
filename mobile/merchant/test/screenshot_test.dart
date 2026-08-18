@@ -500,6 +500,15 @@ class _ShotApi extends MerchantApi {
       'eligible_laari': 235000,
       'cashback_laari': 11750,
     },
+    // MR10's takings card: a believable month for a busy corner shop —
+    // 42 credits, MVR 18,450 of eligible sales, MVR 369 of cashback, and
+    // the server's own floored average (439.28 → 43928 laari).
+    'month': {
+      'credit_count': 42,
+      'eligible_laari': 1845000,
+      'cashback_laari': 36900,
+      'average_eligible_laari': 43928,
+    },
     'outstanding': {
       'total': {
         'count': 1,
@@ -1404,7 +1413,10 @@ void main() {
   }
 
   Future<void> driveTransactions(WidgetTester tester) async {
-    await tester.tap(find.text('Transactions'));
+    // The nav destination by its ICON, not by the word: MR10's month card
+    // carries a "Transactions" figure too, and text order differs between
+    // the phone bar and the tablet rail.
+    await tester.tap(find.byIcon(Icons.receipt_long_outlined).last);
     await tester.pumpAndSettle();
   }
 

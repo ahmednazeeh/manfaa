@@ -7,8 +7,14 @@
 /// HomeController (merchant halves), TransactionResource.
 library;
 
-int _laari(Object? v) => switch (v) { final int i => i, _ => 0 };
-int _count(Object? v) => switch (v) { final int i => i, _ => 0 };
+int _laari(Object? v) => switch (v) {
+  final int i => i,
+  _ => 0,
+};
+int _count(Object? v) => switch (v) {
+  final int i => i,
+  _ => 0,
+};
 String _s(Object? v) => v?.toString() ?? '';
 
 /// GET /merchant/me — fresh identity AND fresh permissions.
@@ -25,17 +31,17 @@ class MerchantMe {
   });
 
   factory MerchantMe.fromJson(Map<String, dynamic> json) => MerchantMe(
-        user: MerchantUserInfo.fromJson(
-          (json['user'] as Map?)?.cast<String, dynamic>() ?? {},
-        ),
-        merchant: MerchantInfo.fromJson(
-          (json['merchant'] as Map?)?.cast<String, dynamic>() ?? {},
-        ),
-        permissions: [
-          for (final slug in (json['permissions'] as List? ?? const []))
-            slug.toString(),
-        ],
-      );
+    user: MerchantUserInfo.fromJson(
+      (json['user'] as Map?)?.cast<String, dynamic>() ?? {},
+    ),
+    merchant: MerchantInfo.fromJson(
+      (json['merchant'] as Map?)?.cast<String, dynamic>() ?? {},
+    ),
+    permissions: [
+      for (final slug in (json['permissions'] as List? ?? const []))
+        slug.toString(),
+    ],
+  );
 
   final MerchantUserInfo user;
   final MerchantInfo merchant;
@@ -73,11 +79,11 @@ class MerchantInfo {
   });
 
   factory MerchantInfo.fromJson(Map<String, dynamic> json) => MerchantInfo(
-        id: json['id'] as int? ?? 0,
-        name: _s(json['name']),
-        slug: _s(json['slug']),
-        status: json['status'] as String?,
-      );
+    id: json['id'] as int? ?? 0,
+    name: _s(json['name']),
+    slug: _s(json['slug']),
+    status: json['status'] as String?,
+  );
 
   final int id;
   final String name;
@@ -96,6 +102,7 @@ class MerchantHome {
     required this.merchantName,
     required this.merchantStatus,
     required this.today,
+    required this.month,
     this.outstanding,
     this.openSettlement,
   });
@@ -108,6 +115,9 @@ class MerchantHome {
       merchantStatus: _s(merchant['status']),
       today: MerchantToday.fromJson(
         (json['today'] as Map?)?.cast<String, dynamic>() ?? {},
+      ),
+      month: MerchantMonth.fromJson(
+        (json['month'] as Map?)?.cast<String, dynamic>() ?? {},
       ),
       outstanding: json['outstanding'] is Map
           ? MerchantOutstanding.fromJson(
@@ -129,6 +139,10 @@ class MerchantHome {
   /// written-off sales excluded so the till agrees with the receipt roll.
   final MerchantToday today;
 
+  /// The calendar month so far, same boundaries and exclusions as [today]
+  /// — what the store EARNED through Manfaa, beside what it owes.
+  final MerchantMonth month;
+
   /// Null for accounts without `settlements.view` — a credits-only cashier
   /// must not learn the store's commercial standing from the app. Null, not
   /// absent: the till renders a stable shape either way.
@@ -147,14 +161,37 @@ class MerchantToday {
   });
 
   factory MerchantToday.fromJson(Map<String, dynamic> json) => MerchantToday(
-        creditCount: _count(json['credit_count']),
-        eligibleLaari: _laari(json['eligible_laari']),
-        cashbackLaari: _laari(json['cashback_laari']),
-      );
+    creditCount: _count(json['credit_count']),
+    eligibleLaari: _laari(json['eligible_laari']),
+    cashbackLaari: _laari(json['cashback_laari']),
+  );
 
   final int creditCount;
   final int eligibleLaari;
   final int cashbackLaari;
+}
+
+/// The month so far: the takings side of the dashboard. `average` is the
+/// server's own floored integer so every surface shows one number.
+class MerchantMonth {
+  MerchantMonth({
+    required this.creditCount,
+    required this.eligibleLaari,
+    required this.cashbackLaari,
+    required this.averageEligibleLaari,
+  });
+
+  factory MerchantMonth.fromJson(Map<String, dynamic> json) => MerchantMonth(
+    creditCount: _count(json['credit_count']),
+    eligibleLaari: _laari(json['eligible_laari']),
+    cashbackLaari: _laari(json['cashback_laari']),
+    averageEligibleLaari: _laari(json['average_eligible_laari']),
+  );
+
+  final int creditCount;
+  final int eligibleLaari;
+  final int cashbackLaari;
+  final int averageEligibleLaari;
 }
 
 /// The store's outstanding payables (OutstandingSummary::forMerchant, minus
@@ -241,12 +278,12 @@ class OpenSettlement {
   });
 
   factory OpenSettlement.fromJson(Map<String, dynamic> json) => OpenSettlement(
-        id: json['id'] as int? ?? 0,
-        reference: _s(json['reference']),
-        state: _s(json['state']),
-        amountDueLaari: _laari(json['amount_due_laari']),
-        dueAt: json['due_at'] as String?,
-      );
+    id: json['id'] as int? ?? 0,
+    reference: _s(json['reference']),
+    state: _s(json['state']),
+    amountDueLaari: _laari(json['amount_due_laari']),
+    dueAt: json['due_at'] as String?,
+  );
 
   final int id;
   final String reference;
@@ -286,34 +323,32 @@ class MerchantTransaction {
     required this.lines,
   });
 
-  factory MerchantTransaction.fromJson(Map<String, dynamic> json) =>
-      MerchantTransaction(
-        id: json['id'] as int? ?? 0,
-        origin: _s(json['origin']),
-        invoiceNo: _s(json['invoice_no']),
-        state: _s(json['state']),
-        reasonCode: json['reason_code'] as String?,
-        backdated: json['backdated'] as bool? ?? false,
-        currency: _s(json['currency']),
-        eligibleLaari: _laari(json['eligible_laari']),
-        saleLaari: json['sale_laari'] as int?,
-        cashbackRatePercent: _s(json['cashback_rate_percent']),
-        platformFeePercent: _s(json['platform_fee_percent']),
-        effectiveCashbackRatePercent:
-            _s(json['effective_cashback_rate_percent']),
-        effectivePlatformFeePercent: _s(json['effective_platform_fee_percent']),
-        cashbackLaari: _laari(json['cashback_laari']),
-        feeLaari: _laari(json['fee_laari']),
-        feeGstLaari: _laari(json['fee_gst_laari']),
-        occurredAt: _s(json['occurred_at']),
-        receivedAt: _s(json['received_at']),
-        lines: [
-          for (final item in (json['lines'] as List? ?? const []))
-            MerchantTransactionLine.fromJson(
-              (item as Map).cast<String, dynamic>(),
-            ),
-        ],
-      );
+  factory MerchantTransaction.fromJson(
+    Map<String, dynamic> json,
+  ) => MerchantTransaction(
+    id: json['id'] as int? ?? 0,
+    origin: _s(json['origin']),
+    invoiceNo: _s(json['invoice_no']),
+    state: _s(json['state']),
+    reasonCode: json['reason_code'] as String?,
+    backdated: json['backdated'] as bool? ?? false,
+    currency: _s(json['currency']),
+    eligibleLaari: _laari(json['eligible_laari']),
+    saleLaari: json['sale_laari'] as int?,
+    cashbackRatePercent: _s(json['cashback_rate_percent']),
+    platformFeePercent: _s(json['platform_fee_percent']),
+    effectiveCashbackRatePercent: _s(json['effective_cashback_rate_percent']),
+    effectivePlatformFeePercent: _s(json['effective_platform_fee_percent']),
+    cashbackLaari: _laari(json['cashback_laari']),
+    feeLaari: _laari(json['fee_laari']),
+    feeGstLaari: _laari(json['fee_gst_laari']),
+    occurredAt: _s(json['occurred_at']),
+    receivedAt: _s(json['received_at']),
+    lines: [
+      for (final item in (json['lines'] as List? ?? const []))
+        MerchantTransactionLine.fromJson((item as Map).cast<String, dynamic>()),
+    ],
+  );
 
   final int id;
 
@@ -402,9 +437,9 @@ class CreditLine {
 
   /// The server requires `category` PRESENT even when null.
   Map<String, dynamic> toJson() => {
-        'category': category,
-        'amount_laari': amountLaari,
-      };
+    'category': category,
+    'amount_laari': amountLaari,
+  };
 }
 
 /// GET /merchant/setup (and every wizard PATCH/POST answer) — the whole
@@ -568,12 +603,12 @@ class SetupBranch {
   });
 
   factory SetupBranch.fromJson(Map<String, dynamic> json) => SetupBranch(
-        id: json['id'] as int? ?? 0,
-        name: _s(json['name']),
-        address: json['address'] as String?,
-        lat: (json['lat'] as num?)?.toDouble(),
-        lng: (json['lng'] as num?)?.toDouble(),
-      );
+    id: json['id'] as int? ?? 0,
+    name: _s(json['name']),
+    address: json['address'] as String?,
+    lat: (json['lat'] as num?)?.toDouble(),
+    lng: (json['lng'] as num?)?.toDouble(),
+  );
 
   final int id;
   final String name;
@@ -602,10 +637,10 @@ class SetupCategory {
   SetupCategory({required this.slug, required this.nameEn, this.nameDv});
 
   factory SetupCategory.fromJson(Map<String, dynamic> json) => SetupCategory(
-        slug: _s(json['slug']),
-        nameEn: _s(json['name_en']),
-        nameDv: json['name_dv'] as String?,
-      );
+    slug: _s(json['slug']),
+    nameEn: _s(json['name_en']),
+    nameDv: json['name_dv'] as String?,
+  );
 
   final String slug;
   final String nameEn;
@@ -627,9 +662,9 @@ class CustomerLookup {
   CustomerLookup({required this.valid, this.name});
 
   factory CustomerLookup.fromJson(Map<String, dynamic> json) => CustomerLookup(
-        valid: json['valid'] as bool? ?? false,
-        name: json['name'] as String?,
-      );
+    valid: json['valid'] as bool? ?? false,
+    name: json['name'] as String?,
+  );
 
   final bool valid;
 
@@ -650,12 +685,12 @@ class RateWindow {
   });
 
   factory RateWindow.fromJson(Map<String, dynamic> json) => RateWindow(
-        cashbackRatePercent: _s(json['cashback_rate_percent']),
-        platformFeePercent: json['platform_fee_percent'] as String?,
-        allInPercent: json['all_in_percent'] as String?,
-        effectiveFrom: _s(json['effective_from']),
-        effectiveTo: json['effective_to'] as String?,
-      );
+    cashbackRatePercent: _s(json['cashback_rate_percent']),
+    platformFeePercent: json['platform_fee_percent'] as String?,
+    allInPercent: json['all_in_percent'] as String?,
+    effectiveFrom: _s(json['effective_from']),
+    effectiveTo: json['effective_to'] as String?,
+  );
 
   final String cashbackRatePercent;
   final String? platformFeePercent;
@@ -671,13 +706,13 @@ class MerchantRate {
   MerchantRate({this.current, this.pending});
 
   factory MerchantRate.fromJson(Map<String, dynamic> json) => MerchantRate(
-        current: json['current'] is Map
-            ? RateWindow.fromJson((json['current'] as Map).cast<String, dynamic>())
-            : null,
-        pending: json['pending'] is Map
-            ? RateWindow.fromJson((json['pending'] as Map).cast<String, dynamic>())
-            : null,
-      );
+    current: json['current'] is Map
+        ? RateWindow.fromJson((json['current'] as Map).cast<String, dynamic>())
+        : null,
+    pending: json['pending'] is Map
+        ? RateWindow.fromJson((json['pending'] as Map).cast<String, dynamic>())
+        : null,
+  );
 
   /// Null when the store has no effective rate at all — the server refuses
   /// credits in that state, and the till says so instead of previewing.
@@ -877,10 +912,10 @@ class RateCost {
   });
 
   factory RateCost.fromJson(Map<String, dynamic> json) => RateCost(
-        cashbackRatePercent: _s(json['cashback_rate_percent']),
-        platformFeePercent: json['platform_fee_percent'] as String?,
-        allInPercent: json['all_in_percent'] as String?,
-      );
+    cashbackRatePercent: _s(json['cashback_rate_percent']),
+    platformFeePercent: json['platform_fee_percent'] as String?,
+    allInPercent: json['all_in_percent'] as String?,
+  );
 
   final String cashbackRatePercent;
   final String? platformFeePercent;
@@ -903,7 +938,9 @@ class RateChangeSummary {
   factory RateChangeSummary.fromJson(Map<String, dynamic> json) =>
       RateChangeSummary(
         previous: json['previous'] is Map
-            ? RateCost.fromJson((json['previous'] as Map).cast<String, dynamic>())
+            ? RateCost.fromJson(
+                (json['previous'] as Map).cast<String, dynamic>(),
+              )
             : null,
         next: RateCost.fromJson(
           (json['new'] as Map?)?.cast<String, dynamic>() ?? {},
@@ -985,17 +1022,17 @@ class MerchantStaff {
   });
 
   factory MerchantStaff.fromJson(Map<String, dynamic> json) => MerchantStaff(
-        id: json['id'] as int? ?? 0,
-        name: _s(json['name']),
-        email: _s(json['email']),
-        role: json['role'] is Map
-            ? MerchantRoleSummary.fromJson(
-                (json['role'] as Map).cast<String, dynamic>(),
-              )
-            : null,
-        isActive: json['is_active'] as bool? ?? true,
-        createdAt: json['created_at'] as String?,
-      );
+    id: json['id'] as int? ?? 0,
+    name: _s(json['name']),
+    email: _s(json['email']),
+    role: json['role'] is Map
+        ? MerchantRoleSummary.fromJson(
+            (json['role'] as Map).cast<String, dynamic>(),
+          )
+        : null,
+    isActive: json['is_active'] as bool? ?? true,
+    createdAt: json['created_at'] as String?,
+  );
 
   final int id;
   final String name;
@@ -1040,20 +1077,20 @@ class MerchantRole {
   });
 
   factory MerchantRole.fromJson(Map<String, dynamic> json) => MerchantRole(
-        id: json['id'] as int? ?? 0,
-        name: _s(json['name']),
-        nameDv: json['name_dv'] as String?,
-        slug: _s(json['slug']),
-        isOwner: json['is_owner'] as bool? ?? false,
-        isSystem: json['is_system'] as bool? ?? false,
-        permissions: [
-          for (final slug in (json['permissions'] as List? ?? const []))
-            slug.toString(),
-        ],
-        staffCount: _count(json['staff_count']),
-        createdAt: json['created_at'] as String?,
-        updatedAt: json['updated_at'] as String?,
-      );
+    id: json['id'] as int? ?? 0,
+    name: _s(json['name']),
+    nameDv: json['name_dv'] as String?,
+    slug: _s(json['slug']),
+    isOwner: json['is_owner'] as bool? ?? false,
+    isSystem: json['is_system'] as bool? ?? false,
+    permissions: [
+      for (final slug in (json['permissions'] as List? ?? const []))
+        slug.toString(),
+    ],
+    staffCount: _count(json['staff_count']),
+    createdAt: json['created_at'] as String?,
+    updatedAt: json['updated_at'] as String?,
+  );
 
   final int id;
   final String name;
@@ -1086,13 +1123,17 @@ class MerchantRole {
 /// added by a later deploy renders — with its own wording, under the right
 /// heading — in an app build that predates it.
 class PermissionInfo {
-  PermissionInfo({required this.slug, required this.label, required this.group});
+  PermissionInfo({
+    required this.slug,
+    required this.label,
+    required this.group,
+  });
 
   factory PermissionInfo.fromJson(Map<String, dynamic> json) => PermissionInfo(
-        slug: _s(json['slug']),
-        label: _s(json['label']),
-        group: _s(json['group']),
-      );
+    slug: _s(json['slug']),
+    label: _s(json['label']),
+    group: _s(json['group']),
+  );
 
   final String slug;
 
@@ -1154,12 +1195,12 @@ class MerchantBranch {
   });
 
   factory MerchantBranch.fromJson(Map<String, dynamic> json) => MerchantBranch(
-        id: json['id'] as int? ?? 0,
-        name: _s(json['name']),
-        address: json['address'] as String?,
-        lat: (json['lat'] as num?)?.toDouble(),
-        lng: (json['lng'] as num?)?.toDouble(),
-      );
+    id: json['id'] as int? ?? 0,
+    name: _s(json['name']),
+    address: json['address'] as String?,
+    lat: (json['lat'] as num?)?.toDouble(),
+    lng: (json['lng'] as num?)?.toDouble(),
+  );
 
   final int id;
   final String name;
@@ -1183,21 +1224,19 @@ class MerchantBranchEstate {
     this.pendingChanges = const [],
   });
 
-  factory MerchantBranchEstate.fromJson(Map<String, dynamic> json) =>
-      MerchantBranchEstate(
-        branches: [
-          for (final item in (json['data'] as List? ?? const []))
-            MerchantBranch.fromJson((item as Map).cast<String, dynamic>()),
-        ],
-        pendingChanges: [
-          for (final item in ((json['meta'] as Map?)?['pending_changes']
-                  as List? ??
-              const []))
-            MerchantChangeRequest.fromJson(
-              (item as Map).cast<String, dynamic>(),
-            ),
-        ],
-      );
+  factory MerchantBranchEstate.fromJson(
+    Map<String, dynamic> json,
+  ) => MerchantBranchEstate(
+    branches: [
+      for (final item in (json['data'] as List? ?? const []))
+        MerchantBranch.fromJson((item as Map).cast<String, dynamic>()),
+    ],
+    pendingChanges: [
+      for (final item
+          in ((json['meta'] as Map?)?['pending_changes'] as List? ?? const []))
+        MerchantChangeRequest.fromJson((item as Map).cast<String, dynamic>()),
+    ],
+  );
 
   final List<MerchantBranch> branches;
 
@@ -1209,9 +1248,9 @@ class MerchantBranchEstate {
   /// so a screen that only draws the list would show nothing at all for a
   /// save the owner just made.
   List<MerchantChangeRequest> get pendingCreates => [
-        for (final change in pendingChanges)
-          if (change.kind == MerchantChangeRequest.kindBranchCreate) change,
-      ];
+    for (final change in pendingChanges)
+      if (change.kind == MerchantChangeRequest.kindBranchCreate) change,
+  ];
 
   /// The request waiting against an EXISTING branch (update or removal), or
   /// null. One pending request per target is the server's law (MR9
@@ -1427,22 +1466,22 @@ class Promotion {
   });
 
   factory Promotion.fromJson(Map<String, dynamic> json) => Promotion(
-        id: json['id'] as int? ?? 0,
-        merchantId: json['merchant_id'] as int? ?? 0,
-        branchId: json['branch_id'] as int?,
-        status: _s(json['status']),
-        isLive: json['is_live'] as bool? ?? false,
-        cashbackRatePercent: _s(json['cashback_rate_percent']),
-        platformFeePercent: json['platform_fee_percent'] as String?,
-        allInPercent: json['all_in_percent'] as String?,
-        startsAt: _s(json['starts_at']),
-        endsAt: _s(json['ends_at']),
-        minPurchaseLaari: json['min_purchase_laari'] as int?,
-        maxCashbackPerCustomerLaari:
-            json['max_cashback_per_customer_laari'] as int?,
-        publishedAt: json['published_at'] as String?,
-        cancelledAt: json['cancelled_at'] as String?,
-      );
+    id: json['id'] as int? ?? 0,
+    merchantId: json['merchant_id'] as int? ?? 0,
+    branchId: json['branch_id'] as int?,
+    status: _s(json['status']),
+    isLive: json['is_live'] as bool? ?? false,
+    cashbackRatePercent: _s(json['cashback_rate_percent']),
+    platformFeePercent: json['platform_fee_percent'] as String?,
+    allInPercent: json['all_in_percent'] as String?,
+    startsAt: _s(json['starts_at']),
+    endsAt: _s(json['ends_at']),
+    minPurchaseLaari: json['min_purchase_laari'] as int?,
+    maxCashbackPerCustomerLaari:
+        json['max_cashback_per_customer_laari'] as int?,
+    publishedAt: json['published_at'] as String?,
+    cancelledAt: json['cancelled_at'] as String?,
+  );
 
   final int id;
   final int merchantId;
@@ -1529,12 +1568,12 @@ class ClosureStore {
   });
 
   factory ClosureStore.fromJson(Map<String, dynamic> json) => ClosureStore(
-        id: json['id'] as int? ?? 0,
-        name: _s(json['name']),
-        status: _s(json['status']),
-        outstandingLaari: json['outstanding_laari'] as int? ?? 0,
-        canClose: json['can_close'] as bool? ?? false,
-      );
+    id: json['id'] as int? ?? 0,
+    name: _s(json['name']),
+    status: _s(json['status']),
+    outstandingLaari: json['outstanding_laari'] as int? ?? 0,
+    canClose: json['can_close'] as bool? ?? false,
+  );
 
   final int id;
   final String name;

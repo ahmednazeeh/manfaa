@@ -1346,5 +1346,32 @@
   "referenceComesLaterNote": "No reference is needed for the transfer — Manfaa creates one when you upload the receipt, and you'll see it on the settlement.",
   "saleTimeLabel": "Sale time",
   "saleTimeNow": "Now",
-  "saleTimeSetNow": "Now"
+  "saleTimeSetNow": "Now",
+  "discountSaveByTitle": "Save {amount} by settling before {date}",
+  "@discountSaveByTitle": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      },
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "discountSaveBySub": "{rate} prompt-payment discount on platform fees",
+  "@discountSaveBySub": {
+    "placeholders": {
+      "rate": {
+        "type": "String"
+      }
+    }
+  },
+  "discountNoneSub": "The prompt-payment discount no longer applies to your oldest sale.",
+  "agingTitle": "Aging",
+  "viewBreakdown": "View breakdown",
+  "monthTitle": "This month",
+  "monthSales": "Sales through Manfaa",
+  "monthTransactions": "Transactions",
+  "monthCashback": "Cashback issued",
+  "monthAverage": "Avg. transaction"
 }

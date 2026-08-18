@@ -111,6 +111,25 @@ final class HomeController extends Controller
             ])
             ->first();
 
+        // "This month" answers the question the rest of the dashboard does
+        // not: what Manfaa is GENERATING, not only what it costs (owner
+        // report 2026-08-18). Same business-timezone boundary and the same
+        // reversed/written-off exclusions as today's tally, so the two can
+        // never tell different stories about the same sale.
+        $startOfMonth = CarbonImmutable::now($timezone)->startOfMonth()->utc();
+
+        $month = DB::table('transactions')
+            ->selectRaw('count(*) as credit_count')
+            ->selectRaw('coalesce(sum(eligible_laari), 0) as eligible_laari')
+            ->selectRaw('coalesce(sum(cashback_laari), 0) as cashback_laari')
+            ->where('merchant_id', $merchant->getKey())
+            ->where('occurred_at', '>=', $startOfMonth)
+            ->whereNotIn('state', [
+                TransactionState::Reversed->value,
+                TransactionState::WrittenOff->value,
+            ])
+            ->first();
+
         $maySeeSettlements = $user->can(Permission::SettlementsView);
 
         /** @var Settlement|null $open */
@@ -134,6 +153,17 @@ final class HomeController extends Controller
                     'credit_count' => (int) $today->credit_count,
                     'eligible_laari' => (int) $today->eligible_laari,
                     'cashback_laari' => (int) $today->cashback_laari,
+                ],
+                'month' => [
+                    'credit_count' => (int) $month->credit_count,
+                    'eligible_laari' => (int) $month->eligible_laari,
+                    'cashback_laari' => (int) $month->cashback_laari,
+                    // The average sale, computed here so every surface
+                    // shows the SAME number — integer laari, floor: a
+                    // rounded-up average would overstate the takings.
+                    'average_eligible_laari' => (int) $month->credit_count === 0
+                        ? 0
+                        : intdiv((int) $month->eligible_laari, (int) $month->credit_count),
                 ],
                 // Ages, totals and pending adjustments, straight from the
                 // service the panel's own screen reads — but only for

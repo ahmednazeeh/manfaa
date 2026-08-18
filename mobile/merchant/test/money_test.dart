@@ -92,23 +92,32 @@ void main() {
   ) async {
     await pumpMoney(tester);
 
-    // Hero + 0–5 bucket + the breakdown chip all carry the SAME server
-    // total — 2750 laari rendered, never recomputed.
-    expect(find.text('MVR 27.50'), findsNWidgets(3));
+    // MR10: the liability is told ONCE, not five times — the amount now
+    // appears in the card's hero and in its 0–5 ageing column, and the
+    // accounting sits behind "View breakdown" until asked for.
+    expect(find.text('MVR 27.50'), findsNWidgets(2));
     expect(find.text('1 transaction'), findsOneWidget);
+    // Empty ageing columns render the server's zeros, not blanks.
+    expect(find.text('MVR 0.00'), findsWidgets);
+    // Collapsed by default: the cashback/fee rows are not on screen yet.
+    expect(find.text('MVR 20.00'), findsNothing);
+
+    await tester.tap(find.text('View breakdown'));
+    await tester.pumpAndSettle();
     expect(find.text('MVR 20.00'), findsOneWidget); // cashback row
     expect(find.text('MVR 7.50'), findsOneWidget); // fee row
-    // Empty buckets render the server's zeros, not blanks.
-    expect(find.text('MVR 0.00'), findsWidgets);
 
-    // The deadline banner: clock_start 10 Aug + 15 days, and the save
-    // amount is the server's discount integer.
+    // The saving reads as an ACTION with its deadline, and names the fee
+    // it applies to — clock_start 10 Aug + 15 days, server's own integer.
+    expect(find.textContaining('Save MVR 0.38 by settling before'), findsOneWidget);
+    expect(find.textContaining('25 Aug 2026'), findsOneWidget);
     expect(
-      find.textContaining('stops earning the 5% prompt-payment discount '
-          'on 25 Aug 2026'),
+      find.textContaining('prompt-payment discount on platform fees'),
       findsOneWidget,
     );
-    expect(find.textContaining('save MVR 0.38'), findsOneWidget);
+
+    // The takings half the owner asked for.
+    expect(find.text('This month'), findsOneWidget);
   });
 
   testWidgets('permission-hidden blocks: no settlements.view, no money', (
@@ -349,6 +358,12 @@ class _MoneyApi extends MerchantApi {
   Future<MerchantHome> home() async => MerchantHome.fromJson({
     'merchant': {'name': 'Tropical Mart', 'status': 'active'},
     'today': {'credit_count': 4, 'eligible_laari': 235000, 'cashback_laari': 11750},
+    'month': {
+      'credit_count': 42,
+      'eligible_laari': 1845000,
+      'cashback_laari': 36900,
+      'average_eligible_laari': 43928,
+    },
     'outstanding': permissions.contains('settlements.view')
         ? {
             'total': {

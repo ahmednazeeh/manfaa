@@ -2649,4 +2649,39 @@ class AppLocalizationsDv extends AppLocalizations {
 
   @override
   String get saleTimeSetNow => 'މިހާރު';
+
+  @override
+  String discountSaveByTitle(String amount, String date) {
+    return '$date ގެ ކުރިން ދެއްކެވުމުން $amount ސަލާމަތްކުރެއްވޭނެ';
+  }
+
+  @override
+  String discountSaveBySub(String rate) {
+    return 'ޕްލެޓްފޯމް ފީން $rate އަވަހަށް ދެއްކުމުގެ ޑިސްކައުންޓް';
+  }
+
+  @override
+  String get discountNoneSub =>
+      'އެންމެ ކުރީގެ ވިޔަފާރިއަށް އަވަހަށް ދެއްކުމުގެ ޑިސްކައުންޓް ނުލިބޭ.';
+
+  @override
+  String get agingTitle => 'ދުވަސްވީ މިންވަރު';
+
+  @override
+  String get viewBreakdown => 'ތަފްޞީލު ބައްލަވާ';
+
+  @override
+  String get monthTitle => 'މި މަސް';
+
+  @override
+  String get monthSales => 'މަންފާ މެދުވެރިކޮށް ވިޔަފާރި';
+
+  @override
+  String get monthTransactions => 'މުޢާމަލާތްތައް';
+
+  @override
+  String get monthCashback => 'ދޫކުރެވުނު ކޭޝްބެކް';
+
+  @override
+  String get monthAverage => 'އެވްރެޖް މުޢާމަލާތް';
 }

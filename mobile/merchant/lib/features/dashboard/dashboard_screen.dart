@@ -9,8 +9,8 @@ import '../../app/providers.dart';
 import '../../widgets/adaptive.dart';
 import '../../widgets/merchant_brand.dart';
 import '../money/money_providers.dart';
+import '../../widgets/tx_format.dart';
 import '../push/push_registrar.dart';
-import '../settlements/settlement_widgets.dart';
 
 /// The Dashboard (MR3), drawn to Dashboard.png: the outstanding hero with
 /// Settle now, the prompt-discount deadline banner, the 2×2 ageing buckets,
@@ -122,34 +122,29 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       // ageing buckets go 4-across. Same blocks, same permission gates —
       // only the flow changes.
       final left = <Widget>[
-        if (outstanding != null) ...[
-          _PayableBreakdown(outstanding: outstanding),
-          const SizedBox(height: Gap.md),
-        ],
+        _MonthCard(month: home.month),
+        const SizedBox(height: Gap.md),
         if (session.can('credits.create')) ...[
           _creditCta(context),
           const SizedBox(height: Gap.md),
         ],
       ];
       final right = <Widget>[
+        TodayStrip(today: home.today),
+        const SizedBox(height: Gap.md),
         if (session.can('wallet.view')) ...[
           const _WalletCard(),
           const SizedBox(height: Gap.md),
         ],
-        TodayStrip(today: home.today),
-        const SizedBox(height: Gap.md),
       ];
 
       return [
         if (outstanding != null) ...[
-          _OutstandingHero(
+          _SettlementCard(
             outstanding: outstanding,
             canSettle: session.can('settlements.create'),
+            canPreview: session.can('settlements.preview'),
           ),
-          const SizedBox(height: Gap.md),
-          if (session.can('settlements.preview') && outstanding.total.count > 0)
-            const _DeadlineBanner(),
-          _BucketsGrid(outstanding: outstanding, columns: 4),
           const SizedBox(height: Gap.md),
         ],
         Row(
@@ -166,25 +161,26 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     return [
       // The money blocks exist only when the server chose to show them —
       // null means this account may not learn the store's standing.
+      // ONE card for the whole liability (owner report 2026-08-18): the
+      // amount, the saving as an action, ageing, and the accounting behind
+      // a disclosure — instead of five cards narrating one number.
       if (outstanding != null) ...[
-        _OutstandingHero(
+        _SettlementCard(
           outstanding: outstanding,
           canSettle: session.can('settlements.create'),
+          canPreview: session.can('settlements.preview'),
         ),
         const SizedBox(height: Gap.md),
-        if (session.can('settlements.preview') && outstanding.total.count > 0)
-          const _DeadlineBanner(),
-        _BucketsGrid(outstanding: outstanding),
-        const SizedBox(height: Gap.md),
-        _PayableBreakdown(outstanding: outstanding),
-        const SizedBox(height: Gap.md),
       ],
+      // What Manfaa GENERATED, next in line after what it costs.
+      _MonthCard(month: home.month),
+      const SizedBox(height: Gap.md),
+      TodayStrip(today: home.today),
+      const SizedBox(height: Gap.md),
       if (session.can('wallet.view')) ...[
         const _WalletCard(),
         const SizedBox(height: Gap.md),
       ],
-      TodayStrip(today: home.today),
-      const SizedBox(height: Gap.md),
       if (session.can('credits.create')) _creditCta(context),
     ];
   }
@@ -224,322 +220,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           Icon(
             Icons.chevron_right_rounded,
             color: Theme.of(context).colorScheme.onSurfaceVariant,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// The violet-soft hero (Dashboard.png): coin tile, "Outstanding to
-/// settle", the server's payable total, and the ink Settle now button —
-/// which is `settlements.create`'s to press.
-class _OutstandingHero extends StatelessWidget {
-  const _OutstandingHero({required this.outstanding, required this.canSettle});
-
-  final MerchantOutstanding outstanding;
-  final bool canSettle;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final l10n = context.l10n;
-
-    return Container(
-      padding: const EdgeInsets.all(Gap.lg),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.secondaryContainer.withValues(alpha: 0.55),
-        borderRadius: BorderRadius.circular(Corner.card),
-      ),
-      child: Row(
-        children: [
-          const IconTile(
-            Icons.paid_outlined,
-            tint: ManfaaTint.violet,
-            size: 44,
-            iconSize: 23,
-          ),
-          const SizedBox(width: Gap.md),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  l10n.dashOutstandingTitle,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                // Scale down rather than wrap: a split money figure is
-                // unreadable, and the ref draws it on one line.
-                FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: AlignmentDirectional.centerStart,
-                  child: MoneyText(
-                    outstanding.total.payableLaari,
-                    style: theme.textTheme.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  l10n.dashOutstandingSub,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          if (canSettle) ...[
-            const SizedBox(width: Gap.sm),
-            FilledButton(
-              // The theme's minimumSize is full-width; this one sits in a row.
-              style: FilledButton.styleFrom(
-                minimumSize: const Size(0, 44),
-                padding: const EdgeInsets.symmetric(horizontal: 18),
-              ),
-              onPressed: () => context.go('/settlements'),
-              child: Text(l10n.settleNow),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-/// The deadline banner, fed by the settle-all preview — the one endpoint
-/// that evaluates the discount. Loading and failure draw nothing: a
-/// countdown is a bonus, never an error surface.
-class _DeadlineBanner extends ConsumerWidget {
-  const _DeadlineBanner();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final preview = ref.watch(settleAllPreviewProvider).valueOrNull;
-    final discount = preview?.discount;
-    if (preview == null || discount == null) return const SizedBox.shrink();
-
-    return Column(
-      children: [
-        DiscountDeadlineBanner(discount: discount, rows: preview.transactions),
-        const SizedBox(height: Gap.md),
-      ],
-    );
-  }
-}
-
-/// The ageing grid (0–5 / 6–10 / 11–15 / Overdue), each cell the server's
-/// own bucket sum and count — never recomputed here. 2×2 on phones
-/// (Dashboard.png); the expanded dashboard lays the same four cells
-/// 4-across ([columns]).
-class _BucketsGrid extends StatelessWidget {
-  const _BucketsGrid({required this.outstanding, this.columns = 2});
-
-  final MerchantOutstanding outstanding;
-  final int columns;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = context.l10n;
-
-    Widget cell(String key, String label, IconData icon, ManfaaTint tint) {
-      final bucket = outstanding.buckets[key];
-
-      return Expanded(
-        child: _BucketCard(
-          label: label,
-          icon: icon,
-          tint: tint,
-          payableLaari: bucket?.payableLaari ?? 0,
-          count: bucket?.count ?? 0,
-        ),
-      );
-    }
-
-    final cells = [
-      cell('0_5', l10n.bucket05, Icons.trending_up_rounded, ManfaaTint.green),
-      cell(
-        '6_10',
-        l10n.bucket610,
-        Icons.arrow_forward_rounded,
-        ManfaaTint.blue,
-      ),
-      cell('11_15', l10n.bucket1115, Icons.schedule_rounded, ManfaaTint.amber),
-      cell(
-        'overdue',
-        l10n.bucketOverdue,
-        Icons.error_outline_rounded,
-        ManfaaTint.coral,
-      ),
-    ];
-
-    Widget row(List<Widget> rowCells) => Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        for (final (i, c) in rowCells.indexed) ...[
-          if (i > 0) const SizedBox(width: Gap.md),
-          c,
-        ],
-      ],
-    );
-
-    if (columns >= 4) return row(cells);
-
-    return Column(
-      children: [
-        row(cells.sublist(0, 2)),
-        const SizedBox(height: Gap.md),
-        row(cells.sublist(2)),
-      ],
-    );
-  }
-}
-
-class _BucketCard extends StatelessWidget {
-  const _BucketCard({
-    required this.label,
-    required this.icon,
-    required this.tint,
-    required this.payableLaari,
-    required this.count,
-  });
-
-  final String label;
-  final IconData icon;
-  final ManfaaTint tint;
-  final int payableLaari;
-  final int count;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final l10n = context.l10n;
-
-    return ManfaaCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  label,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              IconTile(icon, tint: tint, size: 32, iconSize: 17),
-            ],
-          ),
-          const SizedBox(height: Gap.xs),
-          MoneyText(
-            payableLaari,
-            style: theme.textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            l10n.bucketTransactions(count),
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// Payable breakdown (Dashboard.png): cashback / fee / GST rows, the
-/// outstanding count, the §7 pending-adjustment credit when one exists,
-/// and the violet MVR chip carrying the total.
-class _PayableBreakdown extends StatelessWidget {
-  const _PayableBreakdown({required this.outstanding});
-
-  final MerchantOutstanding outstanding;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final l10n = context.l10n;
-    final total = outstanding.total;
-
-    return ManfaaCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  l10n.payableBreakdownTitle,
-                  style: theme.textTheme.titleMedium,
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 5,
-                ),
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.secondaryContainer,
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: MoneyText(
-                  total.payableLaari,
-                  style: theme.textTheme.labelLarge?.copyWith(
-                    color: theme.colorScheme.onSecondaryContainer,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: Gap.sm),
-          MoneyRow(label: l10n.payableCashback, laari: total.cashbackLaari),
-          MoneyRow(label: l10n.payableFee, laari: total.feeLaari),
-          MoneyRow(label: l10n.payableGst, laari: total.feeGstLaari),
-          if (outstanding.pendingAdjustmentCount > 0)
-            MoneyRow(
-              label: l10n.payablePendingCredit,
-              child: MoneyText(
-                outstanding.pendingAdjustmentCreditLaari,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: ManfaaColors.green,
-                ),
-              ),
-            ),
-          const Divider(height: Gap.xl),
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 2),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    l10n.payableOutstandingCount,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ),
-                Text(
-                  '${total.count}',
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    fontFeatures: const [FontFeature.tabularFigures()],
-                  ),
-                ),
-              ],
-            ),
           ),
         ],
       ),
@@ -705,6 +385,418 @@ class _ErrorBlock extends StatelessWidget {
           Text(message, textAlign: TextAlign.center),
           const SizedBox(height: Gap.md),
           OutlinedButton(onPressed: onRetry, child: Text(l10n.retry)),
+        ],
+      ),
+    );
+  }
+}
+
+/// The whole settlement story in ONE card (owner report 2026-08-18): the
+/// dashboard was spending its top two thirds telling the same liability
+/// five times — hero, discount notice, ageing grid, payable breakdown and
+/// wallet all narrating one number. Now the amount leads, the saving reads
+/// as an ACTION, the ageing is a quiet four-column strip, and the
+/// accounting detail hides behind "View breakdown" until asked for.
+class _SettlementCard extends ConsumerStatefulWidget {
+  const _SettlementCard({
+    required this.outstanding,
+    required this.canSettle,
+    required this.canPreview,
+  });
+
+  final MerchantOutstanding outstanding;
+  final bool canSettle;
+  final bool canPreview;
+
+  @override
+  ConsumerState<_SettlementCard> createState() => _SettlementCardState();
+}
+
+class _SettlementCardState extends ConsumerState<_SettlementCard> {
+  var _open = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final l10n = context.l10n;
+    final dhivehi = Localizations.localeOf(context).languageCode == 'dv';
+    final muted = theme.colorScheme.onSurfaceVariant;
+    final total = widget.outstanding.total;
+
+    return ManfaaCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // ── the amount, and the one button that clears it ──────────────
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      l10n.dashOutstandingTitle,
+                      style: theme.textTheme.bodyMedium?.copyWith(color: muted),
+                    ),
+                    const SizedBox(height: 2),
+                    MoneyText(
+                      total.payableLaari,
+                      style: theme.textTheme.headlineMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      l10n.bucketTransactions(total.count),
+                      style: theme.textTheme.bodySmall?.copyWith(color: muted),
+                    ),
+                  ],
+                ),
+              ),
+              if (widget.canSettle)
+                FilledButton(
+                  onPressed: () => context.go('/settlements'),
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size(0, 44),
+                    padding: const EdgeInsets.symmetric(horizontal: Gap.lg),
+                  ),
+                  child: Text(l10n.settleNow),
+                ),
+            ],
+          ),
+
+          // ── the saving, as an action ──────────────────────────────────
+          if (widget.canPreview && total.count > 0) ...[
+            const SizedBox(height: Gap.md),
+            const _SavingLine(),
+          ],
+
+          // ── ageing, four quiet columns ────────────────────────────────
+          if (total.count > 0) ...[
+            const SizedBox(height: Gap.md),
+            Divider(height: 1, color: theme.colorScheme.outlineVariant),
+            const SizedBox(height: Gap.md),
+            Text(
+              l10n.agingTitle,
+              style: theme.textTheme.labelLarge?.copyWith(color: muted),
+            ),
+            const SizedBox(height: Gap.sm),
+            _AgingStrip(outstanding: widget.outstanding),
+          ],
+
+          // ── the accounting, on request ────────────────────────────────
+          const SizedBox(height: Gap.sm),
+          InkWell(
+            borderRadius: BorderRadius.circular(Corner.tile),
+            onTap: () => setState(() => _open = !_open),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: Gap.sm),
+              child: Row(
+                children: [
+                  Text(
+                    l10n.viewBreakdown,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.colorScheme.secondary,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(width: Gap.xs),
+                  Icon(
+                    _open
+                        ? Icons.keyboard_arrow_up_rounded
+                        : Icons.keyboard_arrow_right_rounded,
+                    size: 20,
+                    color: theme.colorScheme.secondary,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          if (_open) _BreakdownRows(outstanding: widget.outstanding),
+          if (dhivehi) const SizedBox.shrink(),
+        ],
+      ),
+    );
+  }
+}
+
+/// "Save MVR 1.50 by settling before 27 Aug" — the benefit and the
+/// deadline in the merchant's own terms, with the fee named underneath so
+/// nobody reads 5% off the whole liability (owner report 2026-08-18).
+class _SavingLine extends ConsumerWidget {
+  const _SavingLine();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final l10n = context.l10n;
+    final dhivehi = Localizations.localeOf(context).languageCode == 'dv';
+    final preview = ref.watch(settleAllPreviewProvider).valueOrNull;
+    final discount = preview?.discount;
+
+    if (preview == null || discount == null || discount.disabled) {
+      return const SizedBox.shrink();
+    }
+
+    final deadline = discountDeadlineDate([
+      for (final row in preview.transactions) row.clockStartAt,
+    ], discount.maxAgeDays);
+    if (discount.discountLaari == 0 || deadline == null) {
+      return const SizedBox.shrink();
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(Gap.md),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.secondaryContainer,
+        borderRadius: BorderRadius.circular(Corner.tile),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            Icons.check_circle_outline_rounded,
+            size: 18,
+            color: theme.colorScheme.onSecondaryContainer,
+          ),
+          const SizedBox(width: Gap.sm),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  l10n.discountSaveByTitle(
+                    formatMoney(discount.discountLaari, dhivehi: dhivehi),
+                    deadline,
+                  ),
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: theme.colorScheme.onSecondaryContainer,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  l10n.discountSaveBySub(trimRatePercent(discount.ratePercent)),
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSecondaryContainer.withValues(
+                      alpha: 0.75,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Ageing as four columns of label + amount — the server's own bucket
+/// sums, never recomputed here.
+class _AgingStrip extends StatelessWidget {
+  const _AgingStrip({required this.outstanding});
+
+  final MerchantOutstanding outstanding;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final l10n = context.l10n;
+    final muted = theme.colorScheme.onSurfaceVariant;
+
+    Widget cell(String key, String label, Color tone) {
+      final bucket = outstanding.buckets[key];
+      final laari = bucket?.payableLaari ?? 0;
+      return Expanded(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.bodySmall?.copyWith(color: muted),
+            ),
+            const SizedBox(height: 2),
+            MoneyText(
+              laari,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                fontWeight: FontWeight.w700,
+                color: laari > 0 ? tone : muted,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        cell('0_5', l10n.bucket05, theme.colorScheme.onSurface),
+        cell('6_10', l10n.bucket610, theme.colorScheme.onSurface),
+        cell('11_15', l10n.bucket1115, ManfaaColors.amber),
+        cell('overdue', l10n.bucketOverdue, theme.colorScheme.error),
+      ],
+    );
+  }
+}
+
+/// The accounting the owner wanted kept but demoted: cashback, fee, GST
+/// and the count, revealed under "View breakdown".
+class _BreakdownRows extends StatelessWidget {
+  const _BreakdownRows({required this.outstanding});
+
+  final MerchantOutstanding outstanding;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final l10n = context.l10n;
+    final muted = theme.colorScheme.onSurfaceVariant;
+    final total = outstanding.total;
+
+    Widget row(String label, Widget value) => Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: theme.textTheme.bodySmall?.copyWith(color: muted),
+            ),
+          ),
+          value,
+        ],
+      ),
+    );
+
+    return Column(
+      children: [
+        const SizedBox(height: Gap.xs),
+        row(
+          l10n.payableCashback,
+          MoneyText(total.cashbackLaari, style: theme.textTheme.bodyMedium),
+        ),
+        row(
+          l10n.payableFee,
+          MoneyText(total.feeLaari, style: theme.textTheme.bodyMedium),
+        ),
+        row(
+          l10n.payableGst,
+          MoneyText(total.feeGstLaari, style: theme.textTheme.bodyMedium),
+        ),
+        if (outstanding.pendingAdjustmentCount > 0)
+          row(
+            l10n.payablePendingCredit,
+            MoneyText(
+              outstanding.pendingAdjustmentCreditLaari,
+              style: theme.textTheme.bodyMedium,
+            ),
+          ),
+        Divider(height: Gap.md, color: theme.colorScheme.outlineVariant),
+        row(
+          l10n.payableOutstandingCount,
+          Text('${total.count}', style: theme.textTheme.titleSmall),
+        ),
+      ],
+    );
+  }
+}
+
+/// What Manfaa GENERATED this month — the half of the story the dashboard
+/// was missing (owner report 2026-08-18). Same business-month boundary and
+/// the same reversed/written-off exclusions as the Today strip.
+class _MonthCard extends StatelessWidget {
+  const _MonthCard({required this.month});
+
+  final MerchantMonth month;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final l10n = context.l10n;
+    final muted = theme.colorScheme.onSurfaceVariant;
+
+    Widget stat(String label, Widget value) => Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          maxLines: 2,
+          style: theme.textTheme.bodySmall?.copyWith(color: muted),
+        ),
+        const SizedBox(height: 2),
+        value,
+      ],
+    );
+
+    final strong = theme.textTheme.titleMedium?.copyWith(
+      fontWeight: FontWeight.w800,
+    );
+
+    return ManfaaCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const IconTile(
+                Icons.trending_up_rounded,
+                tint: ManfaaTint.green,
+                size: 36,
+                iconSize: 18,
+              ),
+              const SizedBox(width: Gap.sm),
+              Text(l10n.monthTitle, style: theme.textTheme.titleMedium),
+            ],
+          ),
+          const SizedBox(height: Gap.md),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: stat(
+                  l10n.monthSales,
+                  MoneyText(month.eligibleLaari, style: strong),
+                ),
+              ),
+              const SizedBox(width: Gap.md),
+              Expanded(
+                child: stat(
+                  l10n.monthTransactions,
+                  Text('${month.creditCount}', style: strong),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: Gap.md),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: stat(
+                  l10n.monthCashback,
+                  MoneyText(
+                    month.cashbackLaari,
+                    style: theme.textTheme.titleSmall,
+                  ),
+                ),
+              ),
+              const SizedBox(width: Gap.md),
+              Expanded(
+                child: stat(
+                  l10n.monthAverage,
+                  MoneyText(
+                    month.averageEligibleLaari,
+                    style: theme.textTheme.titleSmall,
+                  ),
+                ),
+              ),
+            ],
+          ),
         ],
       ),
     );

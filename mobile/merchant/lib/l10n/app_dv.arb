@@ -952,5 +952,32 @@
   "referenceComesLaterNote": "ފައިސާ ފޮނުއްވުމަށް ރެފަރެންސެއް ބޭނުމެއް ނުވާނެ — ރަސީދު އަޕްލޯޑްކުރެއްވުމުން މަންފާއިން ރެފަރެންސެއް ހަދާ، ސެޓްލްމަންޓްގައި ފެންނާނެއެވެ.",
   "saleTimeLabel": "ވިޔަފާރީގެ ވަގުތު",
   "saleTimeNow": "މިހާރު",
-  "saleTimeSetNow": "މިހާރު"
+  "saleTimeSetNow": "މިހާރު",
+  "discountSaveByTitle": "{date} ގެ ކުރިން ދެއްކެވުމުން {amount} ސަލާމަތްކުރެއްވޭނެ",
+  "@discountSaveByTitle": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      },
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "discountSaveBySub": "ޕްލެޓްފޯމް ފީން {rate} އަވަހަށް ދެއްކުމުގެ ޑިސްކައުންޓް",
+  "@discountSaveBySub": {
+    "placeholders": {
+      "rate": {
+        "type": "String"
+      }
+    }
+  },
+  "discountNoneSub": "އެންމެ ކުރީގެ ވިޔަފާރިއަށް އަވަހަށް ދެއްކުމުގެ ޑިސްކައުންޓް ނުލިބޭ.",
+  "agingTitle": "ދުވަސްވީ މިންވަރު",
+  "viewBreakdown": "ތަފްޞީލު ބައްލަވާ",
+  "monthTitle": "މި މަސް",
+  "monthSales": "މަންފާ މެދުވެރިކޮށް ވިޔަފާރި",
+  "monthTransactions": "މުޢާމަލާތްތައް",
+  "monthCashback": "ދޫކުރެވުނު ކޭޝްބެކް",
+  "monthAverage": "އެވްރެޖް މުޢާމަލާތް"
 }

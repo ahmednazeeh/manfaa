@@ -4615,6 +4615,66 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Now'**
   String get saleTimeSetNow;
+
+  /// No description provided for @discountSaveByTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Save {amount} by settling before {date}'**
+  String discountSaveByTitle(String amount, String date);
+
+  /// No description provided for @discountSaveBySub.
+  ///
+  /// In en, this message translates to:
+  /// **'{rate} prompt-payment discount on platform fees'**
+  String discountSaveBySub(String rate);
+
+  /// No description provided for @discountNoneSub.
+  ///
+  /// In en, this message translates to:
+  /// **'The prompt-payment discount no longer applies to your oldest sale.'**
+  String get discountNoneSub;
+
+  /// No description provided for @agingTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Aging'**
+  String get agingTitle;
+
+  /// No description provided for @viewBreakdown.
+  ///
+  /// In en, this message translates to:
+  /// **'View breakdown'**
+  String get viewBreakdown;
+
+  /// No description provided for @monthTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'This month'**
+  String get monthTitle;
+
+  /// No description provided for @monthSales.
+  ///
+  /// In en, this message translates to:
+  /// **'Sales through Manfaa'**
+  String get monthSales;
+
+  /// No description provided for @monthTransactions.
+  ///
+  /// In en, this message translates to:
+  /// **'Transactions'**
+  String get monthTransactions;
+
+  /// No description provided for @monthCashback.
+  ///
+  /// In en, this message translates to:
+  /// **'Cashback issued'**
+  String get monthCashback;
+
+  /// No description provided for @monthAverage.
+  ///
+  /// In en, this message translates to:
+  /// **'Avg. transaction'**
+  String get monthAverage;
 }
 
 class _AppLocalizationsDelegate
