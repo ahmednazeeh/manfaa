@@ -548,11 +548,22 @@ refund_laari          = items_laari − fulfilled_items_laari      → customer 
 delivery_laari        UNCHANGED  ← the exception, and it matters
 cashback_laari        = ceil(fulfilled_items_laari × cashback_rate_bp)
 order_fee_laari       = ceil(fulfilled_items_laari × order_fee_bp)
+order_fee_gst_laari   = ceil(order_fee_laari × gst_bp)          ← follows the fee down
 
 payable_to_merchant_laari
   = fulfilled_items_laari + delivery_laari − cashback_laari
     − order_fee_laari − order_fee_gst_laari
 ```
+
+**Every derived figure is recomputed, never patched.** An amendment
+recalculates the whole suborder from `fulfilled_qty` and the rates already
+frozen on it — cashback, the service charge, the GST on that charge, and the
+merchant's payable. Nothing is adjusted by a delta, because a delta applied
+to a rounded figure drifts: two ceilings do not add up to the ceiling of the
+sum, and §10's money law is that the ceiling is computed once on the final
+base. The frozen `order_fee_bp` is what makes this safe to redo — a fee
+change on the platform can never reach back into an order that is already
+being picked.
 
 **Delivery never moves.** If dropping an item takes the basket back under
 the free-delivery threshold, the customer does **not** suddenly owe a
@@ -570,9 +581,12 @@ bought. This has to be *shown*, not merely applied — the customer was
 promised a figure at checkout and will notice a smaller one. Both the refund
 and the reduced cashback appear on the order.
 
-**We take less too.** The marketplace fee recomputes on the fulfilled items,
-so the platform's cut shrinks with the merchant's sale rather than being
-charged on goods nobody received.
+**We take less too, automatically** (owner, 2026-08-18). The service charge
+recomputes on the fulfilled items and its GST follows, so the platform's cut
+shrinks with the merchant's sale rather than being charged on goods nobody
+received. A merchant who refunds a customer must not also be paying us 2% of
+the refund — that would make honesty about a stock shortage cost them money,
+which is precisely the behaviour we do not want to price.
 
 ### 5.5 Admin → **Merchant Settlements** (new menu)
 
