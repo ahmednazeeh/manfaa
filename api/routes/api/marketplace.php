@@ -2,6 +2,8 @@
 
 use App\Http\Controllers\Admin\MarketplaceKybController;
 use App\Http\Controllers\Customer\AddressController;
+use App\Http\Controllers\Customer\CartController;
+use App\Http\Controllers\Customer\MarketController;
 use App\Http\Controllers\Merchant\DeliveryRuleController;
 use App\Http\Controllers\Merchant\MarketplaceEnrolmentController;
 use App\Http\Controllers\Merchant\ProductController;
@@ -101,6 +103,28 @@ Route::prefix('customer')
         Route::post('addresses', [AddressController::class, 'store'])->middleware('throttle:30,1');
         Route::patch('addresses/{address}', [AddressController::class, 'update'])->whereNumber('address');
         Route::delete('addresses/{address}', [AddressController::class, 'destroy'])->whereNumber('address');
+    });
+
+/*
+ * The Market (MP4). Browsing is OPEN — a shopper should be able to see what
+ * a shop sells before signing in — while the cart needs an account, because
+ * a basket belongs to somebody.
+ */
+Route::prefix('market')
+    ->middleware(['marketplace', 'throttle:discovery'])
+    ->group(function (): void {
+        Route::get('branches', [MarketController::class, 'index']);
+        Route::get('branches/{branch}', [MarketController::class, 'show'])->whereNumber('branch');
+    });
+
+Route::prefix('customer/cart')
+    ->middleware(['auth:customer', 'marketplace'])
+    ->group(function (): void {
+        Route::get('/', [CartController::class, 'show']);
+        Route::post('items', [CartController::class, 'add'])->middleware('throttle:120,1');
+        Route::patch('items/{item}', [CartController::class, 'update'])->whereNumber('item');
+        Route::delete('items/{item}', [CartController::class, 'destroy'])->whereNumber('item');
+        Route::delete('/', [CartController::class, 'clear']);
     });
 
 Route::prefix('admin/marketplace')

@@ -1022,3 +1022,63 @@ Decisions taken in the build:
   deserves the 422.
 
 **Not in MP3:** carts, orders, any customer-facing Market surface.
+
+---
+
+## 16. MP4 — browse and cart, server side (in progress)
+
+The first round a shopper could feel, though nothing is drawn yet: the
+storefronts they browse and the multi-vendor cart that prices itself.
+
+The cart is SERVER-SIDE because it prices itself, and pricing is our job —
+delivery thresholds, per-branch minimums and cashback projections all have
+to agree with what checkout will charge, and a client that computed them
+would be a second opinion waiting to disagree.
+
+**Server**
+
+- [x] Migration: `carts`, `cart_items` keyed on the LISTING
+      (`branch_products`), because that is the thing being bought.
+- [x] Customer browse: nearby/served branch storefronts with their terms for
+      the shopper's chosen address; one branch's products by category.
+- [x] Cart API: add, change quantity, remove, empty.
+- [x] `CartPricer` — one pass producing the exact shape the cart screen
+      renders: a subcart per branch with items, delivery quote, minimum
+      state and projected cashback, then the totals beneath.
+- [x] Cashback projection per line: the product's own rate when it has one,
+      otherwise the store's standing rate. Items only, never delivery
+      (§5.1).
+- [x] Stale-price and stock handling: a listing that moved or sold out must
+      not silently price the old way at checkout.
+
+**Proof**
+
+- [x] Tests: two branches of two merchants price as two subcarts; a subcart
+      short of its minimum says how short; delivery waived per island; a
+      product whose price changed re-prices; an out-of-stock line is flagged
+      not silently dropped; cashback follows the per-product override.
+- [x] Full API suite green, pint clean.
+
+**Shipped 2026-08-18.** 15 cart tests; full API suite **1472 green**; live
+behind the switch.
+
+Decisions taken in the build:
+
+- **The cart re-prices from the live listing, every read.** The price stored
+  on the item exists only so the screen can SAY a price moved
+  (`price_changed`, `price_was_laari`). A basket that quietly bills
+  yesterday's price is worse than one that admits the change.
+- **A sold-out line is flagged, never dropped.** A row that vanishes reads
+  as a bug, and a shopper cannot act on what they cannot see. Adding one is
+  refused at the door instead, with `item_unavailable`.
+- **`can_checkout` is one boolean over every subcart**, so the button can be
+  disabled while the screen still names WHICH shop is short.
+- **`address_id` may be passed to price against another address.** The
+  checkout's address step changes the delivery terms of every subcart at
+  once, and the screen has to show that before committing to it.
+- **Browsing is open, the cart needs an account.** A shopper should see what
+  a shop sells before signing in; a basket belongs to somebody.
+
+**Not in MP4:** checkout, orders, payment (MP5), and the Flutter/web
+surfaces that render all of this — the shape is fixed and tested, the
+drawing is not done.

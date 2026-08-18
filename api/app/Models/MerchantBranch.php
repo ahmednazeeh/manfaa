@@ -51,6 +51,12 @@ class MerchantBranch extends Model
         return $this->hasMany(BranchDeliveryRule::class, 'branch_id');
     }
 
+    /** What this shop lists — its own prices and its own stock (§2.2). */
+    public function products(): HasMany
+    {
+        return $this->hasMany(BranchProduct::class, 'branch_id');
+    }
+
     public function merchant(): BelongsTo
     {
         return $this->belongsTo(Merchant::class);
