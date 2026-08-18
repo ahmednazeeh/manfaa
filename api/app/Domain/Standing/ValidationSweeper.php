@@ -55,7 +55,15 @@ final readonly class ValidationSweeper
             }
 
             try {
-                $this->transitions->makePayable($transaction, Actor::system());
+                if ($transaction->origin === 'marketplace') {
+                    // Funded from the moment the customer paid us. It skips
+                    // the receivable state entirely and becomes payable to
+                    // the SHOPPER — which is what confirmation means here.
+                    $this->transitions->confirm($transaction, Actor::system());
+                } else {
+                    $this->transitions->makePayable($transaction, Actor::system());
+                }
+
                 $swept++;
 
                 // Tell the customer their Pending just became Confirmed —

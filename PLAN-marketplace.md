@@ -1248,3 +1248,50 @@ interrupting a phone for it is how people learn to ignore us.
 Both channels still decide for themselves whether they have anywhere to
 deliver — a customer with no device and no number is sent nothing, and that
 is ordinary rather than an error. There is a test for it.
+
+---
+
+## 20. MP8 — marketplace cashback joins the one engine
+
+Shipped 2026-08-18. 10 tests; full API suite **1522 green**; live behind the
+switch.
+
+A delivered order becomes an ordinary `transactions` row: one wallet, one
+Activity feed, one payout, and a shopper who never has to learn that Manfaa
+has two kinds of cashback.
+
+### The trap this round existed to avoid
+
+`SettlementBuilder::eligibleTransactions` bills a merchant for every payable
+row they have. Pushing marketplace cashback through the engine naively would
+therefore **charge a shop twice for one sale**: once by deducting the
+cashback from their payout, and again on their monthly settlement.
+
+So two rules, both enforced at the source rather than in callers:
+
+- **`fee_laari` is zero** on a marketplace row. Our cut was the marketplace
+  fee, already deducted; the standard cashback fee on top is the same double
+  charge in a different column.
+- **`origin = 'marketplace'` is excluded from `eligibleTransactions`.** That
+  one clause is the whole boundary between the two ledgers, which is why it
+  lives where a settlement decides what it may pick up. Two tests guard it
+  from both sides: a marketplace reward forced into the receivable state is
+  still not billed, and an ordinary till sale still is.
+
+### And one honesty fix in the state machine
+
+A marketplace reward never passes through `payable_unfunded`. That state
+means "the merchant owes us this", and for an order we were paid for up
+front it is a lie in the data — anyone summing it to ask what merchants owe
+would over-count. `awaiting_validation → confirmed` is now permitted, and
+`ValidationSweeper` is the only caller that takes it, only for that origin.
+The store's validation window still applies: a marketplace return is as real
+as a till one, and the shopper is paid on the clock they already know.
+
+Crediting is idempotent by a **unique index on `suborder_id`**, not a flag —
+a retried job, a double-tapped Delivered and a replayed queue message all
+lose at the database rather than paying somebody twice. After an amendment
+it credits what was actually supplied, not what was ordered.
+
+**Still owed (MP9):** settling `customer_refunds`, and Merchant Settlements
+with the xlsx export/import.

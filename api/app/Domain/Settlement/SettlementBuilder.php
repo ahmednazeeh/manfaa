@@ -318,6 +318,13 @@ final class SettlementBuilder
         return Transaction::query()
             ->where('merchant_id', $merchant->id)
             ->where('state', TransactionState::PayableUnfunded->value)
+            // A MARKETPLACE reward is never a receivable. We already hold
+            // the customer's money and deduct the cashback before paying the
+            // merchant; billing it again on a settlement would charge them
+            // twice for one sale. This exclusion is the only thing standing
+            // between the two ledgers, so it belongs at the source of what a
+            // settlement may pick up rather than in each caller.
+            ->where('origin', '!=', 'marketplace')
             ->whereNotExists(function ($query) {
                 $query->select(DB::raw(1))
                     ->from('settlement_lines')

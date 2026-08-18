@@ -20,7 +20,10 @@ use Illuminate\Support\Facades\DB;
  */
 final readonly class FulfilmentService
 {
-    public function __construct(private NotificationService $notifications) {}
+    public function __construct(
+        private NotificationService $notifications,
+        private MarketplaceCashbackService $cashback,
+    ) {}
 
     /**
      * The only moves allowed, in order. A state machine rather than a free
@@ -122,6 +125,13 @@ final readonly class FulfilmentService
 
         if ($key !== null) {
             $this->tell($suborder, $key);
+        }
+
+        // Handed over: the shopper has earned their cashback (§5.3). Safe to
+        // reach twice — the unique index on suborder_id is what makes it
+        // idempotent, not this branch.
+        if ($to === 'delivered') {
+            $this->cashback->credit($suborder->refresh());
         }
 
         return $suborder->refresh();

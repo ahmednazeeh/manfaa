@@ -32,7 +32,13 @@ final class TransitionService
      */
     private const array ALLOWED = [
         'tracked' => ['awaiting_validation', 'on_hold', 'reversed'],
-        'awaiting_validation' => ['payable_unfunded', 'on_hold', 'reversed'],
+        // `confirmed` is reachable here for MARKETPLACE rewards only: the
+        // platform already holds the customer's money, so there is nothing
+        // for a merchant to fund and `payable_unfunded` would be a lie in
+        // the data — a future reader summing it to ask "what do merchants
+        // owe us" would over-count. ValidationSweeper is the only caller
+        // that takes this path, and only for that origin.
+        'awaiting_validation' => ['payable_unfunded', 'confirmed', 'on_hold', 'reversed'],
         'payable_unfunded' => ['confirmed', 'on_hold', 'reversed', 'written_off'],
         'on_hold' => ['tracked', 'awaiting_validation', 'payable_unfunded', 'reversed'],
         'confirmed' => ['paid'],
