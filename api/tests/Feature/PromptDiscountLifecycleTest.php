@@ -238,7 +238,7 @@ it('walks the prompt-payment discount over HTTP: three credits → preview → d
         // What the merchant walks to the bank with (PLAN §1 receipt-first).
         ->assertJsonPath('data.payment_instructions.amount_due_laari', 9_493)
         ->assertJsonPath('data.payment_instructions.bank_account.account_no', '7730000123456')
-        ->assertJsonPath('data.payment_instructions.reference_preview', 'ST-2026-00001')
+        ->assertJsonMissingPath('data.payment_instructions.reference_preview')
         ->json('data');
 
     // The relief comes off the FEE and only the fee: cashback + fee − discount
@@ -403,7 +403,7 @@ it('walks the prompt-payment discount over HTTP: three credits → preview → d
         ->assertJsonPath('data.amount_due_laari', 3_300)
         ->assertJsonPath('data.amount_due_mvr', '33.00')
         ->assertJsonPath('data.payment_instructions.amount_due_laari', 3_300)
-        ->assertJsonPath('data.payment_instructions.reference_preview', 'ST-2026-00002')
+        ->assertJsonMissingPath('data.payment_instructions.reference_preview')
         ->json('data');
 
     expect($latePreview['amount_due_laari'])->toBe($latePreview['line_total_laari']);

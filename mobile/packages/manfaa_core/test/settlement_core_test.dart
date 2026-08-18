@@ -163,8 +163,8 @@ const _previewFixture = {
       },
     },
     'payment_instructions': {
-      'reference_preview': 'ST-2026-00042',
-      'reference_is_final': false,
+      // No reference before the settlement exists (owner decision
+      // 2026-08-18) — the server sends none and the model reads null.
       'amount_due_laari': 2712,
       'amount_due_mvr': '27.12',
       'bank_account': {
@@ -492,8 +492,7 @@ void main() {
       expect(preview.buckets['overdue']?.count, 0);
 
       final instructions = preview.paymentInstructions;
-      expect(instructions.reference, 'ST-2026-00042');
-      expect(instructions.referenceIsFinal, isFalse);
+      expect(instructions.reference, isNull);
       expect(instructions.amountDueLaari, 2712);
       expect(instructions.bankAccount?.bankName, 'bml');
       expect(instructions.bankAccounts, hasLength(2));
@@ -603,9 +602,9 @@ void main() {
       expect(settlement.merchantStatus.code, 'verifying');
       expect(settlement.merchantStatus.rejection, isNull);
 
-      // The detail's payment_instructions reference IS final (no flag sent).
+      // A CREATED settlement carries the real reference — the only place
+      // a reference is ever shown.
       expect(settlement.paymentInstructions.reference, 'ST-2026-00042');
-      expect(settlement.paymentInstructions.referenceIsFinal, isTrue);
 
       final line = settlement.lines.single;
       expect(line.transactionId, 61);

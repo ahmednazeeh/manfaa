@@ -50,6 +50,22 @@ export function isOnboardingStatus(status: MerchantStatus): boolean {
   );
 }
 
+/**
+ * Stores whose PUBLIC CLAIMS are reviewed before they move (MR9) — the live
+ * estate, i.e. active or suspended. Mirrors
+ * ChangeRequestService::GATED_STATUSES: a store still onboarding writes
+ * straight through the wizard, because the whole record is about to be
+ * reviewed anyway.
+ *
+ * The screens use this only to SET EXPECTATIONS before a click ("Manfaa
+ * reviews new branches"). Whether a given save actually queued is never
+ * inferred here — the server answers 202 with the change request, and that
+ * answer is what the panel reports.
+ */
+export function isReviewedStatus(status: MerchantStatus): boolean {
+  return status === 'active' || status === 'suspended';
+}
+
 /** POST /api/merchant/auth/login — bootstraps the Sanctum CSRF cookie first. */
 export async function login(body: {
   email: string;
@@ -289,7 +305,7 @@ export type PlatformBankAccount = SettlementBankAccount;
  * GET /api/merchant/settlements/preview — what this selection costs and
  * where to send it, BEFORE any commitment. Reservation-free: no batch, no
  * lines frozen, and the reference is explicitly a preview
- * (`reference_is_final: false`) — the real one is assigned at submit and is
+ * (none is quoted) — the real one is assigned at submit and is
  * the one the merchant should quote if they ever differ.
  *
  * The response is parsed against the SHARED schema (@manfaa/api-client), not

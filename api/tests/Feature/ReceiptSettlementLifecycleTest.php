@@ -206,8 +206,7 @@ it('walks the receipt-first settlement lifecycle over HTTP: credits → preview 
         ->assertJsonPath('data.payment_instructions.bank_account.account_no', '7730000123456')
         ->assertJsonPath('data.payment_instructions.bank_account.account_name', 'Manfaa Pvt Ltd')
         ->assertJsonPath('data.payment_instructions.needs_configuration', false)
-        ->assertJsonPath('data.payment_instructions.reference_preview', 'ST-2026-00001')
-        ->assertJsonPath('data.payment_instructions.reference_is_final', false)
+        ->assertJsonMissingPath('data.payment_instructions.reference_preview')
         ->json('data');
 
     // Previewing claims NOTHING: no draft, no reference burnt, no line held.
@@ -250,7 +249,9 @@ it('walks the receipt-first settlement lifecycle over HTTP: credits → preview 
     $firstId = (int) $first['id'];
 
     expect($first['amount_due_laari'])->toBe($preview['amount_due_laari'])
-        ->and($first['reference'])->toBe($preview['payment_instructions']['reference_preview']);
+        // The batch carries the year's next reference; the preview quoted
+        // none (owner decision 2026-08-18).
+        ->and($first['reference'])->toBe('ST-2026-00001');
 
     // Every line is claimed: a second batch has nothing left to take.
     $this->getJson('/api/merchant/settlements/preview?settle_all=1')->assertUnprocessable();
@@ -342,7 +343,7 @@ it('walks the receipt-first settlement lifecycle over HTTP: credits → preview 
     $this->getJson('/api/merchant/settlements/preview?settle_all=1')
         ->assertOk()
         ->assertJsonPath('data.amount_due_laari', 11_663)
-        ->assertJsonPath('data.payment_instructions.reference_preview', 'ST-2026-00002');
+        ->assertJsonMissingPath('data.payment_instructions.reference_preview');
 
     // ── 10. The real transfer went out 45 laari short (§7 forgiveness) ────
     // 11,663 due − 45 = 11,618 transferred. The discount is covered funds,

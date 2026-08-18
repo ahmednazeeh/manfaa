@@ -448,8 +448,6 @@ class _FakeApi extends MerchantApi {
       },
     },
     'payment_instructions': const {
-      'reference_preview': 'ST-2026-00042',
-      'reference_is_final': false,
       'amount_due_laari': 2750,
       'bank_account': {
         'bank_name': 'bml',

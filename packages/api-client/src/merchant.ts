@@ -4,9 +4,12 @@ import {
   BankSlugSchema,
   CashbackPercentInputSchema,
   dataWrapped,
+  MerchantChangeRequestSchema,
   MerchantChannelSchema,
   MerchantStatusSchema,
   paginated,
+  QueuedChangeSchema,
+  type MerchantChangeRequest,
   PercentDeltaSchema,
   PercentSchema,
   ProductCategoryModeSchema,
@@ -195,14 +198,15 @@ function appendSelection(form: FormData, selection: SettlementSelection): void {
 
 /**
  * What a selection would cost and where to send it — the preview's own
- * payment instructions. The reference is a PREVIEW (`reference_is_final`
- * false): nothing is reserved, and the batch's real reference is assigned at
- * submit. If the two ever differ, the one on the created settlement is the
- * one the merchant must quote.
+ * payment instructions. No reference is quoted here: the batch does not
+ * exist until the receipt creates it, so any number offered now could be
+ * taken by whoever submits first — after the merchant had already written
+ * it on a bank transfer. The reference appears once, on the settlement.
  */
 export const SettlementPreviewInstructionsSchema = z.object({
-  reference_preview: z.string(),
-  reference_is_final: z.boolean(),
+  // No reference before the settlement exists (owner decision 2026-08-18):
+  // the batch is created by the receipt, and a number quoted earlier could
+  // be taken by whoever submits first.
   amount_due_laari: z.number().int(),
   amount_due_mvr: z.string(),
   bank_account: SettlementBankAccountSchema.nullable(),
@@ -981,6 +985,13 @@ export const MerchantProfileSchema = z.object({
   contact_phone: z.string().nullable(),
   support_phone: z.string().nullable().catch(null),
   website_url: z.string().nullable().catch(null),
+  /**
+   * MR9. The store's own public claims waiting on an admin, with the
+   * proposed values — null when nothing is queued. Everything ABOVE stays
+   * the LIVE row: what a shopper reads until the change is approved, and
+   * therefore what the form shows.
+   */
+  pending_change: MerchantChangeRequestSchema.nullable(),
 });
 export type MerchantProfile = z.infer<typeof MerchantProfileSchema>;
 
@@ -1032,18 +1043,53 @@ export function getMerchantProfile(
 }
 
 /**
+ * The two shapes a profile PATCH can answer with (MR9):
+ *   202 — a gated CLAIM actually moved, so it queues; the instant half is
+ *         already applied and is reflected in the `profile` beside it;
+ *   200 — only instant keys moved, nothing gated DIFFERED from the live row
+ *         (both panels PATCH the whole form), or the store is not live.
+ * The queued variant is tried first and can never swallow a plain profile:
+ * it demands a `change_request` no profile body carries.
+ */
+export const UpdateMerchantProfileResponseSchema = z.union([
+  z.object({
+    data: QueuedChangeSchema.extend({ profile: MerchantProfileSchema }),
+  }),
+  MerchantProfileResponseSchema,
+]);
+
+/** A profile save, with the two answers flattened into one result. */
+export interface MerchantProfileSaveResult {
+  /** The queued request when a claim moved (202), null on a plain save. */
+  queued: MerchantChangeRequest | null;
+  /** The LIVE profile after the save — the instant half already applied. */
+  profile: MerchantProfile;
+}
+
+/**
  * PATCH /api/merchant/profile — partial update; omitted keys are untouched.
  * `profile.edit` plus an approved store.
+ *
+ * A live store's public claims (name, name_dv, category, channel,
+ * eligibility_basis, website_url) do NOT apply here: they queue for admin
+ * review and come back as `queued`. Contact email, contact phone and support
+ * phone apply in the same request — a wrong number means customers cannot
+ * reach the store, so holding that fix for a reviewer would only prolong the
+ * harm (PLAN-merchant-app.md §MR9).
  */
-export function updateMerchantProfile(
+export async function updateMerchantProfile(
   body: UpdateMerchantProfileRequest,
   options: RequestOptions = {},
-): Promise<MerchantProfileResponse> {
-  return apiFetch('/api/merchant/profile', MerchantProfileResponseSchema, {
-    method: 'PATCH',
-    body,
-    signal: options.signal,
-  });
+): Promise<MerchantProfileSaveResult> {
+  const response = await apiFetch(
+    '/api/merchant/profile',
+    UpdateMerchantProfileResponseSchema,
+    { method: 'PATCH', body, signal: options.signal },
+  );
+
+  return 'change_request' in response.data
+    ? { queued: response.data.change_request, profile: response.data.profile }
+    : { queued: null, profile: response.data };
 }
 
 // ---------------------------------------------------------------------------
@@ -1133,6 +1179,14 @@ export type MerchantBranch = z.infer<typeof MerchantBranchSchema>;
 
 export const MerchantBranchListResponseSchema = z.object({
   data: z.array(MerchantBranchSchema),
+  meta: z.object({
+    /**
+     * MR9: the branch changes this store has waiting on a reviewer, oldest
+     * first — creates (no row exists yet), updates and removals (the row is
+     * still live). `data` above is always the ESTATE AS IT STANDS.
+     */
+    pending_changes: z.array(MerchantChangeRequestSchema),
+  }),
 });
 export type MerchantBranchListResponse = z.infer<
   typeof MerchantBranchListResponseSchema
@@ -1173,45 +1227,86 @@ export function listMerchantBranches(
   });
 }
 
-/** POST /api/merchant/branches — creates a branch (201). */
-export function createMerchantBranch(
-  body: CreateMerchantBranchRequest,
-  options: RequestOptions = {},
-): Promise<MerchantBranchResponse> {
-  return apiFetch('/api/merchant/branches', MerchantBranchResponseSchema, {
-    method: 'POST',
-    body,
-    signal: options.signal,
-  });
+/**
+ * MR9: every branch write is a public claim — a branch is an address a
+ * shopper travels to — so for a LIVE store it QUEUES (202) instead of
+ * applying, and the estate moves only when an admin approves. A store that
+ * is not live still writes straight through (201/200/204).
+ */
+const BranchWriteResponseSchema = z.union([
+  z.object({ data: QueuedChangeSchema }),
+  MerchantBranchResponseSchema,
+]);
+
+/** A branch write, with the queued and applied answers flattened into one. */
+export interface MerchantBranchSaveResult {
+  /** The queued request when the write is waiting on a reviewer. */
+  queued: MerchantChangeRequest | null;
+  /** The branch as it now stands — null while the write is queued. */
+  branch: MerchantBranch | null;
 }
 
-/** PATCH /api/merchant/branches/{id} — partial update. */
-export function updateMerchantBranch(
-  id: number,
-  body: UpdateMerchantBranchRequest,
+function branchSaveResult(
+  response: z.infer<typeof BranchWriteResponseSchema>,
+): MerchantBranchSaveResult {
+  return 'change_request' in response.data
+    ? { queued: response.data.change_request, branch: null }
+    : { queued: null, branch: response.data };
+}
+
+/** POST /api/merchant/branches — creates a branch (201), or queues one (202). */
+export async function createMerchantBranch(
+  body: CreateMerchantBranchRequest,
   options: RequestOptions = {},
-): Promise<MerchantBranchResponse> {
-  return apiFetch(
-    `/api/merchant/branches/${id}`,
-    MerchantBranchResponseSchema,
-    { method: 'PATCH', body, signal: options.signal },
+): Promise<MerchantBranchSaveResult> {
+  return branchSaveResult(
+    await apiFetch('/api/merchant/branches', BranchWriteResponseSchema, {
+      method: 'POST',
+      body,
+      signal: options.signal,
+    }),
   );
 }
 
 /**
- * DELETE /api/merchant/branches/{id} — 204 on success. A branch referenced
- * by transactions or branch-scoped promotions is history that must keep
- * resolving: the server answers 409 with code `branch_referenced` (thrown
- * here as ApiError) and the soft alternative is simply to stop using it.
+ * PATCH /api/merchant/branches/{id} — partial update, or a queued one. A
+ * save that moved nothing answers 200 with the untouched branch: the panel
+ * PATCHes the whole dialog, so re-saving an unchanged branch must not park
+ * it in a review queue.
+ */
+export async function updateMerchantBranch(
+  id: number,
+  body: UpdateMerchantBranchRequest,
+  options: RequestOptions = {},
+): Promise<MerchantBranchSaveResult> {
+  return branchSaveResult(
+    await apiFetch(`/api/merchant/branches/${id}`, BranchWriteResponseSchema, {
+      method: 'PATCH',
+      body,
+      signal: options.signal,
+    }),
+  );
+}
+
+/**
+ * DELETE /api/merchant/branches/{id} — 204 when it applies, 202 with the
+ * queued request when it waits for review (the branch stays live meanwhile).
+ * A branch referenced by transactions or branch-scoped promotions is history
+ * that must keep resolving: the server answers 409 with code
+ * `branch_referenced` (thrown here as ApiError) — at SUBMIT, not only at
+ * approval — and the soft alternative is simply to stop using it.
  */
 export async function deleteMerchantBranch(
   id: number,
   options: RequestOptions = {},
-): Promise<void> {
-  await apiFetch(`/api/merchant/branches/${id}`, z.undefined(), {
-    method: 'DELETE',
-    signal: options.signal,
-  });
+): Promise<MerchantChangeRequest | null> {
+  const response = await apiFetch(
+    `/api/merchant/branches/${id}`,
+    z.object({ data: QueuedChangeSchema }).optional(),
+    { method: 'DELETE', signal: options.signal },
+  );
+
+  return response?.data.change_request ?? null;
 }
 
 // ---------------------------------------------------------------------------

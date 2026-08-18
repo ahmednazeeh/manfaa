@@ -51,9 +51,8 @@ it('previews the exact amount the eventual settlement will owe', function () {
         ->assertJsonPath('data.payment_instructions.bank_account.bank_name', 'bml')
         ->assertJsonPath('data.payment_instructions.bank_account.account_no', '7730000123456')
         ->assertJsonPath('data.payment_instructions.needs_configuration', false)
-        ->assertJsonPath('data.payment_instructions.reference_preview', 'ST-2026-00001')
+        ->assertJsonMissingPath('data.payment_instructions.reference_preview')
         // Documented: the FINAL reference is assigned at submit.
-        ->assertJsonPath('data.payment_instructions.reference_is_final', false)
         ->json('data');
 
     // Nothing was claimed or reserved by previewing.
@@ -63,7 +62,7 @@ it('previews the exact amount the eventual settlement will owe', function () {
     $this->getJson('/api/merchant/settlements/preview?settle_all=1')
         ->assertOk()
         ->assertJsonPath('data.amount_due_laari', 11_825)
-        ->assertJsonPath('data.payment_instructions.reference_preview', 'ST-2026-00001');
+        ->assertJsonMissingPath('data.payment_instructions.reference_preview');
 
     // Now submit for real: the settlement matches the preview to the laari.
     $created = $this->post('/api/merchant/settlements', [
@@ -82,7 +81,11 @@ it('previews the exact amount the eventual settlement will owe', function () {
         ->and(count($created['lines']))->toBe($preview['transaction_count'])
         // The preview's reference guess was right here, but the contract only
         // promises the FINAL reference on the created batch.
-        ->and($created['reference'])->toBe($preview['payment_instructions']['reference_preview']);
+        // The reference exists ONLY on the settlement the receipt created —
+        // the preview quotes none (owner decision 2026-08-18), so there is
+        // nothing for a merchant to write at the bank and later find taken.
+        ->and($created['reference'])->toBe('ST-2026-00001')
+        ->and($preview['payment_instructions'])->not->toHaveKey('reference_preview');
 });
 
 it('previews an explicit selection, and refuses one that is not eligible', function () {

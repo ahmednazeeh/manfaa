@@ -27,7 +27,6 @@ import { CopyButton } from '@/components/settlement/copy-button';
  */
 export function PaymentInstructions({
   reference,
-  referenceIsFinal,
   amountDueLaari,
   bankAccount,
   bankAccounts,
@@ -35,9 +34,9 @@ export function PaymentInstructions({
   onSelectAccount,
   needsConfiguration,
 }: {
-  reference: string;
-  /** false on a preview: the batch's real reference is set at submit. */
-  referenceIsFinal: boolean;
+  /** Null on a preview: the batch (and its reference) is created by the
+   *  receipt upload. */
+  reference: string | null;
   amountDueLaari: number;
   bankAccount: PlatformBankAccount | null;
   /** Every account the merchant may send to — one per bank. */
@@ -78,28 +77,35 @@ export function PaymentInstructions({
             className="text-2xl font-semibold text-mono"
           />
         </div>
-        <div className="flex flex-col gap-1">
-          <span className="text-xs uppercase text-muted-foreground">
-            {t('settlement.referenceLabel')}
-          </span>
-          <div className="flex items-center gap-2">
-            <code
-              dir="ltr"
-              className="rounded-md bg-muted px-2.5 py-1.5 text-sm font-semibold text-mono"
-            >
-              {reference}
-            </code>
-            <CopyButton
-              value={reference}
-              label={t('settlement.copyReference')}
-            />
-          </div>
+        {/* Before the receipt lands there is no settlement, so there is no
+            reference to quote — saying so beats quoting a number the next
+            submitter can take (owner decision 2026-08-18). */}
+        {reference === null ? (
           <span className="text-xs text-muted-foreground">
-            {referenceIsFinal
-              ? t('settlement.referenceHint')
-              : t('settlement.referencePreviewNote')}
+            {t('settlement.referenceComesLater')}
           </span>
-        </div>
+        ) : (
+          <div className="flex flex-col gap-1">
+            <span className="text-xs uppercase text-muted-foreground">
+              {t('settlement.referenceLabel')}
+            </span>
+            <div className="flex items-center gap-2">
+              <code
+                dir="ltr"
+                className="rounded-md bg-muted px-2.5 py-1.5 text-sm font-semibold text-mono"
+              >
+                {reference}
+              </code>
+              <CopyButton
+                value={reference}
+                label={t('settlement.copyReference')}
+              />
+            </div>
+            <span className="text-xs text-muted-foreground">
+              {t('settlement.referenceHint')}
+            </span>
+          </div>
+        )}
       </div>
 
       {account !== null || (choosable && !needsConfiguration) ? (

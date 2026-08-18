@@ -194,8 +194,6 @@ const _shotPreview = {
     },
   },
   'payment_instructions': {
-    'reference_preview': 'ST-2026-00042',
-    'reference_is_final': false,
     'amount_due_laari': 2712,
     'bank_account': {
       'bank_name': 'bml',
@@ -311,6 +309,91 @@ Map<String, dynamic> _setupFixture({
   'rejected_reason': null,
 };
 
+// ---- MR9 fixtures: what is waiting on a reviewer ---------------------------
+//
+// Verbatim MerchantChangeRequestResource shapes (captured off the real PHP
+// answering the mobile mount), with fixed instants so the goldens render the
+// same bytes on every run.
+
+const _shotPendingProfile = <String, dynamic>{
+  'id': 21,
+  'merchant_id': 7,
+  'kind': 'profile',
+  'kind_label': 'store profile change',
+  'status': 'pending',
+  'branch_id': null,
+  'branch_name': 'Tropical Mart',
+  'changes': [
+    {'field': 'name', 'from': 'Tropical Mart', 'to': 'Tropical Fresh Market'},
+    {'field': 'category', 'from': 'grocery', 'to': 'dining'},
+    {'field': 'logo', 'from': null, 'to': 'https://manfaa.app/logo?side=1'},
+  ],
+  'proposed': {
+    'name': 'Tropical Fresh Market',
+    'category': 'dining',
+    'logo_url': 'https://manfaa.app/logo?side=1',
+  },
+  'current': {
+    'name': 'Tropical Mart',
+    'category': 'grocery',
+    'logo_url': null,
+  },
+  'submitted_at': '2026-08-17T09:41:00+00:00',
+  'reviewed_at': null,
+  'reviewed_by': null,
+  'rejected_reason': null,
+};
+
+const _shotPendingBranchCreate = <String, dynamic>{
+  'id': 22,
+  'merchant_id': 7,
+  'kind': 'branch_create',
+  'kind_label': 'new branch',
+  'status': 'pending',
+  'branch_id': null,
+  'branch_name': null,
+  'changes': [
+    {'field': 'name', 'from': null, 'to': 'Tropical Mart — Addu'},
+    {'field': 'address', 'from': null, 'to': 'Link Road, Hithadhoo'},
+    {'field': 'lat', 'from': null, 'to': -0.6006},
+    {'field': 'lng', 'from': null, 'to': 73.0836},
+  ],
+  'proposed': {
+    'name': 'Tropical Mart — Addu',
+    'address': 'Link Road, Hithadhoo',
+    'lat': -0.6006,
+    'lng': 73.0836,
+  },
+  'current': {'name': null, 'address': null, 'lat': null, 'lng': null},
+  'submitted_at': '2026-08-17T09:41:00+00:00',
+  'reviewed_at': null,
+  'reviewed_by': null,
+  'rejected_reason': null,
+};
+
+const _shotPendingBranchUpdate = <String, dynamic>{
+  'id': 23,
+  'merchant_id': 7,
+  'kind': 'branch_update',
+  'kind_label': 'branch update',
+  'status': 'pending',
+  'branch_id': 4,
+  'branch_name': 'Tropical Mart — Hulhumalé',
+  'changes': [
+    {
+      'field': 'name',
+      'from': 'Tropical Mart — Hulhumalé',
+      'to': 'Tropical Mart — Hulhumalé Phase 2',
+    },
+  ],
+  'proposed': {'name': 'Tropical Mart — Hulhumalé Phase 2'},
+  'current': {'id': 4, 'name': 'Tropical Mart — Hulhumalé'},
+  'submitted_at': '2026-08-17T09:41:00+00:00',
+  'reviewed_at': null,
+  'reviewed_by': null,
+  'rejected_reason': null,
+};
+
 class _ShotApi extends MerchantApi {
   _ShotApi({
     required super.session,
@@ -318,10 +401,19 @@ class _ShotApi extends MerchantApi {
     this.setup,
     this.walletJson,
     this.categoriesJson,
+    this.pendingProfileJson,
+    this.pendingChanges,
   });
 
   final String status;
   final Map<String, dynamic>? setup;
+
+  /// MR9 — the profile change waiting on a reviewer (the `pending_change`
+  /// key of MerchantProfileResource), and the branch queue the branches
+  /// index publishes under `meta.pending_changes`. Null on every other shot,
+  /// so the shipped goldens render byte-identically.
+  final Map<String, dynamic>? pendingProfileJson;
+  final List<MerchantChangeRequest>? pendingChanges;
 
   /// Per-shot category vocabulary — the MR5 cashback shot wants the ref's
   /// four rules; the credit shots keep the split-editor trio.
@@ -502,7 +594,7 @@ class _ShotApi extends MerchantApi {
   /// `eligibility_basis` is ONE free-text string — the ref's chips render
   /// as this text.
   @override
-  Future<MerchantProfile> profile() async => MerchantProfile.fromJson(const {
+  Future<MerchantProfile> profile() async => MerchantProfile.fromJson({
     'id': 7,
     'name': 'Tropical Mart',
     'name_dv': 'ޓްރޮޕިކަލް މާޓް',
@@ -517,6 +609,7 @@ class _ShotApi extends MerchantApi {
     'contact_phone': '+960 778 1234',
     'support_phone': '+960 333 4455',
     'website_url': 'https://www.tropicalmart.mv',
+    'pending_change': pendingProfileJson,
   });
 
   /// The preferences READ (an empty PATCH server-side) — the ref's MVR
@@ -757,7 +850,9 @@ class _ShotApi extends MerchantApi {
   /// Branches.png's five locations minus the invented chrome — no photos,
   /// hours, phone or active flag; the pin split carries the ref's 4-and-1.
   @override
-  Future<List<MerchantBranch>> branches() async => [
+  Future<MerchantBranchEstate> branches() async => MerchantBranchEstate(
+    pendingChanges: pendingChanges ?? const [],
+    branches: [
     for (final json in [
       {
         'id': 3,
@@ -796,7 +891,8 @@ class _ShotApi extends MerchantApi {
       },
     ])
       MerchantBranch.fromJson(json),
-  ];
+    ],
+  );
 
   /// One of each lifecycle state the list distinguishes.
   @override
@@ -953,6 +1049,8 @@ void main() {
     Map<String, dynamic>? setup,
     Map<String, dynamic>? walletJson,
     List<Map<String, dynamic>>? categoriesJson,
+    Map<String, dynamic>? pendingProfileJson,
+    List<MerchantChangeRequest>? pendingChanges,
     Future<void> Function(WidgetTester tester)? drive,
     // The phone frame the app shipped on; tabletShot passes the MR7 slate.
     Size size = const Size(390, 844),
@@ -994,6 +1092,8 @@ void main() {
               setup: setup,
               walletJson: walletJson,
               categoriesJson: categoriesJson,
+              pendingProfileJson: pendingProfileJson,
+              pendingChanges: pendingChanges,
             ),
           ),
           configProvider.overrideWith(
@@ -1480,6 +1580,33 @@ void main() {
     'branches light',
     (t) => shot(t, 'branches_light', Brightness.light, drive: driveBranches),
   );
+
+  // ---- MR9: waiting for Manfaa's review ------------------------------------
+  // The gated states are their OWN goldens: the shipped shots above keep an
+  // empty queue and must render byte-identically.
+  testWidgets(
+    'profile pending light',
+    (t) => shot(
+      t,
+      'profile_pending_light',
+      Brightness.light,
+      pendingProfileJson: _shotPendingProfile,
+      drive: driveProfile,
+    ),
+  );
+  testWidgets(
+    'branches pending light',
+    (t) => shot(
+      t,
+      'branches_pending_light',
+      Brightness.light,
+      pendingChanges: [
+        MerchantChangeRequest.fromJson(_shotPendingBranchCreate),
+        MerchantChangeRequest.fromJson(_shotPendingBranchUpdate),
+      ],
+      drive: driveBranches,
+    ),
+  );
   testWidgets(
     'promotions light',
     (t) =>
@@ -1497,12 +1624,14 @@ void main() {
     String name,
     Brightness b, {
     Future<void> Function(WidgetTester tester)? drive,
+    List<MerchantChangeRequest>? pendingChanges,
   }) => shot(
     tester,
     name,
     b,
     size: const Size(1280, 800),
     dpr: 2.0,
+    pendingChanges: pendingChanges,
     drive: drive,
   );
 
@@ -1602,6 +1731,21 @@ void main() {
       t,
       'tablet_branches_light',
       Brightness.light,
+      drive: driveBranches,
+    ),
+  );
+  // MR9 on the slate: the pending cards live in the LIST column, so the
+  // editor pane beside them is untouched — this golden is what proves it.
+  testWidgets(
+    'tablet branches pending light',
+    (t) => tabletShot(
+      t,
+      'tablet_branches_pending_light',
+      Brightness.light,
+      pendingChanges: [
+        MerchantChangeRequest.fromJson(_shotPendingBranchCreate),
+        MerchantChangeRequest.fromJson(_shotPendingBranchUpdate),
+      ],
       drive: driveBranches,
     ),
   );

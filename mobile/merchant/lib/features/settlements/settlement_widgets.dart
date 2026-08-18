@@ -561,15 +561,24 @@ class PaymentInstructionsCard extends StatelessWidget {
           ],
         ),
         const SizedBox(height: Gap.md),
-        field(l10n.referenceLabel, CopyValue(value: instructions.reference)),
-        Text(
-          instructions.referenceIsFinal
-              ? l10n.referenceFinalNote
-              : l10n.referencePreviewNote,
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: theme.colorScheme.onSurfaceVariant,
+        // Before the receipt lands there IS no settlement, so there is no
+        // reference to quote — saying so beats quoting a number the next
+        // submitter can take (owner decision 2026-08-18).
+        if (instructions.reference != null) ...[
+          field(l10n.referenceLabel, CopyValue(value: instructions.reference!)),
+          Text(
+            l10n.referenceFinalNote,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
           ),
-        ),
+        ] else
+          Text(
+            l10n.referenceComesLaterNote,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
         const SizedBox(height: Gap.lg),
         Container(
           padding: const EdgeInsets.all(Gap.lg),

@@ -531,8 +531,7 @@ function ReviewStep({
           ) : (
             <>
               <PaymentInstructions
-                reference={data.payment_instructions.reference_preview}
-                referenceIsFinal={data.payment_instructions.reference_is_final}
+                reference={null}
                 amountDueLaari={data.amount_due_laari}
                 bankAccount={data.payment_instructions.bank_account}
                 bankAccounts={data.payment_instructions.bank_accounts}

@@ -328,7 +328,6 @@ export default function SettlementDetailPage({
                 )}
                 <PaymentInstructions
                   reference={settlement.payment_instructions.reference}
-                  referenceIsFinal
                   amountDueLaari={owes}
                   bankAccount={settlement.payment_instructions.bank_account}
                   needsConfiguration={

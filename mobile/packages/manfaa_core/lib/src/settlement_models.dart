@@ -198,13 +198,17 @@ class PlatformBankAccount {
   final bool isPrimary;
 }
 
-/// Where to send the transfer, what to send, and what to quote — the
-/// `payment_instructions` block of both the preview (reference_preview,
-/// reference_is_final=false) and a created settlement (final reference).
+/// Where to send the transfer and what to send — the
+/// `payment_instructions` block of both the pre-submit preview and a
+/// created settlement.
+///
+/// [reference] is NULL on a preview and set on a real settlement: there is
+/// no batch until the receipt lands, so the server quotes no number before
+/// then (owner decision 2026-08-18) rather than one the next submitter can
+/// take out from under a merchant who already wrote it on a transfer.
 class SettlementInstructions {
   SettlementInstructions({
-    required this.reference,
-    required this.referenceIsFinal,
+    this.reference,
     required this.amountDueLaari,
     this.bankAccount,
     required this.bankAccounts,
@@ -213,9 +217,7 @@ class SettlementInstructions {
 
   factory SettlementInstructions.fromJson(Map<String, dynamic> json) =>
       SettlementInstructions(
-        reference: _s(json['reference'] ?? json['reference_preview']),
-        // Absent on a created settlement's block — there it IS final.
-        referenceIsFinal: json['reference_is_final'] as bool? ?? true,
+        reference: json['reference'] == null ? null : _s(json['reference']),
         amountDueLaari: _laari(json['amount_due_laari']),
         bankAccount: json['bank_account'] is Map
             ? PlatformBankAccount.fromJson(_map(json['bank_account']))
@@ -227,8 +229,8 @@ class SettlementInstructions {
         needsConfiguration: json['needs_configuration'] as bool? ?? false,
       );
 
-  final String reference;
-  final bool referenceIsFinal;
+  /// Null before the settlement exists — see the class doc.
+  final String? reference;
   final int amountDueLaari;
 
   /// The default account to show — null ONLY when nothing is configured

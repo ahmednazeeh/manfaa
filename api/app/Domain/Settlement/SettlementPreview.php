@@ -128,12 +128,12 @@ final readonly class SettlementPreview
             'transactions' => $this->rows($eligible, $selectedIds, $now),
             'buckets' => $this->buckets($eligible, $now),
             'payment_instructions' => [
-                // Reservation-free: this is what the reference WOULD be. The
-                // batch's real reference is assigned when the receipt is
-                // submitted, and it is the one the merchant should quote if
-                // the two ever differ.
-                'reference_preview' => $this->builder->peekReference(),
-                'reference_is_final' => false,
+                // NO reference here, deliberately (owner decision
+                // 2026-08-18). There is no settlement yet — it is created
+                // when the receipt lands — so any number quoted now is a
+                // guess the next submitter can take, and the merchant would
+                // have written it on a bank transfer by then. The reference
+                // appears once, on the settlement that actually exists.
                 'amount_due_laari' => $due,
                 'amount_due_mvr' => Laari::of($due)->formatMvr(),
                 'bank_account' => $account === null ? null : [

@@ -476,8 +476,6 @@ class _MoneyApi extends MerchantApi {
       },
     },
     'payment_instructions': {
-      'reference_preview': 'ST-2026-00042',
-      'reference_is_final': false,
       'amount_due_laari': 2712,
       'bank_account': {
         'bank_name': 'bml',
