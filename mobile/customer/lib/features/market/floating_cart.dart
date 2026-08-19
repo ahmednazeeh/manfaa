@@ -4,112 +4,111 @@ import 'package:go_router/go_router.dart';
 import 'package:manfaa_core/manfaa_core.dart';
 import 'package:manfaa_ui/manfaa_ui.dart';
 
-import '../../app/app.dart';
 import 'market_providers.dart';
 
-/// The floating cart bar (`Market View.png`).
+/// The floating basket bar (`Market View.png`).
 ///
-/// Owner decision: a BAR, not a fifth tab. It rides above the nav on every
-/// Market surface and disappears when the basket is empty — a permanent
-/// empty cart is a permanent reminder of nothing.
+/// A dark slab that rides above the nav bar and answers three questions
+/// without a tap: what is in the basket, what it earns, and — when a shop
+/// sets a minimum — how far off it is. That last part is the whole reason
+/// the bar carries a progress track: "MVR 66 to minimum" is actionable in a
+/// way a bare total is not.
 ///
-/// It carries the three numbers a shopper is actually watching: what is in
-/// the basket, what they will earn, and how far they are from the shop's
-/// minimum.
-class FloatingCartBar extends ConsumerWidget {
-  const FloatingCartBar({super.key, this.branchId});
+/// Hidden entirely when the basket is empty. A control that does nothing is
+/// worse than no control.
+class FloatingCart extends ConsumerWidget {
+  const FloatingCart({super.key, this.branchId});
 
-  /// When shown on ONE shop's page, the progress line tracks that shop's
-  /// minimum rather than the whole basket's — which is the number the
-  /// shopper standing in that shop can actually do something about.
+  /// When set, the bar speaks for ONE shop's subcart — its items, its
+  /// earnings, its minimum. On the market list it speaks for the whole
+  /// basket instead.
   final int? branchId;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final cart = ref.watch(cartProvider).valueOrNull;
 
-    if (cart == null || cart.isEmpty) {
-      return const SizedBox.shrink();
-    }
+    if (cart == null || cart.subcarts.isEmpty) return const SizedBox.shrink();
 
-    final l10n = context.l10n;
-    final theme = Theme.of(context);
-    final dhivehi = Localizations.localeOf(context).languageCode == 'dv';
-
-    final focus = branchId == null
+    final subcart = branchId == null
         ? null
-        : cart.subcarts.where((s) => s.branchId == branchId).firstOrNull;
+        : cart.subcarts.where((row) => row.branchId == branchId).firstOrNull;
 
-    // On a shop's page, show that shop's basket; on the Market list, the lot.
-    final itemCount = focus?.items.length ?? cart.itemCount;
-    final amount = focus?.itemsLaari ?? cart.itemsLaari;
-    final cashback = focus?.cashbackLaari ?? cart.cashbackLaari;
+    // On a store page with nothing from THIS store, the bar has nothing to
+    // say about it.
+    if (branchId != null && subcart == null) return const SizedBox.shrink();
 
-    if (itemCount == 0) {
-      return const SizedBox.shrink();
-    }
+    final count = subcart == null
+        ? cart.subcarts.fold<int>(
+            0,
+            (sum, row) => sum + row.items.fold<int>(0, (n, i) => n + i.qty),
+          )
+        : subcart.items.fold<int>(0, (n, i) => n + i.qty);
 
-    return Material(
-      color: theme.colorScheme.onSurface,
-      borderRadius: BorderRadius.circular(Corner.card),
-      elevation: 8,
-      child: InkWell(
+    final total = subcart?.itemsLaari ?? cart.itemsLaari;
+    final earn = subcart?.cashbackLaari ?? cart.cashbackLaari;
+    final terms = subcart?.delivery;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(Gap.md, 0, Gap.md, Gap.md),
+      child: Material(
+        color: ManfaaColors.ink,
         borderRadius: BorderRadius.circular(Corner.card),
-        onTap: () => context.push('/market/cart'),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: Gap.lg,
-            vertical: Gap.md,
-          ),
-          child: Row(
-            children: [
-              _Basket(count: itemCount),
-              const SizedBox(width: Gap.md),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      '$itemCount · ${formatMoney(amount, dhivehi: dhivehi)}',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.titleSmall?.copyWith(
-                        color: theme.colorScheme.surface,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    if (cashback > 0)
+        child: InkWell(
+          borderRadius: BorderRadius.circular(Corner.card),
+          onTap: () => context.push('/market/cart'),
+          child: Padding(
+            padding: const EdgeInsets.all(Gap.md),
+            child: Row(
+              children: [
+                _Badge(count: count),
+                const SizedBox(width: Gap.md),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
                       Text(
-                        l10n.cartEarn(formatMoney(cashback, dhivehi: dhivehi)),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: ManfaaColors.green,
+                        '$count ${count == 1 ? 'item' : 'items'} · '
+                        '${formatRufiyaa(total)}',
+                        style: const TextStyle(
+                          color: Colors.white,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
-                    if (focus != null) ...[
-                      const SizedBox(height: Gap.xs),
-                      _MinimumProgress(subcart: focus),
+                      Text(
+                        'Earn ${formatRufiyaa(earn)}',
+                        style: const TextStyle(
+                          color: ManfaaColors.green,
+                          fontSize: 13,
+                        ),
+                      ),
                     ],
-                  ],
-                ),
-              ),
-              const SizedBox(width: Gap.md),
-              FilledButton(
-                onPressed: () => context.push('/market/cart'),
-                style: FilledButton.styleFrom(
-                  backgroundColor: ManfaaColors.coral,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: Gap.lg,
-                    vertical: Gap.sm,
                   ),
                 ),
-                child: Text(l10n.viewCart),
-              ),
-            ],
+                if (terms != null && !terms.minimumMet && terms.shortfallLaari > 0)
+                  _Shortfall(terms: terms, total: total),
+                const SizedBox(width: Gap.md),
+                FilledButton(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: ManfaaColors.coral,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: Gap.lg,
+                      vertical: Gap.md,
+                    ),
+                  ),
+                  onPressed: () => context.push('/market/cart'),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text('View Cart'),
+                      SizedBox(width: 4),
+                      Icon(Icons.chevron_right_rounded, size: 18),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -117,50 +116,29 @@ class FloatingCartBar extends ConsumerWidget {
   }
 }
 
-/// The shop's minimum, as a line the shopper can close.
-class _MinimumProgress extends StatelessWidget {
-  const _MinimumProgress({required this.subcart});
+class _Badge extends StatelessWidget {
+  const _Badge({required this.count});
 
-  final Subcart subcart;
+  final int count;
 
   @override
   Widget build(BuildContext context) {
-    final l10n = context.l10n;
-    final theme = Theme.of(context);
-    final dhivehi = Localizations.localeOf(context).languageCode == 'dv';
-    final minimum = subcart.delivery.orderMinimumLaari;
-
-    if (minimum == null || minimum == 0) {
-      return const SizedBox.shrink();
-    }
-
-    final met = subcart.delivery.minimumMet;
-    final progress = (subcart.itemsLaari / minimum).clamp(0.0, 1.0);
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return Stack(
+      clipBehavior: Clip.none,
       children: [
-        Text(
-          met
-              ? l10n.minimumMet
-              : l10n.toMinimum(
-                  formatMoney(subcart.delivery.shortfallLaari, dhivehi: dhivehi),
-                ),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: met ? ManfaaColors.green : ManfaaColors.amber,
-          ),
-        ),
-        const SizedBox(height: 3),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(999),
-          child: LinearProgressIndicator(
-            value: progress,
-            minHeight: 4,
-            backgroundColor: theme.colorScheme.surface.withValues(alpha: 0.25),
-            valueColor: AlwaysStoppedAnimation(
-              met ? ManfaaColors.green : ManfaaColors.amber,
+        const Icon(Icons.shopping_cart_outlined, color: Colors.white, size: 28),
+        Positioned(
+          right: -6,
+          top: -6,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+            decoration: const BoxDecoration(
+              color: ManfaaColors.coral,
+              shape: BoxShape.circle,
+            ),
+            child: Text(
+              '$count',
+              style: const TextStyle(color: Colors.white, fontSize: 11),
             ),
           ),
         ),
@@ -169,42 +147,40 @@ class _MinimumProgress extends StatelessWidget {
   }
 }
 
-class _Basket extends StatelessWidget {
-  const _Basket({required this.count});
+/// How far from this shop's free-delivery minimum, with a track that fills.
+class _Shortfall extends StatelessWidget {
+  const _Shortfall({required this.terms, required this.total});
 
-  final int count;
+  final DeliveryTerms terms;
+  final int total;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final minimum = terms.orderMinimumLaari ?? 0;
+    final progress = minimum == 0 ? 1.0 : (total / minimum).clamp(0.0, 1.0);
 
-    return Stack(
-      clipBehavior: Clip.none,
-      children: [
-        Icon(Icons.shopping_cart_rounded,
-            size: 26, color: theme.colorScheme.surface),
-        Positioned(
-          top: -6,
-          right: -8,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-            decoration: const BoxDecoration(
-              color: ManfaaColors.coral,
-              shape: BoxShape.circle,
-            ),
-            constraints: const BoxConstraints(minWidth: 17, minHeight: 17),
-            child: Text(
-              '$count',
-              textAlign: TextAlign.center,
-              style: theme.textTheme.labelSmall?.copyWith(
-                color: Colors.white,
-                fontWeight: FontWeight.w700,
-                fontSize: 10,
-              ),
+    return SizedBox(
+      width: 120,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '${formatRufiyaa(terms.shortfallLaari)} to minimum',
+            style: const TextStyle(color: Colors.white70, fontSize: 12),
+          ),
+          const SizedBox(height: 4),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(999),
+            child: LinearProgressIndicator(
+              value: progress,
+              minHeight: 5,
+              backgroundColor: Colors.white24,
+              valueColor: const AlwaysStoppedAnimation(ManfaaColors.green),
             ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }

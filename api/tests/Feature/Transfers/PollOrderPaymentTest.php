@@ -34,7 +34,6 @@ beforeEach(function (): void {
         'base_url' => 'http://10.99.0.1:3005',
         'segment' => 'faisanet',
         'from_account' => '90501400021681001',
-        'bank' => 'mib',
         'active' => true,
         'is_default' => true,
     ]);

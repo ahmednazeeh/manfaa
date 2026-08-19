@@ -10,9 +10,11 @@ use App\Domain\MerchantAccess\Permission;
 use App\Domain\Money\Laari;
 use App\Domain\Notifications\NotificationService;
 use App\Domain\Notifications\NotificationTemplateKey;
+use App\Jobs\PollSettlementPayment;
 use App\Models\AdminUser;
 use App\Models\Settlement;
 use App\Models\SettlementPayment;
+use App\Models\TransferSetting;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
@@ -134,8 +136,37 @@ final class SettlementAllocator
                 $settlement->forceFill(['state' => SettlementState::PaymentReview])->save();
             }
 
+            $this->watchTheBank($payment);
+
             return $payment;
         });
+    }
+
+    /**
+     * Open the bank-watching window on a freshly recorded payment.
+     *
+     * The clock starts NOW and is stored on the row, so a worker restarted
+     * mid-window resumes where it actually is rather than beginning the
+     * fifteen minutes again. Dispatched after commit, because a job that
+     * reads the row before its transaction lands finds nothing.
+     */
+    private function watchTheBank(SettlementPayment $payment): void
+    {
+        $settings = TransferSetting::current();
+        $now = CarbonImmutable::now();
+
+        $payment->forceFill([
+            'poll_started_at' => $now,
+            'poll_until' => $now->addMinutes((int) $settings->verify_window_minutes),
+            'poll_attempts' => 0,
+        ])->save();
+
+        if (! $settings->auto_verify_enabled) {
+            // The flag is the point: this ships dark until the tunnel is up.
+            return;
+        }
+
+        DB::afterCommit(fn () => PollSettlementPayment::dispatch((int) $payment->getKey()));
     }
 
     /**
@@ -163,7 +194,13 @@ final class SettlementAllocator
      * batch). Post-settlement cash allocates nothing and becomes a pure §7
      * wallet credit — real money is never left unbookable.
      */
-    public function matchPayment(SettlementPayment $payment, AdminUser $actor): Settlement
+    /**
+     * @param  AdminUser|null  $actor  Null for an automatic match against the
+     *                                 bank's own history. `matched_by` then stays null on purpose — no
+     *                                 person decided it, and filing one would put a name on a machine's
+     *                                 call. `auto_matched` on the row is what records who did.
+     */
+    public function matchPayment(SettlementPayment $payment, ?AdminUser $actor): Settlement
     {
         return DB::transaction(function () use ($payment, $actor): Settlement {
             $payment = SettlementPayment::query()->whereKey($payment->getKey())->lockForUpdate()->firstOrFail();
@@ -184,7 +221,7 @@ final class SettlementAllocator
 
             $payment->forceFill([
                 'state' => 'matched',
-                'matched_by' => $actor->id,
+                'matched_by' => $actor?->id,
                 'matched_at' => $now,
             ])->save();
 

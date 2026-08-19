@@ -35,7 +35,27 @@ use Throwable;
  */
 final readonly class TransferClient
 {
-    private const int TIMEOUT_SECONDS = 30;
+    /**
+     * A transfer can legitimately take two minutes (owner 2026-08-19), so we
+     * wait three.
+     *
+     * This was 30 seconds, which was actively dangerous: a slow but perfectly
+     * successful transfer would be abandoned on our side and filed as "the
+     * bank did not answer" — the one outcome we treat as needing review
+     * precisely because the money may have moved. Hanging up early on a call
+     * that is still working MANUFACTURES that uncertainty on every slow
+     * transfer, rather than suffering it rarely.
+     */
+    private const int TIMEOUT_SECONDS = 180;
+
+    /**
+     * How long to wait for the far end to pick up at all.
+     *
+     * Deliberately short and separate from the ceiling above: with the
+     * WireGuard peer down, every call fails here in seconds instead of
+     * hanging a worker for three minutes each.
+     */
+    private const int CONNECT_TIMEOUT_SECONDS = 10;
 
     public function send(
         TransferProfile $profile,
@@ -63,12 +83,23 @@ final readonly class TransferClient
             'internal_ref' => $internalRef,
             'remarks' => $remarks,
             'benef_name' => $beneficiaryName,
-            'from_account' => $profile->from_account,
+            // Ignored by design on /bml/transfer, which is a different
+            // upstream. Sent anyway for MIB, where "whatever that profile's
+            // default account is today" is not a thing to reconcile a bank
+            // statement against.
+            'from_account' => $profile->isBml() ? null : $profile->from_account,
+            // BML picks the debited account by profile name instead.
+            'profile' => $profile->isBml() ? $profile->upstreamProfile() : null,
         ], fn ($value): bool => $value !== null && $value !== '');
 
         try {
             $response = Http::withHeaders(['x-api-key' => $key])
                 ->timeout(self::TIMEOUT_SECONDS)
+                // Connecting is not the same as working. A host that is not
+                // there refuses or fails to route in moments, so waiting the
+                // full ceiling for it buys nothing — while a transfer that is genuinely working needs its three minutes. Two limits,
+                // because they answer two different questions.
+                ->connectTimeout(self::CONNECT_TIMEOUT_SECONDS)
                 ->post($profile->endpoint(), $payload);
         } catch (Throwable $e) {
             // A timeout is the dangerous case: the bank may well have moved

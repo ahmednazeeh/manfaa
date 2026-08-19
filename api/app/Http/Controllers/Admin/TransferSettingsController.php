@@ -69,7 +69,12 @@ final class TransferSettingsController extends Controller
                 'from_account' => $profile->from_account,
                 // Which bank this profile debits, so a payout to a BML
                 // payee can leave from our BML account rather than crossing.
-                'bank' => $profile->bank(),
+                // BML is a different upstream: it takes a profile NAME on
+                // the wire instead of an account number, and is never sent
+                // from — only read.
+                'is_bml' => $profile->isBml(),
+                'history_only' => ! $profile->canSend(),
+                'upstream_profile' => $profile->upstreamProfile(),
                 'endpoint' => $profile->endpoint(),
                 // Dual control answers 200 with `pending_approval`: accepted
                 // and parked, never to be re-sent.
@@ -85,7 +90,12 @@ final class TransferSettingsController extends Controller
         $validated = $request->validate([
             'auto_transfer_enabled' => ['sometimes', 'boolean'],
             'auto_max_laari' => ['sometimes', 'integer', 'min:0', 'max:100000000'],
-            'profile_id' => ['sometimes', 'nullable', 'integer', Rule::exists('transfer_profiles', 'id')],
+            // The profile automatic transfers go out through. A history-only
+            // upstream cannot be it.
+            'profile_id' => [
+                'sometimes', 'nullable', 'integer',
+                Rule::exists('transfer_profiles', 'id')->where('history_only', false),
+            ],
             'auto_verify_enabled' => ['sometimes', 'boolean'],
             // Bounded on purpose. A window of hours would have us reading a
             // bank's history for every unpaid order all day, and a payment
@@ -136,7 +146,7 @@ final class TransferSettingsController extends Controller
             // check that from here, so the panel shows the list and an
             // operator picks. Ignored entirely on /bml/transfer.
             'from_account' => ['sometimes', 'nullable', 'string', 'max:40'],
-            'bank' => ['sometimes', 'nullable', 'string', Rule::in(['mib', 'bml'])],
+            'upstream_profile' => ['sometimes', 'nullable', 'string', 'max:60'],
             'dual_control' => ['sometimes', 'boolean'],
             'active' => ['sometimes', 'boolean'],
             'is_default' => ['sometimes', 'boolean'],

@@ -59,24 +59,20 @@ final class BankAccountService
     }
 
     /**
-     * The account NUMBER is immutable once created — merchants were told to
-     * pay it, so an in-place rewrite would leave old settlement instructions
-     * inexplicable (the reason there is no DELETE either). Replacing an
-     * account is create-new + deactivate-old, keeping both rows explicable.
+     * Every field is editable, the account number included (owner decision
+     * 2026-08-19).
+     *
+     * This used to refuse a changed number outright, on the grounds that
+     * merchants had been told to pay it. That reasoning made a mistyped
+     * number permanent, which is the more common problem by far.
      *
      * @param  array<string, mixed>  $attributes
-     *
-     * @throws BankAccountException when the update tries to change account_no
      */
     public function update(PlatformBankAccount $account, array $attributes, ?AdminUser $actor = null): PlatformBankAccount
     {
         return DB::transaction(function () use ($account, $attributes, $actor): PlatformBankAccount {
             PlatformBankAccount::query()->whereKey($account->getKey())->lockForUpdate()->first();
             $account->refresh()->fill($attributes);
-
-            if ($account->isDirty('account_no')) {
-                throw BankAccountException::immutableAccountNo();
-            }
 
             $account->updated_by = $actor?->id;
 

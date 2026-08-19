@@ -10,6 +10,7 @@ use App\Http\Controllers\Controller;
 use App\Models\BranchProduct;
 use App\Models\MarketplaceCategory;
 use App\Models\Merchant;
+use App\Models\MerchantProductCategory;
 use App\Models\MerchantUser;
 use App\Models\Product;
 use App\Models\ProductImage;
@@ -35,14 +36,45 @@ final class ProductController extends Controller
 {
     public function __construct(private readonly ChangeRequestService $changes) {}
 
-    /** The curated aisles a merchant may file a product under. */
-    public function categories(): JsonResponse
+    /**
+     * BOTH lists a product form needs, kept apart because they answer
+     * different questions (owner decision 2026-08-19).
+     *
+     * `marketplace` is the shopper's vocabulary — global, shared by every
+     * store, and the only thing that can make cross-shop browse work.
+     * `cashback` is this merchant's own pricing, and it is OPTIONAL: a
+     * product left unfiled earns the standing rate, exactly as it would
+     * in-store. The mode and rate ride along so the form can show what
+     * filing something will actually pay.
+     */
+    public function categories(Request $request): JsonResponse
     {
+        $merchant = $this->merchant($request);
+
         return new JsonResponse([
-            'data' => MarketplaceCategory::query()
-                ->where('active', true)
-                ->orderBy('sort')
-                ->get(['id', 'slug', 'name_en', 'name_dv', 'icon']),
+            'data' => [
+                'marketplace' => MarketplaceCategory::query()
+                    ->where('active', true)
+                    ->orderBy('sort')
+                    ->get(['id', 'slug', 'name_en', 'name_dv', 'icon']),
+
+                'cashback' => MerchantProductCategory::query()
+                    ->where('merchant_id', $merchant->getKey())
+                    ->where('active', true)
+                    ->orderBy('sort')
+                    ->get(['id', 'slug', 'name_en', 'name_dv', 'mode', 'rate_bp'])
+                    ->map(fn (MerchantProductCategory $category): array => [
+                        'id' => $category->id,
+                        'slug' => $category->slug,
+                        'name_en' => $category->name_en,
+                        'name_dv' => $category->name_dv,
+                        'mode' => $category->mode,
+                        // Percent on the wire, never basis points (§1).
+                        'rate_percent' => $category->rate_bp === null
+                            ? null
+                            : Percent::format((int) $category->rate_bp),
+                    ])->values(),
+            ],
         ]);
     }
 
@@ -51,7 +83,11 @@ final class ProductController extends Controller
         $merchant = $this->merchant($request);
 
         $products = $merchant->products()
-            ->with(['images', 'listings', 'category:id,slug,name_en,name_dv'])
+            ->with([
+                'images', 'listings',
+                'marketplaceCategory:id,slug,name_en,name_dv',
+                'cashbackCategory:id,slug,name_en,name_dv,mode,rate_bp',
+            ])
             ->when(
                 $request->boolean('archived') === false,
                 fn ($query) => $query->where('archived', false),
@@ -239,7 +275,24 @@ final class ProductController extends Controller
                     ->where('merchant_id', $merchant->getKey())
                     ->ignore($ignore),
             ],
-            'category_id' => ['sometimes', 'nullable', 'integer', Rule::exists('marketplace_categories', 'id')->where('active', true)],
+            // Where it sits on the shelf. Shared across every store.
+            'marketplace_category_id' => [
+                'sometimes', 'nullable', 'integer',
+                Rule::exists('marketplace_categories', 'id')->where('active', true),
+            ],
+            // What it earns. OPTIONAL — unset means the default
+            // "everything else" bucket at the standing rate.
+            //
+            // Scoped to THIS merchant's own list. Without the merchant_id
+            // clause a shop could file a product under another shop's
+            // category and inherit its rate — a rate is money, and money
+            // must not be reachable by guessing an id.
+            'cashback_category_id' => [
+                'sometimes', 'nullable', 'integer',
+                Rule::exists('merchant_product_categories', 'id')
+                    ->where('merchant_id', $merchant->getKey())
+                    ->where('active', true),
+            ],
             'cashback_rate_bp' => ['sometimes', 'nullable', 'integer', 'min:0', 'max:2000'],
             'allow_substitutions' => ['sometimes', 'boolean'],
         ];
@@ -256,11 +309,24 @@ final class ProductController extends Controller
             'name_dv' => $product->name_dv,
             'description' => $product->description,
             'sku' => $product->sku,
-            'category' => $product->category === null ? null : [
-                'id' => $product->category->id,
-                'slug' => $product->category->slug,
-                'name_en' => $product->category->name_en,
-                'name_dv' => $product->category->name_dv,
+            // The shelf label, shared across stores.
+            'marketplace_category' => $product->marketplaceCategory === null ? null : [
+                'id' => $product->marketplaceCategory->id,
+                'slug' => $product->marketplaceCategory->slug,
+                'name_en' => $product->marketplaceCategory->name_en,
+                'name_dv' => $product->marketplaceCategory->name_dv,
+            ],
+            // What it earns, by this merchant's own list. Null is the
+            // default "everything else" bucket at the standing rate.
+            'cashback_category' => $product->cashbackCategory === null ? null : [
+                'id' => $product->cashbackCategory->id,
+                'slug' => $product->cashbackCategory->slug,
+                'name_en' => $product->cashbackCategory->name_en,
+                'name_dv' => $product->cashbackCategory->name_dv,
+                'mode' => $product->cashbackCategory->mode,
+                'rate_percent' => $product->cashbackCategory->rate_bp === null
+                    ? null
+                    : Percent::format((int) $product->cashbackCategory->rate_bp),
             ],
             'cashback_rate_percent' => $product->cashback_rate_bp === null
                 ? null

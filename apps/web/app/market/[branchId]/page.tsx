@@ -1,6 +1,7 @@
 'use client';
 
 import { use, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   addToCart,
   getCart,
@@ -19,6 +20,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { FloatingCart } from '@/components/market/floating-cart';
+import { useMe } from '@/lib/queries';
 
 /** One shop's shelves. */
 export default function StorePage({
@@ -120,12 +122,20 @@ export default function StorePage({
 }
 
 function ProductCard({ product }: { product: MarketProduct }) {
+  const router = useRouter();
+  // Not a guard — browsing is public. Only whether there is a cart to add to.
+  const { data: me } = useMe();
+  const signedIn = me !== undefined;
+
   const { t } = useTranslation();
   const queryClient = useQueryClient();
 
   const cart = useQuery({
     queryKey: ['cart'],
     queryFn: ({ signal }) => getCart(undefined, { signal }),
+    // Browsing is public; a cart is not. Without a session there is nothing
+    // to fetch, and asking would only produce a 401 in the console.
+    enabled: signedIn,
   });
 
   const line = cart.data?.data.subcarts
@@ -181,7 +191,17 @@ function ProductCard({ product }: { product: MarketProduct }) {
               size="sm"
               className="w-full"
               disabled={mutate.isPending}
-              onClick={() => mutate.mutate(1)}
+              onClick={() => {
+                if (!signedIn) {
+                  // Ask at the moment it means something, rather than at the
+                  // door before they have seen anything worth joining for.
+                  router.push('/login');
+
+                  return;
+                }
+
+                mutate.mutate(1);
+              }}
             >
               {t('market.add')}
             </Button>

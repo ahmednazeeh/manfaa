@@ -1,17 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:manfaa_core/manfaa_core.dart';
 import 'package:manfaa_ui/manfaa_ui.dart';
 
-import '../../app/app.dart';
 import 'floating_cart.dart';
 import 'market_providers.dart';
 
-/// One shop's shelves (`Market View.png`, `Market View Tablet.png`).
+/// One shop's shelves, drawn to `Market View.png`.
 ///
-/// The header's chips — rating, ETA, delivery fee, minimum — are properties
-/// of *this shop → your address*, not of the shop alone, which is why they
-/// move when the address does.
+/// The ref's order is the shopper's order: search in THIS shop, the store's
+/// terms (rating, how long, what delivery costs, what it earns), the aisles
+/// it stocks, then the goods themselves two to a row. The basket bar rides
+/// above it all, carrying the distance to this shop's minimum.
 class MarketStoreScreen extends ConsumerStatefulWidget {
   const MarketStoreScreen({super.key, required this.branchId});
 
@@ -23,68 +24,118 @@ class MarketStoreScreen extends ConsumerStatefulWidget {
 
 class _MarketStoreScreenState extends ConsumerState<MarketStoreScreen> {
   String? _category;
+  String _query = '';
 
   @override
   Widget build(BuildContext context) {
-    final l10n = context.l10n;
     final store = ref.watch(
       marketStoreProvider((branchId: widget.branchId, category: _category)),
     );
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(store.valueOrNull?.storeName ?? l10n.tabMarket),
-      ),
       body: SafeArea(
-        top: false,
-        child: Stack(
+        child: Column(
           children: [
-            store.when(
-              loading: () => ListView(
-                padding: const EdgeInsets.all(Gap.lg),
-                children: const [
-                  SkeletonBox(height: 120, radius: Corner.card),
-                  SizedBox(height: Gap.lg),
-                  SkeletonBox(height: 200, radius: Corner.card),
-                ],
-              ),
-              error: (error, _) => Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(Gap.huge),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        error is MobileApiException
-                            ? error.message
-                            : l10n.errorGeneric,
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: Gap.lg),
-                      OutlinedButton(
-                        onPressed: () => ref.invalidate(marketStoreProvider),
-                        child: Text(l10n.retry),
-                      ),
-                    ],
+            _SearchBar(
+              storeName: store.valueOrNull?.storeName,
+              onChanged: (value) => setState(() => _query = value),
+            ),
+            Expanded(
+              child: store.when(
+                loading: () => const Center(child: CircularProgressIndicator()),
+                error: (error, _) => Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(Gap.lg),
+                    child: Text(
+                      error is MobileApiException && error.message.isNotEmpty
+                          ? error.message
+                          : 'This shop could not be opened.',
+                      textAlign: TextAlign.center,
+                    ),
                   ),
                 ),
+                data: (data) => _Shelves(
+                  store: data,
+                  category: _category,
+                  query: _query,
+                  onCategory: (slug) => setState(() => _category = slug),
+                ),
               ),
-              data: (data) => _Shelves(
-                store: data,
-                category: _category,
-                onCategory: (slug) => setState(() => _category = slug),
-              ),
-            ),
-            Positioned(
-              left: Gap.lg,
-              right: Gap.lg,
-              bottom: Gap.md,
-              // Scoped to THIS shop: the minimum a shopper standing in this
-              // store can actually do something about.
-              child: FloatingCartBar(branchId: widget.branchId),
             ),
           ],
         ),
+      ),
+      bottomNavigationBar: FloatingCart(branchId: widget.branchId),
+    );
+  }
+}
+
+class _SearchBar extends ConsumerWidget {
+  const _SearchBar({required this.storeName, required this.onChanged});
+
+  final String? storeName;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final cart = ref.watch(cartProvider).valueOrNull;
+    final count = cart?.subcarts.fold<int>(
+          0,
+          (sum, row) => sum + row.items.fold<int>(0, (n, i) => n + i.qty),
+        ) ??
+        0;
+
+    return Padding(
+      padding: const EdgeInsets.all(Gap.md),
+      child: Row(
+        children: [
+          IconButton.filledTonal(
+            onPressed: () => context.pop(),
+            icon: const Icon(Icons.arrow_back_rounded),
+          ),
+          const SizedBox(width: Gap.sm),
+          Expanded(
+            child: TextField(
+              onChanged: onChanged,
+              decoration: InputDecoration(
+                prefixIcon: const Icon(Icons.search_rounded),
+                hintText: storeName == null
+                    ? 'Search'
+                    : 'Search in $storeName',
+              ),
+            ),
+          ),
+          const SizedBox(width: Gap.sm),
+          Stack(
+            clipBehavior: Clip.none,
+            children: [
+              IconButton.filledTonal(
+                onPressed: () => context.push('/market/cart'),
+                icon: const Icon(Icons.shopping_cart_outlined),
+              ),
+              if (count > 0)
+                Positioned(
+                  right: 0,
+                  top: 0,
+                  child: Container(
+                    padding: const EdgeInsets.all(5),
+                    decoration: const BoxDecoration(
+                      color: ManfaaColors.coral,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Text(
+                      '$count',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 10,
+                        height: 1,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -94,55 +145,61 @@ class _Shelves extends StatelessWidget {
   const _Shelves({
     required this.store,
     required this.category,
+    required this.query,
     required this.onCategory,
   });
 
   final MarketStore store;
   final String? category;
-  final void Function(String?) onCategory;
+  final String query;
+  final ValueChanged<String?> onCategory;
 
   @override
   Widget build(BuildContext context) {
-    final l10n = context.l10n;
-    final theme = Theme.of(context);
-    final dhivehi = Localizations.localeOf(context).languageCode == 'dv';
+    final needle = query.trim().toLowerCase();
+
+    final products = store.products
+        .where((p) => needle.isEmpty || p.name.toLowerCase().contains(needle))
+        .toList(growable: false);
 
     return ListView(
-      padding: const EdgeInsets.fromLTRB(Gap.lg, Gap.md, Gap.lg, 96),
+      padding: const EdgeInsets.fromLTRB(Gap.md, 0, Gap.md, Gap.lg),
       children: [
         _StoreHeader(store: store),
-        if (store.categories.isNotEmpty) ...[
-          const SizedBox(height: Gap.lg),
+        const SizedBox(height: Gap.md),
+
+        if (store.categories.isNotEmpty)
           SizedBox(
-            height: 38,
+            height: 40,
             child: ListView(
               scrollDirection: Axis.horizontal,
               children: [
-                _CategoryChip(
-                  label: l10n.allProducts,
+                _Chip(
+                  label: 'All',
                   selected: category == null,
                   onTap: () => onCategory(null),
                 ),
-                // Only the aisles this shop stocks — an empty chip is a
-                // promise the shelf cannot keep.
                 for (final aisle in store.categories)
-                  _CategoryChip(
-                    label: aisle.label(dhivehi),
+                  _Chip(
+                    label: aisle.nameEn,
                     selected: category == aisle.slug,
                     onTap: () => onCategory(aisle.slug),
                   ),
               ],
             ),
           ),
-        ],
-        const SizedBox(height: Gap.lg),
-        if (store.products.isEmpty)
+        const SizedBox(height: Gap.md),
+
+        if (products.isEmpty)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: Gap.huge),
             child: Center(
               child: Text(
-                l10n.marketEmpty,
-                style: theme.textTheme.titleMedium,
+                needle.isEmpty
+                    ? 'This shop has nothing on its shelves yet.'
+                    : 'Nothing here matches "$query".',
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: ManfaaColors.textMuted),
               ),
             ),
           )
@@ -150,24 +207,21 @@ class _Shelves extends StatelessWidget {
           GridView.builder(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
-            gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-              // Two up on a phone, four on a tablet — the mockup's own
-              // arithmetic, expressed as a maximum rather than a count.
-              maxCrossAxisExtent: 210,
-              mainAxisExtent: 236,
-              crossAxisSpacing: Gap.md,
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2,
               mainAxisSpacing: Gap.md,
+              crossAxisSpacing: Gap.md,
+              childAspectRatio: 0.62,
             ),
-            itemCount: store.products.length,
-            itemBuilder: (_, index) =>
-                ProductCard(product: store.products[index]),
+            itemCount: products.length,
+            itemBuilder: (_, index) => ProductCard(product: products[index]),
           ),
       ],
     );
   }
 }
 
-/// The store header: who they are, and what they will do for you.
+/// The shop's terms, in the order a shopper weighs them.
 class _StoreHeader extends StatelessWidget {
   const _StoreHeader({required this.store});
 
@@ -175,20 +229,26 @@ class _StoreHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final l10n = context.l10n;
     final theme = Theme.of(context);
-    final muted = theme.colorScheme.onSurfaceVariant;
-    final dhivehi = Localizations.localeOf(context).languageCode == 'dv';
-    final delivery = store.delivery;
+    final terms = store.delivery;
 
     return ManfaaCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              IconTile(Icons.storefront_rounded,
-                  tint: ManfaaTint.violet, size: 48, iconSize: 24),
+              CircleAvatar(
+                radius: 28,
+                backgroundColor: ManfaaColors.greenSoft,
+                child: Text(
+                  store.storeName.isEmpty
+                      ? '?'
+                      : store.storeName.characters.first.toUpperCase(),
+                  style: theme.textTheme.titleLarge,
+                ),
+              ),
               const SizedBox(width: Gap.md),
               Expanded(
                 child: Column(
@@ -197,69 +257,81 @@ class _StoreHeader extends StatelessWidget {
                     Text(store.storeName, style: theme.textTheme.titleLarge),
                     Text(
                       store.branchName,
-                      style: theme.textTheme.bodySmall?.copyWith(color: muted),
+                      style: theme.textTheme.bodySmall
+                          ?.copyWith(color: ManfaaColors.textMuted),
                     ),
+                    const SizedBox(height: Gap.sm),
+                    Wrap(
+                      spacing: Gap.md,
+                      runSpacing: 4,
+                      children: [
+                        // A new shop shows NO rating rather than 0.0 — an
+                        // invented score is worse than an absent one.
+                        if (store.rating != null)
+                          _Term(
+                            icon: Icons.star_rounded,
+                            tint: ManfaaColors.amber,
+                            text: store.rating!.toStringAsFixed(1),
+                          ),
+                        if (terms.etaMin != null && terms.etaMax != null)
+                          _Term(
+                            icon: Icons.schedule_rounded,
+                            text: '${terms.etaMin}–${terms.etaMax} min',
+                          ),
+                        if (terms.delivers)
+                          _Term(
+                            icon: Icons.delivery_dining_rounded,
+                            text: terms.feeLaari == 0
+                                ? 'Free delivery'
+                                : formatRufiyaa(terms.feeLaari),
+                          ),
+                      ],
+                    ),
+                    if (terms.orderMinimumLaari != null)
+                      Text(
+                        'Min ${formatRufiyaa(terms.orderMinimumLaari!)}',
+                        style: theme.textTheme.bodySmall
+                            ?.copyWith(color: ManfaaColors.textMuted),
+                      ),
                   ],
                 ),
               ),
             ],
           ),
-          if (store.address != null) ...[
-            const SizedBox(height: Gap.sm),
-            Text(store.address!,
-                style: theme.textTheme.bodySmall?.copyWith(color: muted)),
-          ],
-          const SizedBox(height: Gap.md),
-          Wrap(
-            spacing: Gap.lg,
-            runSpacing: Gap.xs,
-            children: [
-              if (store.rating != null)
-                _HeaderFact(Icons.star_rounded, '${store.rating}'),
-              if (delivery.etaLabel != null)
-                _HeaderFact(Icons.schedule_rounded, delivery.etaLabel!),
-              if (delivery.delivers)
-                _HeaderFact(
-                  Icons.delivery_dining_rounded,
-                  delivery.feeLaari == 0
-                      ? l10n.freeDelivery
-                      : formatMoney(delivery.feeLaari, dhivehi: dhivehi),
-                ),
-              if (delivery.orderMinimumLaari != null)
-                _HeaderFact(
-                  Icons.shopping_basket_outlined,
-                  l10n.minOrder(
-                    formatMoney(delivery.orderMinimumLaari!, dhivehi: dhivehi),
-                  ),
-                ),
-            ],
-          ),
-          // Said plainly rather than by omission: a shop that cannot reach
-          // you is still a shop you can collect from.
-          if (!delivery.delivers) ...[
-            const SizedBox(height: Gap.md),
-            Text(
-              l10n.storeClosedForDelivery,
-              style: theme.textTheme.bodySmall?.copyWith(color: ManfaaColors.amber),
-            ),
-          ],
           if (store.cashbackRatePercent != null) ...[
             const SizedBox(height: Gap.md),
             Container(
               width: double.infinity,
               padding: const EdgeInsets.symmetric(
-                  horizontal: Gap.md, vertical: Gap.sm),
+                horizontal: Gap.md,
+                vertical: Gap.sm,
+              ),
               decoration: BoxDecoration(
                 color: ManfaaColors.greenSoft,
                 borderRadius: BorderRadius.circular(Corner.tile),
               ),
-              child: Text(
-                l10n.cashbackPercent(store.cashbackRatePercent!),
-                textAlign: TextAlign.center,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: ManfaaColors.green,
-                  fontWeight: FontWeight.w700,
-                ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.savings_outlined,
+                      size: 18, color: ManfaaColors.green),
+                  const SizedBox(width: Gap.sm),
+                  Text.rich(
+                    TextSpan(
+                      children: [
+                        TextSpan(
+                          text: '${store.cashbackRatePercent}% cashback',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w700,
+                            color: ManfaaColors.green,
+                          ),
+                        ),
+                        const TextSpan(text: ' on all items'),
+                      ],
+                    ),
+                    style: theme.textTheme.bodyMedium,
+                  ),
+                ],
               ),
             ),
           ],
@@ -269,30 +341,28 @@ class _StoreHeader extends StatelessWidget {
   }
 }
 
-class _HeaderFact extends StatelessWidget {
-  const _HeaderFact(this.icon, this.label);
+class _Term extends StatelessWidget {
+  const _Term({required this.icon, required this.text, this.tint});
 
   final IconData icon;
-  final String label;
+  final String text;
+  final Color? tint;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final muted = theme.colorScheme.onSurfaceVariant;
-
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, size: 16, color: muted),
+        Icon(icon, size: 16, color: tint ?? ManfaaColors.textMuted),
         const SizedBox(width: 4),
-        Text(label, style: theme.textTheme.bodySmall?.copyWith(color: muted)),
+        Text(text, style: Theme.of(context).textTheme.bodySmall),
       ],
     );
   }
 }
 
-class _CategoryChip extends StatelessWidget {
-  const _CategoryChip({
+class _Chip extends StatelessWidget {
+  const _Chip({
     required this.label,
     required this.selected,
     required this.onTap,
@@ -304,42 +374,18 @@ class _CategoryChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
     return Padding(
-      padding: const EdgeInsetsDirectional.only(end: Gap.sm),
-      child: Material(
-        color: selected ? ManfaaColors.violet : theme.colorScheme.surface,
-        shape: StadiumBorder(
-          side: BorderSide(
-            color: selected
-                ? ManfaaColors.violet
-                : theme.colorScheme.outlineVariant,
-          ),
-        ),
-        child: InkWell(
-          customBorder: const StadiumBorder(),
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: Gap.lg),
-            child: Center(
-              child: Text(
-                label,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: selected ? Colors.white : theme.colorScheme.onSurface,
-                  fontWeight: selected ? FontWeight.w600 : null,
-                ),
-              ),
-            ),
-          ),
-        ),
+      padding: const EdgeInsets.only(right: Gap.sm),
+      child: ChoiceChip(
+        label: Text(label),
+        selected: selected,
+        onSelected: (_) => onTap(),
       ),
     );
   }
 }
 
-/// One product tile: picture, name, price, and the Add that becomes a
-/// stepper once it is in the basket.
+/// One item on the shelf: picture, heart, name, price, what it earns, Add.
 class ProductCard extends ConsumerWidget {
   const ProductCard({super.key, required this.product});
 
@@ -347,12 +393,13 @@ class ProductCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final l10n = context.l10n;
     final theme = Theme.of(context);
-    final dhivehi = Localizations.localeOf(context).languageCode == 'dv';
-    final qty = ref.watch(cartProvider.select(
-      (_) => ref.read(cartProvider.notifier).qtyOf(product.branchProductId),
-    ));
+    final cart = ref.watch(cartProvider).valueOrNull;
+
+    final line = cart?.subcarts
+        .expand((row) => row.items)
+        .where((item) => item.branchProductId == product.branchProductId)
+        .firstOrNull;
 
     return ManfaaCard(
       padding: const EdgeInsets.all(Gap.md),
@@ -360,70 +407,88 @@ class ProductCard extends ConsumerWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Expanded(
-            child: Center(
-              child: product.imageUrl == null
-                  ? Icon(Icons.inventory_2_outlined,
-                      size: 44, color: theme.colorScheme.outlineVariant)
-                  : Image.network(
-                      product.imageUrl!,
-                      fit: BoxFit.contain,
-                      errorBuilder: (_, _, _) => Icon(
-                        Icons.inventory_2_outlined,
-                        size: 44,
-                        color: theme.colorScheme.outlineVariant,
-                      ),
-                    ),
+            child: Stack(
+              children: [
+                Center(
+                  child: product.imageUrl == null
+                      ? const Icon(Icons.inventory_2_outlined,
+                          size: 40, color: ManfaaColors.textFaint)
+                      : Image.network(
+                          product.imageUrl!,
+                          fit: BoxFit.contain,
+                          errorBuilder: (_, _, _) => const Icon(
+                            Icons.inventory_2_outlined,
+                            size: 40,
+                            color: ManfaaColors.textFaint,
+                          ),
+                        ),
+                ),
+                Positioned(
+                  right: 0,
+                  top: 0,
+                  child: Icon(
+                    Icons.favorite_border_rounded,
+                    size: 20,
+                    color: ManfaaColors.textFaint,
+                  ),
+                ),
+              ],
             ),
           ),
           const SizedBox(height: Gap.sm),
           Text(
-            product.displayName(dhivehi),
+            product.name,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
             style: theme.textTheme.bodyMedium,
           ),
-          const SizedBox(height: Gap.xs),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              MoneyText(
-                product.priceLaari,
-                style: theme.textTheme.titleSmall
-                    ?.copyWith(fontWeight: FontWeight.w700),
-              ),
-              if (product.compareAtLaari != null) ...[
-                const SizedBox(width: Gap.xs),
-                Text(
-                  formatMoney(product.compareAtLaari!, dhivehi: dhivehi),
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                    decoration: TextDecoration.lineThrough,
-                  ),
-                ),
-              ],
-            ],
+          const SizedBox(height: 2),
+          Text(
+            formatRufiyaa(product.priceLaari),
+            style: theme.textTheme.titleMedium,
           ),
           const SizedBox(height: Gap.sm),
-          SizedBox(
-            width: double.infinity,
-            height: 34,
-            child: !product.inStock
-                ? OutlinedButton(
-                    onPressed: null,
-                    child: Text(l10n.outOfStock),
-                  )
-                : qty == 0
-                    ? FilledButton(
-                        onPressed: () => ref
-                            .read(cartProvider.notifier)
-                            .add(product.branchProductId),
-                        style: FilledButton.styleFrom(
-                          padding: EdgeInsets.zero,
-                          backgroundColor: ManfaaColors.violet,
-                        ),
-                        child: Text(l10n.addToCart),
-                      )
-                    : _Stepper(product: product, qty: qty),
+          Row(
+            children: [
+              if (product.cashbackRatePercent != null)
+                Expanded(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: Gap.sm,
+                      vertical: 3,
+                    ),
+                    decoration: BoxDecoration(
+                      color: ManfaaColors.greenSoft,
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(
+                      '${product.cashbackRatePercent}% cashback',
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: ManfaaColors.green,
+                      ),
+                    ),
+                  ),
+                )
+              else
+                const Spacer(),
+              const SizedBox(width: Gap.sm),
+              if (line == null)
+                FilledButton(
+                  style: FilledButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: Gap.lg),
+                    minimumSize: const Size(0, 36),
+                  ),
+                  onPressed: product.inStock
+                      ? () => ref
+                          .read(cartProvider.notifier)
+                          .add(product.branchProductId)
+                      : null,
+                  child: Text(product.inStock ? 'Add' : 'Out'),
+                )
+              else
+                _Stepper(line: line),
+            ],
           ),
         ],
       ),
@@ -432,50 +497,33 @@ class ProductCard extends ConsumerWidget {
 }
 
 class _Stepper extends ConsumerWidget {
-  const _Stepper({required this.product, required this.qty});
+  const _Stepper({required this.line});
 
-  final MarketProduct product;
-  final int qty;
+  final CartLine line;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final theme = Theme.of(context);
-    final cart = ref.read(cartProvider.notifier);
-    final itemId = cart.cartItemIdOf(product.branchProductId);
+    final controller = ref.read(cartProvider.notifier);
 
-    return Container(
-      decoration: BoxDecoration(
-        color: ManfaaColors.violetSoft,
-        borderRadius: BorderRadius.circular(Corner.tile),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          IconButton(
-            visualDensity: VisualDensity.compact,
-            onPressed: itemId == null
-                ? null
-                : () => cart.setQty(itemId, qty - 1),
-            icon: const Icon(Icons.remove_rounded, size: 18),
-            color: ManfaaColors.violet,
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        InkWell(
+          onTap: () => controller.setQty(line.cartItemId, line.qty - 1),
+          child: const Padding(
+            padding: EdgeInsets.all(4),
+            child: Icon(Icons.remove_circle_outline, size: 22),
           ),
-          Text(
-            '$qty',
-            style: theme.textTheme.titleSmall?.copyWith(
-              color: ManfaaColors.violet,
-              fontWeight: FontWeight.w700,
-            ),
+        ),
+        Text('${line.qty}'),
+        InkWell(
+          onTap: () => controller.setQty(line.cartItemId, line.qty + 1),
+          child: const Padding(
+            padding: EdgeInsets.all(4),
+            child: Icon(Icons.add_circle, size: 22),
           ),
-          IconButton(
-            visualDensity: VisualDensity.compact,
-            onPressed: itemId == null
-                ? null
-                : () => cart.setQty(itemId, qty + 1),
-            icon: const Icon(Icons.add_rounded, size: 18),
-            color: ManfaaColors.violet,
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }

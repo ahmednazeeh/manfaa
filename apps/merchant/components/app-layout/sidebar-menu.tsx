@@ -44,9 +44,32 @@ export function SidebarMenu({ className }: { className?: string }) {
   // approved. Neither implies the other.
   const sellsOnMarketplace = enrolment.data?.data.state === 'active';
 
-  const sections = APP_MENU.filter(
-    (section) => !section.marketplaceOnly || sellsOnMarketplace,
-  )
+  // Whether the PLATFORM has a marketplace at all, which is a different
+  // question from whether this store sells on it. The endpoint 404s behind
+  // the kill switch, so an answer of any kind means the switch is on.
+  const platformHasMarketplace = enrolment.data !== undefined;
+
+  const sections = APP_MENU.map((section) => {
+    if (!section.marketplaceOnly) {
+      return section;
+    }
+
+    if (!platformHasMarketplace) {
+      // No marketplace on this platform: nothing here is real.
+      return { ...section, items: [] };
+    }
+
+    return {
+      ...section,
+      // Before approval the group still appears, holding only the way in.
+      // The operational screens stay hidden — a store with no listings has
+      // no orders to work — but the application form must be reachable, or
+      // the door only opens from the inside.
+      items: sellsOnMarketplace
+        ? section.items
+        : section.items.filter((item) => item.beforeEnrolment),
+    };
+  })
     .map((section) => ({
       ...section,
       items: section.items.filter((item) => menuItemAllowed(me, item)),

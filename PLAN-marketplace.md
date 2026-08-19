@@ -1522,3 +1522,118 @@ unmatched forever while the screen said auto-verify was on.
 
 Tests: 42 across `tests/Feature/Transfers/` and `tests/Unit/NameMatcherTest.php`.
 Suite 1610 passing.
+
+
+---
+
+# AUDIT — actual state, 2026-08-19
+
+Written after the owner reported that most of this plan is missing from the
+apps. It is. This section replaces optimistic round notes above with what is
+actually on disk, verified by reading the tree rather than by memory. Where
+an earlier section says a round "shipped", read it as "shipped on the
+surfaces listed here and nowhere else".
+
+## Method
+
+Every claim below was checked against the filesystem and `route:list`:
+screens by path, endpoints by route table, behaviour by grepping the
+implementing file for the verbs it is supposed to perform. Nothing is marked
+done because a round said so.
+
+## The twelve design references
+
+`/home/ubuntu/Merchant App Flutter Manfaa/Manfaa MarketPlace/`
+
+| Reference | Surface it describes | State |
+|---|---|---|
+| Market View.png | Customer app | **Partial** — screen exists, not styled to the ref |
+| Market View Tablet.png | Customer app, tablet | **Not built** |
+| AI Product Search.png | Customer app | **Not built** — nothing anywhere |
+| Cart Page Collapsible By Merchant.png | Customer app | **Partial** — collapse + minimum warning present, unstyled |
+| Cart Page Expanded.png | Customer app | **Partial** — same screen |
+| Delivery Details Step.png | Customer app | **Not built** — the app has NO address screen at all |
+| Payment Step.png | Customer app | **Partial** — receipt-first payment exists |
+| Order Received.png | Customer app | **Partial** — checkout pushes to an order screen |
+| Customer App Order Tracking.png | Customer app | **Partial** — detail screen exists, NO list to reach it from |
+| Orders.png | Merchant app | **Not built** |
+| Order Details.png | Merchant app | **Not built** |
+| products.png | Merchant app | **Not built** |
+
+Three references describe merchant-app screens. The merchant app contains no
+marketplace code of any kind — `mobile/merchant/lib/features/` holds auth,
+boot, credit, dashboard, money, more, push, settlements, setup, signup,
+status, transactions, wallet, and nothing else.
+
+## Surface matrix
+
+| Capability | API | Admin web | Merchant web | Customer web | Customer app | Merchant app |
+|---|---|---|---|---|---|---|
+| Opt-in + KYB | ✅ | ✅ | ✅ | — | — | ❌ |
+| Product catalogue | ✅ | — | ✅ | — | — | ❌ |
+| Per-branch delivery rules | ✅ | — | ✅ | — | — | ❌ |
+| Customer addresses | ✅ | — | — | ⚠️ inline in checkout only | ❌ no screen | — |
+| Market browse | ✅ | — | — | ✅ public | ⚠️ unstyled | — |
+| Store page | ✅ | — | — | ✅ | ⚠️ unstyled | — |
+| Cart, multi-vendor | ✅ | — | — | ✅ | ⚠️ unstyled | — |
+| Checkout | ✅ | — | — | ✅ | ⚠️ no address step | — |
+| Order tracking | ✅ | ✅ | — | ✅ | ⚠️ **no list** | — |
+| Fulfilment (accept/reject/advance/amend) | ✅ | — | ✅ | — | — | ❌ |
+| Marketplace cashback | ✅ | ✅ | — | — | — | — |
+| Merchant settlements | ✅ | ✅ | — | — | — | — |
+| Customer wallet + payouts | ✅ | ✅ | — | ✅ | ⚠️ untested | — |
+| Bank API + auto-verify | ✅ | ✅ | — | — | — | — |
+| **AI product search** | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| **Ratings** | ⚠️ tables only | ❌ | ❌ | ❌ | ❌ | ❌ |
+| **Favourites** | ⚠️ table only | ❌ | ❌ | ❌ | ❌ | ❌ |
+| **Tablet layouts** | — | — | — | — | ❌ | ❌ |
+
+## The defect that made the customer app non-functional
+
+The app's marketplace screens were written against `/api/mobile/v1/customer/…`
+paths that **did not exist**. Seventeen endpoints — cart, cart items,
+addresses, orders, order detail, receipt upload, payment accounts, activity,
+wallet, withdrawals — were mounted only in `routes/api/marketplace.php`
+behind `auth:customer`, the website's guard. `routes/api/mobile.php` had
+none of them.
+
+Market browse worked, because that one endpoint is public. Everything past
+"add to cart" answered 404. The screens shipped without their doors, and the
+1.0.9 APK went out in that state. Routes added 2026-08-19; the app still
+needs rebuilding, and none of it has been exercised against real data.
+
+## Honest status by round
+
+- **MP1–MP3** (foundations, catalogue, delivery): API + merchant web only.
+  Never surfaced in the merchant app.
+- **MP4–MP5** (browse, cart, checkout): API + customer web complete.
+  Customer app built but was unreachable until today, and has no address
+  step.
+- **MP6** (fulfilment, amendments): API + merchant web complete. **Merchant
+  app: nothing.** This is the largest single gap — a shopkeeper cannot work
+  an order queue from their phone at all.
+- **MP7** (Activity unification, track order): web only. The app's Activity
+  screen has no order awareness; an order is visible once, immediately after
+  checkout, and never again.
+- **MP8–MP12** (cashback, settlements, wallet, payouts, bank automation):
+  complete on API + admin, which is where they belong.
+- **AI search, ratings, favourites, tablet**: not started.
+
+## What remains, in the order it should be done
+
+1. **Customer app orders list + Activity unification** — an order that cannot
+   be found again is not tracking.
+2. **Customer app address screen** — checkout cannot complete without one.
+3. **Merchant app marketplace: Orders, Order Details, Products** — three
+   design references, none begun.
+4. **Ratings** — tables exist as of today; service, endpoints and UI do not.
+   Store cards have been drawing a star against data nothing writes.
+5. **Favourites** — table exists; nothing else.
+6. **AI product search** — nothing exists. Claude Haiku query parser plus
+   Postgres retrieval, pgvector deferred (§6).
+7. **Design pass against the twelve references** — every marketplace screen
+   built so far is functional, not styled to the mockups.
+8. **Tablet layouts** — one reference, not attempted.
+
+None of the above can be verified end-to-end until a merchant is enrolled
+with products and a delivery rule; the platform currently has zero of each.

@@ -5,10 +5,10 @@ declare(strict_types=1);
 use App\Domain\Platform\PlatformConfig;
 use App\Models\AdminUser;
 use App\Models\BranchProduct;
-use App\Models\MarketplaceCategory;
 use App\Models\Merchant;
 use App\Models\MerchantBranch;
 use App\Models\MerchantChangeRequest;
+use App\Models\MerchantProductCategory;
 use App\Models\MerchantUser;
 use App\Models\Product;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -39,7 +39,11 @@ function makeProduct($test, string $name = 'Lotus Jasmine Rice 5kg'): int
 {
     return $test->postJson('/api/merchant/marketplace/products', [
         'name' => $name,
-        'category_id' => MarketplaceCategory::query()->where('slug', 'rice-grains')->value('id'),
+        // The merchant's OWN cashback category — the same list that prices
+        // their in-store sales.
+        'category_id' => MerchantProductCategory::query()
+            ->where('merchant_id', $test->merchant->id)
+            ->value('id'),
         'sku' => 'RICE-'.strtoupper(substr(md5($name), 0, 6)),
     ])->assertCreated()->json('data.id');
 }

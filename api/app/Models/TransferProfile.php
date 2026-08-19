@@ -21,6 +21,37 @@ class TransferProfile extends Model
      * inside one bank where we can. Null means "no preference", which is
      * every profile until somebody sets one.
      */
+    /**
+     * May this profile SEND money?
+     *
+     * BML cannot: everything we pay out leaves from MIB, whatever bank the
+     * payee uses. BML is here to have its history read, nothing else.
+     */
+    public function canSend(): bool
+    {
+        return ! (bool) $this->getAttribute('history_only');
+    }
+
+    /** BML's history call is a different upstream. */
+    public function isBml(): bool
+    {
+        return str_contains(mb_strtolower((string) $this->segment), 'bml');
+    }
+
+    /**
+     * The profile name BML wants on the wire (`?profile=CLEVIDEN`).
+     *
+     * Deliberately NOT `name`. That is a label an admin can retitle from the
+     * panel; this is an identifier the bank matches on, and letting a rename
+     * break API calls is the kind of coupling nobody finds until it breaks.
+     */
+    public function upstreamProfile(): ?string
+    {
+        $value = trim((string) $this->getAttribute('upstream_profile'));
+
+        return $value === '' ? null : $value;
+    }
+
     public function bank(): ?string
     {
         $bank = trim((string) $this->getAttribute('bank'));

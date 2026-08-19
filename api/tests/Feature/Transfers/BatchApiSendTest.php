@@ -7,6 +7,8 @@ use App\Domain\Payout\PayoutItemState;
 use App\Domain\Transfers\BatchApiSender;
 use App\Domain\Transfers\BatchNotSendableException;
 use App\Domain\Transfers\TransferProfileRef;
+use App\Jobs\SendMerchantPayoutBatchViaApi;
+use App\Jobs\SendPayoutBatchViaApi;
 use App\Models\Customer;
 use App\Models\Merchant;
 use App\Models\MerchantPayoutBatch;
@@ -16,6 +18,7 @@ use App\Models\PayoutItem;
 use App\Models\TransferProfile;
 use Database\Seeders\LedgerAccountSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Queue\Middleware\WithoutOverlapping;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
@@ -212,16 +215,15 @@ it('refuses a draft batch', function (): void {
         ->toThrow(BatchNotSendableException::class);
 });
 
-it('pays from our account at the payee\'s own bank when we have one', function (): void {
-    // The payout rows are all BML payees. Given a BML profile, the transfer
-    // should leave from it rather than crossing banks.
-    $this->profile->forceFill(['bank' => 'mib'])->save();
-
+it('pays a BML payee from MIB, because everything leaves from MIB', function (): void {
+    // The payout rows are all BML payees. That changes nothing: we hold one
+    // paying bank, and /bml/transfer is never called (owner 2026-08-19).
     TransferProfile::create([
         'name' => 'BML',
         'base_url' => 'http://10.99.0.1:3005',
         'segment' => 'bml',
-        'bank' => 'bml',
+        'upstream_profile' => 'CLEVIDEN',
+        'history_only' => true,
         'active' => true,
     ]);
 
@@ -229,17 +231,33 @@ it('pays from our account at the payee\'s own bank when we have one', function (
 
     app(BatchApiSender::class)->sendCustomerBatch(approvedBatch(1), TransferProfileRef::resolve());
 
-    Http::assertSent(fn ($request) => str_contains($request->url(), '/bml/transfer'));
+    Http::assertSent(fn ($request) => str_contains($request->url(), '/faisanet4/transfer'));
+});
+
+it('refuses to send from a watch-only upstream', function (): void {
+    $bml = TransferProfile::create([
+        'name' => 'BML',
+        'base_url' => 'http://10.99.0.1:3005',
+        'segment' => 'bml',
+        'upstream_profile' => 'CLEVIDEN',
+        'history_only' => true,
+        'active' => true,
+    ]);
+
+    // Refused at the door rather than attempted and failed upstream: BML is
+    // here to have its history read, and nothing else.
+    expect(fn () => TransferProfileRef::resolve($bml->id))
+        ->toThrow(BatchNotSendableException::class);
 });
 
 it('honours an explicitly chosen profile for every row', function (): void {
     // An operator picking a profile is a decision, not a default — it is
     // not second-guessed per payee.
     TransferProfile::create([
-        'name' => 'BML',
+        'name' => 'Faseyha Faisaa',
         'base_url' => 'http://10.99.0.1:3005',
-        'segment' => 'bml',
-        'bank' => 'bml',
+        'segment' => 'faisanet',
+        'from_account' => '90501400021681001',
         'active' => true,
     ]);
 
@@ -348,4 +366,24 @@ it('refuses a draft settlement run', function (): void {
 
     expect(fn () => app(BatchApiSender::class)->sendMerchantBatch($batch, TransferProfileRef::resolve()))
         ->toThrow(BatchNotSendableException::class);
+});
+
+it('will not sweep the same batch twice at once', function (): void {
+    // Load-bearing, not belt-and-braces: the Redis queue's retry_after is 90
+    // seconds and a sweep is one live bank call per row, so a batch of any
+    // size runs past it — at which point Redis hands the same job to a
+    // second worker while the first is still going.
+    $middleware = (new SendPayoutBatchViaApi(7))->middleware();
+
+    expect($middleware)->toHaveCount(1);
+    expect($middleware[0])->toBeInstanceOf(WithoutOverlapping::class);
+    expect($middleware[0]->key)->toBe('payout-batch:7');
+
+    // Keyed per batch, so two DIFFERENT batches still sweep side by side.
+    expect((new SendPayoutBatchViaApi(8))->middleware()[0]->key)->toBe('payout-batch:8');
+
+    // The settlement run keys off its own namespace, so a payout batch and a
+    // settlement run sharing an id do not block each other.
+    expect((new SendMerchantPayoutBatchViaApi(7))->middleware()[0]->key)
+        ->toBe('settlement-run:7');
 });

@@ -219,7 +219,9 @@ it('matches an order paid into a second bank once that bank is mapped', function
         'name' => 'BML',
         'base_url' => 'http://10.99.0.1:3005',
         'segment' => 'bml',
-        'bank' => 'bml',
+        'upstream_profile' => 'CLEVIDEN',
+        // Watched, never sent from.
+        'history_only' => true,
         'active' => true,
     ]);
 

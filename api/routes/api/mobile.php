@@ -2,7 +2,12 @@
 
 declare(strict_types=1);
 
+use App\Http\Controllers\Customer\ActivityController;
+use App\Http\Controllers\Customer\AddressController;
 use App\Http\Controllers\Customer\AvatarController;
+use App\Http\Controllers\Customer\CartController;
+use App\Http\Controllers\Customer\OrderController as MarketOrderController;
+use App\Http\Controllers\Customer\WalletController;
 use App\Http\Controllers\Devices\CustomerDevicesController;
 use App\Http\Controllers\Devices\CustomerPushTokenController;
 use App\Http\Controllers\Devices\MerchantDevicesController;
@@ -10,8 +15,11 @@ use App\Http\Controllers\Devices\MerchantPushTokenController;
 use App\Http\Controllers\Merchant\BankAccountController;
 use App\Http\Controllers\Merchant\BranchesController;
 use App\Http\Controllers\Merchant\CustomerLookupController;
+use App\Http\Controllers\Merchant\MarketplaceEnrolmentController;
+use App\Http\Controllers\Merchant\OrderController as MerchantOrderController;
 use App\Http\Controllers\Merchant\PreferencesController;
 use App\Http\Controllers\Merchant\ProductCategoriesController;
+use App\Http\Controllers\Merchant\ProductController;
 use App\Http\Controllers\Merchant\ProfileController;
 use App\Http\Controllers\Merchant\PromotionController;
 use App\Http\Controllers\Merchant\RateController;
@@ -139,6 +147,68 @@ Route::prefix('mobile/v1')
                 // duplicates and skips rows while sales are landing.
                 Route::get('transactions', [TransactionsController::class, 'customer']);
 
+                /*
+                 * MARKETPLACE (PLAN-marketplace.md).
+                 *
+                 * These existed on the website and NOT here, which meant the
+                 * app could browse the Market — that endpoint is public —
+                 * and then 404 on everything past "add to cart". The screens
+                 * shipped without their doors.
+                 *
+                 * Same controllers as the website, same middleware, same
+                 * rules: one behaviour, two ways in. The marketplace switch
+                 * gates all of it except the wallet, because money we owe
+                 * outlives a feature flag.
+                 */
+                Route::middleware('marketplace')->group(function (): void {
+                    // Where to deliver. An address book exists to be
+                    // delivered to, so it lives behind the same switch.
+                    Route::get('addresses', [AddressController::class, 'index']);
+                    Route::post('addresses', [AddressController::class, 'store'])
+                        ->middleware('throttle:30,1');
+                    Route::patch('addresses/{address}', [AddressController::class, 'update'])
+                        ->whereNumber('address');
+                    Route::delete('addresses/{address}', [AddressController::class, 'destroy'])
+                        ->whereNumber('address');
+
+                    // The basket belongs to somebody, hence the token.
+                    Route::get('cart', [CartController::class, 'show']);
+                    Route::post('cart/items', [CartController::class, 'add'])
+                        ->middleware('throttle:120,1');
+                    Route::patch('cart/items/{item}', [CartController::class, 'update'])
+                        ->whereNumber('item');
+                    Route::delete('cart/items/{item}', [CartController::class, 'destroy'])
+                        ->whereNumber('item');
+                    Route::delete('cart', [CartController::class, 'clear']);
+
+                    // Checkout is receipt-first: nothing is confirmed until
+                    // the money is seen.
+                    Route::get('payment-accounts', [MarketOrderController::class, 'paymentAccounts']);
+                    Route::post('orders', [MarketOrderController::class, 'place'])
+                        ->middleware('throttle:20,1');
+                    Route::post('orders/{order}/receipt', [MarketOrderController::class, 'uploadReceipt'])
+                        ->whereNumber('order')->middleware('throttle:20,1');
+
+                    // The list the app had no way to reach: an order was
+                    // visible once, immediately after checkout, and never
+                    // again.
+                    Route::get('orders', [MarketOrderController::class, 'index']);
+                    Route::get('orders/{order}', [MarketOrderController::class, 'show'])
+                        ->whereNumber('order');
+
+                    // One timeline: marketplace orders AND cashback.
+                    Route::get('activity', [ActivityController::class, 'index']);
+                });
+
+                /*
+                 * The wallet, deliberately OUTSIDE the switch above. A
+                 * refund already paid in must stay visible and withdrawable
+                 * even if the marketplace is switched off tomorrow.
+                 */
+                Route::get('wallet', [WalletController::class, 'show']);
+                Route::post('wallet/withdrawals', [WalletController::class, 'withdraw'])
+                    ->middleware('throttle:10,1');
+
                 // Payout history (R3): the money that reached the bank, and
                 // what each transfer covered. Same rules as the web —
                 // pending excluded, failed included, own rows only.
@@ -204,6 +274,49 @@ Route::prefix('mobile/v1')
                 // history: invoice numbers, frozen rates, fees and GST.
                 Route::get('transactions', [TransactionsController::class, 'merchant'])
                     ->middleware('merchant.can:transactions.view');
+
+                /*
+                 * MARKETPLACE — the shop's order queue and shelf
+                 * (PLAN-marketplace.md §4.1, §4.2).
+                 *
+                 * Missing until 2026-08-19, exactly as the customer app's
+                 * were: the panel had these and the app had nothing, so a
+                 * shopkeeper could not work an order from their phone.
+                 *
+                 * Same controllers and same gates as the panel — one
+                 * behaviour, two doors. `marketplace` is the platform
+                 * switch, `merchant.can:marketplace.manage` the staff
+                 * permission, EnsureMerchantTrading the shop's own state: a
+                 * store that is not active has no business fulfilling.
+                 */
+                Route::prefix('marketplace')
+                    ->middleware(['marketplace', 'merchant.can:marketplace.manage'])
+                    ->group(function (): void {
+                        // Whether this store sells at all, which is what the
+                        // app needs before it draws an Orders tab.
+                        Route::get('enrolment', [MarketplaceEnrolmentController::class, 'show']);
+
+                        Route::get('orders', [MerchantOrderController::class, 'index']);
+                        Route::get('orders/{suborder}', [MerchantOrderController::class, 'show'])
+                            ->whereNumber('suborder');
+                        Route::post('orders/{suborder}/accept', [MerchantOrderController::class, 'accept'])
+                            ->whereNumber('suborder');
+                        Route::post('orders/{suborder}/reject', [MerchantOrderController::class, 'reject'])
+                            ->whereNumber('suborder');
+                        Route::post('orders/{suborder}/advance', [MerchantOrderController::class, 'advance'])
+                            ->whereNumber('suborder');
+                        // Editing while picking (§2.7): drop a line the shelf
+                        // cannot fill, refund the difference.
+                        Route::post('orders/{suborder}/amend', [MerchantOrderController::class, 'amend'])
+                            ->whereNumber('suborder');
+
+                        // Reading the shelf, and the QUICK edits the ref
+                        // allows: price, stock, visibility. Catalogue work
+                        // proper stays on desktop, and the screen says so.
+                        Route::get('products', [ProductController::class, 'index']);
+                        Route::put('products/{product}/listing', [ProductController::class, 'listing'])
+                            ->whereNumber('product');
+                    });
 
                 /*
                  * The till void (merchant app MR2) — the SAME two corrections

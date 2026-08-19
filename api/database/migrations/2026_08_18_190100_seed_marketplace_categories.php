@@ -2,6 +2,7 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * The platform's curated product tree, from `Market View Tablet.png` — the
@@ -34,6 +35,14 @@ return new class extends Migration
 
     public function up(): void
     {
+        // Superseded by 2026_08_19_040000, which drops this table: a
+        // product's category is the merchant's own cashback category now.
+        // Left in place so an existing database's history stays readable,
+        // while a fresh one walks past it.
+        if (! Schema::hasTable('marketplace_categories')) {
+            return;
+        }
+
         $now = now();
 
         foreach (self::SEED as $sort => [$slug, $en, $dv, $icon]) {
@@ -57,6 +66,10 @@ return new class extends Migration
 
     public function down(): void
     {
+        if (! Schema::hasTable('marketplace_categories')) {
+            return;
+        }
+
         DB::table('marketplace_categories')
             ->whereIn('slug', array_column(self::SEED, 0))
             ->delete();

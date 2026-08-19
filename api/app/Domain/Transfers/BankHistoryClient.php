@@ -30,6 +30,9 @@ final readonly class BankHistoryClient
 {
     private const int TIMEOUT_SECONDS = 20;
 
+    /** See TransferClient: a host that is not there should fail fast. */
+    private const int CONNECT_TIMEOUT_SECONDS = 10;
+
     /**
      * @return list<BankRow>
      */
@@ -41,11 +44,29 @@ final readonly class BankHistoryClient
             return [];
         }
 
-        $isBml = str_contains($profile->segment, 'bml');
+        // BML is a different upstream, not a variant of MIB: its own query
+        // string, its own response shape, its own row parser.
+        $isBml = $profile->isBml();
+
+        if ($isBml && $profile->upstreamProfile() === null) {
+            // Without the upstream profile name BML answers for the wrong
+            // account or not at all. Refusing here beats reading somebody
+            // else's ledger.
+            Log::warning('BML profile has no upstream profile name', [
+                'profile' => $profile->name,
+            ]);
+
+            return [];
+        }
 
         try {
             $response = Http::withHeaders(['x-api-key' => $key])
                 ->timeout(self::TIMEOUT_SECONDS)
+                // Connecting is not the same as working. A host that is not
+                // there refuses or fails to route in moments, so waiting the
+                // full ceiling for it buys nothing — while a history read is quick once the far end answers at all. Two limits,
+                // because they answer two different questions.
+                ->connectTimeout(self::CONNECT_TIMEOUT_SECONDS)
                 ->get(
                     sprintf(
                         '%s/%s/history',
@@ -53,7 +74,7 @@ final readonly class BankHistoryClient
                         trim($profile->segment, '/'),
                     ),
                     $isBml
-                        ? ['account' => $account, 'profile' => $profile->name]
+                        ? ['account' => $account, 'profile' => $profile->upstreamProfile()]
                         : ['account' => $account, 'page' => $page],
                 );
         } catch (Throwable $e) {

@@ -10,6 +10,7 @@ import '../features/discover/discover_screen.dart';
 import '../features/discover/search_screen.dart';
 import '../features/discover/store_screen.dart';
 import '../features/home/home_screen.dart';
+import '../features/market/address_screen.dart';
 import '../features/market/cart_screen.dart';
 import '../features/market/checkout_screen.dart';
 import '../features/market/order_screen.dart';
@@ -111,6 +112,13 @@ final routerProvider = Provider<GoRouter>((ref) {
                 GoRoute(
                   path: 'wallet',
                   builder: (_, _) => const WalletScreen(),
+                ),
+                GoRoute(
+                  // MUST sit above ':branchId', which would otherwise
+                  // swallow it — that is exactly what threw a GoRouter
+                  // exception when checkout pushed here (fixed 2026-08-19).
+                  path: 'addresses/new',
+                  builder: (_, _) => const AddressStepScreen(),
                 ),
                 GoRoute(
                   path: 'orders/:id',

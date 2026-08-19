@@ -7,6 +7,7 @@ namespace App\Http\Controllers\Admin;
 use App\Domain\Transfers\PayoutSender;
 use App\Domain\Wallet\WalletService;
 use App\Http\Controllers\Controller;
+use App\Jobs\SendOnePayoutViaApi;
 use App\Models\AdminUser;
 use App\Models\CustomerPayout;
 use App\Models\TransferProfile;
@@ -103,16 +104,29 @@ final class PendingPaymentsController extends Controller
             ? TransferProfile::query()->find($validated['profile_id'])
             : null;
 
-        $sent = $this->sender->send($payout, $profile, $admin);
+        // Queued, not called here. A transfer can take two minutes and
+        // nginx hangs up at sixty seconds, so doing this inside the request
+        // handed the admin a 504 while the money was still moving — an error
+        // page for a transfer that very probably succeeded.
+        SendOnePayoutViaApi::dispatch(
+            (int) $payout->getKey(),
+            $profile?->getKey(),
+            (int) $admin->getKey(),
+        );
+
+        $fresh = $payout->fresh();
 
         return new JsonResponse(['data' => [
-            'id' => $sent->id,
-            'state' => $sent->state,
-            'trx_id' => $sent->trx_id,
-            'approval_id' => $sent->approval_id,
-            'error_code' => $sent->error_code,
-            'failure_reason' => $sent->failure_reason,
-        ]]);
+            'id' => $fresh->id,
+            'state' => $fresh->state,
+            'trx_id' => $fresh->trx_id,
+            'approval_id' => $fresh->approval_id,
+            'error_code' => $fresh->error_code,
+            'failure_reason' => $fresh->failure_reason,
+            // The honest answer to "did it send?": not yet, and the row is
+            // where the outcome will appear.
+            'queued' => true,
+        ]], 202);
     }
 
     /**

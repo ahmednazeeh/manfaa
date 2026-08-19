@@ -9,6 +9,8 @@ import { useTranslation } from 'react-i18next';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { FloatingCart } from '@/components/market/floating-cart';
+import { useMe } from '@/lib/queries';
 
 /**
  * The Market (`Market View.png`), on the web.
@@ -20,6 +22,8 @@ import { Skeleton } from '@/components/ui/skeleton';
  */
 export default function MarketPage() {
   const { t } = useTranslation();
+  // Browsing is public; a basket belongs to a session.
+  const { data: me } = useMe();
 
   const branches = useQuery({
     queryKey: ['market', 'branches'],
@@ -58,6 +62,9 @@ export default function MarketPage() {
           ))}
         </div>
       )}
+
+      {/* Only a signed-in customer has a basket to keep in view. */}
+      {me ? <FloatingCart /> : null}
     </div>
   );
 }

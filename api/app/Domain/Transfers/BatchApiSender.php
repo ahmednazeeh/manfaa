@@ -111,9 +111,10 @@ final readonly class BatchApiSender
             }
 
             $result = $this->client->send(
-                // Paid from our account at the customer's own bank where we
-                // hold one; the batch's profile otherwise.
-                $ref->forBank($item->bank),
+                // One profile pays everybody. The payee's own bank is
+                // recorded on the row but does not choose the sender: every
+                // payout leaves from MIB.
+                $ref->profile,
                 account: (string) $item->account,
                 amountLaari: (int) $item->amount_laari,
                 internalRef: $key,
@@ -231,7 +232,7 @@ final readonly class BatchApiSender
             }
 
             $result = $this->client->send(
-                $ref->forBank($item->bank),
+                $ref->profile,
                 account: (string) $item->account,
                 amountLaari: (int) $item->amount_laari,
                 internalRef: $key,

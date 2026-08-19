@@ -10,6 +10,7 @@ use App\Models\Cart;
 use App\Models\CartItem;
 use App\Models\CustomerAddress;
 use App\Models\MerchantBranch;
+use App\Models\Product;
 use Illuminate\Support\Collection;
 
 /**
@@ -38,6 +39,10 @@ final readonly class CartPricer
         $items = $cart->items()
             ->with([
                 'listing.product.merchant',
+                // The CASHBACK category prices the line, so it must be
+                // loaded with the line rather than lazily per product. The
+                // marketplace category is a shelf label and prices nothing.
+                'listing.product.cashbackCategory',
                 'listing.branch.deliveryRules',
             ])
             ->get();
@@ -86,6 +91,36 @@ final readonly class CartPricer
      * @param  Collection<int, CartItem>  $lines
      * @return array<string, mixed>
      */
+    /**
+     * What one product earns, by the merchant's own rules.
+     *
+     * Exclusion is checked FIRST and beats everything, including a rate set
+     * directly on the product: a merchant who says "we never give cashback
+     * on tobacco" has said something about the goods, not a default to be
+     * talked out of by a field elsewhere.
+     */
+    private static function lineRate(Product $product, int $standingRateBp): int
+    {
+        $category = $product->cashbackCategory;
+
+        if ($category !== null && $category->mode === 'excluded') {
+            return 0;
+        }
+
+        // Then the product's own rate, the most specific thing a merchant
+        // can say about one item.
+        if ($product->cashback_rate_bp !== null) {
+            return (int) $product->cashback_rate_bp;
+        }
+
+        if ($category !== null && $category->mode === 'rate') {
+            return (int) $category->rate_bp;
+        }
+
+        // The default "everything else" bucket.
+        return $standingRateBp;
+    }
+
     private function priceSubcart(MerchantBranch $branch, $lines, ?CustomerAddress $address): array
     {
         $merchant = $lines->first()->listing->product->merchant;
@@ -104,9 +139,18 @@ final readonly class CartPricer
             $unit = (int) $listing->price_laari;
             $lineTotal = $unit * $line->qty;
 
-            // The product's own rate when it has one, otherwise whatever the
-            // store advertises. Ceiling rounding, per the money law.
-            $rateBp = $product->cashback_rate_bp ?? $standingRateBp;
+            // The SAME precedence an in-store sale gets (§1, TermsResolver):
+            // an excluded category earns nothing whatever else is set, a
+            // category override prices its own lines, and the default bucket
+            // falls back to what the store advertises.
+            //
+            // This used to be `$product->cashback_rate_bp ?? $standingRateBp`
+            // and nothing more, so a merchant's category rules were honoured
+            // in their shop and silently ignored online — an override never
+            // applied, and an EXCLUDED category still paid out. Two prices
+            // for one product depending on the door the customer came
+            // through is not a policy anybody chose.
+            $rateBp = self::lineRate($product, $standingRateBp);
             // The §10 ceiling, computed once on the line total — the same
             // arithmetic CashbackCalculator does for an in-store sale.
             $lineCashback = intdiv($lineTotal * $rateBp + 9999, 10000);

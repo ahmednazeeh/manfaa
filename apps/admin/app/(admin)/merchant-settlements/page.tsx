@@ -440,10 +440,14 @@ function SendItemButton({
     mutationFn: () => sendMerchantPayoutItem(batchId, item.id),
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'merchant-settlements'] });
+      // Queued, not done. A transfer can take two minutes, so claiming it
+      // transferred here would be a guess dressed as a fact.
       toast.success(
-        result.data.state === 'pending_approval'
-          ? 'Sent — waiting for a second approver.'
-          : `Transferred. Reference ${result.data.trx_id ?? '—'}`,
+        result.data.queued
+          ? 'Transfer queued. The outcome appears against this shop shortly.'
+          : result.data.state === 'pending_approval'
+            ? 'Sent — waiting for a second approver.'
+            : `Transferred. Reference ${result.data.trx_id ?? '—'}`,
       );
     },
     onError: (error) => toast.error(apiErrorMessage(error)),

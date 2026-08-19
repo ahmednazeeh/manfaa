@@ -9,10 +9,10 @@ use App\Domain\Marketplace\MerchantSheetImporter;
 use App\Domain\Marketplace\MerchantTransferSheet;
 use App\Domain\Transfers\BatchNotSendableException;
 use App\Domain\Transfers\TransferClient;
-use App\Domain\Transfers\TransferOutcome;
 use App\Domain\Transfers\TransferProfileRef;
 use App\Http\Controllers\Controller;
 use App\Jobs\SendMerchantPayoutBatchViaApi;
+use App\Jobs\SendOneSettlementItemViaApi;
 use App\Models\AdminUser;
 use App\Models\MerchantPayoutBatch;
 use App\Models\MerchantPayoutItem;
@@ -235,45 +235,26 @@ final class MerchantSettlementController extends Controller
             return new JsonResponse(['message' => 'No transfer profile is configured.', 'code' => 'no_profile'], 409);
         }
 
+        // Claimed HERE, before anything is queued, so a second press is
+        // refused at the door rather than racing in a worker.
         $item->forceFill(['state' => 'processing', 'attempts' => $item->attempts + 1])->save();
 
-        $result = $this->client->send(
-            $profile,
-            account: (string) $item->account,
-            amountLaari: (int) $item->amount_laari,
-            // The SAME key every attempt — the whole of what makes a retry
-            // safe rather than a second payment.
-            internalRef: (string) $item->internal_ref,
-            beneficiaryName: $item->account_name,
-            remarks: 'Manfaa settlement '.$batch->reference,
+        // Queued, not called here: a transfer can take two minutes and nginx
+        // hangs up at sixty seconds.
+        SendOneSettlementItemViaApi::dispatch(
+            (int) $item->getKey(),
+            (int) $profile->getKey(),
+            'Manfaa settlement '.$batch->reference,
         );
 
-        $item->forceFill(match ($result->outcome) {
-            TransferOutcome::Sent => [
-                'state' => 'sent',
-                'trx_id' => $result->trxId,
-                'paid_at' => CarbonImmutable::now(),
-                'error_code' => null,
-                'failure_reason' => null,
-            ],
-            TransferOutcome::PendingApproval => [
-                'state' => 'pending_approval',
-                // Never as trx_id: a queue record is not a bank reference.
-                'approval_id' => $result->approvalId,
-                'failure_reason' => $result->message,
-            ],
-            default => [
-                'state' => 'failed',
-                'error_code' => $result->errorCode,
-                'failure_reason' => $result->message,
-            ],
-        })->save();
+        $fresh = $item->fresh();
 
         return new JsonResponse(['data' => [
-            'state' => $item->fresh()->state,
-            'trx_id' => $item->fresh()->trx_id,
-            'approval_id' => $item->fresh()->approval_id,
-        ]]);
+            'state' => $fresh->state,
+            'trx_id' => $fresh->trx_id,
+            'approval_id' => $fresh->approval_id,
+            'queued' => true,
+        ]], 202);
     }
 
     public function cancel(MerchantPayoutBatch $batch): JsonResponse

@@ -121,9 +121,27 @@ function ProductCard({
                   Archived
                 </Badge>
               ) : null}
-              {product.category ? (
+              {product.marketplace_category ? (
                 <Badge variant="secondary" appearance="ghost" size="sm">
-                  {product.category.name_en}
+                  {product.marketplace_category.name_en}
+                </Badge>
+              ) : null}
+              {/* What it earns, when that is not simply the standing rate.
+                  An excluded product is the one a shopkeeper most needs to
+                  spot at a glance. */}
+              {product.cashback_category ? (
+                <Badge
+                  variant={
+                    product.cashback_category.mode === 'excluded'
+                      ? 'destructive'
+                      : 'info'
+                  }
+                  appearance="light"
+                  size="sm"
+                >
+                  {product.cashback_category.mode === 'excluded'
+                    ? `${product.cashback_category.name_en} — no cashback`
+                    : `${product.cashback_category.name_en} — ${product.cashback_category.rate_percent ?? ''}%`}
                 </Badge>
               ) : null}
             </div>
@@ -322,7 +340,8 @@ function ProductDialog({
     name_dv: product?.name_dv ?? '',
     description: product?.description ?? '',
     sku: product?.sku ?? '',
-    category_id: product?.category?.id?.toString() ?? '',
+    marketplace_category_id: product?.marketplace_category?.id?.toString() ?? '',
+    cashback_category_id: product?.cashback_category?.id?.toString() ?? '',
   });
 
   const live = (product?.listings ?? []).some((row) => row.state === 'active');
@@ -362,20 +381,59 @@ function ProductDialog({
             />
           </div>
           <div className="flex flex-col gap-2">
-            <Label htmlFor="product-category">Category</Label>
+            <Label htmlFor="product-category">Shelf</Label>
             <select
               id="product-category"
               className="h-9 rounded-md border border-input bg-background px-3 text-sm"
-              value={form.category_id}
-              onChange={(event) => setForm({ ...form, category_id: event.target.value })}
+              value={form.marketplace_category_id}
+              onChange={(event) =>
+                setForm({ ...form, marketplace_category_id: event.target.value })
+              }
             >
               <option value="">Uncategorised</option>
-              {(categories.data?.data ?? []).map((category) => (
-                <option key={category.id} value={category.id}>
-                  {category.name_en}
+              {(categories.data?.data.marketplace ?? []).map((aisle) => (
+                <option key={aisle.id} value={aisle.id}>
+                  {aisle.name_en}
                 </option>
               ))}
             </select>
+            <p className="text-xs text-muted-foreground">
+              Where shoppers find it while browsing. The same shelves across
+              every store, so a search for rice reaches yours.
+            </p>
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="product-cashback-category">
+              Cashback category (optional)
+            </Label>
+            <select
+              id="product-cashback-category"
+              className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+              value={form.cashback_category_id}
+              onChange={(event) =>
+                setForm({ ...form, cashback_category_id: event.target.value })
+              }
+            >
+              <option value="">Everything else — your standing rate</option>
+              {(categories.data?.data.cashback ?? []).map((category) => (
+                <option key={category.id} value={category.id}>
+                  {category.name_en}
+                  {category.mode === 'excluded'
+                    ? ' — earns nothing'
+                    : category.rate_percent
+                      ? ` — ${category.rate_percent}%`
+                      : ''}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-muted-foreground">
+              {/* The whole point of the second picker: your own rules, and
+                  the same ones your counter uses. */}
+              Your own categories, the same ones that price your in-store
+              sales. Leave it alone and this product earns your standing
+              rate.
+            </p>
           </div>
           <div className="flex flex-col gap-2">
             <Label htmlFor="product-sku">SKU (optional)</Label>
@@ -409,7 +467,16 @@ function ProductDialog({
                     name_dv: form.name_dv.trim() || null,
                     description: form.description.trim() || null,
                     sku: form.sku.trim() || null,
-                    category_id: form.category_id === '' ? null : Number(form.category_id),
+                    marketplace_category_id:
+                      form.marketplace_category_id === ''
+                        ? null
+                        : Number(form.marketplace_category_id),
+                    // Null on purpose when blank: that IS the default
+                    // "everything else" bucket, not a missing answer.
+                    cashback_category_id:
+                      form.cashback_category_id === ''
+                        ? null
+                        : Number(form.cashback_category_id),
                   },
                 },
                 {

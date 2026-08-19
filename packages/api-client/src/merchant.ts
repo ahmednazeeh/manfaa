@@ -2143,12 +2143,31 @@ export const MarketplaceProductSchema = z.object({
   name_dv: z.string().nullable(),
   description: z.string().nullable(),
   sku: z.string().nullable(),
-  category: z
+  /**
+   * Where it sits on the shelf — the SHOPPER's vocabulary, shared by every
+   * store so cross-shop browse can work.
+   */
+  marketplace_category: z
     .object({
       id: z.number().int(),
       slug: z.string(),
       name_en: z.string(),
       name_dv: z.string().nullable(),
+    })
+    .nullable(),
+  /**
+   * What it EARNS, by this merchant's own pricing list. Optional: null is
+   * the default "everything else" bucket at the standing rate, exactly as an
+   * unfiled product behaves in-store.
+   */
+  cashback_category: z
+    .object({
+      id: z.number().int(),
+      slug: z.string(),
+      name_en: z.string(),
+      name_dv: z.string().nullable(),
+      mode: z.enum(['excluded', 'rate']),
+      rate_percent: z.string().nullable(),
     })
     .nullable(),
   cashback_rate_percent: z.string().nullable(),
@@ -2185,20 +2204,44 @@ export function listMarketplaceProducts(options: RequestOptions = {}) {
   );
 }
 
+/** The shopper-facing aisle a product is filed under. */
+export const MarketplaceAisleSchema = z.object({
+  id: z.number().int(),
+  slug: z.string(),
+  name_en: z.string(),
+  name_dv: z.string().nullable(),
+  icon: z.string().nullable(),
+});
+export type MarketplaceAisle = z.infer<typeof MarketplaceAisleSchema>;
+
+/** One of the merchant's OWN cashback categories, with what it pays. */
+export const CashbackCategoryOptionSchema = z.object({
+  id: z.number().int(),
+  slug: z.string(),
+  name_en: z.string(),
+  name_dv: z.string().nullable(),
+  mode: z.enum(['excluded', 'rate']),
+  rate_percent: z.string().nullable(),
+});
+export type CashbackCategoryOption = z.infer<typeof CashbackCategoryOptionSchema>;
+
+/**
+ * BOTH lists a product form needs, in one call.
+ *
+ * They are deliberately separate things: `marketplace` is the shared shelf
+ * vocabulary every store draws from, `cashback` is this merchant's private
+ * pricing. Merging them would splinter cross-store browse and leak one
+ * shop's rate structure to shoppers.
+ */
 export function listMarketplaceCategories(options: RequestOptions = {}) {
   return apiFetch(
     '/api/merchant/marketplace/categories',
-    z.object({
-      data: z.array(
-        z.object({
-          id: z.number().int(),
-          slug: z.string(),
-          name_en: z.string(),
-          name_dv: z.string().nullable(),
-          icon: z.string().nullable(),
-        }),
-      ),
-    }),
+    dataWrapped(
+      z.object({
+        marketplace: z.array(MarketplaceAisleSchema),
+        cashback: z.array(CashbackCategoryOptionSchema),
+      }),
+    ),
     { signal: options.signal },
   );
 }

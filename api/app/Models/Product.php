@@ -59,9 +59,26 @@ class Product extends Model
         return $this->belongsTo(Merchant::class);
     }
 
-    public function category(): BelongsTo
+    /**
+     * Where the product sits on the shelf — the SHOPPER'S vocabulary, shared
+     * by every store so that browsing across shops is coherent.
+     */
+    public function marketplaceCategory(): BelongsTo
     {
-        return $this->belongsTo(MarketplaceCategory::class, 'category_id');
+        return $this->belongsTo(MarketplaceCategory::class, 'marketplace_category_id');
+    }
+
+    /**
+     * What the product EARNS, by the merchant's own pricing list — the same
+     * one that prices their in-store sales.
+     *
+     * Optional by design (owner decision 2026-08-19): left unset, the
+     * product falls into the default "everything else" bucket and earns the
+     * standing rate, exactly as an unfiled product does in-store.
+     */
+    public function cashbackCategory(): BelongsTo
+    {
+        return $this->belongsTo(MerchantProductCategory::class, 'cashback_category_id');
     }
 
     public function images(): HasMany

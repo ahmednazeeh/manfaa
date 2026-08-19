@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Domain\Transfers\BankHistoryClient;
+use App\Domain\Transfers\TransferClient;
 use App\Models\TransferProfile;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
@@ -41,7 +42,10 @@ function bmlProfile(): TransferProfile
         'name' => 'BML',
         'base_url' => 'http://10.99.0.1:3005',
         'segment' => 'bml',
+        // Ignored by design on /bml — the account comes from the profile
+        // name instead.
         'from_account' => null,
+        'upstream_profile' => 'CLEVIDEN',
         'active' => true,
     ]);
 }
@@ -147,8 +151,11 @@ it('sends the account and page for MIB and the account and profile for BML', fun
         && str_contains($request->url(), 'account=90501400021681001')
         && str_contains($request->url(), 'page=1'));
 
+    // The UPSTREAM name, not the display name — renaming a profile in the
+    // panel must not change what goes on the wire.
     Http::assertSent(fn ($request) => str_contains($request->url(), '/bml/history')
-        && str_contains($request->url(), 'profile='));
+        && str_contains($request->url(), 'account=7730000757923')
+        && str_contains($request->url(), 'profile=CLEVIDEN'));
 });
 
 it('returns nothing rather than throwing when the bank is unreachable', function (): void {
@@ -157,4 +164,39 @@ it('returns nothing rather than throwing when the bank is unreachable', function
     // A poll that throws would take a queue worker down with it; an empty
     // history simply means "not matched yet", which is the truth.
     expect(app(BankHistoryClient::class)->history(mibProfile(), '90501400021681001'))->toBe([]);
+});
+
+it('will not read BML history without the upstream profile name', function (): void {
+    // BML picks the account from the profile name. Without it the call would
+    // answer for the wrong account or not at all, and reading somebody
+    // else's ledger is worse than reading none.
+    Http::fake(['*' => Http::response([])]);
+
+    $profile = bmlProfile();
+    $profile->forceFill(['upstream_profile' => null])->save();
+
+    expect(app(BankHistoryClient::class)->history($profile, '7730000757923'))->toBe([]);
+    Http::assertNothingSent();
+});
+
+it('sends the profile name on a BML transfer and no from_account', function (): void {
+    Http::fake(['*' => Http::response(['status' => 'success', 'trx_id' => 'TRX-1'])]);
+
+    $profile = bmlProfile();
+    $profile->forceFill(['from_account' => '90501400021681001'])->save();
+
+    app(TransferClient::class)->send(
+        $profile,
+        account: '7730000757923',
+        amountLaari: 12500,
+        internalRef: 'MANFAA-TEST-1',
+    );
+
+    Http::assertSent(function ($request) {
+        // from_account is ignored by that upstream, so we do not send it —
+        // a field the other end drops is a field that misleads whoever reads
+        // our request log.
+        return ($request->data()['profile'] ?? null) === 'CLEVIDEN'
+            && ! array_key_exists('from_account', $request->data());
+    });
 });

@@ -1832,6 +1832,12 @@ const PayoutActionSchema = dataWrapped(
     approval_id: z.string().nullable().optional(),
     error_code: z.string().nullable().optional(),
     failure_reason: z.string().nullable().optional(),
+    /**
+     * The transfer is QUEUED, not done. A transfer can take two minutes and
+     * the web server hangs up long before that, so the outcome arrives on
+     * the row rather than in this reply.
+     */
+    queued: z.boolean().optional(),
   }),
 );
 
@@ -1867,8 +1873,17 @@ export const TransferProfileSchema = z.object({
   base_url: z.string(),
   segment: z.string(),
   from_account: z.string().nullable(),
-  /** Which bank this profile debits, so a payout can stay inside one bank. */
-  bank: z.enum(['mib', 'bml']).nullable(),
+  /**
+   * BML is a different upstream, not a variant of MIB. It identifies the
+   * account by a profile NAME on the wire.
+   */
+  is_bml: z.boolean(),
+  upstream_profile: z.string().nullable(),
+  /**
+   * Read-only upstream: it can have its history watched but is never sent
+   * from. Every payout leaves from MIB, whatever bank the payee uses.
+   */
+  history_only: z.boolean(),
   endpoint: z.string(),
   /** Answers 200 `pending_approval`: accepted and parked, never re-sent. */
   dual_control: z.boolean(),
@@ -1942,7 +1957,7 @@ export function updateTransferProfile(
     base_url?: string;
     segment?: string;
     from_account?: string | null;
-    bank?: 'mib' | 'bml' | null;
+    upstream_profile?: string | null;
     dual_control?: boolean;
     active?: boolean;
     is_default?: boolean;
@@ -2081,6 +2096,8 @@ export function sendMerchantPayoutItem(batchId: number, itemId: number) {
         state: z.string(),
         trx_id: z.string().nullable(),
         approval_id: z.string().nullable(),
+        /** The transfer is queued, not done — the row carries the outcome. */
+        queued: z.boolean().optional(),
       }),
     ),
     { method: 'POST', body: {} },

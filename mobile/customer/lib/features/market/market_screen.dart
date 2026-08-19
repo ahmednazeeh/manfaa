@@ -98,7 +98,7 @@ class MarketScreen extends ConsumerWidget {
               left: Gap.lg,
               right: Gap.lg,
               bottom: Gap.navClearance - 24,
-              child: FloatingCartBar(),
+              child: FloatingCart(),
             ),
           ],
         ),

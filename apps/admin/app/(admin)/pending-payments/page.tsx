@@ -141,11 +141,13 @@ function PaymentRow({ payment }: { payment: PendingPayment }) {
       // Parked is not sent, and saying so is the difference between an
       // operator waiting and an operator sending it again.
       toast.success(
-        result.data.state === 'pending_approval'
-          ? 'Sent — waiting for a second approver.'
-          : result.data.state === 'sent'
-            ? `Transferred. Reference ${result.data.trx_id ?? '—'}`
-            : `Refused: ${result.data.failure_reason ?? 'unknown'}`,
+        result.data.queued
+          ? 'Transfer queued. The outcome appears on this row shortly.'
+          : result.data.state === 'pending_approval'
+            ? 'Sent — waiting for a second approver.'
+            : result.data.state === 'sent'
+              ? `Transferred. Reference ${result.data.trx_id ?? '—'}`
+              : `Refused: ${result.data.failure_reason ?? 'unknown'}`,
       );
     },
     onError: (error) => toast.error(apiErrorMessage(error)),

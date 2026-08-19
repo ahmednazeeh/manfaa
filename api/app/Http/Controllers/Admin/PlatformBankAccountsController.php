@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Domain\Platform\Bank;
-use App\Domain\Platform\BankAccountException;
 use App\Domain\Platform\BankAccountService;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\PlatformBankAccountResource;
@@ -56,8 +55,6 @@ class PlatformBankAccountsController extends Controller
 
         $validated = $request->validate([
             'bank_name' => ['sometimes', Rule::enum(Bank::class)],
-            // Accepted only when unchanged (edit forms echo it back); the
-            // service refuses any actual account_no mutation.
             'account_no' => ['sometimes', 'string', 'max:255'],
             'account_name' => ['sometimes', 'string', 'max:255'],
             'currency' => ['sometimes', 'string', 'in:MVR'],
@@ -65,12 +62,8 @@ class PlatformBankAccountsController extends Controller
             'active' => ['sometimes', 'boolean'],
         ]);
 
-        try {
-            return new PlatformBankAccountResource(
-                $service->update($account, $validated, $request->user('admin')),
-            );
-        } catch (BankAccountException $e) {
-            abort(422, $e->getMessage());
-        }
+        return new PlatformBankAccountResource(
+            $service->update($account, $validated, $request->user('admin')),
+        );
     }
 }

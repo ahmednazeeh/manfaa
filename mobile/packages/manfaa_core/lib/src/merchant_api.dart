@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart' show visibleForTesting;
 
 import 'api_base.dart';
 import 'errors.dart';
+import 'marketplace_merchant_models.dart';
 import 'merchant_models.dart';
 import 'models.dart';
 import 'session.dart';
@@ -1379,4 +1380,130 @@ class MerchantApi extends ManfaaApiBase<MerchantSession> {
   Future<void> deletePushToken(String token) async => run(
         () => dio.delete<void>('/merchant/push-token', data: {'token': token}),
       );
+
+  // ------------------------------------------------------------ marketplace
+  //
+  // The shop's order queue and shelf (PLAN-marketplace.md §4.1, §4.2).
+  // Every route here is gated `marketplace.manage` server-side and sits
+  // behind the platform switch, so a store that does not sell online gets a
+  // 404 rather than an empty screen pretending to be one.
+
+  /// Whether this store sells on the marketplace at all.
+  ///
+  /// Read before the Orders tab is drawn: `not_enrolled` is a perfectly
+  /// ordinary answer and means the tab has no business existing.
+  Future<String> marketplaceState() async {
+    final data = await getJson('/merchant/marketplace/enrolment');
+
+    final row = (data['data'] as Map?)?.cast<String, dynamic>();
+
+    return (row?['state'] as String?) ?? 'not_enrolled';
+  }
+
+  /// One tab of the queue, plus the two tiles above it.
+  ///
+  /// `tab` is the server's vocabulary — new / preparing / ready / completed —
+  /// which maps several states onto one heading (ready covers
+  /// out_for_delivery, completed covers rejected and cancelled).
+  Future<ShopOrderPage> shopOrders({String tab = 'new'}) async {
+    final data = await run(
+      () => dio.get<Map<String, dynamic>>(
+        '/merchant/marketplace/orders',
+        queryParameters: {'tab': tab},
+      ),
+    );
+
+    return ShopOrderPage.fromJson(data ?? const {});
+  }
+
+  Future<ShopOrder> shopOrder(int suborderId) async {
+    final data = await getJson('/merchant/marketplace/orders/$suborderId');
+
+    return ShopOrder.fromJson(
+      ((data['data'] as Map?) ?? const {}).cast<String, dynamic>(),
+    );
+  }
+
+  /// Accepting says the shop can fulfil EVERY line. Editing comes after.
+  Future<ShopOrder> acceptShopOrder(int suborderId) =>
+      _orderAction('$suborderId/accept');
+
+  /// A reason is required — the customer is told it, verbatim.
+  Future<ShopOrder> rejectShopOrder(int suborderId, String reason) =>
+      _orderAction('$suborderId/reject', {'reason': reason});
+
+  /// One step along: accepted → preparing → ready → out_for_delivery →
+  /// delivered. The server decides what "next" means for this fulfilment.
+  Future<ShopOrder> advanceShopOrder(int suborderId) =>
+      _orderAction('$suborderId/advance');
+
+  /// Editing while picking (§2.7): reduce or drop lines the shelf cannot
+  /// fill. The difference refunds to the customer's wallet, and the service
+  /// charge follows it down.
+  Future<ShopOrder> amendShopOrder(
+    int suborderId, {
+    required Map<int, int> quantities,
+    required String reason,
+  }) =>
+      _orderAction('$suborderId/amend', {
+        'reason': reason,
+        'items': [
+          for (final entry in quantities.entries)
+            {'id': entry.key, 'fulfilled_qty': entry.value},
+        ],
+      });
+
+  Future<ShopOrder> _orderAction(
+    String path, [
+    Map<String, dynamic>? body,
+  ]) async {
+    final data = await run(
+      () => dio.post<Map<String, dynamic>>(
+        '/merchant/marketplace/orders/$path',
+        data: body ?? const <String, dynamic>{},
+      ),
+    );
+
+    return ShopOrder.fromJson(
+      ((data?['data'] as Map?) ?? const {}).cast<String, dynamic>(),
+    );
+  }
+
+  /// The shelf. Reading is the whole catalogue; editing from the app is
+  /// deliberately narrow (see [updateShopListing]).
+  Future<List<ShopProduct>> shopProducts() async {
+    final data = await getJson('/merchant/marketplace/products');
+
+    return ((data['data'] as List?) ?? const [])
+        .whereType<Map>()
+        .map((row) => ShopProduct.fromJson(row.cast<String, dynamic>()))
+        .toList(growable: false);
+  }
+
+  /// QUICK edits only: price, stock, visibility (§4.2).
+  ///
+  /// Everything else about a product — name, words, pictures, category —
+  /// goes through review and belongs on desktop, which the screen says out
+  /// loud rather than hiding behind a disabled field.
+  Future<void> updateShopListing(
+    int productId, {
+    required int branchId,
+    int? priceLaari,
+    int? stockQty,
+    String? state,
+  }) async {
+    await run(
+      () => dio.put<Map<String, dynamic>>(
+        '/merchant/marketplace/products/$productId/listing',
+        // Only what the caller actually changed — an omitted field means
+        // "leave it alone", never "clear it".
+        data: <String, dynamic>{
+          'branch_id': branchId,
+          'price_laari': ?priceLaari,
+          'stock_qty': ?stockQty,
+          'state': ?state,
+        },
+      ),
+    );
+  }
 }

@@ -91,19 +91,25 @@ export default function TransferSettingsPage() {
             profiles={data.profiles}
           />
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Profiles</CardTitle>
-            </CardHeader>
-            <CardContent className="flex flex-col">
-              {data.profiles.map((profile, index) => (
-                <div key={profile.id}>
-                  {index > 0 ? <Separator /> : null}
-                  <ProfileRow profile={profile} />
-                </div>
-              ))}
-            </CardContent>
-          </Card>
+          <ProfileGroup
+            title="MIB — Faisanet"
+            summary="One upstream session per profile, each holding only its own accounts. The account to debit is sent explicitly on every transfer, and history is read a page at a time."
+            calls={[
+              'POST {base}/{segment}/transfer — account, amount, internal_ref, benef_name, from_account',
+              'GET {base}/{segment}/history?account=…&page=1',
+            ]}
+            profiles={data.profiles.filter((profile) => !profile.is_bml)}
+          />
+
+          <ProfileGroup
+            title="BML"
+            summary="A different upstream entirely, not a variant of Faisanet. It picks the account by profile name rather than account number, ignores the debited account on transfers, and returns its own row shape."
+            calls={[
+              'POST {base}/bml/transfer — account, amount, internal_ref, benef_name, profile',
+              'GET {base}/bml/history?account=…&profile=…',
+            ]}
+            profiles={data.profiles.filter((profile) => profile.is_bml)}
+          />
         </>
       ) : null}
     </div>
@@ -136,7 +142,11 @@ function AutoTransferCard({
     onError: (error) => toast.error(apiErrorMessage(error)),
   });
 
-  const active = profiles.filter((profile) => profile.active);
+  // A read-only upstream cannot pay anybody, so it does not count towards
+  // "is there anything to switch this on for".
+  const active = profiles.filter(
+    (profile) => profile.active && !profile.history_only,
+  );
 
   return (
     <Card>
@@ -195,12 +205,14 @@ function AutoTransferCard({
             }
           >
             <option value="">Use the default profile</option>
-            {profiles.map((profile) => (
-              <option key={profile.id} value={profile.id}>
-                {profile.name} ({profile.segment})
-                {profile.active ? '' : ' — inactive'}
-              </option>
-            ))}
+            {profiles
+              .filter((profile) => !profile.history_only)
+              .map((profile) => (
+                <option key={profile.id} value={profile.id}>
+                  {profile.name} ({profile.segment})
+                  {profile.active ? '' : ' — inactive'}
+                </option>
+              ))}
           </select>
         </div>
 
@@ -251,7 +263,7 @@ function ProfileRow({ profile }: { profile: TransferProfile }) {
     base_url: profile.base_url,
     segment: profile.segment,
     from_account: profile.from_account ?? '',
-    bank: profile.bank ?? '',
+    upstream_profile: profile.upstream_profile ?? '',
   });
 
   useEffect(() => {
@@ -259,9 +271,14 @@ function ProfileRow({ profile }: { profile: TransferProfile }) {
       base_url: profile.base_url,
       segment: profile.segment,
       from_account: profile.from_account ?? '',
-      bank: profile.bank ?? '',
+      upstream_profile: profile.upstream_profile ?? '',
     });
-  }, [profile.base_url, profile.segment, profile.from_account, profile.bank]);
+  }, [
+    profile.base_url,
+    profile.segment,
+    profile.from_account,
+    profile.upstream_profile,
+  ]);
 
   const save = useMutation({
     mutationFn: (body: Parameters<typeof updateTransferProfile>[1]) =>
@@ -277,7 +294,7 @@ function ProfileRow({ profile }: { profile: TransferProfile }) {
     form.base_url !== profile.base_url ||
     form.segment !== profile.segment ||
     form.from_account !== (profile.from_account ?? '') ||
-    form.bank !== (profile.bank ?? '');
+    form.upstream_profile !== (profile.upstream_profile ?? '');
 
   return (
     <div className="flex flex-col gap-4 py-5">
@@ -300,6 +317,11 @@ function ProfileRow({ profile }: { profile: TransferProfile }) {
         >
           {profile.active ? 'Active' : 'Inactive'}
         </Badge>
+        {profile.history_only ? (
+          <Badge variant="secondary" appearance="light" size="sm">
+            Watch only
+          </Badge>
+        ) : null}
         <code className="ms-auto text-xs text-muted-foreground">
           {profile.endpoint}
         </code>
@@ -314,7 +336,7 @@ function ProfileRow({ profile }: { profile: TransferProfile }) {
         </p>
       ) : null}
 
-      <div className="grid gap-3 sm:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <div className="flex flex-col gap-1.5">
           <Label htmlFor={`base-${profile.id}`}>Base URL</Label>
           <Input
@@ -338,38 +360,51 @@ function ProfileRow({ profile }: { profile: TransferProfile }) {
           />
         </div>
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor={`from-${profile.id}`}>Debited account</Label>
+          <Label htmlFor={`from-${profile.id}`}>
+            {profile.is_bml ? 'Account' : 'Debited account'}
+          </Label>
           <Input
             id={`from-${profile.id}`}
             value={form.from_account}
-            placeholder="90501400021681000"
+            placeholder={profile.is_bml ? '7730000757923' : '90501400021681000'}
             onChange={(event) =>
               setForm({ ...form, from_account: event.target.value })
             }
           />
           <p className="text-xs text-muted-foreground">
-            Must be one of this profile&apos;s own accounts. Ignored on
-            /bml/transfer, which is a different upstream.
+            {profile.is_bml ? (
+              <>
+                Sent as <code>?account=</code>. The transfer call ignores it —
+                BML picks the account from the profile name — but the history
+                call needs it, and a watched account below supplies its own.
+              </>
+            ) : (
+              <>
+                Sent as <code>from_account</code> on every transfer. Must be
+                one of this profile&apos;s own accounts.
+              </>
+            )}
           </p>
         </div>
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor={`bank-${profile.id}`}>Bank</Label>
-          <select
-            id={`bank-${profile.id}`}
-            className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-            value={form.bank}
-            onChange={(event) => setForm({ ...form, bank: event.target.value })}
-          >
-            <option value="">No preference</option>
-            <option value="mib">MIB</option>
-            <option value="bml">BML</option>
-          </select>
-          <p className="text-xs text-muted-foreground">
-            A payout to a payee at this bank leaves from here rather than
-            crossing banks. Leave unset and every payout uses the batch
-            profile.
-          </p>
-        </div>
+
+        {profile.is_bml ? (
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor={`upstream-${profile.id}`}>Profile name</Label>
+            <Input
+              id={`upstream-${profile.id}`}
+              value={form.upstream_profile}
+              placeholder="CLEVIDEN"
+              onChange={(event) =>
+                setForm({ ...form, upstream_profile: event.target.value })
+              }
+            />
+            <p className="text-xs text-muted-foreground">
+              Sent as <code>?profile=</code> on every BML call. Kept separate
+              from the display name above on purpose: that one is a label you
+              can retitle, this one the bank matches on.
+            </p>
+          </div>
+        ) : null}
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
@@ -377,7 +412,11 @@ function ProfileRow({ profile }: { profile: TransferProfile }) {
           size="sm"
           disabled={!dirty || save.isPending}
           onClick={() =>
-            save.mutate({ ...form, bank: form.bank === '' ? null : (form.bank as 'mib' | 'bml') })
+            save.mutate({
+              ...form,
+              upstream_profile:
+                form.upstream_profile === '' ? null : form.upstream_profile,
+            })
           }
         >
           {save.isPending ? 'Saving…' : 'Save'}
@@ -390,7 +429,7 @@ function ProfileRow({ profile }: { profile: TransferProfile }) {
         >
           {profile.active ? 'Deactivate' : 'Activate'}
         </Button>
-        {!profile.is_default ? (
+        {!profile.is_default && !profile.history_only ? (
           <Button
             size="sm"
             variant="ghost"
@@ -556,6 +595,9 @@ function AutoVerifyCard({
                   <option key={profile.id} value={profile.id}>
                     {profile.name} ({profile.segment})
                     {profile.active ? '' : ' — inactive'}
+                    {profile.is_bml && !profile.upstream_profile
+                      ? ' — needs an upstream profile name'
+                      : ''}
                   </option>
                 ))}
               </select>
@@ -628,6 +670,59 @@ function AutoVerifyCard({
             </p>
           </div>
         </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+/**
+ * One upstream, with its own request shape stated at the top.
+ *
+ * Rendered as two separate cards rather than one list of profiles, because
+ * MIB and BML do not share a request format — same table, same screen, but
+ * not the same API, and a single list invites reading one's vocabulary onto
+ * the other (owner correction 2026-08-19).
+ */
+function ProfileGroup({
+  title,
+  summary,
+  calls,
+  profiles,
+}: {
+  title: string;
+  summary: string;
+  calls: string[];
+  profiles: TransferProfile[];
+}) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>{title}</CardTitle>
+      </CardHeader>
+      <CardContent className="flex flex-col">
+        <div className="flex flex-col gap-2 pb-4">
+          <p className="text-sm text-muted-foreground">{summary}</p>
+          <div className="flex flex-col gap-1 rounded-md bg-muted/50 p-3">
+            {calls.map((call) => (
+              <code key={call} className="text-xs text-muted-foreground">
+                {call}
+              </code>
+            ))}
+          </div>
+        </div>
+
+        {profiles.length === 0 ? (
+          <p className="py-4 text-sm text-muted-foreground">
+            No profile is configured for this upstream.
+          </p>
+        ) : (
+          profiles.map((profile, index) => (
+            <div key={profile.id}>
+              {index > 0 ? <Separator /> : null}
+              <ProfileRow profile={profile} />
+            </div>
+          ))
+        )}
       </CardContent>
     </Card>
   );

@@ -108,14 +108,14 @@ final class MarketController extends Controller
             ->firstOrFail();
 
         $listings = BranchProduct::query()
-            ->with(['product.images', 'product.category'])
+            ->with(['product.images', 'product.marketplaceCategory'])
             ->where('branch_id', $row->id)
             ->where('state', 'active')
             ->whereHas('product', fn ($query) => $query->where('archived', false))
             ->when(
                 $request->filled('category'),
                 fn ($query) => $query->whereHas(
-                    'product.category',
+                    'product.marketplaceCategory',
                     fn ($c) => $c->where('slug', $request->string('category')),
                 ),
             )
@@ -137,9 +137,13 @@ final class MarketController extends Controller
             'delivery' => DeliveryQuote::for($rule, 0)->toArray(),
             'cashback_rate_percent' => Percent::formatOrNull($standingRateBp),
             // Only the aisles this shop actually stocks — an empty category
-            // chip is a promise the shelf cannot keep.
+            // chip is a promise the shelf cannot keep. These are the SHARED
+            // marketplace aisles, never the merchant's cashback list: what a
+            // shopper browses by is a shelf label, and what a line earns is
+            // the merchant's own pricing. Showing the latter here would leak
+            // one shop's rate structure to everybody.
             'categories' => $listings
-                ->map(fn (BranchProduct $listing) => $listing->product->category)
+                ->map(fn (BranchProduct $listing) => $listing->product->marketplaceCategory)
                 ->filter()
                 ->unique('id')
                 ->sortBy('sort')
@@ -164,7 +168,7 @@ final class MarketController extends Controller
                     : Storage::disk(ProductImage::DISK)
                         ->url($listing->product->images->first()->path),
                 'in_stock' => $listing->isBuyable(),
-                'category' => $listing->product->category?->slug,
+                'category' => $listing->product->marketplaceCategory?->slug,
             ])->values(),
         ]]);
     }

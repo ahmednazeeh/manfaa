@@ -24,7 +24,18 @@ class SettlementPayment extends Model
             'matched_at' => 'immutable_datetime',
             'rejected_by' => 'integer',
             'rejected_at' => 'immutable_datetime',
+            'auto_matched' => 'boolean',
+            'matched_score' => 'integer',
+            'poll_started_at' => 'immutable_datetime',
+            'poll_until' => 'immutable_datetime',
+            'poll_attempts' => 'integer',
         ];
+    }
+
+    /** Snapshotted on the row, so it survives a settlement being rebuilt. */
+    public function merchant(): BelongsTo
+    {
+        return $this->belongsTo(Merchant::class);
     }
 
     public function settlement(): BelongsTo

@@ -35,6 +35,17 @@ export interface AppMenuItem {
   permission: MerchantPermission;
 
   /**
+   * In a `marketplaceOnly` group, shown whenever the platform has a
+   * marketplace — enrolled or not.
+   *
+   * Exactly one screen needs this and it is the important one: the way IN.
+   * Gating the application form on already being approved is a door that
+   * only opens from the inside, so a store that never applied could never
+   * find the form (owner report 2026-08-19).
+   */
+  beforeEnrolment?: boolean;
+
+  /**
    * ANY-of gate for a screen that merges several formerly separate screens
    * (Cashback settings). When set, holding any listed permission shows the
    * entry; `permission` stays the primary one for consumers that need a
@@ -154,10 +165,13 @@ export const APP_MENU: AppMenuSection[] = [
         permission: 'marketplace.manage',
       },
       {
+        // The application form, and afterwards the place a store reads how
+        // its application is going. Visible from the very first visit.
         title: 'Marketplace setup',
         path: '/marketplace/setup',
         icon: BadgeCheck,
         permission: 'marketplace.manage',
+        beforeEnrolment: true,
       },
     ],
   },
