@@ -115,6 +115,7 @@
   "browseStores": "ފިހާރަތައް ބައްލަވާ",
   "segmentEarned": "ލިބުނު",
   "segmentPaidOut": "ދެއްކުނު",
+  "segmentOrders": "އޯޑަރތައް",
   "emptyEarnedTitle": "އަދި އެއްޗެއް ނެތް",
   "emptyEarnedBody": "މަންފާ ފިހާރައަކުން ވިޔަފާރިކޮށް، ކޯޑު ފިހާރައިގައި ދައްކަވާ.",
   "emptyPaidTitle": "އަދި ޕޭއައުޓެއް ނެތް",

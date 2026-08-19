@@ -59,6 +59,12 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
         segments: [
           ButtonSegment(value: 0, label: Text(l10n.segmentEarned)),
           ButtonSegment(value: 1, label: Text(l10n.segmentPaidOut)),
+          // Orders is its OWN tab, not folded into the other two. Cashback,
+          // payouts and orders are three different questions a customer
+          // asks at three different moments, and a merged stream answered
+          // none of them well (owner decision 2026-08-19).
+          if (ref.watch(marketplaceEnabledProvider))
+            ButtonSegment(value: 2, label: Text(l10n.segmentOrders)),
         ],
         selected: {_segment},
         onSelectionChanged: (s) => setState(() => _segment = s.first),
@@ -69,25 +75,21 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // With a marketplace, Activity IS the one timeline the plan calls for
-    // (MP7) and the reference draws: orders and cashback together, because
-    // that is how a customer thinks about what they have going on. Without
-    // one there are no orders to merge, and the plain earned/paid-out
-    // segments remain exactly as they were.
-    if (ref.watch(marketplaceEnabledProvider)) {
-      return const Scaffold(
-        body: SafeArea(bottom: false, child: YourOrdersView()),
-      );
-    }
-
     final header = _header(context);
+
+    // A tab that vanished under the customer (marketplace switched off mid
+    // session) must not leave the screen on an index nothing renders.
+    final segment =
+        _segment == 2 && !ref.watch(marketplaceEnabledProvider) ? 0 : _segment;
 
     return Scaffold(
       body: SafeArea(
         bottom: false,
-        child: _segment == 0
-            ? _EarnedList(header: header)
-            : _PaidList(header: header),
+        child: switch (segment) {
+          0 => _EarnedList(header: header),
+          1 => _PaidList(header: header),
+          _ => YourOrdersView(header: header),
+        },
       ),
     );
   }

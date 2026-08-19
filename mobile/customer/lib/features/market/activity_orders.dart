@@ -6,55 +6,58 @@ import 'package:manfaa_ui/manfaa_ui.dart';
 
 import '../../app/providers.dart';
 
-/// Which slice of the timeline is showing.
+/// Which slice of the order list is showing.
 final activityTabProvider = StateProvider<String>((_) => 'active');
 
 final activityQueryProvider = StateProvider<String>((_) => '');
 
-final activityProvider = FutureProvider.autoDispose<ActivityPage>((ref) {
-  return ref.watch(apiProvider).activity(tab: ref.watch(activityTabProvider));
+/// Orders ONLY, from the orders endpoint.
+///
+/// This once read a merged activity stream — cashback, payouts and orders in
+/// one list. That was the wrong shape: they are three questions a customer
+/// asks at three different moments, and one stream answered none of them
+/// well (owner decision 2026-08-19). Activity has three tabs now, so this
+/// list has one subject.
+final customerOrdersProvider =
+    FutureProvider.autoDispose<List<CustomerOrder>>((ref) {
+  return ref.watch(apiProvider).orders();
 });
 
-/// "Your orders" — the one timeline (`Customer App Order Tracking.png`).
+/// The Orders tab of Activity (`Customer App Order Tracking.png`).
 ///
-/// Marketplace orders and cashback credits in a single stream, which is how
-/// a customer thinks about what they have going on. The distinction between
-/// the two is ours, not theirs.
-///
-/// This screen exists because an order was reachable exactly once, on the
-/// push straight after checkout, and never again — there was no list
-/// anywhere in the app.
+/// A card per order with a line per shop — because in a multi-vendor order
+/// the shops ARE the status, and one summary word would hide that two are
+/// confirmed and one is not.
 class YourOrdersView extends ConsumerWidget {
-  const YourOrdersView({super.key});
+  const YourOrdersView({super.key, this.header = const []});
+
+  /// The tab screen's shared brand header, so this list leads like its
+  /// siblings rather than starting abruptly.
+  final List<Widget> header;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final theme = Theme.of(context);
-    final page = ref.watch(activityProvider);
+    final orders = ref.watch(customerOrdersProvider);
     final tab = ref.watch(activityTabProvider);
     final query = ref.watch(activityQueryProvider).trim().toLowerCase();
 
     return RefreshIndicator(
-      onRefresh: () async => ref.invalidate(activityProvider),
+      onRefresh: () async => ref.invalidate(customerOrdersProvider),
       child: ListView(
-        padding: const EdgeInsets.fromLTRB(Gap.md, 0, Gap.md, Gap.navClearance),
+        padding: const EdgeInsets.fromLTRB(
+          Gap.lg,
+          Gap.md,
+          Gap.lg,
+          Gap.navClearance,
+        ),
         children: [
-          Text('Your orders', style: theme.textTheme.headlineMedium),
-          const SizedBox(height: Gap.xs),
-          Text(
-            'Track your marketplace and cashback orders in one place.',
-            style: theme.textTheme.bodyMedium
-                ?.copyWith(color: ManfaaColors.textMuted),
-          ),
-          const SizedBox(height: Gap.lg),
-
+          ...header,
           _Tabs(
             value: tab,
             onChanged: (next) =>
                 ref.read(activityTabProvider.notifier).state = next,
           ),
           const SizedBox(height: Gap.md),
-
           TextField(
             onChanged: (value) =>
                 ref.read(activityQueryProvider.notifier).state = value,
@@ -64,13 +67,12 @@ class YourOrdersView extends ConsumerWidget {
             ),
           ),
           const SizedBox(height: Gap.md),
-
-          page.when(
+          orders.when(
             loading: () => const Column(
               children: [
                 SkeletonBox(height: 160),
                 SizedBox(height: Gap.md),
-                SkeletonBox(height: 120),
+                SkeletonBox(height: 160),
               ],
             ),
             error: (error, _) => Padding(
@@ -78,54 +80,59 @@ class YourOrdersView extends ConsumerWidget {
               child: Text(
                 error is MobileApiException && error.message.isNotEmpty
                     ? error.message
-                    : 'That could not be loaded.',
+                    : 'Your orders could not be loaded.',
                 textAlign: TextAlign.center,
               ),
             ),
-            data: (data) => _Timeline(page: data, query: query),
+            data: (rows) => _OrderList(orders: rows, tab: tab, query: query),
           ),
-
           const SizedBox(height: Gap.md),
-          _HowItWorks(),
+          const _HowItWorks(),
         ],
       ),
     );
   }
 }
 
-class _Timeline extends StatelessWidget {
-  const _Timeline({required this.page, required this.query});
+class _OrderList extends StatelessWidget {
+  const _OrderList({
+    required this.orders,
+    required this.tab,
+    required this.query,
+  });
 
-  final ActivityPage page;
+  final List<CustomerOrder> orders;
+  final String tab;
   final String query;
+
+  /// Which tab an order belongs to. Decided here rather than by asking the
+  /// server three times — this is a customer's own orders, not a feed.
+  static bool _inTab(CustomerOrder order, String tab) => switch (tab) {
+        'completed' => order.state == 'completed',
+        'cancelled' =>
+          order.state == 'cancelled' || order.paymentState == 'refused',
+        _ => order.state != 'completed' &&
+            order.state != 'cancelled' &&
+            order.paymentState != 'refused',
+      };
 
   @override
   Widget build(BuildContext context) {
-    final entries = page.entries.where((entry) {
+    final shown = orders.where((order) {
+      if (!_inTab(order, tab)) return false;
       if (query.isEmpty) return true;
 
-      final order = entry.order;
-      if (order != null) {
-        return order.reference.toLowerCase().contains(query) ||
-            order.stores.any(
-              (store) => store.storeName.toLowerCase().contains(query),
-            );
-      }
-
-      final tx = entry.transaction;
-
-      return (tx?.reference.toLowerCase().contains(query) ?? false) ||
-          (tx?.merchantName?.toLowerCase().contains(query) ?? false);
+      return order.reference.toLowerCase().contains(query) ||
+          order.suborders
+              .any((sub) => sub.storeName.toLowerCase().contains(query));
     }).toList(growable: false);
 
-    if (entries.isEmpty) {
+    if (shown.isEmpty) {
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: Gap.huge),
         child: Center(
           child: Text(
-            query.isEmpty
-                ? 'Nothing here yet.'
-                : 'Nothing matches "$query".',
+            query.isEmpty ? 'No orders here yet.' : 'Nothing matches "$query".',
             style: const TextStyle(color: ManfaaColors.textMuted),
           ),
         ),
@@ -134,11 +141,8 @@ class _Timeline extends StatelessWidget {
 
     return Column(
       children: [
-        for (final entry in entries) ...[
-          if (entry.isOrder)
-            _OrderCard(order: entry.order!, at: entry.at)
-          else
-            _TransactionCard(transaction: entry.transaction!),
+        for (final order in shown) ...[
+          _OrderCard(order: order),
           const SizedBox(height: Gap.md),
         ],
       ],
@@ -188,6 +192,8 @@ class _Tabs extends StatelessWidget {
                   child: Text(
                     label,
                     textAlign: TextAlign.center,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: theme.textTheme.labelLarge?.copyWith(
                       color: key == value
                           ? theme.colorScheme.primary
@@ -204,15 +210,20 @@ class _Tabs extends StatelessWidget {
 }
 
 class _OrderCard extends StatelessWidget {
-  const _OrderCard({required this.order, required this.at});
+  const _OrderCard({required this.order});
 
-  final ActivityOrder order;
-  final DateTime? at;
+  final CustomerOrder order;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final pickup = order.pickupReady;
+
+    final pickup = order.suborders
+        .where((sub) =>
+            sub.fulfilment == 'pickup' &&
+            sub.state == 'ready' &&
+            (sub.pickupCode ?? '').isNotEmpty)
+        .firstOrNull;
 
     return ManfaaCard(
       child: Column(
@@ -235,22 +246,29 @@ class _OrderCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('#${order.reference}',
-                        style: theme.textTheme.titleMedium),
-                    if (at != null)
+                    Text(
+                      '#${order.reference}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.titleMedium,
+                    ),
+                    if (_placed(order) != null)
                       Text(
-                        _when(at!),
+                        _when(_placed(order)!),
                         style: theme.textTheme.bodySmall
                             ?.copyWith(color: ManfaaColors.textMuted),
                       ),
                   ],
                 ),
               ),
+              const SizedBox(width: Gap.sm),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
                     formatRufiyaa(order.totalPayableLaari),
+                    maxLines: 1,
                     style: theme.textTheme.titleMedium,
                   ),
                   const SizedBox(height: 2),
@@ -262,7 +280,6 @@ class _OrderCard extends StatelessWidget {
               ),
             ],
           ),
-
           if (order.storeCount > 1) ...[
             const SizedBox(height: Gap.md),
             Text(
@@ -271,24 +288,26 @@ class _OrderCard extends StatelessWidget {
             ),
           ],
           const SizedBox(height: Gap.sm),
-
-          // A line per shop: in a multi-vendor order the shops ARE the
-          // status, and one summary word would hide that two are confirmed
-          // and one is not.
-          for (final store in order.stores)
+          for (final sub in order.suborders)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 3),
               child: Row(
                 children: [
-                  Expanded(child: Text(store.storeName)),
+                  Expanded(
+                    child: Text(
+                      sub.storeName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  const SizedBox(width: Gap.sm),
                   StatusChip(
-                    label: storeStateLabel(store.state),
-                    tone: storeStateTone(store.state),
+                    label: storeStateLabel(sub.state),
+                    tone: storeStateTone(sub.state),
                   ),
                 ],
               ),
             ),
-
           const SizedBox(height: Gap.md),
           Container(
             width: double.infinity,
@@ -310,6 +329,7 @@ class _OrderCard extends StatelessWidget {
                           style: theme.textTheme.bodySmall),
                       Text(
                         formatRufiyaa(order.cashbackTotalLaari),
+                        maxLines: 1,
                         style: theme.textTheme.titleMedium
                             ?.copyWith(color: ManfaaColors.green),
                       ),
@@ -319,133 +339,49 @@ class _OrderCard extends StatelessWidget {
                 if (pickup != null)
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.end,
+                    mainAxisSize: MainAxisSize.min,
                     children: [
                       Text('Pickup code', style: theme.textTheme.bodySmall),
-                      Text(
-                        pickup.pickupCode!,
-                        style: theme.textTheme.titleMedium,
-                      ),
+                      Text(pickup.pickupCode!,
+                          style: theme.textTheme.titleMedium),
                     ],
                   ),
               ],
             ),
           ),
-
           const SizedBox(height: Gap.md),
-          Row(
-            children: [
-              Expanded(
-                child: FilledButton.icon(
-                  onPressed: () => context.push('/market/orders/${order.id}'),
-                  icon: const Icon(Icons.local_shipping_outlined, size: 18),
-                  label: const Text('Track order'),
-                ),
-              ),
-              const SizedBox(width: Gap.md),
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: () => context.push('/market/orders/${order.id}'),
-                  child: const Text('View details'),
-                ),
-              ),
-            ],
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: () => context.push('/market/orders/${order.id}'),
+              icon: const Icon(Icons.local_shipping_outlined, size: 18),
+              label: const Text('Track order'),
+            ),
           ),
         ],
       ),
     );
   }
+
+  /// The model carries the wire string; parsing belongs here rather than in
+  /// a model that other screens read raw.
+  static DateTime? _placed(CustomerOrder order) =>
+      order.placedAt == null ? null : DateTime.tryParse(order.placedAt!);
 
   static String _when(DateTime at) {
     final now = DateTime.now();
     final sameDay =
         at.year == now.year && at.month == now.month && at.day == now.day;
-    final time =
-        '${at.hour.toString().padLeft(2, '0')}:${at.minute.toString().padLeft(2, '0')}';
+    final time = '${at.hour.toString().padLeft(2, '0')}:'
+        '${at.minute.toString().padLeft(2, '0')}';
 
     return sameDay ? 'Today, $time' : '${at.day}/${at.month}/${at.year}';
   }
 }
 
-class _TransactionCard extends StatelessWidget {
-  const _TransactionCard({required this.transaction});
-
-  final ActivityTransaction transaction;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final paid = transaction.state == 'paid';
-
-    return ManfaaCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(transaction.merchantName ?? 'Cashback',
-                        style: theme.textTheme.titleMedium),
-                    Text(
-                      '#${transaction.reference}',
-                      style: theme.textTheme.bodySmall
-                          ?.copyWith(color: ManfaaColors.textMuted),
-                    ),
-                  ],
-                ),
-              ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text(
-                    formatRufiyaa(transaction.amountLaari),
-                    style: theme.textTheme.titleMedium,
-                  ),
-                  const SizedBox(height: 2),
-                  StatusChip(
-                    label: paid ? 'Paid out' : 'Earned',
-                    tone: paid ? StatusTone.paid : StatusTone.confirmed,
-                  ),
-                ],
-              ),
-            ],
-          ),
-          if (paid) ...[
-            const SizedBox(height: Gap.sm),
-            Row(
-              children: [
-                const Icon(Icons.check_circle_rounded,
-                    size: 16, color: ManfaaColors.green),
-                const SizedBox(width: Gap.sm),
-                Text(
-                  'Cashback sent to your payout account',
-                  style: theme.textTheme.bodySmall,
-                ),
-              ],
-            ),
-          ],
-          const SizedBox(height: Gap.sm),
-          Row(
-            children: [
-              Text('Cashback earned', style: theme.textTheme.bodySmall),
-              const Spacer(),
-              Text(
-                formatRufiyaa(transaction.cashbackLaari),
-                style: theme.textTheme.titleMedium
-                    ?.copyWith(color: ManfaaColors.green),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _HowItWorks extends StatelessWidget {
+  const _HowItWorks();
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -481,7 +417,7 @@ class _HowItWorks extends StatelessWidget {
   }
 }
 
-String orderStateLabel(ActivityOrder order) {
+String orderStateLabel(CustomerOrder order) {
   if (order.paymentState == 'proof_submitted') return 'Under review';
   if (order.paymentState == 'refused') return 'Payment refused';
 
@@ -495,7 +431,7 @@ String orderStateLabel(ActivityOrder order) {
   };
 }
 
-StatusTone orderStateTone(ActivityOrder order) {
+StatusTone orderStateTone(CustomerOrder order) {
   if (order.paymentState == 'refused') return StatusTone.closed;
   if (order.state == 'completed') return StatusTone.confirmed;
   if (order.state == 'cancelled') return StatusTone.closed;

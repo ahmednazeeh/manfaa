@@ -115,6 +115,7 @@
   "browseStores": "Browse stores",
   "segmentEarned": "Earned",
   "segmentPaidOut": "Paid out",
+  "segmentOrders": "Orders",
   "emptyEarnedTitle": "Nothing here yet",
   "emptyEarnedBody": "Shop at a Manfaa store and show your code at the till.",
   "emptyPaidTitle": "No payouts yet",

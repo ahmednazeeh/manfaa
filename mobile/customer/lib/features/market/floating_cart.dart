@@ -8,20 +8,22 @@ import 'market_providers.dart';
 
 /// The floating basket bar (`Market View.png`).
 ///
-/// A dark slab that rides above the nav bar and answers three questions
-/// without a tap: what is in the basket, what it earns, and — when a shop
-/// sets a minimum — how far off it is. That last part is the whole reason
-/// the bar carries a progress track: "MVR 66 to minimum" is actionable in a
-/// way a bare total is not.
+/// A dark slab above the nav bar answering three questions without a tap:
+/// what is in the basket, what it earns, and how far off a shop's minimum
+/// it is.
 ///
-/// Hidden entirely when the basket is empty. A control that does nothing is
-/// worse than no control.
+/// LAYOUT NOTE, learned the hard way. This was one row — badge, text,
+/// progress track, button — and on a narrow phone the fixed-width children
+/// took everything, leaving the text an [Expanded] a few pixels wide that
+/// wrapped ONE LETTER PER LINE. The progress track now lives on its own
+/// line beneath, so the text column always has the row to itself minus a
+/// badge and a button. [FloatingCartBar] is split out from the provider
+/// wiring precisely so this can be measured in a test rather than eyeballed.
 class FloatingCart extends ConsumerWidget {
   const FloatingCart({super.key, this.branchId});
 
-  /// When set, the bar speaks for ONE shop's subcart — its items, its
-  /// earnings, its minimum. On the market list it speaks for the whole
-  /// basket instead.
+  /// When set, the bar speaks for ONE shop's subcart. On the market list it
+  /// speaks for the whole basket.
   final int? branchId;
 
   @override
@@ -45,9 +47,39 @@ class FloatingCart extends ConsumerWidget {
           )
         : subcart.items.fold<int>(0, (n, i) => n + i.qty);
 
-    final total = subcart?.itemsLaari ?? cart.itemsLaari;
-    final earn = subcart?.cashbackLaari ?? cart.cashbackLaari;
-    final terms = subcart?.delivery;
+    return FloatingCartBar(
+      count: count,
+      totalLaari: subcart?.itemsLaari ?? cart.itemsLaari,
+      earnLaari: subcart?.cashbackLaari ?? cart.cashbackLaari,
+      terms: subcart?.delivery,
+      onTap: () => context.push('/market/cart'),
+    );
+  }
+}
+
+/// The bar itself, free of providers so its layout can be tested directly.
+class FloatingCartBar extends StatelessWidget {
+  const FloatingCartBar({
+    super.key,
+    required this.count,
+    required this.totalLaari,
+    required this.earnLaari,
+    required this.onTap,
+    this.terms,
+  });
+
+  final int count;
+  final int totalLaari;
+  final int earnLaari;
+  final DeliveryTerms? terms;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final short = terms != null &&
+        !terms!.minimumMet &&
+        terms!.shortfallLaari > 0 &&
+        (terms!.orderMinimumLaari ?? 0) > 0;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(Gap.md, 0, Gap.md, Gap.md),
@@ -56,63 +88,78 @@ class FloatingCart extends ConsumerWidget {
         borderRadius: BorderRadius.circular(Corner.card),
         child: InkWell(
           borderRadius: BorderRadius.circular(Corner.card),
-          onTap: () => context.push('/market/cart'),
+          onTap: onTap,
           child: Padding(
             padding: const EdgeInsets.all(Gap.md),
-            child: Row(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                _Badge(count: count),
-                const SizedBox(width: Gap.md),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        '$count ${count == 1 ? 'item' : 'items'} · '
-                        '${formatRufiyaa(total)}',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w600,
-                        ),
+                Row(
+                  children: [
+                    _Badge(count: count),
+                    const SizedBox(width: Gap.md),
+                    // The ONLY flexible child on this row, so it can never
+                    // be squeezed by a sibling that sizes itself.
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            '$count ${count == 1 ? 'item' : 'items'} · '
+                            '${formatRufiyaa(totalLaari)}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          Text(
+                            'Earn ${formatRufiyaa(earnLaari)}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: ManfaaColors.green,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ],
                       ),
-                      Text(
-                        'Earn ${formatRufiyaa(earn)}',
-                        style: const TextStyle(
-                          color: ManfaaColors.green,
-                          fontSize: 13,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                // Dropped on a narrow screen rather than overflowing: the
-                // basket total and the way to the cart matter more than the
-                // progress track, and a RenderFlex overflow helps nobody.
-                if (terms != null &&
-                    !terms.minimumMet &&
-                    terms.shortfallLaari > 0 &&
-                    MediaQuery.sizeOf(context).width >= 380)
-                  _Shortfall(terms: terms, total: total),
-                const SizedBox(width: Gap.sm),
-                FilledButton(
-                  style: FilledButton.styleFrom(
-                    backgroundColor: ManfaaColors.coral,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: Gap.md,
-                      vertical: Gap.md,
                     ),
-                  ),
-                  onPressed: () => context.push('/market/cart'),
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text('View Cart'),
-                      SizedBox(width: 4),
-                      Icon(Icons.chevron_right_rounded, size: 18),
-                    ],
-                  ),
+                    const SizedBox(width: Gap.sm),
+                    // FIXED width, for two reasons. A Row measures its
+                    // non-flexible children with an UNBOUNDED main axis, and
+                    // a button whose maximumSize is infinite passes that
+                    // straight down to its Material, which asserts. And a
+                    // fixed button makes the text column's share of the row
+                    // deterministic instead of whatever is left over.
+                    SizedBox(
+                      width: 104,
+                      child: FilledButton(
+                        style: FilledButton.styleFrom(
+                          backgroundColor: ManfaaColors.coral,
+                          foregroundColor: Colors.white,
+                          padding: EdgeInsets.zero,
+                          visualDensity: VisualDensity.compact,
+                        ),
+                        onPressed: onTap,
+                        child: const Text(
+                          'View Cart',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
+
+                // Its own line, full width. As a sibling on the row above it
+                // was what starved the text.
+                if (short) ...[
+                  const SizedBox(height: Gap.sm),
+                  _Shortfall(terms: terms!, total: totalLaari),
+                ],
               ],
             ),
           ),
@@ -132,10 +179,10 @@ class _Badge extends StatelessWidget {
     return Stack(
       clipBehavior: Clip.none,
       children: [
-        const Icon(Icons.shopping_cart_outlined, color: Colors.white, size: 28),
+        const Icon(Icons.shopping_cart_outlined, color: Colors.white, size: 26),
         Positioned(
-          right: -6,
-          top: -6,
+          right: -4,
+          top: -4,
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
             decoration: const BoxDecoration(
@@ -153,7 +200,7 @@ class _Badge extends StatelessWidget {
   }
 }
 
-/// How far from this shop's free-delivery minimum, with a track that fills.
+/// How far from this shop's minimum, with a track that fills.
 class _Shortfall extends StatelessWidget {
   const _Shortfall({required this.terms, required this.total});
 
@@ -165,28 +212,27 @@ class _Shortfall extends StatelessWidget {
     final minimum = terms.orderMinimumLaari ?? 0;
     final progress = minimum == 0 ? 1.0 : (total / minimum).clamp(0.0, 1.0);
 
-    return SizedBox(
-      width: 120,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            '${formatRufiyaa(terms.shortfallLaari)} to minimum',
-            style: const TextStyle(color: Colors.white70, fontSize: 12),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          '${formatRufiyaa(terms.shortfallLaari)} to minimum',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(color: Colors.white70, fontSize: 12),
+        ),
+        const SizedBox(height: 4),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(999),
+          child: LinearProgressIndicator(
+            value: progress,
+            minHeight: 5,
+            backgroundColor: Colors.white24,
+            valueColor: const AlwaysStoppedAnimation(ManfaaColors.green),
           ),
-          const SizedBox(height: 4),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(999),
-            child: LinearProgressIndicator(
-              value: progress,
-              minHeight: 5,
-              backgroundColor: Colors.white24,
-              valueColor: const AlwaysStoppedAnimation(ManfaaColors.green),
-            ),
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
