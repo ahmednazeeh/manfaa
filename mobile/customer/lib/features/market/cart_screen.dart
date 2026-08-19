@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:manfaa_core/manfaa_core.dart';
 import 'package:manfaa_ui/manfaa_ui.dart';
 
@@ -555,7 +556,9 @@ class _CheckoutBarState extends ConsumerState<_CheckoutBar> {
                 const SizedBox(width: Gap.md),
                 Expanded(
                   child: FilledButton(
-                    onPressed: cart.canCheckout ? () {} : null,
+                    onPressed: cart.canCheckout
+                        ? () => context.push('/market/checkout')
+                        : null,
                     style: FilledButton.styleFrom(
                       backgroundColor: ManfaaColors.violet,
                       padding: const EdgeInsets.symmetric(vertical: Gap.md),

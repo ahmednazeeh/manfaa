@@ -427,5 +427,64 @@
   "cartSeparateOrdersHint": "Each store will fulfil your order separately.",
   "cartNeedsAddress": "Choose a delivery address to see delivery fees.",
   "fulfilmentDelivery": "Delivery",
-  "fulfilmentPickup": "Pickup"
+  "fulfilmentPickup": "Pickup",
+  "checkoutTitle": "Checkout",
+  "stepAddress": "Address",
+  "stepPayment": "Payment",
+  "next": "Next",
+  "placeOrder": "Place order",
+  "savedAddresses": "Saved addresses",
+  "noAddresses": "No delivery address yet",
+  "noAddressesHint": "Add one so stores can quote delivery to you.",
+  "addAddress": "Add an address",
+  "addressNotServed": "No store delivers here yet — collection only.",
+  "orderSummary": "Order summary",
+  "cashbackAfterValidation": "Cashback after the store validates",
+  "paymentMethod": "Payment method",
+  "transferExactly": "Transfer exactly",
+  "accountName": "Account name",
+  "accountNumber": "Account number",
+  "receiptFirstNote": "Transfer the exact amount, then upload your receipt. Your order is confirmed once Manfaa verifies the payment.",
+  "orderReceived": "Order received",
+  "orderUnderReview": "We are reviewing your payment. Each store confirms your order separately.",
+  "uploadReceipt": "Upload receipt",
+  "receiptUploaded": "Receipt uploaded — we are checking it now.",
+  "trackOrder": "Track order",
+  "ordersTitle": "Your orders",
+  "orderStores": "{count} stores in this order",
+  "@orderStores": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "pickupCode": "Pickup code",
+  "orderRefunded": "{store} changed this order. {amount} refunded to your wallet.",
+  "@orderRefunded": {
+    "placeholders": {
+      "store": {
+        "type": "String"
+      },
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "walletTitle": "Wallet",
+  "walletBalance": "Wallet balance",
+  "walletWithdraw": "Withdraw to bank",
+  "walletNoBank": "Add your bank account before withdrawing.",
+  "walletMinimum": "The smallest withdrawal is {amount}.",
+  "@walletMinimum": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "walletEmpty": "Nothing in your wallet yet. Refunds appear here straight away.",
+  "walletHistory": "Wallet history",
+  "walletWithdrawals": "Withdrawals",
+  "withdrawalRequested": "Withdrawal requested. We will transfer it to your bank."
 }

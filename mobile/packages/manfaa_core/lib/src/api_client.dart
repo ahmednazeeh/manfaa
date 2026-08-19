@@ -6,6 +6,7 @@ import 'api_base.dart';
 import 'cart_models.dart';
 import 'market_models.dart';
 import 'models.dart';
+import 'order_models.dart';
 import 'session.dart';
 
 /// The customer app's client for /api/mobile/v1.
@@ -141,6 +142,131 @@ class ManfaaApi extends ManfaaApiBase<CustomerSession> {
     final data = await run(call);
 
     return Cart.fromJson((data?['data'] as Map?)?.cast<String, dynamic>() ?? {});
+  }
+
+  // -------------------------------------------------- orders and the wallet
+
+  /// Where to send the money for a marketplace order.
+  Future<List<Map<String, dynamic>>> paymentAccounts() async {
+    final data = await run(
+      () => dio.get<Map<String, dynamic>>('/customer/payment-accounts'),
+    );
+
+    return ((data?['data'] as List?) ?? const [])
+        .map((row) => (row as Map).cast<String, dynamic>())
+        .toList(growable: false);
+  }
+
+  /// Place the order. Refusals name the shop that is blocking it.
+  Future<CustomerOrder> placeOrder({
+    required String paymentMethod,
+    int? addressId,
+  }) async {
+    final data = await run(
+      () => dio.post<Map<String, dynamic>>('/customer/orders', data: {
+        'payment_method': paymentMethod,
+        'address_id': ?addressId,
+      }),
+    );
+
+    return CustomerOrder.fromJson(
+      (data?['data'] as Map?)?.cast<String, dynamic>() ?? {},
+    );
+  }
+
+  /// The transfer receipt. Until it lands, nothing is confirmed.
+  Future<CustomerOrder> uploadOrderReceipt(
+    int orderId, {
+    required Uint8List bytes,
+    required String filename,
+  }) async {
+    final data = await run(
+      () => dio.post<Map<String, dynamic>>(
+        '/customer/orders/$orderId/receipt',
+        data: FormData.fromMap({
+          'receipt': MultipartFile.fromBytes(bytes, filename: filename),
+        }),
+      ),
+    );
+
+    return CustomerOrder.fromJson(
+      (data?['data'] as Map?)?.cast<String, dynamic>() ?? {},
+    );
+  }
+
+  Future<List<CustomerOrder>> orders() async {
+    final data = await run(
+      () => dio.get<Map<String, dynamic>>('/customer/orders'),
+    );
+
+    return ((data?['data'] as List?) ?? const [])
+        .map((row) => CustomerOrder.fromJson((row as Map).cast<String, dynamic>()))
+        .toList(growable: false);
+  }
+
+  Future<CustomerOrder> order(int id) async {
+    final data = await run(
+      () => dio.get<Map<String, dynamic>>('/customer/orders/$id'),
+    );
+
+    return CustomerOrder.fromJson(
+      (data?['data'] as Map?)?.cast<String, dynamic>() ?? {},
+    );
+  }
+
+  // ------------------------------------------------------------- addresses
+
+  Future<List<CustomerAddressEntry>> addresses() async {
+    final data = await run(
+      () => dio.get<Map<String, dynamic>>('/customer/addresses'),
+    );
+
+    return ((data?['data'] as List?) ?? const [])
+        .map((row) =>
+            CustomerAddressEntry.fromJson((row as Map).cast<String, dynamic>()))
+        .toList(growable: false);
+  }
+
+  Future<CustomerAddressEntry> saveAddress(
+    Map<String, dynamic> body, {
+    int? id,
+  }) async {
+    final data = await run(
+      () => id == null
+          ? dio.post<Map<String, dynamic>>('/customer/addresses', data: body)
+          : dio.patch<Map<String, dynamic>>('/customer/addresses/$id', data: body),
+    );
+
+    return CustomerAddressEntry.fromJson(
+      (data?['data'] as Map?)?.cast<String, dynamic>() ?? {},
+    );
+  }
+
+  Future<void> deleteAddress(int id) async {
+    await run(() => dio.delete<Map<String, dynamic>>('/customer/addresses/$id'));
+  }
+
+  // ---------------------------------------------------------------- wallet
+
+  /// A REAL balance, distinct from the derived cashback figure. Refunds land
+  /// here instantly, and it is always withdrawable.
+  Future<WalletState> wallet() async {
+    final data = await run(
+      () => dio.get<Map<String, dynamic>>('/customer/wallet'),
+    );
+
+    return WalletState.fromJson(
+      (data?['data'] as Map?)?.cast<String, dynamic>() ?? {},
+    );
+  }
+
+  Future<void> requestWithdrawal(int amountLaari) async {
+    await run(
+      () => dio.post<Map<String, dynamic>>(
+        '/customer/wallet/withdrawals',
+        data: {'amount_laari': amountLaari},
+      ),
+    );
   }
 
   /// The islands the location picker offers (admin-drawn zones).

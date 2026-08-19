@@ -19,3 +19,4 @@ export 'src/session.dart';
 export 'src/settlement_models.dart';
 export 'src/market_models.dart';
 export 'src/cart_models.dart';
+export 'src/order_models.dart';

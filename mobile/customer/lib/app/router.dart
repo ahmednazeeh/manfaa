@@ -11,6 +11,9 @@ import '../features/discover/search_screen.dart';
 import '../features/discover/store_screen.dart';
 import '../features/home/home_screen.dart';
 import '../features/market/cart_screen.dart';
+import '../features/market/checkout_screen.dart';
+import '../features/market/order_screen.dart';
+import '../features/market/wallet_screen.dart';
 import '../features/market/market_screen.dart';
 import '../features/market/store_screen.dart';
 import '../features/home/qr_screen.dart';
@@ -100,6 +103,20 @@ final routerProvider = Provider<GoRouter>((ref) {
                 GoRoute(
                   path: 'cart',
                   builder: (_, _) => const CartScreen(),
+                ),
+                GoRoute(
+                  path: 'checkout',
+                  builder: (_, _) => const CheckoutScreen(),
+                ),
+                GoRoute(
+                  path: 'wallet',
+                  builder: (_, _) => const WalletScreen(),
+                ),
+                GoRoute(
+                  path: 'orders/:id',
+                  builder: (_, state) => OrderScreen(
+                    orderId: int.tryParse(state.pathParameters['id'] ?? '') ?? 0,
+                  ),
                 ),
                 GoRoute(
                   path: ':branchId',
