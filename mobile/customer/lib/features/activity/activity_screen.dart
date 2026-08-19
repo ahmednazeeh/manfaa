@@ -6,6 +6,8 @@ import 'package:manfaa_ui/manfaa_ui.dart';
 
 import '../../app/app.dart';
 import '../../app/providers.dart';
+import '../market/activity_orders.dart';
+import '../market/market_providers.dart';
 import '../home/home_screen.dart' show initialsFor;
 import 'paged.dart';
 
@@ -67,6 +69,17 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // With a marketplace, Activity IS the one timeline the plan calls for
+    // (MP7) and the reference draws: orders and cashback together, because
+    // that is how a customer thinks about what they have going on. Without
+    // one there are no orders to merge, and the plain earned/paid-out
+    // segments remain exactly as they were.
+    if (ref.watch(marketplaceEnabledProvider)) {
+      return const Scaffold(
+        body: SafeArea(bottom: false, child: YourOrdersView()),
+      );
+    }
+
     final header = _header(context);
 
     return Scaffold(

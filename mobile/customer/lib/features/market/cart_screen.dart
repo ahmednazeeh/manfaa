@@ -4,320 +4,407 @@ import 'package:go_router/go_router.dart';
 import 'package:manfaa_core/manfaa_core.dart';
 import 'package:manfaa_ui/manfaa_ui.dart';
 
-import '../../app/app.dart';
 import 'market_providers.dart';
 
-/// The multi-vendor cart (`Cart Page Collapsible By Merchant.png`,
-/// `Cart Page Expanded.png`).
+/// The basket, drawn to `Cart Page Collapsible By Merchant.png`.
 ///
-/// Owner decisions this screen exists to honour, all three visible at once:
-/// each shop's card is **collapsed by default**, a shop short of its minimum
-/// carries a **warning saying how short**, and the order summary at the
-/// bottom **expands**.
-class CartScreen extends ConsumerWidget {
+/// A basket spanning three shops is three separate orders, and the screen is
+/// built to make that legible rather than to hide it: one card per shop,
+/// each carrying its own fulfilment, its own delivery fee, its own minimum
+/// and its own cashback. The footer totals them and says plainly how many
+/// orders the Checkout button is about to create.
+///
+/// Sections are COLLAPSED by default (owner decision): a shopper with three
+/// shops in the basket wants to see the shape of it first, not scroll past
+/// twenty lines to reach the total.
+class CartScreen extends ConsumerStatefulWidget {
   const CartScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final l10n = context.l10n;
+  ConsumerState<CartScreen> createState() => _CartScreenState();
+}
+
+class _CartScreenState extends ConsumerState<CartScreen> {
+  final Set<int> _open = {};
+  bool _editing = false;
+
+  @override
+  Widget build(BuildContext context) {
     final cart = ref.watch(cartProvider);
 
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          cart.valueOrNull == null || cart.valueOrNull!.storeCount == 0
-              ? l10n.cartTitle
-              : l10n.cartTitleWithStores(cart.valueOrNull!.storeCount),
+          cart.valueOrNull == null
+              ? 'My Cart'
+              : 'My Cart (${cart.value!.storeCount} '
+                  '${cart.value!.storeCount == 1 ? 'store' : 'stores'})',
         ),
         actions: [
-          if ((cart.valueOrNull?.storeCount ?? 0) > 0)
+          if ((cart.valueOrNull?.subcarts.isNotEmpty ?? false))
             TextButton(
-              onPressed: () => ref.read(cartProvider.notifier).clear(),
-              child: Text(l10n.cartClear),
+              onPressed: () => setState(() => _editing = !_editing),
+              child: Text(_editing ? 'Done' : 'Edit Cart'),
             ),
         ],
       ),
-      body: SafeArea(
-        child: cart.when(
-          loading: () => const Padding(
-            padding: EdgeInsets.all(Gap.lg),
-            child: Column(children: [
-              SkeletonBox(height: 90, radius: Corner.card),
-              SizedBox(height: Gap.md),
-              SkeletonBox(height: 90, radius: Corner.card),
-            ]),
-          ),
-          error: (error, _) => Center(
-            child: Padding(
-              padding: const EdgeInsets.all(Gap.huge),
-              child: Text(
-                error is MobileApiException ? error.message : l10n.errorGeneric,
-                textAlign: TextAlign.center,
+      body: cart.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (error, _) => Center(child: Text(error.toString())),
+        data: (data) => data.subcarts.isEmpty
+            ? const _Empty()
+            : ListView(
+                padding: const EdgeInsets.fromLTRB(
+                  Gap.md,
+                  Gap.md,
+                  Gap.md,
+                  Gap.huge,
+                ),
+                children: [
+                  _EarnHero(laari: data.cashbackLaari),
+                  const SizedBox(height: Gap.md),
+                  for (final subcart in data.subcarts) ...[
+                    _StoreSection(
+                      subcart: subcart,
+                      open: _open.contains(subcart.branchId),
+                      editing: _editing,
+                      onToggle: () => setState(() {
+                        _open.contains(subcart.branchId)
+                            ? _open.remove(subcart.branchId)
+                            : _open.add(subcart.branchId);
+                      }),
+                    ),
+                    const SizedBox(height: Gap.md),
+                  ],
+                  if (data.storeCount > 1) const _SeparateOrdersNote(),
+                ],
               ),
-            ),
-          ),
-          data: (data) => data.isEmpty ? _Empty() : _Basket(cart: data),
-        ),
       ),
-      bottomNavigationBar: cart.valueOrNull == null || cart.valueOrNull!.isEmpty
+      bottomNavigationBar: cart.valueOrNull == null ||
+              cart.value!.subcarts.isEmpty
           ? null
           : _CheckoutBar(cart: cart.value!),
     );
   }
 }
 
-class _Basket extends StatelessWidget {
-  const _Basket({required this.cart});
-
-  final Cart cart;
+class _Empty extends StatelessWidget {
+  const _Empty();
 
   @override
   Widget build(BuildContext context) {
-    final l10n = context.l10n;
-    final theme = Theme.of(context);
-
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(Gap.lg, Gap.md, Gap.lg, Gap.xl),
-      children: [
-        // What they will earn, at the top — the reason they are here.
-        if (cart.cashbackLaari > 0)
-          Container(
-            padding: const EdgeInsets.all(Gap.lg),
-            decoration: BoxDecoration(
-              color: ManfaaColors.greenSoft,
-              borderRadius: BorderRadius.circular(Corner.card),
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(Gap.xl),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.shopping_cart_outlined,
+                size: 48, color: ManfaaColors.textFaint),
+            const SizedBox(height: Gap.md),
+            Text('Your basket is empty',
+                style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: Gap.sm),
+            FilledButton(
+              onPressed: () => context.go('/market'),
+              child: const Text('Browse shops'),
             ),
-            child: Row(
-              children: [
-                IconTile(Icons.savings_outlined,
-                    tint: ManfaaTint.green, size: 40, iconSize: 20),
-                const SizedBox(width: Gap.md),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(l10n.cartYouWillEarn,
-                          style: theme.textTheme.bodySmall),
-                      MoneyText(
-                        cart.cashbackLaari,
-                        style: theme.textTheme.titleLarge?.copyWith(
-                          color: ManfaaColors.green,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        const SizedBox(height: Gap.md),
-        for (final subcart in cart.subcarts) ...[
-          SubcartCard(subcart: subcart),
-          const SizedBox(height: Gap.md),
-        ],
-        // Said plainly, because it surprises people the first time.
-        if (cart.storeCount > 1)
-          ManfaaCard(
-            child: Row(
-              children: [
-                IconTile(Icons.local_shipping_outlined,
-                    tint: ManfaaTint.blue, size: 40, iconSize: 20),
-                const SizedBox(width: Gap.md),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(l10n.cartSeparateOrders,
-                          style: theme.textTheme.titleSmall),
-                      Text(
-                        l10n.cartSeparateOrdersHint,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        if (cart.needsAddress) ...[
-          const SizedBox(height: Gap.md),
-          Text(
-            l10n.cartNeedsAddress,
-            style: theme.textTheme.bodySmall?.copyWith(color: ManfaaColors.amber),
-          ),
-        ],
-      ],
+          ],
+        ),
+      ),
     );
   }
 }
 
-/// One shop's card. **Collapsed by default** (owner decision): the header
-/// alone answers "what am I buying here and does it qualify", and only
-/// someone changing quantities needs the lines.
-class SubcartCard extends ConsumerStatefulWidget {
-  const SubcartCard({super.key, required this.subcart});
+/// What the whole basket earns, at the top where it can be seen before any
+/// scrolling.
+class _EarnHero extends StatelessWidget {
+  const _EarnHero({required this.laari});
 
-  final Subcart subcart;
-
-  @override
-  ConsumerState<SubcartCard> createState() => _SubcartCardState();
-}
-
-class _SubcartCardState extends ConsumerState<SubcartCard> {
-  bool _open = false;
+  final int laari;
 
   @override
   Widget build(BuildContext context) {
-    final l10n = context.l10n;
     final theme = Theme.of(context);
-    final muted = theme.colorScheme.onSurfaceVariant;
-    final dhivehi = Localizations.localeOf(context).languageCode == 'dv';
-    final subcart = widget.subcart;
-    final delivery = subcart.delivery;
-    final short = !delivery.minimumMet;
+
+    return Container(
+      padding: const EdgeInsets.all(Gap.md),
+      decoration: BoxDecoration(
+        color: ManfaaColors.greenSoft,
+        borderRadius: BorderRadius.circular(Corner.card),
+      ),
+      child: Row(
+        children: [
+          const CircleAvatar(
+            backgroundColor: Colors.white,
+            child: Icon(Icons.account_balance_wallet_outlined,
+                color: ManfaaColors.green),
+          ),
+          const SizedBox(width: Gap.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text("You'll earn", style: theme.textTheme.bodySmall),
+                Text.rich(
+                  TextSpan(
+                    children: [
+                      TextSpan(
+                        text: formatRufiyaa(laari),
+                        style: theme.textTheme.titleLarge
+                            ?.copyWith(color: ManfaaColors.green),
+                      ),
+                      const TextSpan(text: '  cashback'),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// One shop's half of the basket.
+class _StoreSection extends ConsumerWidget {
+  const _StoreSection({
+    required this.subcart,
+    required this.open,
+    required this.editing,
+    required this.onToggle,
+  });
+
+  final Subcart subcart;
+  final bool open;
+  final bool editing;
+  final VoidCallback onToggle;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final terms = subcart.delivery;
+    final count = subcart.items.fold<int>(0, (sum, item) => sum + item.qty);
 
     return ManfaaCard(
       padding: EdgeInsets.zero,
       child: Column(
         children: [
           InkWell(
+            onTap: onToggle,
             borderRadius: BorderRadius.circular(Corner.card),
-            onTap: () => setState(() => _open = !_open),
             child: Padding(
-              padding: const EdgeInsets.all(Gap.lg),
-              child: Column(
+              padding: const EdgeInsets.all(Gap.md),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    children: [
-                      IconTile(Icons.storefront_rounded,
-                          tint: ManfaaTint.violet, size: 40, iconSize: 20),
-                      const SizedBox(width: Gap.md),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                  Container(
+                    padding: const EdgeInsets.all(Gap.sm),
+                    decoration: BoxDecoration(
+                      color: ManfaaColors.greenSoft,
+                      borderRadius: BorderRadius.circular(Corner.tile),
+                    ),
+                    child: const Icon(Icons.storefront_rounded,
+                        color: ManfaaColors.green),
+                  ),
+                  const SizedBox(width: Gap.md),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(subcart.storeName,
+                            style: theme.textTheme.titleMedium),
+                        const SizedBox(height: 4),
+                        Wrap(
+                          spacing: Gap.sm,
+                          crossAxisAlignment: WrapCrossAlignment.center,
                           children: [
-                            Text(subcart.title,
-                                style: theme.textTheme.titleSmall,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis),
+                            _FulfilmentChip(terms: terms),
                             Text(
-                              l10n.cartItemsAnd(
-                                subcart.items.length,
-                                formatMoney(subcart.itemsLaari, dhivehi: dhivehi),
-                              ),
-                              style: theme.textTheme.bodySmall
-                                  ?.copyWith(color: muted),
+                              '· $count ${count == 1 ? 'item' : 'items'} · '
+                              '${formatRufiyaa(subcart.itemsLaari)}',
+                              style: theme.textTheme.bodySmall,
                             ),
                           ],
                         ),
-                      ),
-                      Icon(
-                        _open ? Icons.expand_less_rounded : Icons.expand_more_rounded,
-                        color: muted,
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                  const SizedBox(height: Gap.sm),
-                  Row(
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
-                      StatusChip(
-                        label: delivery.delivers
-                            ? l10n.fulfilmentDelivery
-                            : l10n.fulfilmentPickup,
-                        tone: StatusTone.pending,
-                      ),
-                      const Spacer(),
-                      if (subcart.cashbackLaari > 0)
-                        Text(
-                          l10n.cartEarn(formatMoney(
-                              subcart.cashbackLaari, dhivehi: dhivehi)),
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: ManfaaColors.green,
-                            fontWeight: FontWeight.w600,
-                          ),
+                      if (terms.delivers && terms.minimumMet)
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.check_circle_rounded,
+                                size: 14, color: ManfaaColors.green),
+                            const SizedBox(width: 4),
+                            Text('Minimum met',
+                                style: theme.textTheme.bodySmall
+                                    ?.copyWith(color: ManfaaColors.green)),
+                          ],
                         ),
+                      Text(
+                        terms.delivers
+                            ? 'Delivery ${formatRufiyaa(terms.feeLaari)}'
+                            : 'Pickup FREE',
+                        style: theme.textTheme.bodySmall,
+                      ),
+                      Text(
+                        'Earn ${formatRufiyaa(subcart.cashbackLaari)}'
+                        '${subcart.cashbackRatePercent == null ? '' : ' (${subcart.cashbackRatePercent}%)'}',
+                        style: theme.textTheme.bodySmall
+                            ?.copyWith(color: ManfaaColors.green),
+                      ),
                     ],
                   ),
+                  Icon(open ? Icons.expand_less : Icons.expand_more),
                 ],
               ),
             ),
           ),
-          // THE WARNING (owner decision): a shop short of its minimum says
-          // exactly how short, in the attention tone, and blocks checkout.
-          if (short)
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(
-                  horizontal: Gap.lg, vertical: Gap.md),
-              color: ManfaaColors.amberSoft,
-              child: Row(
-                children: [
-                  const Icon(Icons.error_outline_rounded,
-                      size: 18, color: ManfaaColors.amber),
-                  const SizedBox(width: Gap.sm),
-                  Expanded(
-                    child: Text(
-                      l10n.cartAddMoreToMinimum(
-                        formatMoney(delivery.shortfallLaari, dhivehi: dhivehi),
-                      ),
-                      style: theme.textTheme.bodySmall
-                          ?.copyWith(color: ManfaaColors.amber),
-                    ),
-                  ),
-                  Text(
-                    '${formatMoney(subcart.itemsLaari, dhivehi: dhivehi)} / '
-                    '${formatMoney(delivery.orderMinimumLaari ?? 0, dhivehi: dhivehi)}',
-                    style: theme.textTheme.bodySmall
-                        ?.copyWith(color: ManfaaColors.amber),
-                  ),
-                ],
-              ),
-            ),
-          if (!subcart.allAvailable)
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(
-                  horizontal: Gap.lg, vertical: Gap.md),
-              color: ManfaaColors.amberSoft,
-              child: Text(
-                l10n.cartSomethingUnavailable,
-                style: theme.textTheme.bodySmall
-                    ?.copyWith(color: ManfaaColors.amber),
-              ),
-            ),
-          if (_open) ...[
-            Divider(height: 1, color: theme.colorScheme.outlineVariant),
+
+          if (open) ...[
+            const Divider(height: 1),
             Padding(
-              padding: const EdgeInsets.all(Gap.lg),
+              padding: const EdgeInsets.all(Gap.md),
               child: Column(
                 children: [
-                  for (final line in subcart.items) ...[
-                    _Line(line: line),
-                    const SizedBox(height: Gap.md),
-                  ],
-                  _Money(
-                    label: l10n.cartItemsLabel(subcart.items.length),
-                    laari: subcart.itemsLaari,
+                  for (final line in subcart.items)
+                    _Line(line: line, editing: editing),
+                  const Divider(height: Gap.xl),
+                  _Row(
+                    label: 'Items ($count)',
+                    value: formatRufiyaa(subcart.itemsLaari),
                   ),
-                  _Money(
-                    label: l10n.cartDelivery,
-                    laari: delivery.feeLaari,
-                    strikethroughFree: delivery.feeWaived,
-                  ),
-                  if (subcart.cashbackLaari > 0)
-                    _Money(
-                      label: l10n.cartCashbackFrom(subcart.storeName),
-                      laari: subcart.cashbackLaari,
-                      tint: ManfaaColors.green,
-                      negative: true,
+                  if (terms.delivers)
+                    _Row(
+                      label: 'Delivery fee',
+                      value: formatRufiyaa(terms.feeLaari),
                     ),
+                  _Row(
+                    label: 'Cashback from ${subcart.storeName}'
+                        '${subcart.cashbackRatePercent == null ? '' : ' (${subcart.cashbackRatePercent}%)'}',
+                    value: '- ${formatRufiyaa(subcart.cashbackLaari)}',
+                    tone: ManfaaColors.green,
+                  ),
                 ],
               ),
             ),
           ],
+
+          if (terms.delivers && terms.orderMinimumLaari != null)
+            _MinimumBar(subcart: subcart),
+        ],
+      ),
+    );
+  }
+}
+
+class _FulfilmentChip extends StatelessWidget {
+  const _FulfilmentChip({required this.terms});
+
+  final DeliveryTerms terms;
+
+  @override
+  Widget build(BuildContext context) {
+    final delivers = terms.delivers;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: Gap.sm, vertical: 2),
+      decoration: BoxDecoration(
+        color: delivers ? ManfaaColors.greenSoft : ManfaaColors.blueSoft,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            delivers
+                ? Icons.delivery_dining_rounded
+                : Icons.storefront_outlined,
+            size: 13,
+            color: delivers ? ManfaaColors.green : ManfaaColors.blue,
+          ),
+          const SizedBox(width: 4),
+          Text(
+            delivers ? 'Delivery' : 'Pickup',
+            style: TextStyle(
+              fontSize: 11,
+              color: delivers ? ManfaaColors.green : ManfaaColors.blue,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Met or not met, always with the numbers behind it — a shopper deciding
+/// whether to add one more thing needs to see how much more.
+class _MinimumBar extends StatelessWidget {
+  const _MinimumBar({required this.subcart});
+
+  final Subcart subcart;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final terms = subcart.delivery;
+    final minimum = terms.orderMinimumLaari ?? 0;
+    final met = terms.minimumMet;
+    final progress =
+        minimum == 0 ? 1.0 : (subcart.itemsLaari / minimum).clamp(0.0, 1.0);
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(Gap.md, 0, Gap.md, Gap.md),
+      padding: const EdgeInsets.all(Gap.md),
+      decoration: BoxDecoration(
+        color: met ? ManfaaColors.greenSoft : ManfaaColors.amberSoft,
+        borderRadius: BorderRadius.circular(Corner.tile),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Icon(
+                met ? Icons.check_circle_rounded : Icons.error_outline_rounded,
+                size: 16,
+                color: met ? ManfaaColors.green : ManfaaColors.amber,
+              ),
+              const SizedBox(width: Gap.sm),
+              Expanded(
+                child: Text(
+                  met
+                      ? "You've met the minimum order"
+                      : 'Add ${formatRufiyaa(terms.shortfallLaari)} more to '
+                          'reach the minimum order',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: met ? ManfaaColors.ink : ManfaaColors.amber,
+                  ),
+                ),
+              ),
+              Text(
+                '${formatRufiyaa(subcart.itemsLaari)} / '
+                '${formatRufiyaa(minimum)}',
+                style: theme.textTheme.bodySmall,
+              ),
+            ],
+          ),
+          const SizedBox(height: Gap.sm),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(999),
+            child: LinearProgressIndicator(
+              value: progress,
+              minHeight: 5,
+              backgroundColor: Colors.white,
+              valueColor: AlwaysStoppedAnimation(
+                met ? ManfaaColors.green : ManfaaColors.amber,
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -325,107 +412,73 @@ class _SubcartCardState extends ConsumerState<SubcartCard> {
 }
 
 class _Line extends ConsumerWidget {
-  const _Line({required this.line});
+  const _Line({required this.line, required this.editing});
 
   final CartLine line;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final l10n = context.l10n;
-    final theme = Theme.of(context);
-    final muted = theme.colorScheme.onSurfaceVariant;
-    final dhivehi = Localizations.localeOf(context).languageCode == 'dv';
-    final cart = ref.read(cartProvider.notifier);
-
-    return Row(
-      children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                line.displayName(dhivehi),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  // A sold-out line stays visible and struck, never dropped.
-                  decoration:
-                      line.available ? null : TextDecoration.lineThrough,
-                  color: line.available ? null : muted,
-                ),
-              ),
-              Row(
-                children: [
-                  Text(formatMoney(line.unitPriceLaari, dhivehi: dhivehi),
-                      style: theme.textTheme.bodySmall?.copyWith(color: muted)),
-                  // The price moved while it sat here. Said out loud.
-                  if (line.priceChanged && line.priceWasLaari != null) ...[
-                    const SizedBox(width: Gap.xs),
-                    Text(
-                      formatMoney(line.priceWasLaari!, dhivehi: dhivehi),
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: muted,
-                        decoration: TextDecoration.lineThrough,
-                      ),
-                    ),
-                  ],
-                  if (!line.available) ...[
-                    const SizedBox(width: Gap.sm),
-                    Text(l10n.outOfStock,
-                        style: theme.textTheme.bodySmall
-                            ?.copyWith(color: ManfaaColors.amber)),
-                  ],
-                ],
-              ),
-            ],
-          ),
-        ),
-        IconButton(
-          visualDensity: VisualDensity.compact,
-          onPressed: () => cart.remove(line.cartItemId),
-          icon: const Icon(Icons.delete_outline_rounded, size: 20),
-          color: muted,
-        ),
-        _QtyStepper(line: line),
-        const SizedBox(width: Gap.sm),
-        MoneyText(line.lineTotalLaari, style: theme.textTheme.bodyMedium),
-      ],
-    );
-  }
-}
-
-class _QtyStepper extends ConsumerWidget {
-  const _QtyStepper({required this.line});
-
-  final CartLine line;
+  final bool editing;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
-    final cart = ref.read(cartProvider.notifier);
+    final controller = ref.read(cartProvider.notifier);
 
-    return Container(
-      decoration: BoxDecoration(
-        border: Border.all(color: theme.colorScheme.outlineVariant),
-        borderRadius: BorderRadius.circular(Corner.tile),
-      ),
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: Gap.sm),
       child: Row(
-        mainAxisSize: MainAxisSize.min,
         children: [
-          InkWell(
-            onTap: () => cart.setQty(line.cartItemId, line.qty - 1),
-            child: const Padding(
-              padding: EdgeInsets.all(6),
-              child: Icon(Icons.remove_rounded, size: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(line.name, style: theme.textTheme.bodyMedium),
+                Text(
+                  formatRufiyaa(line.unitPriceLaari),
+                  style: theme.textTheme.bodySmall
+                      ?.copyWith(color: ManfaaColors.textMuted),
+                ),
+                if (!line.available)
+                  Text(
+                    'Out of stock',
+                    style: theme.textTheme.bodySmall
+                        ?.copyWith(color: ManfaaColors.coralDeep),
+                  ),
+              ],
             ),
           ),
-          Text('${line.qty}', style: theme.textTheme.bodyMedium),
-          InkWell(
-            onTap: () => cart.setQty(line.cartItemId, line.qty + 1),
-            child: const Padding(
-              padding: EdgeInsets.all(6),
-              child: Icon(Icons.add_rounded, size: 16),
+          if (editing)
+            IconButton(
+              visualDensity: VisualDensity.compact,
+              onPressed: () => controller.remove(line.cartItemId),
+              icon: const Icon(Icons.delete_outline_rounded, size: 20),
             ),
+          Container(
+            decoration: BoxDecoration(
+              border: Border.all(color: ManfaaColors.line),
+              borderRadius: BorderRadius.circular(Corner.control),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  visualDensity: VisualDensity.compact,
+                  onPressed: () =>
+                      controller.setQty(line.cartItemId, line.qty - 1),
+                  icon: const Icon(Icons.remove, size: 16),
+                ),
+                Text('${line.qty}'),
+                IconButton(
+                  visualDensity: VisualDensity.compact,
+                  onPressed: () =>
+                      controller.setQty(line.cartItemId, line.qty + 1),
+                  icon: const Icon(Icons.add, size: 16),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: Gap.md),
+          Text(
+            formatRufiyaa(line.lineTotalLaari),
+            style: theme.textTheme.titleSmall,
           ),
         ],
       ),
@@ -433,170 +486,131 @@ class _QtyStepper extends ConsumerWidget {
   }
 }
 
-class _Money extends StatelessWidget {
-  const _Money({
-    required this.label,
-    required this.laari,
-    this.tint,
-    this.negative = false,
-    this.strikethroughFree = false,
-  });
+class _Row extends StatelessWidget {
+  const _Row({required this.label, required this.value, this.tone});
 
   final String label;
-  final int laari;
-  final Color? tint;
-  final bool negative;
-  final bool strikethroughFree;
+  final String value;
+  final Color? tone;
 
   @override
   Widget build(BuildContext context) {
-    final l10n = context.l10n;
-    final theme = Theme.of(context);
+    final style =
+        Theme.of(context).textTheme.bodyMedium?.copyWith(color: tone);
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 3),
       child: Row(
         children: [
-          Expanded(
-            child: Text(label,
-                style: theme.textTheme.bodySmall?.copyWith(color: tint)),
-          ),
-          if (strikethroughFree)
-            Text(l10n.freeDelivery,
-                style: theme.textTheme.bodySmall
-                    ?.copyWith(color: ManfaaColors.green))
-          else
-            Text(
-              negative ? '− ' : '',
-              style: theme.textTheme.bodySmall?.copyWith(color: tint),
-            ),
-          if (!strikethroughFree)
-            MoneyText(laari,
-                style: theme.textTheme.bodySmall?.copyWith(color: tint)),
+          Expanded(child: Text(label, style: style)),
+          Text(value, style: style),
         ],
       ),
     );
   }
 }
 
-/// The sticky footer. Total Payable **expands** into the breakdown (owner
-/// decision), and the button says which shop is stopping checkout rather
-/// than refusing without a reason.
-class _CheckoutBar extends ConsumerStatefulWidget {
+/// Said once, plainly, rather than discovered at the payment step.
+class _SeparateOrdersNote extends StatelessWidget {
+  const _SeparateOrdersNote();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return ManfaaCard(
+      child: Row(
+        children: [
+          const CircleAvatar(
+            backgroundColor: ManfaaColors.greenSoft,
+            child: Icon(Icons.local_shipping_outlined,
+                color: ManfaaColors.green),
+          ),
+          const SizedBox(width: Gap.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Different stores, separate orders',
+                    style: theme.textTheme.titleSmall),
+                Text(
+                  'Each store will fulfill your order separately.',
+                  style: theme.textTheme.bodySmall
+                      ?.copyWith(color: ManfaaColors.textMuted),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CheckoutBar extends StatelessWidget {
   const _CheckoutBar({required this.cart});
 
   final Cart cart;
 
   @override
-  ConsumerState<_CheckoutBar> createState() => _CheckoutBarState();
-}
-
-class _CheckoutBarState extends ConsumerState<_CheckoutBar> {
-  bool _open = false;
-
-  @override
   Widget build(BuildContext context) {
-    final l10n = context.l10n;
     final theme = Theme.of(context);
-    final cart = widget.cart;
-    final blocking = cart.blocking;
 
     return SafeArea(
       child: Container(
-        padding: const EdgeInsets.all(Gap.lg),
-        decoration: BoxDecoration(
-          color: theme.colorScheme.surface,
-          border: Border(
-            top: BorderSide(color: theme.colorScheme.outlineVariant),
-          ),
+        padding: const EdgeInsets.all(Gap.md),
+        decoration: const BoxDecoration(
+          color: ManfaaColors.surface,
+          border: Border(top: BorderSide(color: ManfaaColors.line)),
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
+        child: Row(
           children: [
-            if (_open) ...[
-              _Money(label: l10n.cartItemsLabel(cart.itemCount), laari: cart.itemsLaari),
-              _Money(label: l10n.cartDelivery, laari: cart.deliveryLaari),
-              _Money(
-                label: l10n.cartYouWillEarn,
-                laari: cart.cashbackLaari,
-                tint: ManfaaColors.green,
-              ),
-              const SizedBox(height: Gap.sm),
-            ],
-            Row(
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Expanded(
-                  child: InkWell(
-                    onTap: () => setState(() => _open = !_open),
-                    child: Row(
-                      children: [
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(l10n.cartTotalPayable,
-                                style: theme.textTheme.bodySmall),
-                            MoneyText(
-                              cart.totalPayableLaari,
-                              style: theme.textTheme.titleLarge
-                                  ?.copyWith(fontWeight: FontWeight.w800),
-                            ),
-                          ],
-                        ),
-                        Icon(
-                          _open
-                              ? Icons.expand_more_rounded
-                              : Icons.expand_less_rounded,
-                          color: theme.colorScheme.onSurfaceVariant,
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(width: Gap.md),
-                Expanded(
-                  child: FilledButton(
-                    onPressed: cart.canCheckout
-                        ? () => context.push('/market/checkout')
-                        : null,
-                    style: FilledButton.styleFrom(
-                      backgroundColor: ManfaaColors.violet,
-                      padding: const EdgeInsets.symmetric(vertical: Gap.md),
-                    ),
-                    child: Text(
-                      cart.canCheckout
-                          ? l10n.cartCheckoutOrders(cart.storeCount)
-                          // Names the shop rather than refusing silently.
-                          : l10n.cartBlockedBy(blocking.first.storeName),
-                      textAlign: TextAlign.center,
-                      maxLines: 2,
-                    ),
-                  ),
+                Text('Total Payable', style: theme.textTheme.bodySmall),
+                Text(
+                  formatRufiyaa(cart.totalPayableLaari),
+                  style: theme.textTheme.titleLarge,
                 ),
               ],
             ),
+            const SizedBox(width: Gap.lg),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text("You'll earn", style: theme.textTheme.bodySmall),
+                Text(
+                  formatRufiyaa(cart.cashbackLaari),
+                  style: theme.textTheme.titleMedium
+                      ?.copyWith(color: ManfaaColors.green),
+                ),
+              ],
+            ),
+            const Spacer(),
+            FilledButton(
+              // Never enabled on a basket the server says cannot check out —
+              // an unmet minimum or a missing address is a reason, and the
+              // cards above already carry it.
+              onPressed: cart.canCheckout
+                  ? () => context.push('/market/checkout')
+                  : null,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text('Checkout'),
+                  Text(
+                    '${cart.storeCount} separate '
+                    '${cart.storeCount == 1 ? 'order' : 'orders'}',
+                    style: const TextStyle(fontSize: 11),
+                  ),
+                ],
+              ),
+            ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _Empty extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    final l10n = context.l10n;
-    final theme = Theme.of(context);
-
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          IconTile(Icons.shopping_cart_outlined,
-              tint: ManfaaTint.violet, size: 56, iconSize: 28),
-          const SizedBox(height: Gap.lg),
-          Text(l10n.cartEmpty, style: theme.textTheme.titleMedium),
-        ],
       ),
     );
   }

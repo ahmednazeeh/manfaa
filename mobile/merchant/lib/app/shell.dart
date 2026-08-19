@@ -7,6 +7,7 @@ import '../widgets/adaptive.dart';
 import 'app.dart';
 import 'providers.dart';
 import 'router.dart';
+import '../features/marketplace/marketplace_providers.dart';
 
 /// The floating white pill nav from the refs — same bar as the customer app,
 /// with the merchant's five slots: Dashboard · Credit · Transactions ·
@@ -41,34 +42,46 @@ class MerchantShell extends ConsumerWidget {
       _NavItem(0, Icons.home_outlined, Icons.home_rounded, l10n.tabDashboard),
       _NavItem(
         1,
+        Icons.assignment_outlined,
+        Icons.assignment_rounded,
+        'Orders',
+      ),
+      _NavItem(
+        2,
         Icons.person_add_outlined,
         Icons.person_add_rounded,
         l10n.tabCredit,
       ),
       _NavItem(
-        2,
+        3,
         Icons.receipt_long_outlined,
         Icons.receipt_long_rounded,
         l10n.tabTransactions,
       ),
       _NavItem(
-        3,
+        4,
         Icons.account_balance_outlined,
         Icons.account_balance_rounded,
         l10n.tabSettlements,
       ),
       _NavItem(
-        4,
+        5,
         Icons.more_horiz_rounded,
         Icons.more_horiz_rounded,
         l10n.tabMore,
       ),
     ];
 
+    // Orders needs BOTH the staff permission and a store that actually
+    // sells online. Neither implies the other, and a tab leading to an empty
+    // queue for a shop that never enrolled is worse than no tab.
+    final sells = ref.watch(sellsOnMarketplaceProvider);
+
     final items = <_NavItem>[
       for (final item in specs)
-        if (kTabs[item.branch].permission == null ||
-            session.can(kTabs[item.branch].permission!))
+        if ((kTabs[item.branch].permission == null ||
+                session.can(kTabs[item.branch].permission!)) &&
+            (kTabs[item.branch].path != '/orders' || sells))
           item,
     ];
 

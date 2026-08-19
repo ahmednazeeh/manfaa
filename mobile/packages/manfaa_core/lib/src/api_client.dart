@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 
+import 'activity_models.dart';
 import 'api_base.dart';
 import 'cart_models.dart';
 import 'market_models.dart';
@@ -212,6 +213,24 @@ class ManfaaApi extends ManfaaApiBase<CustomerSession> {
     return CustomerOrder.fromJson(
       (data?['data'] as Map?)?.cast<String, dynamic>() ?? {},
     );
+  }
+
+  // -------------------------------------------------------------- activity
+
+  /// The one timeline: marketplace orders AND cashback, newest first.
+  ///
+  /// `tab` is active / completed / cancelled / all — the same vocabulary the
+  /// screen's segmented control uses, resolved server-side because "active"
+  /// means different states for an order than for a transaction.
+  Future<ActivityPage> activity({String tab = 'active', int page = 1}) async {
+    final data = await run(
+      () => dio.get<Map<String, dynamic>>(
+        '/customer/activity',
+        queryParameters: {'tab': tab, 'page': page},
+      ),
+    );
+
+    return ActivityPage.fromJson(data ?? const {});
   }
 
   // ------------------------------------------------------------- addresses

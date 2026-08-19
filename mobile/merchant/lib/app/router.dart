@@ -10,6 +10,9 @@ import '../features/more/branches_screen.dart';
 import '../features/more/cashback_screen.dart';
 import '../features/more/close_store_screen.dart';
 import '../features/more/employees_screen.dart';
+import '../features/marketplace/order_detail_screen.dart';
+import '../features/marketplace/orders_screen.dart';
+import '../features/marketplace/products_screen.dart';
 import '../features/more/more_screen.dart';
 import '../features/more/profile_screen.dart';
 import '../features/more/promotions_screen.dart';
@@ -30,6 +33,10 @@ import 'shell.dart';
 /// regardless, so hiding is a courtesy, never the security.
 const kTabs = <({String path, String? permission})>[
   (path: '/dashboard', permission: 'settlements.view'),
+  // Marketplace orders (Orders.png). Permission-gated like every other slot,
+  // and additionally hidden unless this store actually sells online — see
+  // MerchantShell, where a store that never enrolled gets no tab at all.
+  (path: '/orders', permission: 'marketplace.manage'),
   (path: '/credit', permission: 'credits.create'),
   (path: '/transactions', permission: 'transactions.view'),
   (path: '/settlements', permission: 'settlements.view'),
@@ -196,6 +203,21 @@ final routerProvider = Provider<GoRouter>((ref) {
             GoRoute(path: '/wallet', builder: (_, _) => const WalletScreen()),
           ]),
           StatefulShellBranch(routes: [
+            GoRoute(
+              path: '/orders',
+              builder: (_, _) => const ShopOrdersScreen(),
+              routes: [
+                GoRoute(
+                  path: ':id',
+                  builder: (_, state) => ShopOrderDetailScreen(
+                    suborderId:
+                        int.tryParse(state.pathParameters['id'] ?? '') ?? 0,
+                  ),
+                ),
+              ],
+            ),
+          ]),
+          StatefulShellBranch(routes: [
             GoRoute(path: '/credit', builder: (_, _) => const CreditScreen()),
           ]),
           StatefulShellBranch(routes: [
@@ -229,6 +251,10 @@ final routerProvider = Provider<GoRouter>((ref) {
                 GoRoute(
                   path: 'cashback',
                   builder: (_, _) => const CashbackSettingsScreen(),
+                ),
+                GoRoute(
+                  path: 'products',
+                  builder: (_, _) => const ShopProductsScreen(),
                 ),
                 GoRoute(
                   path: 'employees',

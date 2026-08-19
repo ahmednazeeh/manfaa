@@ -19,5 +19,6 @@ export 'src/session.dart';
 export 'src/settlement_models.dart';
 export 'src/market_models.dart';
 export 'src/cart_models.dart';
+export 'src/activity_models.dart';
 export 'src/order_models.dart';
 export 'src/marketplace_merchant_models.dart';

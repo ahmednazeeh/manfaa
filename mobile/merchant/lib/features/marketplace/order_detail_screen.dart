@@ -385,7 +385,7 @@ class _ItemRow extends StatelessWidget {
                 ),
                 if (item.amended)
                   Text(
-                    'Amended · refunded ${laariToString(item.refundLaari)}',
+                    'Amended · refunded ${formatRufiyaa(item.refundLaari)}',
                     style: theme.textTheme.bodySmall
                         ?.copyWith(color: ManfaaColors.amber),
                   ),
