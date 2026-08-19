@@ -3,6 +3,8 @@ import 'dart:typed_data';
 import 'package:dio/dio.dart';
 
 import 'api_base.dart';
+import 'cart_models.dart';
+import 'market_models.dart';
 import 'models.dart';
 import 'session.dart';
 
@@ -66,6 +68,79 @@ class ManfaaApi extends ManfaaApiBase<CustomerSession> {
     return DiscoverFeed.fromJson(
       (data?['data'] as Map?)?.cast<String, dynamic>() ?? {},
     );
+  }
+
+  // ------------------------------------------------------------ marketplace
+
+  /// The storefronts a shopper can buy from today.
+  ///
+  /// Lists BRANCHES, not merchants: the branch is the shop, and its delivery
+  /// terms are a property of *branch → your address*, which is why the
+  /// address travels with the request.
+  Future<List<MarketBranch>> marketBranches({int? addressId}) async {
+    final data = await run(
+      () => dio.get<Map<String, dynamic>>(
+        '${ApiEnv.publicBaseUrl}/market/branches',
+        queryParameters: {'address_id': ?addressId},
+      ),
+    );
+
+    return ((data?['data'] as List?) ?? const [])
+        .map((row) => MarketBranch.fromJson((row as Map).cast<String, dynamic>()))
+        .toList(growable: false);
+  }
+
+  /// One shop's shelves, optionally narrowed to an aisle.
+  Future<MarketStore> marketStore(int branchId, {String? category, int? addressId}) async {
+    final data = await run(
+      () => dio.get<Map<String, dynamic>>(
+        '${ApiEnv.publicBaseUrl}/market/branches/$branchId',
+        queryParameters: {'category': ?category, 'address_id': ?addressId},
+      ),
+    );
+
+    return MarketStore.fromJson(
+      (data?['data'] as Map?)?.cast<String, dynamic>() ?? {},
+    );
+  }
+
+  /// The priced cart. EVERY cart call answers with the whole thing, not a
+  /// diff, so the floating bar, the subcart cards and the totals can never
+  /// disagree after a tap.
+  Future<Cart> cart({int? addressId}) async => _cart(
+        () => dio.get<Map<String, dynamic>>(
+          '/customer/cart',
+          queryParameters: {'address_id': ?addressId},
+        ),
+      );
+
+  Future<Cart> addToCart(int branchProductId, {int qty = 1}) async => _cart(
+        () => dio.post<Map<String, dynamic>>(
+          '/customer/cart/items',
+          data: {'branch_product_id': branchProductId, 'qty': qty},
+        ),
+      );
+
+  /// Zero removes the line, exactly as the stepper does.
+  Future<Cart> setCartQty(int cartItemId, int qty) async => _cart(
+        () => dio.patch<Map<String, dynamic>>(
+          '/customer/cart/items/$cartItemId',
+          data: {'qty': qty},
+        ),
+      );
+
+  Future<Cart> removeFromCart(int cartItemId) async => _cart(
+        () => dio.delete<Map<String, dynamic>>('/customer/cart/items/$cartItemId'),
+      );
+
+  Future<Cart> clearCart() async => _cart(
+        () => dio.delete<Map<String, dynamic>>('/customer/cart'),
+      );
+
+  Future<Cart> _cart(Future<Response<Map<String, dynamic>>> Function() call) async {
+    final data = await run(call);
+
+    return Cart.fromJson((data?['data'] as Map?)?.cast<String, dynamic>() ?? {});
   }
 
   /// The islands the location picker offers (admin-drawn zones).

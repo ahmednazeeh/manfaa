@@ -1403,3 +1403,46 @@ everything it claimed.
 The bank API path is available per item with the same interpretation rules
 as the customer side: a parked transfer is never re-sent, and its
 `approval_id` is never filed as a bank reference.
+
+---
+
+## 23. MP11 — the customer app starts drawing
+
+Shipped 2026-08-19. The Market tab, one shop's shelves, the floating cart
+and the multi-vendor basket. 7 model tests; customer app 46 green; core 138;
+api 1557.
+
+**The nav bar problem, and how it is solved.** go_router's indexed stack
+needs a STABLE branch count — a shell that grew and shrank would renumber
+every tab underneath the user mid-session. So the Market branch is always
+registered, and the bar maps what it SHOWS onto those fixed branches
+(`[0, 1, if (marketplace) 2, 3, 4]`). With the marketplace off there is no
+Market item and nothing below it moves; the existing goldens prove it,
+because they did not change.
+
+That mapping is also what caught a real bug: adding the branch without
+teaching the bar made every golden shift 40%, because tapping Activity was
+landing on Market.
+
+**Decisions in the drawing:**
+
+- **The floating bar scopes itself.** On the Market list it shows the whole
+  basket; on one shop's page it shows THAT shop and tracks THAT minimum —
+  the number a shopper standing in the shop can actually do something about.
+- **It disappears when the basket is empty.** A permanent empty cart is a
+  permanent reminder of nothing.
+- **The cart never blanks on a tap.** Mutations replace the whole cart with
+  the server's answer and deliberately do not set a loading state; the last
+  known truth stays on screen. A basket that flickers on every stepper press
+  is a basket nobody trusts.
+- **Subcarts collapse by default** (owner), the header alone answering "what
+  am I buying here and does it qualify".
+- **A shop short of its minimum says how short**, in the attention tone,
+  with `120.00 / 150.00` beside it — and the checkout button names that shop
+  rather than refusing silently.
+- **A sold-out line stays on screen, struck through.** A row that vanishes
+  reads as a bug.
+- **Total Payable expands** into the breakdown (owner).
+
+**Still to draw:** checkout's four steps, order tracking in Activity, the
+wallet screen, and the merchant app's Orders and Products tabs.

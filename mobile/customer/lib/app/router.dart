@@ -10,6 +10,9 @@ import '../features/discover/discover_screen.dart';
 import '../features/discover/search_screen.dart';
 import '../features/discover/store_screen.dart';
 import '../features/home/home_screen.dart';
+import '../features/market/cart_screen.dart';
+import '../features/market/market_screen.dart';
+import '../features/market/store_screen.dart';
 import '../features/home/qr_screen.dart';
 import '../features/profile/devices_screen.dart';
 import '../features/profile/payout_account_screen.dart';
@@ -80,6 +83,30 @@ final routerProvider = Provider<GoRouter>((ref) {
                   path: 'store/:slug',
                   builder: (_, state) =>
                       StoreScreen(slug: state.pathParameters['slug'] ?? ''),
+                ),
+              ],
+            ),
+          ]),
+          // Marketplace (PLAN-marketplace.md §10). The branch is ALWAYS
+          // registered — go_router's indexed stack needs a stable branch
+          // count, and a shell that grew and shrank would renumber every
+          // other tab underneath the user. What the kill switch decides is
+          // whether the bar OFFERS it; the routes refuse on their own.
+          StatefulShellBranch(routes: [
+            GoRoute(
+              path: '/market',
+              builder: (_, _) => const MarketScreen(),
+              routes: [
+                GoRoute(
+                  path: 'cart',
+                  builder: (_, _) => const CartScreen(),
+                ),
+                GoRoute(
+                  path: ':branchId',
+                  builder: (_, state) => MarketStoreScreen(
+                    branchId:
+                        int.tryParse(state.pathParameters['branchId'] ?? '') ?? 0,
+                  ),
                 ),
               ],
             ),

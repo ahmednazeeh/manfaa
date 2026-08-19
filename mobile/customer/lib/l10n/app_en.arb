@@ -304,5 +304,128 @@
   "storeCall": "Call",
   "storeWebsite": "Website",
   "storeMap": "On the map",
-  "copiedToClipboard": "Copied."
+  "copiedToClipboard": "Copied.",
+  "tabMarket": "Market",
+  "marketSubtitle": "Order from stores that give you cashback.",
+  "marketEmpty": "No stores yet",
+  "marketEmptyHint": "Stores near you will appear here as they join the Manfaa marketplace.",
+  "cashbackPercent": "{rate}% back",
+  "@cashbackPercent": {
+    "placeholders": {
+      "rate": {
+        "type": "String"
+      }
+    }
+  },
+  "freeDelivery": "Free delivery",
+  "pickupOnly": "Pickup only",
+  "minOrder": "Min {amount}",
+  "@minOrder": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "viewCart": "View cart",
+  "cartEarn": "Earn {amount}",
+  "@cartEarn": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "minimumMet": "Minimum reached",
+  "toMinimum": "{amount} to minimum",
+  "@toMinimum": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "searchInStore": "Search in {store}",
+  "@searchInStore": {
+    "placeholders": {
+      "store": {
+        "type": "String"
+      }
+    }
+  },
+  "addToCart": "Add",
+  "outOfStock": "Out of stock",
+  "allProducts": "All",
+  "storeClosedForDelivery": "This shop does not deliver to your address — collection only.",
+  "cartTitle": "My cart",
+  "cartTitleWithStores": "My cart ({count} stores)",
+  "@cartTitleWithStores": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "cartClear": "Clear",
+  "cartEmpty": "Your cart is empty",
+  "cartYouWillEarn": "You'll earn",
+  "cartItemsAnd": "{count} items · {amount}",
+  "@cartItemsAnd": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "cartItemsLabel": "Items ({count})",
+  "@cartItemsLabel": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "cartDelivery": "Delivery fee",
+  "cartCashbackFrom": "Cashback from {store}",
+  "@cartCashbackFrom": {
+    "placeholders": {
+      "store": {
+        "type": "String"
+      }
+    }
+  },
+  "cartTotalPayable": "Total payable",
+  "cartCheckoutOrders": "Checkout · {count} orders",
+  "@cartCheckoutOrders": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "cartBlockedBy": "{store} needs more",
+  "@cartBlockedBy": {
+    "placeholders": {
+      "store": {
+        "type": "String"
+      }
+    }
+  },
+  "cartAddMoreToMinimum": "Add {amount} more to reach the minimum order",
+  "@cartAddMoreToMinimum": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "cartSomethingUnavailable": "Something here is no longer available. Remove it to continue.",
+  "cartSeparateOrders": "Different stores, separate orders",
+  "cartSeparateOrdersHint": "Each store will fulfil your order separately.",
+  "cartNeedsAddress": "Choose a delivery address to see delivery fees.",
+  "fulfilmentDelivery": "Delivery",
+  "fulfilmentPickup": "Pickup"
 }
