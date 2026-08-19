@@ -21,6 +21,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 
 /**
  * How a key's value is entered and displayed. A `percent` key arrives from
@@ -28,7 +29,7 @@ import { Label } from '@/components/ui/label';
  * wire) and is worked with here as integer basis points — the same
  * integer-bp law every rate input follows, never a float in between.
  */
-export type SettingUnit = 'mvr' | 'days' | 'percent';
+export type SettingUnit = 'mvr' | 'days' | 'percent' | 'toggle';
 
 export interface SettingMeta {
   label: string;
@@ -82,6 +83,9 @@ function fromInput(raw: string, unit: SettingUnit): number | null {
 }
 
 function display(value: number, unit: SettingUnit): string {
+  if (unit === 'toggle') {
+    return value === 1 ? 'on' : 'off';
+  }
   if (unit === 'days') {
     return `${value} ${value === 1 ? 'day' : 'days'}`;
   }
@@ -181,6 +185,19 @@ export function PlatformSettingRow({
           </Alert>
         ) : null}
       </div>
+      {meta.unit === 'toggle' ? (
+        <div className="flex shrink-0 items-center gap-3">
+          <span className="text-sm text-muted-foreground">
+            {current === 1 ? 'On' : 'Off'}
+          </span>
+          <Switch
+            id={inputId}
+            checked={current === 1}
+            disabled={save.isPending}
+            onCheckedChange={(next) => save.mutate(next ? 1 : 0)}
+          />
+        </div>
+      ) : (
       <div className="flex shrink-0 items-start gap-2">
         <div className="flex flex-col gap-1">
           <div className="relative">
@@ -236,6 +253,7 @@ export function PlatformSettingRow({
           {save.isPending ? 'Saving…' : 'Save'}
         </Button>
       </div>
+      )}
     </div>
   );
 }

@@ -1396,6 +1396,20 @@ export const PlatformSettingKeySchema = z.enum([
    */
   'prompt_discount_rate_percent',
   'prompt_discount_max_age_days',
+  /**
+   * The window a NEW store is created with, as distinct from the ceiling it
+   * may raise itself to (`default_validation_window_days`).
+   */
+  'new_merchant_validation_window_days',
+  /**
+   * MARKETPLACE (PLAN-marketplace.md §10). `marketplace_enabled` is a
+   * BOOLEAN carried as 0/1 — the settings table stores integers, and the
+   * panel renders it as a switch rather than a number box, because "how many
+   * marketplaces" is not a question. `marketplace_fee_percent` is a rate and
+   * follows the same 2-decimal string wire format as the other percent key.
+   */
+  'marketplace_enabled',
+  'marketplace_fee_percent',
 ]);
 export type PlatformSettingKey = z.infer<typeof PlatformSettingKeySchema>;
 
@@ -1737,4 +1751,371 @@ export function setAdminBrandColor(
     body: { color },
     signal: options.signal,
   });
+}
+
+// ---------------------------------------------------------------------------
+// MARKETPLACE OPERATIONS (PLAN-marketplace.md §5.5, §9, §21)
+// ---------------------------------------------------------------------------
+
+/**
+ * Money owed to a customer, waiting to leave. Worked by hand today; a worker
+ * drains exactly these rows once the bank tunnel exists.
+ */
+export const PendingPaymentSchema = z.object({
+  id: z.number().int(),
+  customer_name: z.string().nullable(),
+  customer_phone: z.string().nullable(),
+  amount_laari: z.number().int(),
+  bank: z.string().nullable(),
+  account: z.string(),
+  account_name: z.string().nullable(),
+  /** The bank's idempotency key. The same string identifies it everywhere. */
+  internal_ref: z.string(),
+  state: z.enum(['pending', 'processing', 'pending_approval', 'sent', 'failed', 'cancelled']),
+  attempts: z.number().int(),
+  trx_id: z.string().nullable(),
+  /**
+   * An approvals-QUEUE record id, not a bank reference. Never shown as one:
+   * quoting it at a bank gets nowhere.
+   */
+  approval_id: z.string().nullable(),
+  error_code: z.string().nullable(),
+  failure_reason: z.string().nullable(),
+  requested_at: z.string().nullable(),
+});
+export type PendingPayment = z.infer<typeof PendingPaymentSchema>;
+
+export const PendingPaymentsResponseSchema = z.object({
+  data: z.array(PendingPaymentSchema),
+  meta: z.object({
+    counts: z.record(z.string(), z.number()).catch({}),
+    auto_transfer_enabled: z.boolean().catch(false),
+  }),
+});
+
+export function listPendingPayments(
+  state = 'pending',
+  options: RequestOptions = {},
+) {
+  return apiFetch(
+    `/api/admin/pending-payments?state=${encodeURIComponent(state)}`,
+    PendingPaymentsResponseSchema,
+    { signal: options.signal },
+  );
+}
+
+const PayoutActionSchema = dataWrapped(
+  z.object({
+    id: z.number().int().optional(),
+    state: z.string(),
+    trx_id: z.string().nullable().optional(),
+    approval_id: z.string().nullable().optional(),
+    error_code: z.string().nullable().optional(),
+    failure_reason: z.string().nullable().optional(),
+  }),
+);
+
+export function sendPendingPayment(id: number, profileId?: number) {
+  return apiFetch(`/api/admin/pending-payments/${id}/send`, PayoutActionSchema, {
+    method: 'POST',
+    body: profileId === undefined ? {} : { profile_id: profileId },
+  });
+}
+
+/** Record a transfer made by hand — every transfer, until the tunnel exists. */
+export function markPendingPaymentSent(id: number, trxId: string) {
+  return apiFetch(
+    `/api/admin/pending-payments/${id}/mark-sent`,
+    PayoutActionSchema,
+    { method: 'POST', body: { trx_id: trxId } },
+  );
+}
+
+export function cancelPendingPayment(id: number, reason: string) {
+  return apiFetch(
+    `/api/admin/pending-payments/${id}/cancel`,
+    PayoutActionSchema,
+    { method: 'POST', body: { reason } },
+  );
+}
+
+// --------------------------------------------------------- transfer settings
+
+export const TransferProfileSchema = z.object({
+  id: z.number().int(),
+  name: z.string(),
+  base_url: z.string(),
+  segment: z.string(),
+  from_account: z.string().nullable(),
+  endpoint: z.string(),
+  /** Answers 200 `pending_approval`: accepted and parked, never re-sent. */
+  dual_control: z.boolean(),
+  active: z.boolean(),
+  is_default: z.boolean(),
+});
+export type TransferProfile = z.infer<typeof TransferProfileSchema>;
+
+export const TransferSettingsResponseSchema = dataWrapped(
+  z.object({
+    auto_transfer_enabled: z.boolean(),
+    auto_max_laari: z.number().int(),
+    profile_id: z.number().int().nullable(),
+    /** Whether a key is SET. Never the key — it is the whole of the auth. */
+    api_key_configured: z.boolean(),
+    profiles: z.array(TransferProfileSchema),
+  }),
+);
+export type TransferSettingsResponse = z.infer<
+  typeof TransferSettingsResponseSchema
+>;
+
+export function getTransferSettings(options: RequestOptions = {}) {
+  return apiFetch('/api/admin/transfer-settings', TransferSettingsResponseSchema, {
+    signal: options.signal,
+  });
+}
+
+export function updateTransferSettings(body: {
+  auto_transfer_enabled?: boolean;
+  auto_max_laari?: number;
+  profile_id?: number | null;
+}) {
+  return apiFetch('/api/admin/transfer-settings', TransferSettingsResponseSchema, {
+    method: 'PATCH',
+    body,
+  });
+}
+
+export function updateTransferProfile(
+  id: number,
+  body: {
+    name?: string;
+    base_url?: string;
+    segment?: string;
+    from_account?: string | null;
+    dual_control?: boolean;
+    active?: boolean;
+    is_default?: boolean;
+  },
+) {
+  return apiFetch(
+    `/api/admin/transfer-settings/profiles/${id}`,
+    TransferSettingsResponseSchema,
+    { method: 'PATCH', body },
+  );
+}
+
+// ------------------------------------------------------ merchant settlements
+
+export const MerchantSettlementBatchSchema = z.object({
+  id: z.number().int(),
+  reference: z.string(),
+  state: z.enum(['draft', 'approved', 'processing', 'completed', 'cancelled']),
+  total_laari: z.number().int(),
+  merchant_count: z.number().int(),
+  /** Money held back for want of bank details — surfaced, never silent. */
+  excluded_laari: z.number().int(),
+  excluded_count: z.number().int(),
+  cutoff_at: z.string().nullable(),
+  approved_at: z.string().nullable(),
+  exported_at: z.string().nullable(),
+});
+export type MerchantSettlementBatch = z.infer<
+  typeof MerchantSettlementBatchSchema
+>;
+
+export const MerchantSettlementsResponseSchema = z.object({
+  data: z.array(MerchantSettlementBatchSchema),
+  meta: z.object({ payable_now_laari: z.number().int().catch(0) }),
+});
+
+export function listMerchantPayoutBatches(options: RequestOptions = {}) {
+  return apiFetch(
+    '/api/admin/merchant-settlements',
+    MerchantSettlementsResponseSchema,
+    { signal: options.signal },
+  );
+}
+
+export const MerchantSettlementItemSchema = z.object({
+  id: z.number().int(),
+  merchant_name: z.string(),
+  amount_laari: z.number().int(),
+  bank: z.string().nullable(),
+  account: z.string(),
+  account_name: z.string().nullable(),
+  internal_ref: z.string(),
+  state: z.string(),
+  trx_id: z.string().nullable(),
+  approval_id: z.string().nullable(),
+  failure_reason: z.string().nullable(),
+  order_count: z.number().int(),
+});
+export type MerchantSettlementItem = z.infer<
+  typeof MerchantSettlementItemSchema
+>;
+
+export const MerchantSettlementDetailSchema = dataWrapped(
+  z.object({
+    id: z.number().int(),
+    reference: z.string(),
+    state: z.string(),
+    total_laari: z.number().int(),
+    items: z.array(MerchantSettlementItemSchema),
+  }),
+);
+
+export function getMerchantPayoutBatch(id: number, options: RequestOptions = {}) {
+  return apiFetch(
+    `/api/admin/merchant-settlements/${id}`,
+    MerchantSettlementDetailSchema,
+    { signal: options.signal },
+  );
+}
+
+export function buildMerchantPayoutBatch() {
+  return apiFetch(
+    '/api/admin/merchant-settlements',
+    dataWrapped(z.object({ id: z.number().int(), reference: z.string() })),
+    { method: 'POST', body: {} },
+  );
+}
+
+export function approveMerchantPayoutBatch(id: number) {
+  return apiFetch(
+    `/api/admin/merchant-settlements/${id}/approve`,
+    dataWrapped(z.object({ state: z.string() })),
+    { method: 'POST', body: {} },
+  );
+}
+
+export function cancelMerchantPayoutBatch(id: number) {
+  return apiFetch(
+    `/api/admin/merchant-settlements/${id}/cancel`,
+    dataWrapped(z.object({ state: z.string() })),
+    { method: 'POST', body: {} },
+  );
+}
+
+export function sendMerchantPayoutItem(batchId: number, itemId: number) {
+  return apiFetch(
+    `/api/admin/merchant-settlements/${batchId}/items/${itemId}/send`,
+    dataWrapped(
+      z.object({
+        state: z.string(),
+        trx_id: z.string().nullable(),
+        approval_id: z.string().nullable(),
+      }),
+    ),
+    { method: 'POST', body: {} },
+  );
+}
+
+// ------------------------------------------------------------- marketplace KYB
+
+export const KybApplicationSchema = z.object({
+  merchant_id: z.number().int(),
+  merchant_name: z.string().nullable(),
+  merchant_slug: z.string().nullable(),
+  merchant_status: z.string().nullable(),
+  contact_phone: z.string().nullable(),
+  state: z.enum(['not_enrolled', 'pending_kyb', 'active', 'rejected', 'suspended']),
+  business_type: z.string().nullable(),
+  fulfilment: z.string().nullable(),
+  prep_time_min: z.number().int().nullable(),
+  prep_time_max: z.number().int().nullable(),
+  rejected_reason: z.string().nullable(),
+  submitted_at: z.string().nullable(),
+  approved_at: z.string().nullable(),
+});
+export type KybApplication = z.infer<typeof KybApplicationSchema>;
+
+export function listKybApplications(state = 'pending_kyb', options: RequestOptions = {}) {
+  return apiFetch(
+    `/api/admin/marketplace/kyb?state=${encodeURIComponent(state)}`,
+    z.object({ data: z.array(KybApplicationSchema) }),
+    { signal: options.signal },
+  );
+}
+
+export const KybDocumentSchema = z.object({
+  id: z.number().int(),
+  kind: z.string(),
+  original_name: z.string(),
+  mime: z.string().optional(),
+  size: z.number().int(),
+  state: z.string(),
+  reject_reason: z.string().nullable(),
+  uploaded_at: z.string().nullable(),
+});
+
+export function getKybApplication(merchantId: number, options: RequestOptions = {}) {
+  return apiFetch(
+    `/api/admin/marketplace/kyb/${merchantId}`,
+    dataWrapped(
+      KybApplicationSchema.extend({
+        documents: z.array(KybDocumentSchema),
+        missing_documents: z.array(z.string()),
+      }),
+    ),
+    { signal: options.signal },
+  );
+}
+
+export function approveKyb(merchantId: number) {
+  return apiFetch(
+    `/api/admin/marketplace/kyb/${merchantId}/approve`,
+    dataWrapped(KybApplicationSchema),
+    { method: 'POST', body: {} },
+  );
+}
+
+export function rejectKyb(merchantId: number, reason: string) {
+  return apiFetch(
+    `/api/admin/marketplace/kyb/${merchantId}/reject`,
+    dataWrapped(KybApplicationSchema),
+    { method: 'POST', body: { reason } },
+  );
+}
+
+// --------------------------------------------------------- order payments
+
+export const OrderPaymentSchema = z.object({
+  id: z.number().int(),
+  reference: z.string(),
+  customer_name: z.string().nullable(),
+  customer_phone: z.string().nullable(),
+  total_payable_laari: z.number().int(),
+  payment_method: z.string(),
+  payment_state: z.enum(['awaiting_proof', 'proof_submitted', 'verified', 'refused']),
+  has_receipt: z.boolean(),
+  proof_submitted_at: z.string().nullable(),
+  stores: z.array(z.string().nullable()),
+});
+export type OrderPayment = z.infer<typeof OrderPaymentSchema>;
+
+export function listOrderPayments(state = 'proof_submitted', options: RequestOptions = {}) {
+  return apiFetch(
+    `/api/admin/marketplace/payments?payment_state=${encodeURIComponent(state)}`,
+    z.object({ data: z.array(OrderPaymentSchema) }),
+    { signal: options.signal },
+  );
+}
+
+export function verifyOrderPayment(orderId: number) {
+  return apiFetch(
+    `/api/admin/marketplace/payments/${orderId}/verify`,
+    dataWrapped(z.object({ payment_state: z.string() })),
+    { method: 'POST', body: {} },
+  );
+}
+
+export function refuseOrderPayment(orderId: number, reason: string) {
+  return apiFetch(
+    `/api/admin/marketplace/payments/${orderId}/refuse`,
+    dataWrapped(
+      z.object({ payment_state: z.string(), refused_reason: z.string() }),
+    ),
+    { method: 'POST', body: { reason } },
+  );
 }

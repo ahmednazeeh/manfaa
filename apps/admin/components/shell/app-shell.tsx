@@ -6,6 +6,11 @@ import { usePathname, useRouter } from 'next/navigation';
 import { listHolds, listStoreReviews } from '@manfaa/api-client';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
+  BadgeCheck,
+  HandCoins,
+  Radio,
+  Receipt,
+  Wallet,
   Banknote,
   ClipboardCheck,
   CreditCard,
@@ -152,6 +157,14 @@ const NAV_ITEMS: NavItem[] = [
     badge: PendingChangeRequestsBadge,
   },
   { href: '/payouts', label: 'Payout batches', icon: Banknote },
+  { href: '/pending-payments', label: 'Pending payments', icon: Wallet },
+  {
+    href: '/merchant-settlements',
+    label: 'Merchant settlements',
+    icon: HandCoins,
+  },
+  { href: '/marketplace/kyb', label: 'Marketplace KYB', icon: BadgeCheck },
+  { href: '/marketplace/payments', label: 'Order payments', icon: Receipt },
   { href: '/reconciliation', label: 'Reconciliation', icon: Scale },
 ];
 
@@ -161,6 +174,7 @@ const SETTINGS_ITEMS: NavItem[] = [
   { href: '/settings/appearance', label: 'Appearance', icon: Palette },
   { href: '/settings/fee-tiers', label: 'Fee tiers', icon: Percent },
   { href: '/settings/bank-accounts', label: 'Bank accounts', icon: CreditCard },
+  { href: '/settings/transfers', label: 'Transfer API', icon: Radio },
   { href: '/settings/store-categories', label: 'Store categories', icon: Tags },
   { href: '/settings/offers', label: 'Featured offers', icon: Megaphone },
   {

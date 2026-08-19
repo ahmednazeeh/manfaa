@@ -62,6 +62,24 @@ const SETTING_META: Record<PlatformSettingKey, SettingMeta> = {
       'Taken off the PLATFORM FEE — never off the customer’s cashback — when a merchant settles every outstanding transaction and each one is still inside the age window below. Set to 0% to switch the incentive off entirely.',
     unit: 'percent',
   },
+  new_merchant_validation_window_days: {
+    label: 'New merchant validation window',
+    description:
+      'What a store starts on, as distinct from the ceiling above that it may raise itself to. Changing this never touches a store that already exists.',
+    unit: 'days',
+  },
+  marketplace_enabled: {
+    label: 'Marketplace',
+    description:
+      'The whole marketplace, on or off. With it off the Market tab, the customer storefront, order tracking and every merchant marketplace menu disappear — and the routes refuse as well, so an old app build cannot walk past it. Cashback is unaffected.',
+    unit: 'toggle',
+  },
+  marketplace_fee_percent: {
+    label: 'Marketplace fee',
+    description:
+      'The platform’s cut of a marketplace order, charged on items and never on delivery. Frozen onto each order when it is placed, so changing this never restates one already made. A store may be given its own rate, which overrides this.',
+    unit: 'percent',
+  },
   prompt_discount_max_age_days: {
     label: 'Prompt-payment age window',
     description:
