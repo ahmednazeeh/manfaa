@@ -14,13 +14,25 @@ class TransferSetting extends Model
 
     protected function casts(): array
     {
-        return ['auto_transfer_enabled' => 'boolean', 'auto_max_laari' => 'integer'];
+        return [
+            'auto_transfer_enabled' => 'boolean',
+            'auto_max_laari' => 'integer',
+            'auto_verify_enabled' => 'boolean',
+            'verify_window_minutes' => 'integer',
+            'verify_min_score' => 'integer',
+        ];
     }
 
     public function profile(): BelongsTo
     {
         return $this->belongsTo(TransferProfile::class, 'profile_id');
     }
+
+    /**
+     * The profile history is READ through. Deliberately its own setting:
+     * money arrives in one account and leaves from another, and reading is a
+     * different risk from paying.
+     */
 
     /** There is exactly one, always. */
     public static function current(): self

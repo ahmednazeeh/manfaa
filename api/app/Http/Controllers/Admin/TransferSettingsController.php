@@ -6,6 +6,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\AdminUser;
+use App\Models\PlatformBankAccount;
 use App\Models\TransferProfile;
 use App\Models\TransferSetting;
 use Illuminate\Http\JsonResponse;
@@ -35,6 +36,29 @@ final class TransferSettingsController extends Controller
             'auto_transfer_enabled' => $settings->auto_transfer_enabled,
             'auto_max_laari' => $settings->auto_max_laari,
             'profile_id' => $settings->profile_id,
+            // Auto-matching an incoming payment to an order. Behind its own
+            // flag because the API access is not live yet (owner
+            // requirement 2026-08-19) — the code ships dark and an operator
+            // turns it on the day the tunnel exists.
+            'auto_verify_enabled' => $settings->auto_verify_enabled,
+            'verify_window_minutes' => $settings->verify_window_minutes,
+            'verify_min_score' => $settings->verify_min_score,
+            // Which of OUR accounts is watched, and how. One row per bank a
+            // customer can choose at checkout — a single global account
+            // could only ever verify half the orders.
+            'watched_accounts' => PlatformBankAccount::query()
+                ->orderByDesc('is_primary')
+                ->orderBy('id')
+                ->get()
+                ->map(fn (PlatformBankAccount $account): array => [
+                    'id' => $account->id,
+                    'bank_name' => $account->bank_name,
+                    'account_no' => $account->account_no,
+                    'account_name' => $account->account_name,
+                    'active' => $account->active,
+                    'is_primary' => $account->is_primary,
+                    'verify_profile_id' => $account->verify_profile_id,
+                ])->values(),
             // Whether the KEY is present, never the key itself.
             'api_key_configured' => (string) config('services.transfer.api_key') !== '',
             'profiles' => TransferProfile::query()->orderBy('id')->get()->map(fn (TransferProfile $profile): array => [
@@ -43,6 +67,9 @@ final class TransferSettingsController extends Controller
                 'base_url' => $profile->base_url,
                 'segment' => $profile->segment,
                 'from_account' => $profile->from_account,
+                // Which bank this profile debits, so a payout to a BML
+                // payee can leave from our BML account rather than crossing.
+                'bank' => $profile->bank(),
                 'endpoint' => $profile->endpoint(),
                 // Dual control answers 200 with `pending_approval`: accepted
                 // and parked, never to be re-sent.
@@ -59,6 +86,13 @@ final class TransferSettingsController extends Controller
             'auto_transfer_enabled' => ['sometimes', 'boolean'],
             'auto_max_laari' => ['sometimes', 'integer', 'min:0', 'max:100000000'],
             'profile_id' => ['sometimes', 'nullable', 'integer', Rule::exists('transfer_profiles', 'id')],
+            'auto_verify_enabled' => ['sometimes', 'boolean'],
+            // Bounded on purpose. A window of hours would have us reading a
+            // bank's history for every unpaid order all day, and a payment
+            // that late deserves a person anyway.
+            'verify_window_minutes' => ['sometimes', 'integer', 'min:1', 'max:180'],
+            // 0 would accept any name at all. The floor is deliberate.
+            'verify_min_score' => ['sometimes', 'integer', 'min:30', 'max:100'],
         ]);
 
         /** @var AdminUser $admin */
@@ -68,6 +102,24 @@ final class TransferSettingsController extends Controller
         $settings->fill($validated);
         $settings->updated_by = $admin->getKey();
         $settings->save();
+
+        return $this->index();
+    }
+
+    /**
+     * Point one of our accounts at the profile that reads its history.
+     *
+     * Separate from the profile screen on purpose: this says "customers pay
+     * into THIS account, and THIS is how we read it", which is a different
+     * sentence from "this is how we send money out".
+     */
+    public function updateWatchedAccount(Request $request, PlatformBankAccount $account): JsonResponse
+    {
+        $validated = $request->validate([
+            'verify_profile_id' => ['present', 'nullable', 'integer', Rule::exists('transfer_profiles', 'id')],
+        ]);
+
+        $account->forceFill($validated)->save();
 
         return $this->index();
     }
@@ -84,6 +136,7 @@ final class TransferSettingsController extends Controller
             // check that from here, so the panel shows the list and an
             // operator picks. Ignored entirely on /bml/transfer.
             'from_account' => ['sometimes', 'nullable', 'string', 'max:40'],
+            'bank' => ['sometimes', 'nullable', 'string', Rule::in(['mib', 'bml'])],
             'dual_control' => ['sometimes', 'boolean'],
             'active' => ['sometimes', 'boolean'],
             'is_default' => ['sometimes', 'boolean'],

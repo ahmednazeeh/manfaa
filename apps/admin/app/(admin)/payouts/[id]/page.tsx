@@ -53,6 +53,7 @@ import {
 } from '@/components/admin/state-badge';
 import { MarkFailedDialog } from '@/components/payouts/mark-failed-dialog';
 import { MarkPaidDialog } from '@/components/payouts/mark-paid-dialog';
+import { SendViaApiButton } from '@/components/payouts/send-via-api-button';
 import { SettleAllButton } from '@/components/payouts/settle-all-button';
 import { UploadSheetButton } from '@/components/payouts/upload-sheet-button';
 
@@ -202,6 +203,9 @@ export default function PayoutBatchDetailPage() {
             {batch.exported_at ? (
               <span>Exported {formatDateTime(batch.exported_at)}</span>
             ) : null}
+            {batch.api_sent_at ? (
+              <span>Sent via API {formatDateTime(batch.api_sent_at)}</span>
+            ) : null}
           </span>
         }
         actions={
@@ -242,6 +246,12 @@ export default function PayoutBatchDetailPage() {
                   : 'Re-download transfer sheet'}
               </Button>
             ) : null}
+            {batch.state === 'approved' ||
+            batch.state === 'processing' ||
+            batch.state === 'sent' ||
+            batch.state === 'partially_failed' ? (
+              <SendViaApiButton batch={batch} />
+            ) : null}
             {acceptsResults ? (
               <>
                 <UploadSheetButton batchId={batch.id} />
@@ -258,10 +268,12 @@ export default function PayoutBatchDetailPage() {
             <Download />
           </AlertIcon>
           <AlertDescription>
-            Exporting downloads the transfer sheet (.xlsx) and moves the batch
-            to processing — items are marked sent. The identical sheet can be
-            re-downloaded until the first outcome is recorded. Fill in the
-            Transfer Reference Number column and upload it back.
+            Three roads to the bank, and they mix freely on one batch. Export
+            downloads the transfer sheet (.xlsx), moves the batch to
+            processing and marks items sent; fill in the Transfer Reference
+            Number column and upload it back. Send via API hands the pending
+            rows to a queue worker instead. Or record an outcome by hand, row
+            by row.
           </AlertDescription>
         </Alert>
       ) : null}
@@ -411,3 +423,4 @@ export default function PayoutBatchDetailPage() {
     </div>
   );
 }
+

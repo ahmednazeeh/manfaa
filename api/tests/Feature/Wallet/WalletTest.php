@@ -170,7 +170,9 @@ it('refuses to re-send a parked transfer', function () {
     expect($payout->fresh()->attempts)->toBe(1);
 });
 
-it('puts the money back only when the failure PROVES nothing left the bank', function () {
+it('puts the money back when the failure PROVES nothing left the bank', function () {
+    // A refused account number was refused before anything moved, so the
+    // customer gets their balance back and can correct the account.
     Http::fake(['*' => Http::response(['error_code' => 'invalid_account', 'error' => 'No such account'], 400)]);
 
     $this->wallet->credit($this->customer, 50000, 'refund');
@@ -179,10 +181,21 @@ it('puts the money back only when the failure PROVES nothing left the bank', fun
     $failed = app(PayoutSender::class)->send($payout);
 
     expect($failed->state)->toBe('failed');
+    expect(CustomerWallet::query()->sole()->balance_laari)->toBe(50000);
+});
 
-    // A 400 with an unknown-to-us shape is NOT proof. The balance stays
-    // debited and a human looks — crediting a wallet for money that did move
-    // is a second payment by another name.
+it('keeps the money committed when the failure proves nothing at all', function () {
+    // A 400 carrying a code we do not recognise is NOT proof. The balance
+    // stays debited and a human looks — crediting a wallet for money that
+    // did move is a second payment by another name.
+    Http::fake(['*' => Http::response(['error_code' => 'bank_error', 'error' => 'Refused'], 400)]);
+
+    $this->wallet->credit($this->customer, 50000, 'refund');
+    $payout = $this->wallet->requestWithdrawal($this->customer, 10000);
+
+    $failed = app(PayoutSender::class)->send($payout);
+
+    expect($failed->state)->toBe('failed');
     expect(CustomerWallet::query()->sole()->balance_laari)->toBe(40000);
 });
 

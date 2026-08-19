@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import {
   approveMerchantPayoutBatch,
+  sendMerchantPayoutBatchViaApi,
   buildMerchantPayoutBatch,
   cancelMerchantPayoutBatch,
   getMerchantPayoutBatch,
@@ -12,12 +13,22 @@ import {
 } from '@manfaa/api-client';
 import { formatMoney } from '@manfaa/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Download, TriangleAlert, Upload } from 'lucide-react';
+import { Download, Landmark, TriangleAlert, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiErrorMessage } from '@/lib/api-error';
 import { formatDateTime } from '@/lib/format';
 import { Alert, AlertDescription, AlertIcon } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
@@ -139,6 +150,29 @@ function BatchCard({
   const invalidate = () =>
     queryClient.invalidateQueries({ queryKey: ['admin', 'merchant-settlements'] });
 
+  /**
+   * The whole run through the bank API, in a queue worker
+   * (owner requirement 2026-08-19). A refusal is recorded and the pass moves
+   * on — never retried — and every row carries the same internal_ref the
+   * sheet is matched on, so a re-run cannot pay a shop twice.
+   */
+  const [confirmSend, setConfirmSend] = useState(false);
+
+  const sendBatch = useMutation({
+    mutationFn: () => sendMerchantPayoutBatchViaApi(batch.id),
+    onSuccess: (response) => {
+      invalidate();
+      queryClient.invalidateQueries({
+        queryKey: ['admin', 'merchant-settlement', batch.id],
+      });
+      toast.success(
+        `${response.data.queued} transfer${response.data.queued === 1 ? '' : 's'} queued. Outcomes appear against each shop as the bank answers.`,
+      );
+      setConfirmSend(false);
+    },
+    onError: (error) => toast.error(apiErrorMessage(error)),
+  });
+
   const approve = useMutation({
     mutationFn: () => approveMerchantPayoutBatch(batch.id),
     onSuccess: () => {
@@ -242,6 +276,59 @@ function BatchCard({
                 Cancel
               </Button>
             </>
+          ) : null}
+
+          {['approved', 'processing'].includes(batch.state) ? (
+            <AlertDialog open={confirmSend} onOpenChange={setConfirmSend}>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setConfirmSend(true)}
+              >
+                <Landmark className="size-4" />
+                Send via API
+              </Button>
+
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>
+                    Send this settlement run to the bank?
+                  </AlertDialogTitle>
+                  <AlertDialogDescription asChild>
+                    <div className="flex flex-col gap-2">
+                      <span>
+                        A queue worker transfers every shop still waiting in{' '}
+                        {batch.reference}. Rows already sent, failed or waiting
+                        on an approver are passed over.
+                      </span>
+                      <span>
+                        A refused transfer is recorded and the pass moves on to
+                        the next shop — it is never retried, so one bad account
+                        number cannot stop everybody else being paid. Every row
+                        carries the same reference the sheet is matched on, so
+                        no shop can be paid twice.
+                      </span>
+                    </div>
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel disabled={sendBatch.isPending}>
+                    Cancel
+                  </AlertDialogCancel>
+                  <AlertDialogAction
+                    disabled={sendBatch.isPending}
+                    onClick={(event) => {
+                      // Held open until the request answers, so a failure is
+                      // seen rather than dismissed by the dialog closing.
+                      event.preventDefault();
+                      sendBatch.mutate();
+                    }}
+                  >
+                    {sendBatch.isPending ? 'Queueing…' : 'Send to the bank'}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           ) : null}
 
           {['approved', 'processing', 'completed'].includes(batch.state) ? (

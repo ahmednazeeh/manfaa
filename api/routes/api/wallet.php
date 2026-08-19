@@ -32,5 +32,6 @@ Route::prefix('admin')->middleware('auth:admin')->group(function (): void {
 
         Route::patch('transfer-settings', [TransferSettingsController::class, 'updateSettings']);
         Route::patch('transfer-settings/profiles/{profile}', [TransferSettingsController::class, 'updateProfile'])->whereNumber('profile');
+        Route::patch('transfer-settings/watched-accounts/{account}', [TransferSettingsController::class, 'updateWatchedAccount'])->whereNumber('account');
     });
 });

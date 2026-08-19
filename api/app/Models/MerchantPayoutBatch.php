@@ -27,6 +27,7 @@ class MerchantPayoutBatch extends Model
             'cutoff_at' => 'immutable_datetime',
             'approved_at' => 'immutable_datetime',
             'exported_at' => 'immutable_datetime',
+            'api_sent_at' => 'immutable_datetime',
         ];
     }
 

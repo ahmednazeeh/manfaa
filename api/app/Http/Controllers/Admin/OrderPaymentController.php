@@ -44,6 +44,15 @@ final class OrderPaymentController extends Controller
                 'payment_state' => $order->payment_state,
                 'has_receipt' => $order->receipt_path !== null,
                 'proof_submitted_at' => $order->proof_submitted_at?->toIso8601String(),
+                // Who decided. A machine-verified payment is still auditable
+                // as one — verified_by is deliberately left null, so this
+                // flag is the only thing that says so.
+                'auto_verified' => (bool) $order->auto_verified,
+                'matched_trx_id' => $order->matched_trx_id,
+                'matched_payer_name' => $order->matched_payer_name,
+                'matched_score' => $order->matched_score,
+                // Set while the bank is still being watched.
+                'poll_until' => $order->poll_until?->toIso8601String(),
                 'stores' => $order->suborders->map(fn ($sub): ?string => $sub->merchant?->name)->values(),
             ])->values(),
         ]);

@@ -1,7 +1,7 @@
 <?php
 
-use App\Http\Controllers\Merchant\SetupController;
 use App\Http\Controllers\Merchant\AccountClosureController;
+use App\Http\Controllers\Merchant\SetupController;
 use App\Http\Controllers\Merchant\SignupController;
 use Illuminate\Support\Facades\Route;
 

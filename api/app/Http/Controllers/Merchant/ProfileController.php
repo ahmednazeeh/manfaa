@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Merchant;
 
-use App\Rules\MaxWords;
 use App\Domain\Approvals\ChangeRequestService;
 use App\Domain\Discovery\DiscoveryService;
 use App\Domain\Onboarding\OnboardingService;
@@ -14,6 +13,7 @@ use App\Http\Resources\MerchantProfileResource;
 use App\Models\Merchant;
 use App\Models\MerchantUser;
 use App\Models\StoreCategory;
+use App\Rules\MaxWords;
 use Closure;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;

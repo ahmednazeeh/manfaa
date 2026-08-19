@@ -9,6 +9,7 @@ use App\Models\Customer;
 use App\Models\Merchant;
 use App\Models\MerchantUser;
 use App\Models\Transaction;
+use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
@@ -353,10 +354,10 @@ it('tallies THIS MONTH beside today, so the till can show what it earned', funct
     $customer = Customer::factory()->create();
 
     $timezone = (string) config('app.business_timezone', 'Indian/Maldives');
-    $monthStart = \Carbon\CarbonImmutable::now($timezone)->startOfMonth();
+    $monthStart = CarbonImmutable::now($timezone)->startOfMonth();
 
     // Two sales earlier this month, one today: the month covers all three.
-    foreach ([$monthStart->addDay(), $monthStart->addDays(2), \Carbon\CarbonImmutable::now($timezone)] as $when) {
+    foreach ([$monthStart->addDay(), $monthStart->addDays(2), CarbonImmutable::now($timezone)] as $when) {
         Transaction::factory()->for($merchant)->for($customer)->create([
             'state' => TransactionState::Confirmed->value,
             'occurred_at' => $when->utc(),

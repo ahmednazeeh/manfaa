@@ -884,6 +884,26 @@ export function approveAdminPayoutBatch(
   );
 }
 
+/**
+ * POST /api/admin/payout-batches/{batch}/send-via-api — the third road to
+ * the bank, beside the exported sheet and the per-row Mark paid.
+ *
+ * Queued: a batch is as many live bank calls as it has rows. The reply says
+ * the pass STARTED, which is all a caller can honestly be told about work
+ * that has not happened yet.
+ */
+export function sendAdminPayoutBatchViaApi(
+  batchId: number,
+  body: { profile_id?: number | null } = {},
+  options: RequestOptions = {},
+): Promise<PayoutBatchResponse> {
+  return apiFetch(
+    `/api/admin/payout-batches/${batchId}/send-via-api`,
+    PayoutBatchResponseSchema,
+    { method: 'POST', body, signal: options.signal },
+  );
+}
+
 /** POST /api/admin/payout-batches/{batch}/cancel — withdraws a draft. */
 export function cancelAdminPayoutBatch(
   batchId: number,
@@ -1847,6 +1867,8 @@ export const TransferProfileSchema = z.object({
   base_url: z.string(),
   segment: z.string(),
   from_account: z.string().nullable(),
+  /** Which bank this profile debits, so a payout can stay inside one bank. */
+  bank: z.enum(['mib', 'bml']).nullable(),
   endpoint: z.string(),
   /** Answers 200 `pending_approval`: accepted and parked, never re-sent. */
   dual_control: z.boolean(),
@@ -1855,6 +1877,25 @@ export const TransferProfileSchema = z.object({
 });
 export type TransferProfile = z.infer<typeof TransferProfileSchema>;
 
+/**
+ * One of OUR accounts a customer can be told to pay into, and the profile
+ * that reads its history.
+ *
+ * There is no single global "watched account": customers choose their bank
+ * at checkout, so one account could only ever verify half the orders.
+ */
+export const WatchedAccountSchema = z.object({
+  id: z.number().int(),
+  bank_name: z.string(),
+  account_no: z.string(),
+  account_name: z.string().nullable(),
+  active: z.boolean(),
+  is_primary: z.boolean(),
+  /** Null means nobody watches it and a person verifies by hand. */
+  verify_profile_id: z.number().int().nullable(),
+});
+export type WatchedAccount = z.infer<typeof WatchedAccountSchema>;
+
 export const TransferSettingsResponseSchema = dataWrapped(
   z.object({
     auto_transfer_enabled: z.boolean(),
@@ -1862,7 +1903,12 @@ export const TransferSettingsResponseSchema = dataWrapped(
     profile_id: z.number().int().nullable(),
     /** Whether a key is SET. Never the key — it is the whole of the auth. */
     api_key_configured: z.boolean(),
+    /** Auto-matching a customer payment to an order, behind its own flag. */
+    auto_verify_enabled: z.boolean(),
+    verify_window_minutes: z.number().int(),
+    verify_min_score: z.number().int(),
     profiles: z.array(TransferProfileSchema),
+    watched_accounts: z.array(WatchedAccountSchema),
   }),
 );
 export type TransferSettingsResponse = z.infer<
@@ -1879,6 +1925,9 @@ export function updateTransferSettings(body: {
   auto_transfer_enabled?: boolean;
   auto_max_laari?: number;
   profile_id?: number | null;
+  auto_verify_enabled?: boolean;
+  verify_window_minutes?: number;
+  verify_min_score?: number;
 }) {
   return apiFetch('/api/admin/transfer-settings', TransferSettingsResponseSchema, {
     method: 'PATCH',
@@ -1893,6 +1942,7 @@ export function updateTransferProfile(
     base_url?: string;
     segment?: string;
     from_account?: string | null;
+    bank?: 'mib' | 'bml' | null;
     dual_control?: boolean;
     active?: boolean;
     is_default?: boolean;
@@ -1900,6 +1950,18 @@ export function updateTransferProfile(
 ) {
   return apiFetch(
     `/api/admin/transfer-settings/profiles/${id}`,
+    TransferSettingsResponseSchema,
+    { method: 'PATCH', body },
+  );
+}
+
+/** Point one of our accounts at the profile that reads its history. */
+export function updateWatchedAccount(
+  id: number,
+  body: { verify_profile_id: number | null },
+) {
+  return apiFetch(
+    `/api/admin/transfer-settings/watched-accounts/${id}`,
     TransferSettingsResponseSchema,
     { method: 'PATCH', body },
   );
@@ -1919,6 +1981,8 @@ export const MerchantSettlementBatchSchema = z.object({
   cutoff_at: z.string().nullable(),
   approved_at: z.string().nullable(),
   exported_at: z.string().nullable(),
+  /** Set when the run went out through the bank API rather than as a sheet. */
+  api_sent_at: z.string().nullable().optional(),
 });
 export type MerchantSettlementBatch = z.infer<
   typeof MerchantSettlementBatchSchema
@@ -1994,6 +2058,18 @@ export function cancelMerchantPayoutBatch(id: number) {
     `/api/admin/merchant-settlements/${id}/cancel`,
     dataWrapped(z.object({ state: z.string() })),
     { method: 'POST', body: {} },
+  );
+}
+
+/** POST /api/admin/merchant-settlements/{batch}/send — the whole run, queued. */
+export function sendMerchantPayoutBatchViaApi(
+  batchId: number,
+  body: { profile_id?: number | null } = {},
+) {
+  return apiFetch(
+    `/api/admin/merchant-settlements/${batchId}/send`,
+    dataWrapped(z.object({ queued: z.number().int() })),
+    { method: 'POST', body },
   );
 }
 
@@ -2090,6 +2166,17 @@ export const OrderPaymentSchema = z.object({
   payment_state: z.enum(['awaiting_proof', 'proof_submitted', 'verified', 'refused']),
   has_receipt: z.boolean(),
   proof_submitted_at: z.string().nullable(),
+  /**
+   * Verified by the bank-history matcher rather than by a person.
+   * `verified_by` stays null for these on purpose — no admin decided it —
+   * so this flag is the only thing that records who did.
+   */
+  auto_verified: z.boolean(),
+  matched_trx_id: z.string().nullable(),
+  matched_payer_name: z.string().nullable(),
+  matched_score: z.number().int().nullable(),
+  /** Set while the bank is still being watched for this payment. */
+  poll_until: z.string().nullable(),
   stores: z.array(z.string().nullable()),
 });
 export type OrderPayment = z.infer<typeof OrderPaymentSchema>;

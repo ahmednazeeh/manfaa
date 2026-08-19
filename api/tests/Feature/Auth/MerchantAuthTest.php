@@ -1,7 +1,9 @@
 <?php
 
+use App\Models\AdminUser;
 use App\Models\Merchant;
 use App\Models\MerchantUser;
+use Illuminate\Auth\SessionGuard;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -73,11 +75,11 @@ it('keeps a fresh merchant login alive when another guard\'s session hash pair i
     // hash, the 2026-08-17 production incident) must log out that guard
     // only — flushing the whole session bounced a just-logged-in merchant
     // straight back to /login.
-    $merchant = \App\Models\Merchant::factory()->create();
-    $owner = \App\Models\MerchantUser::factory()->for($merchant)->owner()->create([
+    $merchant = Merchant::factory()->create();
+    $owner = MerchantUser::factory()->for($merchant)->owner()->create([
         'password' => bcrypt('secret-123'),
     ]);
-    $admin = \App\Models\AdminUser::factory()->create();
+    $admin = AdminUser::factory()->create();
 
     $this->postJson('/api/merchant/auth/login', [
         'email' => $owner->email,
@@ -85,7 +87,7 @@ it('keeps a fresh merchant login alive when another guard\'s session hash pair i
     ])->assertOk();
 
     session()->put([
-        'login_admin_'.sha1(\Illuminate\Auth\SessionGuard::class) => $admin->id,
+        'login_admin_'.sha1(SessionGuard::class) => $admin->id,
         'password_hash_admin' => 'stale-or-wrong-format-value',
     ]);
 
@@ -93,7 +95,7 @@ it('keeps a fresh merchant login alive when another guard\'s session hash pair i
     $this->getJson('/api/merchant/auth/me')->assertOk();
 
     // …while the offending admin login (and its pair) is gone.
-    expect(session()->has('login_admin_'.sha1(\Illuminate\Auth\SessionGuard::class)))->toBeFalse()
+    expect(session()->has('login_admin_'.sha1(SessionGuard::class)))->toBeFalse()
         ->and(session()->has('password_hash_admin'))->toBeFalse()
-        ->and(session()->has('login_merchant_'.sha1(\Illuminate\Auth\SessionGuard::class)))->toBeTrue();
+        ->and(session()->has('login_merchant_'.sha1(SessionGuard::class)))->toBeTrue();
 });

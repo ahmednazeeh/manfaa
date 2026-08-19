@@ -1446,3 +1446,79 @@ landing on Market.
 
 **Still to draw:** checkout's four steps, order tracking in Activity, the
 wallet screen, and the merchant app's Orders and Products tabs.
+
+
+---
+
+## MP12 — bank API automation and auto-verification (shipped 2026-08-19)
+
+Three roads to the bank now, and they mix freely on one batch: the exported
+sheet, per-row Mark paid, and a queue worker driving the transfer API.
+
+### Sending a batch
+- `BatchApiSender` sweeps a batch, one live bank call per pending row.
+  `SendPayoutBatchViaApi` / `SendMerchantPayoutBatchViaApi` carry it, both
+  `tries = 1`.
+- **A refusal is never retried.** It is recorded and the pass moves to the
+  next row — a batch that stops at the first bad account number pays nobody.
+- **Ambiguity is left alone.** A refusal that proves no debit (`invalid_account`,
+  `invalid_amount`, `missing_field`, `validation_failed`) marks the row failed
+  and re-queues its money. Anything else — a timeout, a 500 — marks nothing
+  and stays pending for a person.
+- Every row sends its own stored key as `internal_ref`, so a worker that dies
+  halfway and is re-run cannot pay anybody twice.
+- A parked (`pending_approval`) row moves out of `pending` so no later sweep
+  re-sends it; the approvals-queue id is kept, never filed as a bank reference.
+- `api_sent_at` is deliberately not `exported_at` — no file was made, and the
+  batch page says which road it took.
+- Fixed on the way through: `TransferClient` applied the proves-no-debit
+  allow-list only on the 409 duplicate path, so a first-attempt
+  `invalid_account` was treated as needing review. Both paths now agree.
+
+### Auto-verifying customer payments
+- Behind `auto_verify_enabled` (default off) — the tunnel is not live yet, so
+  it ships dark and an operator turns it on. Checked at the dispatch site, in
+  the job, and in the verifier.
+- `PollOrderPayment` watches for `verify_window_minutes` (default 15) after
+  the receipt upload, re-queueing each minute. The window is read from
+  `poll_until` on the row, so a restarted worker resumes where the clock is.
+- Amount to the laari AND name by `NameMatcher` (pg_trgm, threshold 0.30,
+  token / initial / trigram, every expected token must find a home). Verified
+  against the owner's own examples: Ahmed Nazeeh ↔ AHMD NAZEEH,
+  Ahmed Nazeeh Adam ↔ AHMD N ADAM.
+- `BankHistoryClient` normalises both banks in their own field names —
+  MIB `trxNumber2` / `benefName` / signed `baseAmount`; BML `narrative3`
+  falling back to `narrative1`, direction from `minus`.
+- **A bank reference verifies exactly one order, ever.** Partial unique index
+  `orders_matched_trx_id_unique`; the verifier pre-checks to skip cheaply and
+  catches the constraint violation, because two workers reading the same
+  history at the same instant would both see a row unclaimed.
+- On a match the order is verified, `auto_verified` is set, `verified_by` is
+  deliberately left null (no person decided it), and **every shop in the
+  order is told** — at verification, not at placement, because an unpaid
+  order is not something a shop should be interrupted for.
+
+### Routing by bank (owner question, same day)
+The verifier polled one fixed account. Customers choose BML or MIB at
+checkout, so that would have left every order paid into the other bank
+unmatched forever while the screen said auto-verify was on.
+- `platform_bank_accounts.verify_profile_id` maps each of our accounts to the
+  profile that reads *its* history. No fallback: reading the wrong bank's
+  ledger can only produce a match that means nothing.
+- The global `verify_account` / `verify_profile_id` were dropped in the same
+  round they shipped.
+- `transfer_profiles.bank` does the same outbound — a payout to a BML payee
+  leaves from our BML account where one is set. Null everywhere, behaviour is
+  unchanged.
+
+### Screens
+- Transfer API settings: auto-verification card (flag, watched-account
+  mapping per bank, window, minimum score) and a bank selector per profile.
+- Payout batch and Merchant Settlements: **Send via API**, each behind a
+  confirmation naming the rows and the money, and stating that a refusal is
+  not retried.
+- Marketplace payments: "Matched automatically" and "Watching the bank"
+  badges, plus the bank's own reference, payer name and score.
+
+Tests: 42 across `tests/Feature/Transfers/` and `tests/Unit/NameMatcherTest.php`.
+Suite 1610 passing.

@@ -7,12 +7,14 @@ namespace App\Http\Controllers\Customer;
 use App\Domain\Marketplace\CheckoutException;
 use App\Domain\Marketplace\CheckoutService;
 use App\Http\Controllers\Controller;
+use App\Jobs\PollOrderPayment;
 use App\Models\Cart;
 use App\Models\Customer;
 use App\Models\Order;
 use App\Models\PlatformBankAccount;
 use App\Models\Suborder;
 use App\Models\SuborderItem;
+use App\Models\TransferSetting;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -103,13 +105,29 @@ final class OrderController extends Controller
             Storage::disk('local')->delete($row->receipt_path);
         }
 
+        $settings = TransferSetting::current();
+        $now = CarbonImmutable::now();
+
         $row->forceFill([
             'receipt_path' => $path,
             'payment_state' => 'proof_submitted',
-            'proof_submitted_at' => CarbonImmutable::now(),
+            'proof_submitted_at' => $now,
             'state' => 'under_review',
             'refused_reason' => null,
+            // The bank-watching window opens NOW and closes on the clock,
+            // not on a count of tries — a worker restarted mid-window must
+            // resume where the clock is, not start the fifteen minutes again
+            // (owner requirement: max 15 min poll after receipt upload).
+            'poll_started_at' => $now,
+            'poll_until' => $now->addMinutes((int) $settings->verify_window_minutes),
+            'poll_attempts' => 0,
         ])->save();
+
+        // Only when the operator has turned auto-matching on. The flag is
+        // the whole point of shipping this before the bank tunnel exists.
+        if ($settings->auto_verify_enabled) {
+            PollOrderPayment::dispatch((int) $row->getKey());
+        }
 
         return new JsonResponse(['data' => $this->present($row->refresh()->load('suborders.items'))]);
     }

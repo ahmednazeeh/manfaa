@@ -7,9 +7,12 @@ namespace App\Http\Controllers\Admin;
 use App\Domain\Marketplace\MerchantPayoutBuilder;
 use App\Domain\Marketplace\MerchantSheetImporter;
 use App\Domain\Marketplace\MerchantTransferSheet;
+use App\Domain\Transfers\BatchNotSendableException;
 use App\Domain\Transfers\TransferClient;
 use App\Domain\Transfers\TransferOutcome;
+use App\Domain\Transfers\TransferProfileRef;
 use App\Http\Controllers\Controller;
+use App\Jobs\SendMerchantPayoutBatchViaApi;
 use App\Models\AdminUser;
 use App\Models\MerchantPayoutBatch;
 use App\Models\MerchantPayoutItem;
@@ -159,6 +162,43 @@ final class MerchantSettlementController extends Controller
         }
 
         return new JsonResponse(['data' => $result]);
+    }
+
+    /**
+     * Hand the whole run to a queue worker, which transfers every pending
+     * row through the bank API (owner requirement 2026-08-19).
+     *
+     * A refusal does not stop the pass and is never retried — the worker
+     * records why and moves to the next shop. Each row carries the same
+     * `internal_ref` the sheet is matched on, so a worker that dies halfway
+     * and is re-run cannot pay anybody twice.
+     */
+    public function sendBatch(Request $request, MerchantPayoutBatch $batch): JsonResponse
+    {
+        $validated = $request->validate([
+            'profile_id' => ['sometimes', 'nullable', 'integer'],
+        ]);
+
+        if (! in_array($batch->state, ['approved', 'processing'], true)) {
+            return new JsonResponse([
+                'message' => 'Approve the run before sending it to the bank.',
+                'code' => 'not_sendable',
+            ], 409);
+        }
+
+        try {
+            // Resolved here too, so a missing profile refuses to the admin's
+            // face rather than dying quietly in a worker.
+            TransferProfileRef::resolve($validated['profile_id'] ?? null);
+        } catch (BatchNotSendableException $e) {
+            return new JsonResponse(['message' => $e->getMessage(), 'code' => 'no_profile'], 422);
+        }
+
+        SendMerchantPayoutBatchViaApi::dispatch((int) $batch->getKey(), $validated['profile_id'] ?? null);
+
+        return new JsonResponse(['data' => [
+            'queued' => $batch->items()->where('state', 'pending')->count(),
+        ]]);
     }
 
     /**

@@ -9,7 +9,7 @@ import {
 } from '@manfaa/api-client';
 import { formatMoney } from '@manfaa/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Download, TriangleAlert } from 'lucide-react';
+import { Bot, Download, TriangleAlert } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiErrorMessage } from '@/lib/api-error';
 import { formatDateTime } from '@/lib/format';
@@ -151,6 +151,20 @@ function PaymentCard({ payment }: { payment: OrderPayment }) {
               <Badge variant="secondary" appearance="ghost" size="sm">
                 {payment.payment_method.toUpperCase()}
               </Badge>
+              {payment.auto_verified ? (
+                // Nobody signed for this one, so the screen has to say so.
+                <Badge variant="info" appearance="light" size="sm">
+                  <Bot className="size-3" />
+                  Matched automatically
+                </Badge>
+              ) : null}
+              {payment.payment_state === 'proof_submitted' &&
+              payment.poll_until &&
+              new Date(payment.poll_until) > new Date() ? (
+                <Badge variant="secondary" appearance="light" size="sm">
+                  Watching the bank
+                </Badge>
+              ) : null}
             </div>
             <p className="text-sm text-muted-foreground">
               {payment.customer_name ?? '—'} · {payment.customer_phone ?? '—'}
@@ -161,6 +175,20 @@ function PaymentCard({ payment }: { payment: OrderPayment }) {
             {payment.proof_submitted_at ? (
               <p className="text-xs text-muted-foreground/80">
                 Proof uploaded {formatDateTime(payment.proof_submitted_at)}
+              </p>
+            ) : null}
+            {payment.matched_trx_id ? (
+              // What the bank actually said, not our conclusion about it —
+              // an operator checking this later needs the bank's own words.
+              <p className="text-xs text-muted-foreground/80">
+                Bank reference{' '}
+                <code className="text-[11px]">{payment.matched_trx_id}</code>
+                {payment.matched_payer_name
+                  ? ` · paid by ${payment.matched_payer_name}`
+                  : ''}
+                {payment.matched_score !== null
+                  ? ` · name score ${payment.matched_score}`
+                  : ''}
               </p>
             ) : null}
           </div>

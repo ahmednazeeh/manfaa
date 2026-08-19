@@ -1017,6 +1017,12 @@ export const PayoutItemSchema = z.object({
   state: PayoutItemStateSchema,
   failure_reason: z.string().nullable(),
   bank_reference: z.string().nullable(),
+  // What the bank API said, when the batch went out that way.
+  attempts: z.number().int(),
+  error_code: z.string().nullable(),
+  // An approvals-queue record id, not a transaction reference — a parked
+  // transfer is alive, and must never be shown as paid.
+  approval_id: z.string().nullable(),
 });
 export type PayoutItem = z.infer<typeof PayoutItemSchema>;
 
@@ -1037,6 +1043,9 @@ export const PayoutBatchSchema = z.object({
   approved_by: z.number().int().nullable(),
   approved_at: z.string().nullable(),
   exported_at: z.string().nullable(),
+  // Set when the batch went out through the bank API rather than as a sheet.
+  // Deliberately not exported_at: no file was ever made.
+  api_sent_at: z.string().nullable(),
   // Present only on endpoints that eager-load the items.
   items: z.array(PayoutItemSchema).optional(),
 });

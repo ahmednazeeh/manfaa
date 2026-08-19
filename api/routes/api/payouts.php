@@ -17,6 +17,8 @@ Route::prefix('admin/payout-batches')->middleware('auth:admin')->group(function 
     Route::post('{batch}/export', [PayoutBatchController::class, 'export']);
     Route::post('{batch}/import', [PayoutBatchController::class, 'import']);
     Route::post('{batch}/settle-all', [PayoutBatchController::class, 'settleAll']);
+    // The third road to the bank, beside export/import and per-row mark-paid.
+    Route::post('{batch}/send-via-api', [PayoutBatchController::class, 'sendViaApi']);
     // Scoped bindings, so an item id from another batch resolves to a 404
     // rather than settling a row this batch does not own.
     Route::post('{batch}/items/{item}/mark-paid', [PayoutBatchController::class, 'markPaid'])->scopeBindings();

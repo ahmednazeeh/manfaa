@@ -34,6 +34,12 @@ class PayoutItemResource extends JsonResource
             'state' => $this->state->value,
             'failure_reason' => $this->failure_reason,
             'bank_reference' => $this->bank_reference,
+            // What the bank API said, when the batch went out that way.
+            'attempts' => (int) $this->attempts,
+            'error_code' => $this->error_code,
+            // An approvals-queue record id. Not a transaction reference, and
+            // never shown as one.
+            'approval_id' => $this->approval_id,
         ];
     }
 }

@@ -34,6 +34,9 @@ class PayoutBatchResource extends JsonResource
             'approved_by' => $this->approved_by,
             'approved_at' => $this->approved_at?->toIso8601String(),
             'exported_at' => $this->exported_at?->toIso8601String(),
+            // Distinct from exported_at on purpose: two roads to the bank,
+            // and the page should say which one this batch took.
+            'api_sent_at' => $this->api_sent_at?->toIso8601String(),
             'items' => PayoutItemResource::collection($this->whenLoaded('items')),
         ];
     }

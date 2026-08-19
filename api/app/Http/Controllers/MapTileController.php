@@ -33,7 +33,9 @@ class MapTileController extends Controller
     private const AGENT = 'ManfaaMaps/1.0 (+https://manfaa.app; support@manfaa.app)';
 
     private const DISK = 'local';
+
     private const CACHE_DAYS = 30;
+
     private const MAX_ZOOM = 19;
 
     public function __invoke(Request $request, int $z, int $x, int $y): Response

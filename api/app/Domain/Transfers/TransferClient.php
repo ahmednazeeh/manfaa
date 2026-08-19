@@ -96,9 +96,19 @@ final readonly class TransferClient
         }
 
         if (! $response->successful()) {
+            $errorCode = (string) ($body['error_code'] ?? $response->status());
+
+            // The SAME allow-list the duplicate path uses. A bank that
+            // refuses an account number outright refused it before moving
+            // anything, whether we are hearing that for the first time or
+            // the second — and treating those two differently would leave
+            // every bad account number in a batch stuck pending forever
+            // instead of failing and re-queueing into the next run.
             return new TransferResult(
-                TransferOutcome::FailedNeedsReview,
-                errorCode: (string) ($body['error_code'] ?? $response->status()),
+                self::provesNoDebit($errorCode)
+                    ? TransferOutcome::FailedRetryable
+                    : TransferOutcome::FailedNeedsReview,
+                errorCode: $errorCode,
                 message: (string) ($body['error'] ?? $body['message'] ?? 'The transfer was refused.'),
             );
         }

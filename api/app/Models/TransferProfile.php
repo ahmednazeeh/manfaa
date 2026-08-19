@@ -16,6 +16,18 @@ class TransferProfile extends Model
 
     protected $guarded = [];
 
+    /**
+     * Which bank this profile debits — 'mib' or 'bml'. Used to keep a payout
+     * inside one bank where we can. Null means "no preference", which is
+     * every profile until somebody sets one.
+     */
+    public function bank(): ?string
+    {
+        $bank = trim((string) $this->getAttribute('bank'));
+
+        return $bank === '' ? null : mb_strtolower($bank);
+    }
+
     protected function casts(): array
     {
         return ['dual_control' => 'boolean', 'active' => 'boolean', 'is_default' => 'boolean'];

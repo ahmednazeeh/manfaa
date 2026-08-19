@@ -27,6 +27,7 @@ class PayoutBatch extends Model
             'approved_by' => 'integer',
             'approved_at' => 'immutable_datetime',
             'exported_at' => 'immutable_datetime',
+            'api_sent_at' => 'immutable_datetime',
         ];
     }
 

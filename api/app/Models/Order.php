@@ -29,6 +29,13 @@ class Order extends Model
             'placed_at' => 'immutable_datetime',
             'proof_submitted_at' => 'immutable_datetime',
             'verified_at' => 'immutable_datetime',
+            // The bank-watching window. Cast, so the poll job compares two
+            // instants rather than an instant against a string.
+            'poll_started_at' => 'immutable_datetime',
+            'poll_until' => 'immutable_datetime',
+            'poll_attempts' => 'integer',
+            'matched_score' => 'integer',
+            'auto_verified' => 'boolean',
         ];
     }
 

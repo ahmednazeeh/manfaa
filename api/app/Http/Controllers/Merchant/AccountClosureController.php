@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Merchant;
 
-use App\Domain\Discovery\DiscoveryService;
 use App\Domain\Customers\InvalidOtpException;
 use App\Domain\Customers\Msisdn;
 use App\Domain\Customers\TooManyOtpAttemptsException;
+use App\Domain\Discovery\DiscoveryService;
 use App\Domain\Onboarding\MerchantOtpService;
 use App\Domain\Settlement\OutstandingSummary;
 use App\Http\Controllers\Controller;

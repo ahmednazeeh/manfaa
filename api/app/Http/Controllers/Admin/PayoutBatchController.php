@@ -10,10 +10,14 @@ use App\Domain\Payout\ImportRowException;
 use App\Domain\Payout\InvalidPayoutBatchStateException;
 use App\Domain\Payout\InvalidPayoutItemStateException;
 use App\Domain\Payout\PayoutBatchBuilder;
+use App\Domain\Payout\PayoutBatchState;
 use App\Domain\Payout\PayoutItemSettler;
 use App\Domain\Payout\TransferSheetImporter;
+use App\Domain\Transfers\BatchNotSendableException;
+use App\Domain\Transfers\TransferProfileRef;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\PayoutBatchResource;
+use App\Jobs\SendPayoutBatchViaApi;
 use App\Models\AdminUser;
 use App\Models\PayoutBatch;
 use App\Models\PayoutItem;
@@ -154,6 +158,47 @@ class PayoutBatchController extends Controller
         } catch (InvalidPayoutBatchStateException $e) {
             abort(409, $e->getMessage());
         }
+
+        return new PayoutBatchResource($batch->refresh()->load('items'));
+    }
+
+    /**
+     * The third road to the bank: hand the whole batch to a queue worker
+     * that transfers each row through the bank API
+     * (owner requirement 2026-08-19).
+     *
+     * Queued rather than run here — a batch is as many live bank calls as it
+     * has rows, and no admin should hold a browser tab open through that.
+     * The reply says the pass STARTED, which is all a caller can honestly be
+     * told about work that has not happened yet.
+     */
+    public function sendViaApi(Request $request, PayoutBatch $batch): PayoutBatchResource
+    {
+        $validated = $request->validate([
+            // Resolved once at the door, so a default changed mid-pass
+            // cannot split one batch across two banks.
+            'profile_id' => ['sometimes', 'nullable', 'integer'],
+        ]);
+
+        try {
+            // Checked HERE as well as in the job, so a batch in the wrong
+            // state refuses to the admin's face instead of failing quietly
+            // in a worker ten seconds later.
+            TransferProfileRef::resolve($validated['profile_id'] ?? null);
+        } catch (BatchNotSendableException $e) {
+            abort(422, $e->getMessage());
+        }
+
+        if (! in_array($batch->state, [
+            PayoutBatchState::Approved,
+            PayoutBatchState::Processing,
+            PayoutBatchState::Sent,
+            PayoutBatchState::PartiallyFailed,
+        ], true)) {
+            abort(409, 'A '.$batch->state->label().' batch cannot be sent to the bank.');
+        }
+
+        SendPayoutBatchViaApi::dispatch((int) $batch->getKey(), $validated['profile_id'] ?? null);
 
         return new PayoutBatchResource($batch->refresh()->load('items'));
     }

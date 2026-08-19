@@ -1,11 +1,11 @@
 <?php
 
 use App\Http\Controllers\Admin\ClaimsController as AdminClaimsController;
+use App\Http\Controllers\Customer\AccountDeletionController;
 use App\Http\Controllers\Customer\AvatarController;
 use App\Http\Controllers\Customer\BalanceController;
 use App\Http\Controllers\Customer\ClaimsController;
 use App\Http\Controllers\Customer\DiscoveryController;
-use App\Http\Controllers\Customer\AccountDeletionController;
 use App\Http\Controllers\Customer\OtpAuthController;
 use App\Http\Controllers\Customer\PayoutAccountController;
 use App\Http\Controllers\Customer\PayoutsController;

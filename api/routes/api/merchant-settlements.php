@@ -27,6 +27,7 @@ Route::prefix('admin/merchant-settlements')
             Route::post('/', [MerchantSettlementController::class, 'store']);
             Route::post('{batch}/approve', [MerchantSettlementController::class, 'approve'])->whereNumber('batch');
             Route::post('{batch}/import', [MerchantSettlementController::class, 'import'])->whereNumber('batch');
+            Route::post('{batch}/send', [MerchantSettlementController::class, 'sendBatch'])->whereNumber('batch');
             Route::post('{batch}/items/{item}/send', [MerchantSettlementController::class, 'send'])
                 ->whereNumber(['batch', 'item']);
             Route::post('{batch}/cancel', [MerchantSettlementController::class, 'cancel'])->whereNumber('batch');

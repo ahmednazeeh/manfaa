@@ -11,6 +11,7 @@ use App\Domain\Customers\TooManyOtpAttemptsException;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\CustomerResource;
 use App\Http\Support\OtpRequestLimiter;
+use App\Models\Customer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -84,7 +85,7 @@ class OtpAuthController extends Controller
                 // already-registered member at the code step ("sign in
                 // instead") rather than letting them fill the whole details
                 // form and be refused at the very end.
-                'already_registered' => \App\Models\Customer::query()
+                'already_registered' => Customer::query()
                     ->where('phone', $validated['phone'])
                     ->where('status', '!=', 'closed')
                     ->exists(),
