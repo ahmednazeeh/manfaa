@@ -32,7 +32,20 @@ import {
   revokeMerchantCredential,
   submitMerchantSetup,
   updateMerchantBankAccount,
+  archiveMarketplaceProduct,
+  createMarketplaceProduct,
+  enrolInMarketplace,
+  getBranchDelivery,
+  getMarketplaceEnrolment,
+  listMarketplaceCategories,
+  listMarketplaceProducts,
+  listMerchantOrders,
+  removeBranchDelivery,
   reverseGeocodeBranchPin,
+  setBranchDelivery,
+  setProductListing,
+  submitMarketplaceApplication,
+  updateMarketplaceProduct,
   setMerchantPublication,
   updateMerchantBranch,
   updateMerchantPreferences,
@@ -96,6 +109,10 @@ import {
 
 export const queryKeys = {
   me: ['merchant', 'me'] as const,
+  // Marketplace (PLAN-marketplace.md §4).
+  marketplaceEnrolment: ['merchant', 'marketplace', 'enrolment'] as const,
+  marketplaceProducts: ['merchant', 'marketplace', 'products'] as const,
+  marketplaceOrders: ['merchant', 'marketplace', 'orders'] as const,
   outstanding: ['merchant', 'outstanding'] as const,
   wallet: ['merchant', 'wallet'] as const,
   rate: ['merchant', 'rate'] as const,
@@ -674,6 +691,151 @@ export function useCreateBranch() {
  * The store's own on/off switch. Invalidates the profile, because
  * `published` lives on it and the header badge reads from there.
  */
+// ------------------------------------------------------- marketplace (§4)
+
+export function useMarketplaceEnrolment() {
+  return useQuery({
+    queryKey: queryKeys.marketplaceEnrolment,
+    queryFn: ({ signal }) => getMarketplaceEnrolment({ signal }),
+    // A store that never opted in answers `not_enrolled` rather than 404, so
+    // a failure here means the marketplace is OFF platform-wide — the sidebar
+    // simply shows nothing, which is the intended behaviour.
+    retry: false,
+  });
+}
+
+export function useEnrolInMarketplace() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: enrolInMarketplace,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.marketplaceEnrolment });
+    },
+  });
+}
+
+export function useSubmitMarketplaceApplication() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: submitMarketplaceApplication,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.marketplaceEnrolment });
+    },
+  });
+}
+
+export function useMarketplaceProducts() {
+  return useQuery({
+    queryKey: queryKeys.marketplaceProducts,
+    queryFn: ({ signal }) => listMarketplaceProducts({ signal }),
+  });
+}
+
+export function useMarketplaceCategories() {
+  return useQuery({
+    queryKey: ['merchant', 'marketplace', 'categories'],
+    queryFn: ({ signal }) => listMarketplaceCategories({ signal }),
+    staleTime: 60 * 60 * 1000,
+  });
+}
+
+export function useSaveProduct() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, body }: { id?: number; body: Record<string, unknown> }) =>
+      id === undefined
+        ? createMarketplaceProduct(body)
+        : updateMarketplaceProduct(id, body),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.marketplaceProducts });
+    },
+  });
+}
+
+export function useArchiveProduct() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: archiveMarketplaceProduct,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.marketplaceProducts });
+    },
+  });
+}
+
+export function useSetListing() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      productId,
+      body,
+    }: {
+      productId: number;
+      body: Parameters<typeof setProductListing>[1];
+    }) => setProductListing(productId, body),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.marketplaceProducts });
+    },
+  });
+}
+
+export function useMerchantOrders(tab: string) {
+  return useQuery({
+    queryKey: [...queryKeys.marketplaceOrders, tab],
+    queryFn: ({ signal }) => listMerchantOrders(tab, { signal }),
+    // A shop works this screen while customers are ordering into it.
+    refetchInterval: 30_000,
+  });
+}
+
+export function useOrderAction() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (action: () => Promise<unknown>) => action(),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.marketplaceOrders });
+    },
+  });
+}
+
+export function useBranchDelivery(branchId: number | null) {
+  return useQuery({
+    queryKey: ['merchant', 'marketplace', 'delivery', branchId],
+    queryFn: ({ signal }) => getBranchDelivery(branchId!, { signal }),
+    enabled: branchId !== null,
+  });
+}
+
+export function useSaveBranchDelivery() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      branchId,
+      body,
+    }: {
+      branchId: number;
+      body: Parameters<typeof setBranchDelivery>[1];
+    }) => setBranchDelivery(branchId, body),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: ['merchant', 'marketplace', 'delivery'],
+      });
+    },
+  });
+}
+
+export function useRemoveBranchDelivery() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ branchId, zoneId }: { branchId: number; zoneId: number }) =>
+      removeBranchDelivery(branchId, zoneId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: ['merchant', 'marketplace', 'delivery'],
+      });
+    },
+  });
+}
+
 export function useSetPublication() {
   const queryClient = useQueryClient();
   return useMutation({

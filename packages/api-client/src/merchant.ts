@@ -1473,6 +1473,12 @@ export const MERCHANT_PERMISSIONS = [
   'setup.view',
   'setup.edit',
   'setup.submit',
+  // Pausing the store on the app, and running the marketplace shop. Both
+  // separated from profile.edit on purpose: going dark to every customer,
+  // and committing the business to selling online, are not the same
+  // authority as editing a phone number.
+  'store.publication',
+  'marketplace.manage',
 ] as const;
 export const MerchantPermissionSchema = z.enum(MERCHANT_PERMISSIONS);
 export type MerchantPermission = (typeof MERCHANT_PERMISSIONS)[number];
@@ -2066,5 +2072,320 @@ export function revokeMerchantCredential(
     `/api/merchant/credentials/${id}`,
     MerchantCredentialResponseSchema,
     { method: 'DELETE', signal: options.signal },
+  );
+}
+
+// ---------------------------------------------------------------------------
+// MARKETPLACE — the merchant's own half (PLAN-marketplace.md §4, §9)
+// ---------------------------------------------------------------------------
+
+export const MarketplaceEnrolmentSchema = z.object({
+  state: z.enum(['not_enrolled', 'pending_kyb', 'active', 'rejected', 'suspended']),
+  business_type: z.string().nullable(),
+  fulfilment: z.string().nullable(),
+  prep_time_min: z.number().int().nullable(),
+  prep_time_max: z.number().int().nullable(),
+  rejected_reason: z.string().nullable(),
+  submitted_at: z.string().nullable(),
+  approved_at: z.string().nullable(),
+  /** What this store is charged per order — its own rate, or the default. */
+  order_fee_percent: z.string(),
+  required_documents: z.array(z.string()),
+  missing_documents: z.array(z.string()),
+  documents: z.array(
+    z.object({
+      id: z.number().int(),
+      kind: z.string(),
+      original_name: z.string(),
+      size: z.number().int(),
+      state: z.string(),
+      reject_reason: z.string().nullable(),
+      uploaded_at: z.string().nullable(),
+    }),
+  ),
+});
+export type MarketplaceEnrolment = z.infer<typeof MarketplaceEnrolmentSchema>;
+
+export function getMarketplaceEnrolment(options: RequestOptions = {}) {
+  return apiFetch(
+    '/api/merchant/marketplace/enrolment',
+    dataWrapped(MarketplaceEnrolmentSchema),
+    { signal: options.signal },
+  );
+}
+
+export function enrolInMarketplace(body: {
+  business_type: string;
+  fulfilment: string;
+  prep_time_min?: number | null;
+  prep_time_max?: number | null;
+}) {
+  return apiFetch(
+    '/api/merchant/marketplace/enrolment',
+    dataWrapped(z.object({ state: z.string() })),
+    { method: 'POST', body },
+  );
+}
+
+export function submitMarketplaceApplication() {
+  return apiFetch(
+    '/api/merchant/marketplace/submit',
+    dataWrapped(z.object({ state: z.string() })),
+    { method: 'POST', body: {} },
+  );
+}
+
+// -------------------------------------------------------------- catalogue
+
+export const MarketplaceProductSchema = z.object({
+  id: z.number().int(),
+  name: z.string(),
+  name_dv: z.string().nullable(),
+  description: z.string().nullable(),
+  sku: z.string().nullable(),
+  category: z
+    .object({
+      id: z.number().int(),
+      slug: z.string(),
+      name_en: z.string(),
+      name_dv: z.string().nullable(),
+    })
+    .nullable(),
+  cashback_rate_percent: z.string().nullable(),
+  allow_substitutions: z.boolean(),
+  archived: z.boolean(),
+  images: z.array(
+    z.object({ id: z.number().int(), url: z.string(), sort: z.number().int() }),
+  ),
+  /** One per branch that stocks it — price and stock are per SHOP. */
+  listings: z.array(
+    z.object({
+      id: z.number().int(),
+      branch_id: z.number().int(),
+      price_laari: z.number().int(),
+      compare_at_laari: z.number().int().nullable(),
+      stock_qty: z.number().int().nullable(),
+      low_stock_at: z.number().int().nullable(),
+      state: z.string(),
+      buyable: z.boolean(),
+      low_stock: z.boolean(),
+    }),
+  ),
+});
+export type MarketplaceProduct = z.infer<typeof MarketplaceProductSchema>;
+
+export function listMarketplaceProducts(options: RequestOptions = {}) {
+  return apiFetch(
+    '/api/merchant/marketplace/products',
+    z.object({
+      data: z.array(MarketplaceProductSchema),
+      meta: z.object({ pending_changes: z.array(z.unknown()).catch([]) }),
+    }),
+    { signal: options.signal },
+  );
+}
+
+export function listMarketplaceCategories(options: RequestOptions = {}) {
+  return apiFetch(
+    '/api/merchant/marketplace/categories',
+    z.object({
+      data: z.array(
+        z.object({
+          id: z.number().int(),
+          slug: z.string(),
+          name_en: z.string(),
+          name_dv: z.string().nullable(),
+          icon: z.string().nullable(),
+        }),
+      ),
+    }),
+    { signal: options.signal },
+  );
+}
+
+/** A product edit answers 202 with a change request on a LIVE listing. */
+const ProductWriteSchema = z.union([
+  z.object({ data: z.object({ change_request: z.unknown() }) }),
+  dataWrapped(MarketplaceProductSchema),
+]);
+
+export function createMarketplaceProduct(body: Record<string, unknown>) {
+  return apiFetch('/api/merchant/marketplace/products', ProductWriteSchema, {
+    method: 'POST',
+    body,
+  });
+}
+
+export function updateMarketplaceProduct(id: number, body: Record<string, unknown>) {
+  return apiFetch(`/api/merchant/marketplace/products/${id}`, ProductWriteSchema, {
+    method: 'PATCH',
+    body,
+  });
+}
+
+export function archiveMarketplaceProduct(id: number) {
+  return apiFetch(
+    `/api/merchant/marketplace/products/${id}`,
+    dataWrapped(MarketplaceProductSchema),
+    { method: 'DELETE' },
+  );
+}
+
+/** Price, stock and availability for ONE shop. Instant — never reviewed. */
+export function setProductListing(
+  productId: number,
+  body: {
+    branch_id: number;
+    price_laari: number;
+    compare_at_laari?: number | null;
+    stock_qty?: number | null;
+    low_stock_at?: number | null;
+    state: string;
+  },
+) {
+  return apiFetch(
+    `/api/merchant/marketplace/products/${productId}/listing`,
+    dataWrapped(z.object({ id: z.number().int(), state: z.string() })),
+    { method: 'PUT', body },
+  );
+}
+
+// --------------------------------------------------------------- orders
+
+export const MerchantOrderSchema = z.object({
+  id: z.number().int(),
+  reference: z.string(),
+  state: z.string(),
+  fulfilment: z.string(),
+  pickup_code: z.string().nullable(),
+  reject_reason: z.string().nullable(),
+  placed_at: z.string().nullable(),
+  payment_state: z.string().nullable(),
+  customer: z.object({
+    name: z.string().nullable(),
+    phone: z.string().nullable(),
+  }),
+  address: z.record(z.string(), z.unknown()).nullable(),
+  branch_name: z.string().nullable(),
+  items_laari: z.number().int(),
+  delivery_laari: z.number().int(),
+  subtotal_laari: z.number().int(),
+  cashback_laari: z.number().int(),
+  order_fee_laari: z.number().int(),
+  payable_to_merchant_laari: z.number().int(),
+  items: z.array(
+    z.object({
+      id: z.number().int(),
+      name: z.string(),
+      /** What was ORDERED — immutable. */
+      qty: z.number().int(),
+      /** What this shop will supply. The gap is the amendment. */
+      fulfilled_qty: z.number().int(),
+      amended: z.boolean(),
+      refund_laari: z.number().int(),
+      unit_price_laari: z.number().int(),
+      line_total_laari: z.number().int(),
+    }),
+  ),
+});
+export type MerchantOrder = z.infer<typeof MerchantOrderSchema>;
+
+export function listMerchantOrders(tab: string, options: RequestOptions = {}) {
+  return apiFetch(
+    `/api/merchant/marketplace/orders?tab=${encodeURIComponent(tab)}`,
+    z.object({
+      data: z.array(MerchantOrderSchema),
+      meta: z.object({
+        new_count: z.number().int().catch(0),
+        awaiting_action_count: z.number().int().catch(0),
+      }),
+    }),
+    { signal: options.signal },
+  );
+}
+
+const OrderActionSchema = dataWrapped(MerchantOrderSchema);
+
+export function acceptMerchantOrder(id: number) {
+  return apiFetch(`/api/merchant/marketplace/orders/${id}/accept`, OrderActionSchema, {
+    method: 'POST',
+    body: {},
+  });
+}
+
+export function rejectMerchantOrder(id: number, reason: string) {
+  return apiFetch(`/api/merchant/marketplace/orders/${id}/reject`, OrderActionSchema, {
+    method: 'POST',
+    body: { reason },
+  });
+}
+
+export function advanceMerchantOrder(id: number, state: string) {
+  return apiFetch(`/api/merchant/marketplace/orders/${id}/advance`, OrderActionSchema, {
+    method: 'POST',
+    body: { state },
+  });
+}
+
+/** Reduce what will be supplied. Only ever DOWN — see PLAN §2.7. */
+export function amendMerchantOrder(
+  id: number,
+  lines: { suborder_item_id: number; fulfilled_qty: number }[],
+  reason: string,
+  note?: string,
+) {
+  return apiFetch(`/api/merchant/marketplace/orders/${id}/amend`, OrderActionSchema, {
+    method: 'POST',
+    body: { lines, reason, note },
+  });
+}
+
+// ------------------------------------------------------------- delivery
+
+export const BranchDeliveryRowSchema = z.object({
+  zone_id: z.number().int(),
+  zone_name: z.string(),
+  zone_name_dv: z.string().nullable(),
+  /** The absence of a rule IS the answer: we do not deliver there. */
+  delivers: z.boolean(),
+  free_delivery_over_laari: z.number().int().nullable(),
+  delivery_fee_laari: z.number().int().nullable(),
+  order_minimum_laari: z.number().int().nullable(),
+  eta_min: z.number().int().nullable(),
+  eta_max: z.number().int().nullable(),
+});
+export type BranchDeliveryRow = z.infer<typeof BranchDeliveryRowSchema>;
+
+export function getBranchDelivery(branchId: number, options: RequestOptions = {}) {
+  return apiFetch(
+    `/api/merchant/marketplace/branches/${branchId}/delivery`,
+    z.object({ data: z.array(BranchDeliveryRowSchema) }),
+    { signal: options.signal },
+  );
+}
+
+export function setBranchDelivery(
+  branchId: number,
+  body: {
+    zone_id: number;
+    delivery_fee_laari: number;
+    free_delivery_over_laari?: number | null;
+    order_minimum_laari?: number | null;
+    eta_min?: number | null;
+    eta_max?: number | null;
+  },
+) {
+  return apiFetch(
+    `/api/merchant/marketplace/branches/${branchId}/delivery`,
+    dataWrapped(z.unknown()),
+    { method: 'PUT', body },
+  );
+}
+
+export function removeBranchDelivery(branchId: number, zoneId: number) {
+  return apiFetch(
+    `/api/merchant/marketplace/branches/${branchId}/delivery/${zoneId}`,
+    z.unknown(),
+    { method: 'DELETE' },
   );
 }

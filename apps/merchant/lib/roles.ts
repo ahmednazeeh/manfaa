@@ -97,6 +97,8 @@ const MERCHANT_PERMISSION_KEYS: Record<MerchantPermission, string> = {
   'setup.view': 'roles.permissions.setupView',
   'setup.edit': 'roles.permissions.setupEdit',
   'setup.submit': 'roles.permissions.setupSubmit',
+  'store.publication': 'roles.permissions.storePublication',
+  'marketplace.manage': 'roles.permissions.marketplaceManage',
 };
 
 /**

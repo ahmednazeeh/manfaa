@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/accordion-menu';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useLayout } from './context';
+import { useMarketplaceEnrolment } from '@/lib/queries';
 import { APP_MENU, menuItemAllowed } from './menu';
 
 const classNames: AccordionMenuClassNames = {
@@ -25,6 +26,7 @@ const classNames: AccordionMenuClassNames = {
 export function SidebarMenu({ className }: { className?: string }) {
   const pathname = usePathname();
   const { me } = useLayout();
+  const enrolment = useMarketplaceEnrolment();
 
   const matchPath = useCallback(
     (path: string): boolean =>
@@ -37,10 +39,19 @@ export function SidebarMenu({ className }: { className?: string }) {
   // with no rows underneath advertises a screen the reader cannot reach.
   // Navigation cosmetics only: the API's permission gate (403
   // `permission_required`) is the actual enforcement.
-  const sections = APP_MENU.map((section) => ({
-    ...section,
-    items: section.items.filter((item) => menuItemAllowed(me, item)),
-  })).filter((section) => section.items.length > 0);
+  // A store sees the marketplace group only once it is actually selling on
+  // it — the platform switch is on AND this store's application was
+  // approved. Neither implies the other.
+  const sellsOnMarketplace = enrolment.data?.data.state === 'active';
+
+  const sections = APP_MENU.filter(
+    (section) => !section.marketplaceOnly || sellsOnMarketplace,
+  )
+    .map((section) => ({
+      ...section,
+      items: section.items.filter((item) => menuItemAllowed(me, item)),
+    }))
+    .filter((section) => section.items.length > 0);
 
   return (
     <ScrollArea

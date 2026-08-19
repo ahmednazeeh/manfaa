@@ -304,7 +304,9 @@
       "setupView": "View the setup wizard",
       "setupEdit": "Fill in the setup wizard",
       "setupSubmit": "Submit the store for review",
-      "unknown": "a permission this panel does not recognise yet"
+      "unknown": "a permission this panel does not recognise yet",
+      "storePublication": "Pause and resume the store on the app",
+      "marketplaceManage": "Manage the marketplace shop"
     }
   },
   "staff": {

@@ -1,5 +1,9 @@
 import type { MerchantPermission } from '@manfaa/api-client';
 import {
+  BadgeCheck,
+  ClipboardList,
+  Package,
+  Truck,
   Banknote,
   HandCoins,
   Landmark,
@@ -43,6 +47,12 @@ export interface AppMenuItem {
 export interface AppMenuSection {
   /** Rendered as a group label when set. */
   label?: string;
+  /**
+   * Shown only when the platform has a marketplace AND this store is an
+   * approved vendor. A greyed-out menu for a product a merchant cannot have
+   * is worse than no menu at all (PLAN-marketplace.md §10).
+   */
+  marketplaceOnly?: boolean;
   items: AppMenuItem[];
 }
 
@@ -114,6 +124,40 @@ export const APP_MENU: AppMenuSection[] = [
         path: '/wallet',
         icon: Wallet,
         permission: 'wallet.view',
+      },
+    ],
+  },
+  {
+    // MARKETPLACE (PLAN-marketplace.md). Hidden entirely when the platform
+    // switch is off, or when this store has not been approved to sell — a
+    // greyed-out menu for a product a merchant cannot have is worse than no
+    // menu at all.
+    label: 'Marketplace',
+    marketplaceOnly: true,
+    items: [
+      {
+        title: 'Orders',
+        path: '/marketplace/orders',
+        icon: ClipboardList,
+        permission: 'marketplace.manage',
+      },
+      {
+        title: 'Products',
+        path: '/marketplace/products',
+        icon: Package,
+        permission: 'marketplace.manage',
+      },
+      {
+        title: 'Delivery',
+        path: '/marketplace/delivery',
+        icon: Truck,
+        permission: 'marketplace.manage',
+      },
+      {
+        title: 'Marketplace setup',
+        path: '/marketplace/setup',
+        icon: BadgeCheck,
+        permission: 'marketplace.manage',
       },
     ],
   },
