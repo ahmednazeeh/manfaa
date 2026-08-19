@@ -31,6 +31,12 @@ class PollOrderPayment implements ShouldQueue
 
     private const int INTERVAL_SECONDS = 60;
 
+    /**
+     * Slack above the window's own minute count, so an honest poll is never
+     * cut short by a slow worker.
+     */
+    private const int EXTRA_ATTEMPTS = 5;
+
     public function __construct(private readonly int $orderId) {}
 
     public function handle(PaymentVerifier $verifier): void
@@ -55,9 +61,19 @@ class PollOrderPayment implements ShouldQueue
             return;
         }
 
-        $order->forceFill(['poll_attempts' => $order->poll_attempts + 1])->save();
+        $attempts = (int) $order->poll_attempts + 1;
+        $order->forceFill(['poll_attempts' => $attempts])->save();
 
         if ($verifier->attempt($order)) {
+            return;
+        }
+
+        // Bounded by ATTEMPTS as well as by the clock. The clock alone is not
+        // enough: on a synchronous queue `delay()` is ignored, so a job that
+        // re-dispatches itself recurses without any time passing at all —
+        // which is precisely what hung the test suite. A ceiling holds
+        // whatever the driver does.
+        if ($attempts >= (int) $settings->verify_window_minutes + self::EXTRA_ATTEMPTS) {
             return;
         }
 

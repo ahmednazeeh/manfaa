@@ -5,6 +5,7 @@ use App\Http\Controllers\Admin\OrderPaymentController;
 use App\Http\Controllers\Customer\ActivityController;
 use App\Http\Controllers\Customer\AddressController;
 use App\Http\Controllers\Customer\CartController;
+use App\Http\Controllers\Customer\FavouriteController;
 use App\Http\Controllers\Customer\MarketController;
 use App\Http\Controllers\Customer\OrderController;
 use App\Http\Controllers\Merchant\DeliveryRuleController;
@@ -119,6 +120,18 @@ Route::prefix('market')
     ->group(function (): void {
         Route::get('branches', [MarketController::class, 'index']);
         Route::get('branches/{branch}', [MarketController::class, 'show'])->whereNumber('branch');
+    });
+
+/*
+ * Favourite shops. Behind the switch with everything else — a favourite is
+ * a marketplace shop, and there are none without a marketplace.
+ */
+Route::prefix('customer')
+    ->middleware(['auth:customer', 'marketplace'])
+    ->group(function (): void {
+        Route::get('favourites', [FavouriteController::class, 'index']);
+        Route::post('favourites/{branch}', [FavouriteController::class, 'toggle'])
+            ->whereNumber('branch')->middleware('throttle:120,1');
     });
 
 Route::prefix('customer/cart')

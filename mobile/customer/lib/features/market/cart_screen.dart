@@ -83,7 +83,7 @@ class _CartScreenState extends ConsumerState<CartScreen> {
       bottomNavigationBar: cart.valueOrNull == null ||
               cart.value!.subcarts.isEmpty
           ? null
-          : _CheckoutBar(cart: cart.value!),
+          : CheckoutBar(cart: cart.value!),
     );
   }
 }
@@ -547,8 +547,16 @@ class _SeparateOrdersNote extends StatelessWidget {
   }
 }
 
-class _CheckoutBar extends StatelessWidget {
-  const _CheckoutBar({required this.cart});
+/// The foot of the basket: what it costs, what it earns, and the one way
+/// forward.
+///
+/// Laid out as two ROWS rather than one. A single row put the totals and the
+/// button side by side, and on a narrow phone the button was pushed off the
+/// edge — so the screen showed a tall bar with no way to continue, which is
+/// exactly what it was reported as. A full-width button beneath the totals
+/// cannot be pushed anywhere.
+class CheckoutBar extends StatelessWidget {
+  const CheckoutBar({super.key, required this.cart});
 
   final Cart cart;
 
@@ -558,60 +566,92 @@ class _CheckoutBar extends StatelessWidget {
 
     return SafeArea(
       child: Container(
-        padding: const EdgeInsets.all(Gap.md),
+        padding: const EdgeInsets.symmetric(
+          horizontal: Gap.md,
+          vertical: Gap.sm,
+        ),
         decoration: const BoxDecoration(
           color: ManfaaColors.surface,
           border: Border(top: BorderSide(color: ManfaaColors.line)),
         ),
-        child: Row(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
+            Row(
               children: [
-                Text('Total Payable', style: theme.textTheme.bodySmall),
-                Text(
-                  formatRufiyaa(cart.totalPayableLaari),
-                  style: theme.textTheme.titleLarge,
-                ),
-              ],
-            ),
-            const SizedBox(width: Gap.lg),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text("You'll earn", style: theme.textTheme.bodySmall),
-                Text(
-                  formatRufiyaa(cart.cashbackLaari),
-                  style: theme.textTheme.titleMedium
-                      ?.copyWith(color: ManfaaColors.green),
-                ),
-              ],
-            ),
-            const Spacer(),
-            FilledButton(
-              // Never enabled on a basket the server says cannot check out —
-              // an unmet minimum or a missing address is a reason, and the
-              // cards above already carry it.
-              onPressed: cart.canCheckout
-                  ? () => context.push('/market/checkout')
-                  : null,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text('Checkout'),
-                  Text(
-                    '${cart.storeCount} separate '
-                    '${cart.storeCount == 1 ? 'order' : 'orders'}',
-                    style: const TextStyle(fontSize: 11),
+                Expanded(
+                  child: _Figure(
+                    label: 'Total Payable',
+                    value: formatRufiyaa(cart.totalPayableLaari),
+                    style: theme.textTheme.titleMedium,
                   ),
-                ],
-              ),
+                ),
+                Expanded(
+                  child: _Figure(
+                    label: "You'll earn",
+                    value: formatRufiyaa(cart.cashbackLaari),
+                    style: theme.textTheme.titleMedium
+                        ?.copyWith(color: ManfaaColors.green),
+                    end: true,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: Gap.sm),
+            SizedBox(
+              width: double.infinity,
+              child: cart.needsAddress
+                  // WITHOUT an address, delivery cannot be quoted, so no
+                  // minimum can be met, so a Checkout button would sit dead
+                  // with its own cure on the far side of it. The button
+                  // becomes the cure instead.
+                  ? FilledButton.icon(
+                      onPressed: () => context.push('/market/addresses/new'),
+                      icon: const Icon(Icons.place_outlined, size: 18),
+                      label: const Text('Add delivery address'),
+                    )
+                  : FilledButton(
+                      onPressed: cart.canCheckout
+                          ? () => context.push('/market/checkout')
+                          : null,
+                      child: Text(
+                        cart.canCheckout
+                            ? 'Checkout · ${cart.storeCount} separate '
+                                '${cart.storeCount == 1 ? 'order' : 'orders'}'
+                            : 'Add more to meet a shop minimum',
+                      ),
+                    ),
             ),
           ],
         ),
       ),
+    );
+  }
+}
+
+class _Figure extends StatelessWidget {
+  const _Figure({
+    required this.label,
+    required this.value,
+    this.style,
+    this.end = false,
+  });
+
+  final String label;
+  final String value;
+  final TextStyle? style;
+  final bool end;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment:
+          end ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(label, style: Theme.of(context).textTheme.bodySmall),
+        Text(value, style: style, maxLines: 1, overflow: TextOverflow.ellipsis),
+      ],
     );
   }
 }

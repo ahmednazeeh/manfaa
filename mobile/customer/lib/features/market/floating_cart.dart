@@ -86,14 +86,20 @@ class FloatingCart extends ConsumerWidget {
                     ],
                   ),
                 ),
-                if (terms != null && !terms.minimumMet && terms.shortfallLaari > 0)
+                // Dropped on a narrow screen rather than overflowing: the
+                // basket total and the way to the cart matter more than the
+                // progress track, and a RenderFlex overflow helps nobody.
+                if (terms != null &&
+                    !terms.minimumMet &&
+                    terms.shortfallLaari > 0 &&
+                    MediaQuery.sizeOf(context).width >= 380)
                   _Shortfall(terms: terms, total: total),
-                const SizedBox(width: Gap.md),
+                const SizedBox(width: Gap.sm),
                 FilledButton(
                   style: FilledButton.styleFrom(
                     backgroundColor: ManfaaColors.coral,
                     padding: const EdgeInsets.symmetric(
-                      horizontal: Gap.lg,
+                      horizontal: Gap.md,
                       vertical: Gap.md,
                     ),
                   ),

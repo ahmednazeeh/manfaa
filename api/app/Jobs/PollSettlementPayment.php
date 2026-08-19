@@ -27,11 +27,19 @@ class PollSettlementPayment implements ShouldQueue
 
     private const int INTERVAL_SECONDS = 60;
 
+    /**
+     * Slack above the window's own minute count, so an honest poll is never
+     * cut short by a slow worker.
+     */
+    private const int EXTRA_ATTEMPTS = 5;
+
     public function __construct(private readonly int $paymentId) {}
 
     public function handle(SettlementPaymentVerifier $verifier): void
     {
-        if (! TransferSetting::current()->auto_verify_enabled) {
+        $settings = TransferSetting::current();
+
+        if (! $settings->auto_verify_enabled) {
             return;
         }
 
@@ -49,9 +57,17 @@ class PollSettlementPayment implements ShouldQueue
             return;
         }
 
-        $payment->forceFill(['poll_attempts' => (int) $payment->poll_attempts + 1])->save();
+        $attempts = (int) $payment->poll_attempts + 1;
+        $payment->forceFill(['poll_attempts' => $attempts])->save();
 
         if ($verifier->attempt($payment)) {
+            return;
+        }
+
+        // See PollOrderPayment: bounded by attempts as well as by the clock,
+        // because a synchronous queue ignores `delay()` and a self-
+        // re-dispatching job then recurses with no time passing.
+        if ($attempts >= (int) $settings->verify_window_minutes + self::EXTRA_ATTEMPTS) {
             return;
         }
 

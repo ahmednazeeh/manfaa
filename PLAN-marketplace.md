@@ -1637,3 +1637,56 @@ needs rebuilding, and none of it has been exercised against real data.
 
 None of the above can be verified end-to-end until a merchant is enrolled
 with products and a delivery rule; the platform currently has zero of each.
+
+
+---
+
+# REMAINING WORK — task list, 2026-08-19
+
+Ordered by what unblocks or misleads most. Kept here rather than in a
+message so it survives the session. Struck items move to done with the round
+that closed them.
+
+## Correctness gate
+
+- [ ] **T1 — Full API suite verified green.** Three runs vanished tonight;
+      the cause was found (sync-queue poll recursion, fixed) but the whole
+      suite has not been seen to finish since. Nothing below ships without
+      this.
+
+## Visible lies — the screen claims something that does not exist
+
+- [ ] **T2 — Favourites.** `customer_favourite_branches` is migrated. The
+      heart on every product card in the customer app is DRAWN AND INERT.
+      Needs: toggle endpoint, list endpoint, provider, and the heart wired —
+      plus a favourites filter on the market list.
+- [ ] **T3 — Ratings.** `suborder_ratings` is migrated with the plan's rules
+      already enforced by index and constraint. Store cards have drawn a
+      star against `rating_count`/`rating_sum` since MP1 and NOTHING has ever
+      written to them. Needs: RatingService (placer only, after `delivered`,
+      once per suborder), endpoint, the prompt on a delivered order, and the
+      profile aggregates updated in the same transaction.
+
+## Designs not yet built
+
+- [ ] **T4 — `Payment Step.png`** — checkout's payment step has never been
+      compared to its reference.
+- [ ] **T5 — `Order Received.png`** — same, for the confirmation screen.
+- [ ] **T6 — `AI Product Search.png`** — nothing exists anywhere. §6's
+      recommendation stands: Claude Haiku query parser + Postgres retrieval,
+      pgvector deferred.
+- [ ] **T7 — `Market View Tablet.png`** — not attempted on either app.
+- [ ] **T8 — Customer web storefront design pass.** Functional, but it is
+      the dashboard's components rearranged, not the Market mockups.
+
+## Owner-blocked
+
+- [ ] **T9 — Enrol one merchant** (KYB approval), add products and one
+      delivery rule. Until this exists, NOTHING above has been exercised
+      against real data — every screen has only ever rendered its empty
+      state.
+- [ ] **T10 — Firebase registration of `mv.manfaa.merchant`.**
+- [ ] **T11 — Platform MIB account number is `800`**, which is not an account
+      number. Correct before any merchant is told to pay it.
+- [ ] **T12 — BML profile has no upstream profile name**; BML history cannot
+      be read until it is set.

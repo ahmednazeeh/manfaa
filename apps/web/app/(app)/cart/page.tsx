@@ -136,14 +136,21 @@ export default function CartPage() {
               )}
             </button>
 
+            {/* WITHOUT an address there is nothing to disable over:
+                delivery cannot be quoted, so no minimum can be met, so this
+                button sat dead with its only cure — the address form — on
+                the far side of itself. Checkout is where that form lives, so
+                that is where an addressless basket goes. */}
             <Button
-              disabled={!data.can_checkout}
+              disabled={!data.needs_address && !data.can_checkout}
               onClick={() => router.push('/checkout')}
             >
-              {data.can_checkout
-                ? t('cart.checkout', { count: data.store_count })
-                : /* Names the shop rather than refusing silently. */
-                  t('cart.blockedBy', { store: blocking[0]?.store_name ?? '' })}
+              {data.needs_address
+                ? t('cart.addAddress')
+                : data.can_checkout
+                  ? t('cart.checkout', { count: data.store_count })
+                  : /* Names the shop rather than refusing silently. */
+                    t('cart.blockedBy', { store: blocking[0]?.store_name ?? '' })}
             </Button>
           </div>
         </CardContent>

@@ -6,6 +6,7 @@ use App\Http\Controllers\Customer\ActivityController;
 use App\Http\Controllers\Customer\AddressController;
 use App\Http\Controllers\Customer\AvatarController;
 use App\Http\Controllers\Customer\CartController;
+use App\Http\Controllers\Customer\FavouriteController;
 use App\Http\Controllers\Customer\OrderController as MarketOrderController;
 use App\Http\Controllers\Customer\WalletController;
 use App\Http\Controllers\Devices\CustomerDevicesController;
@@ -198,6 +199,10 @@ Route::prefix('mobile/v1')
 
                     // One timeline: marketplace orders AND cashback.
                     Route::get('activity', [ActivityController::class, 'index']);
+
+                    Route::get('favourites', [FavouriteController::class, 'index']);
+                    Route::post('favourites/{branch}', [FavouriteController::class, 'toggle'])
+                        ->whereNumber('branch')->middleware('throttle:120,1');
                 });
 
                 /*

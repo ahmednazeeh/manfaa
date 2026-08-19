@@ -478,7 +478,8 @@
     "blockedBy": "{{store}} needs more",
     "addMore": "Add {{amount}} more to reach the minimum order",
     "unavailable": "Something here is no longer available. Remove it to continue.",
-    "separateOrders": "Different stores fulfil your order separately."
+    "separateOrders": "Different stores fulfil your order separately.",
+    "addAddress": "Add delivery address"
   },
   "checkout": {
     "title": "Checkout",

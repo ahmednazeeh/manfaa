@@ -16,6 +16,7 @@ use App\Models\MerchantBranch;
 use App\Models\ProductImage;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 
 /**
@@ -50,7 +51,19 @@ final class MarketController extends Controller
             ->whereHas('products', fn ($query) => $query->where('state', 'active'))
             ->get();
 
-        $rows = $branches->map(function (MerchantBranch $branch) use ($address): array {
+        // One query for the whole list rather than a lookup per card. Empty
+        // for a signed-out shopper, which is right: browsing is public and
+        // an anonymous visitor has no favourites to show.
+        $customer = $request->user('customer');
+
+        $favourites = $customer === null
+            ? []
+            : DB::table('customer_favourite_branches')
+                ->where('customer_id', $customer->getKey())
+                ->pluck('branch_id')
+                ->all();
+
+        $rows = $branches->map(function (MerchantBranch $branch) use ($address, $favourites): array {
             $rule = $address?->zone_id === null
                 ? null
                 : $branch->deliveryRules->firstWhere('zone_id', $address->zone_id);
@@ -73,6 +86,7 @@ final class MarketController extends Controller
                     $this->onboarding->currentRateBp($merchant),
                 ),
                 'fulfilment' => $profile?->fulfilment,
+                'favourite' => in_array($branch->id, $favourites, true),
                 // Null, never 0.0 — a new shop has no rating, and showing it
                 // zero stars would libel it on its first day (§11.2).
                 'rating' => $profile?->ratingAverage(),
