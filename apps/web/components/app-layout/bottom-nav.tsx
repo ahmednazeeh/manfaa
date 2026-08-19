@@ -4,6 +4,9 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
+  PackageOpen,
+  Store,
+  Wallet,
   Banknote,
   Compass,
   House,
@@ -46,16 +49,18 @@ interface BarItem {
 const BAR_ITEMS: BarItem[] = [
   { titleKey: 'nav.home', path: '/', icon: House },
   { titleKey: 'nav.dashboard', path: '/dashboard', icon: LayoutGrid },
+  // Marketplace (PLAN-marketplace.md §10). The routes 404 while the platform
+  // switch is off, and the pages show their empty state — the bar keeps its
+  // slot rather than reflowing under the user mid-session.
+  { titleKey: 'nav.market', path: '/market', icon: Store },
   { titleKey: 'nav.transactions', path: '/transactions', icon: ReceiptText },
-  {
-    titleKey: 'nav.payoutAccountShort',
-    path: '/payout-account',
-    icon: Landmark,
-  },
 ];
 
 /** The sidebar destinations that did not earn a bar slot. */
 const MORE_ITEMS: BarItem[] = [
+  { titleKey: 'nav.orders', path: '/orders', icon: PackageOpen },
+  { titleKey: 'nav.wallet', path: '/wallet', icon: Wallet },
+  { titleKey: 'nav.payoutAccountShort', path: '/payout-account', icon: Landmark },
   { titleKey: 'nav.payouts', path: '/payouts', icon: Banknote },
   { titleKey: 'nav.discover', path: '/discover', icon: Compass },
 ];

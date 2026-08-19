@@ -43,7 +43,11 @@
     "publicNav": "Main menu",
     "payouts": "Payouts",
     "forMerchants": "For merchants",
-    "becomeMerchant": "Become a merchant"
+    "becomeMerchant": "Become a merchant",
+    "market": "Market",
+    "orders": "Orders",
+    "cart": "Cart",
+    "wallet": "Wallet"
   },
   "auth": {
     "loginTitle": "Welcome back",
@@ -439,5 +443,75 @@
       "sent": "On its way",
       "failed": "Failed"
     }
+  },
+  "market": {
+    "title": "Market",
+    "subtitle": "Order from stores that give you cashback.",
+    "empty": "No stores yet",
+    "emptyHint": "Stores near you will appear here as they join the Manfaa marketplace.",
+    "cashback": "{{rate}}% back",
+    "freeDelivery": "Free delivery",
+    "deliveryFee": "Delivery {{amount}}",
+    "pickupOnly": "Pickup only",
+    "noDeliveryHere": "This shop does not deliver to your address — collection only.",
+    "minOrder": "Min {{amount}}",
+    "allProducts": "All",
+    "add": "Add",
+    "outOfStock": "Out of stock",
+    "earn": "Earn {{amount}}",
+    "viewCart": "View cart",
+    "minimumMet": "Minimum reached",
+    "toMinimum": "{{amount}} to minimum"
+  },
+  "cart": {
+    "empty": "Your cart is empty",
+    "titleWithStores": "My cart ({{count}} stores)",
+    "clear": "Clear",
+    "youWillEarn": "You'll earn",
+    "items": "Items",
+    "itemsAnd": "{{count}} items · {{amount}}",
+    "delivery": "Delivery",
+    "pickup": "Pickup",
+    "cashbackFrom": "Cashback from {{store}}",
+    "totalPayable": "Total payable",
+    "checkout": "Checkout · {{count}} orders",
+    "blockedBy": "{{store}} needs more",
+    "addMore": "Add {{amount}} more to reach the minimum order",
+    "unavailable": "Something here is no longer available. Remove it to continue.",
+    "separateOrders": "Different stores fulfil your order separately."
+  },
+  "checkout": {
+    "title": "Checkout",
+    "deliveryAddress": "Delivery address",
+    "noAddresses": "Add a delivery address to see delivery fees.",
+    "addressNotServed": "No store delivers here yet — collection only.",
+    "orderSummary": "Order summary",
+    "cashbackAfterValidation": "Cashback after the store validates",
+    "paymentMethod": "Payment method",
+    "transferExactly": "Transfer exactly",
+    "accountName": "Account name",
+    "accountNumber": "Account number",
+    "receiptFirst": "Transfer the exact amount, then upload your receipt. Your order is confirmed once Manfaa verifies the payment.",
+    "placeOrder": "Place order",
+    "placing": "Placing…"
+  },
+  "orders": {
+    "title": "Your orders",
+    "empty": "No orders yet",
+    "storeCount": "{{count}} stores in this order",
+    "pickupCode": "Pickup code",
+    "uploadReceipt": "Upload receipt",
+    "receiptUploaded": "Receipt uploaded — we are checking it now.",
+    "refunded": "{{store}} changed this order. {{amount}} refunded to your wallet."
+  },
+  "wallet": {
+    "balance": "Wallet balance",
+    "withdraw": "Withdraw to bank",
+    "withdrawals": "Withdrawals",
+    "history": "Wallet history",
+    "empty": "Nothing in your wallet yet. Refunds appear here straight away.",
+    "noBank": "Add your bank account before withdrawing.",
+    "minimum": "The smallest withdrawal is {{amount}}.",
+    "requested": "Withdrawal requested. We will transfer it to your bank."
   }
 }

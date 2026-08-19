@@ -644,3 +644,355 @@ export function createCustomerClaim(
     signal: options.signal,
   });
 }
+
+// ---------------------------------------------------------------------------
+// MARKETPLACE — the shopper's side on the web (PLAN-marketplace.md §3)
+// ---------------------------------------------------------------------------
+
+export const WebDeliveryTermsSchema = z.object({
+  delivers: z.boolean(),
+  fee_laari: z.number().int(),
+  fee_waived: z.boolean(),
+  free_delivery_over_laari: z.number().int().nullable(),
+  order_minimum_laari: z.number().int().nullable(),
+  minimum_met: z.boolean(),
+  shortfall_laari: z.number().int(),
+  to_free_delivery_laari: z.number().int().nullable(),
+  eta_min: z.number().int().nullable(),
+  eta_max: z.number().int().nullable(),
+});
+
+/** A storefront. A BRANCH, not a merchant — the shop is what you buy from. */
+export const MarketBranchSchema = z.object({
+  branch_id: z.number().int(),
+  merchant_id: z.number().int(),
+  store_name: z.string(),
+  store_name_dv: z.string().nullable(),
+  branch_name: z.string(),
+  slug: z.string(),
+  address: z.string().nullable(),
+  cashback_rate_percent: z.string().nullable(),
+  fulfilment: z.string().nullable(),
+  /** Null until somebody has rated it — never 0.0. */
+  rating: z.number().nullable(),
+  rating_count: z.number().int(),
+  delivery: WebDeliveryTermsSchema,
+  pickup_only: z.boolean(),
+});
+export type MarketBranch = z.infer<typeof MarketBranchSchema>;
+
+export function listMarketBranches(addressId?: number, options: RequestOptions = {}) {
+  const query = addressId === undefined ? '' : `?address_id=${addressId}`;
+
+  return apiFetch(
+    `/api/market/branches${query}`,
+    z.object({
+      data: z.array(MarketBranchSchema),
+      meta: z.object({
+        address_id: z.number().int().nullable(),
+        needs_address: z.boolean(),
+      }),
+    }),
+    { signal: options.signal },
+  );
+}
+
+export const MarketProductSchema = z.object({
+  branch_product_id: z.number().int(),
+  product_id: z.number().int(),
+  name: z.string(),
+  name_dv: z.string().nullable(),
+  description: z.string().nullable(),
+  price_laari: z.number().int(),
+  compare_at_laari: z.number().int().nullable(),
+  cashback_rate_percent: z.string().nullable(),
+  image_url: z.string().nullable(),
+  in_stock: z.boolean(),
+  category: z.string().nullable(),
+});
+export type MarketProduct = z.infer<typeof MarketProductSchema>;
+
+export const MarketStoreSchema = z.object({
+  branch_id: z.number().int(),
+  store_name: z.string(),
+  branch_name: z.string(),
+  address: z.string().nullable(),
+  rating: z.number().nullable(),
+  rating_count: z.number().int(),
+  delivery: WebDeliveryTermsSchema,
+  cashback_rate_percent: z.string().nullable(),
+  categories: z.array(
+    z.object({
+      slug: z.string(),
+      name_en: z.string(),
+      name_dv: z.string().nullable(),
+    }),
+  ),
+  products: z.array(MarketProductSchema),
+});
+export type MarketStore = z.infer<typeof MarketStoreSchema>;
+
+export function getMarketStore(
+  branchId: number,
+  params: { category?: string; addressId?: number } = {},
+  options: RequestOptions = {},
+) {
+  const query = new URLSearchParams();
+  if (params.category) query.set('category', params.category);
+  if (params.addressId !== undefined) query.set('address_id', String(params.addressId));
+
+  return apiFetch(
+    `/api/market/branches/${branchId}${query.size ? `?${query}` : ''}`,
+    dataWrapped(MarketStoreSchema),
+    { signal: options.signal },
+  );
+}
+
+// ------------------------------------------------------------------- cart
+
+export const CartLineSchema = z.object({
+  cart_item_id: z.number().int(),
+  branch_product_id: z.number().int(),
+  product_id: z.number().int(),
+  name: z.string(),
+  name_dv: z.string().nullable(),
+  qty: z.number().int(),
+  unit_price_laari: z.number().int(),
+  line_total_laari: z.number().int(),
+  cashback_laari: z.number().int(),
+  /** Said out loud rather than applied silently. */
+  price_changed: z.boolean(),
+  price_was_laari: z.number().int().nullable(),
+  /** Flagged where it sits — a row that vanishes reads as a bug. */
+  available: z.boolean(),
+  stock_qty: z.number().int().nullable(),
+});
+
+export const SubcartSchema = z.object({
+  branch_id: z.number().int(),
+  merchant_id: z.number().int(),
+  store_name: z.string(),
+  branch_name: z.string(),
+  items: z.array(CartLineSchema),
+  items_laari: z.number().int(),
+  cashback_laari: z.number().int(),
+  cashback_rate_percent: z.string().nullable(),
+  delivery: WebDeliveryTermsSchema,
+  all_available: z.boolean(),
+});
+export type Subcart = z.infer<typeof SubcartSchema>;
+
+export const CartSchema = z.object({
+  subcarts: z.array(SubcartSchema),
+  items_laari: z.number().int(),
+  delivery_laari: z.number().int(),
+  total_payable_laari: z.number().int(),
+  cashback_laari: z.number().int(),
+  store_count: z.number().int(),
+  /** One boolean over every subcart. */
+  can_checkout: z.boolean(),
+  needs_address: z.boolean(),
+  address_id: z.number().int().nullable(),
+});
+export type Cart = z.infer<typeof CartSchema>;
+
+const CartResponseSchema = dataWrapped(CartSchema);
+
+export function getCart(addressId?: number, options: RequestOptions = {}) {
+  const query = addressId === undefined ? '' : `?address_id=${addressId}`;
+
+  return apiFetch(`/api/customer/cart${query}`, CartResponseSchema, {
+    signal: options.signal,
+  });
+}
+
+export function addToCart(branchProductId: number, qty = 1) {
+  return apiFetch('/api/customer/cart/items', CartResponseSchema, {
+    method: 'POST',
+    body: { branch_product_id: branchProductId, qty },
+  });
+}
+
+export function setCartQty(cartItemId: number, qty: number) {
+  return apiFetch(`/api/customer/cart/items/${cartItemId}`, CartResponseSchema, {
+    method: 'PATCH',
+    body: { qty },
+  });
+}
+
+export function clearCart() {
+  return apiFetch('/api/customer/cart', CartResponseSchema, { method: 'DELETE' });
+}
+
+// ----------------------------------------------------------------- orders
+
+export const CustomerAddressSchema = z.object({
+  id: z.number().int(),
+  label: z.string(),
+  recipient_name: z.string(),
+  phone: z.string(),
+  building: z.string(),
+  island: z.string().nullable(),
+  area_magu: z.string().nullable(),
+  apartment_floor: z.string().nullable(),
+  delivery_note: z.string().nullable(),
+  lat: z.number().nullable(),
+  lng: z.number().nullable(),
+  /** Resolved from the pin. Null = no shop can quote delivery there yet. */
+  zone_id: z.number().int().nullable(),
+  zone_name: z.string().nullable(),
+  is_default: z.boolean(),
+});
+export type CustomerAddress = z.infer<typeof CustomerAddressSchema>;
+
+export function listAddresses(options: RequestOptions = {}) {
+  return apiFetch(
+    '/api/customer/addresses',
+    z.object({ data: z.array(CustomerAddressSchema) }),
+    { signal: options.signal },
+  );
+}
+
+export function createAddress(body: Record<string, unknown>) {
+  return apiFetch('/api/customer/addresses', dataWrapped(CustomerAddressSchema), {
+    method: 'POST',
+    body,
+  });
+}
+
+export const CustomerOrderSchema = z.object({
+  id: z.number().int(),
+  reference: z.string(),
+  state: z.string(),
+  payment_state: z.string(),
+  payment_method: z.string(),
+  items_laari: z.number().int(),
+  delivery_laari: z.number().int(),
+  total_payable_laari: z.number().int(),
+  cashback_total_laari: z.number().int(),
+  store_count: z.number().int(),
+  placed_at: z.string().nullable(),
+  address: z.record(z.string(), z.unknown()).nullable(),
+  suborders: z.array(
+    z.object({
+      id: z.number().int(),
+      reference: z.string(),
+      store_name: z.string().nullable(),
+      branch_name: z.string().nullable(),
+      fulfilment: z.string(),
+      state: z.string(),
+      reject_reason: z.string().nullable(),
+      pickup_code: z.string().nullable(),
+      items_laari: z.number().int(),
+      delivery_laari: z.number().int(),
+      subtotal_laari: z.number().int(),
+      cashback_laari: z.number().int(),
+      items: z.array(
+        z.object({
+          id: z.number().int(),
+          name: z.string(),
+          qty: z.number().int(),
+          fulfilled_qty: z.number().int(),
+          amended: z.boolean(),
+          refund_laari: z.number().int(),
+          unit_price_laari: z.number().int(),
+          line_total_laari: z.number().int(),
+        }),
+      ),
+    }),
+  ),
+});
+export type CustomerOrder = z.infer<typeof CustomerOrderSchema>;
+
+export function listCustomerOrders(options: RequestOptions = {}) {
+  return apiFetch(
+    '/api/customer/orders',
+    z.object({ data: z.array(CustomerOrderSchema) }),
+    { signal: options.signal },
+  );
+}
+
+export function getCustomerOrder(id: number, options: RequestOptions = {}) {
+  return apiFetch(`/api/customer/orders/${id}`, dataWrapped(CustomerOrderSchema), {
+    signal: options.signal,
+  });
+}
+
+export function placeOrder(body: { payment_method: string; address_id?: number | null }) {
+  return apiFetch('/api/customer/orders', dataWrapped(CustomerOrderSchema), {
+    method: 'POST',
+    body,
+  });
+}
+
+export function listPaymentAccounts(options: RequestOptions = {}) {
+  return apiFetch(
+    '/api/customer/payment-accounts',
+    z.object({
+      data: z.array(
+        z.object({
+          id: z.number().int(),
+          bank_name: z.string(),
+          account_no: z.string(),
+          account_name: z.string(),
+          currency: z.string(),
+          is_primary: z.boolean(),
+        }),
+      ),
+    }),
+    { signal: options.signal },
+  );
+}
+
+// ----------------------------------------------------------------- wallet
+
+const CustomerWalletSchema = dataWrapped(
+  z.object({
+    balance_laari: z.number().int(),
+    currency: z.string(),
+    minimum_withdrawal_laari: z.number().int(),
+    can_withdraw: z.boolean(),
+    has_bank_account: z.boolean(),
+    entries: z.array(
+      z.object({
+        id: z.number().int(),
+        amount_laari: z.number().int(),
+        balance_after_laari: z.number().int(),
+        type: z.string(),
+        description: z.string().nullable(),
+        at: z.string().nullable(),
+      }),
+    ),
+    withdrawals: z.array(
+      z.object({
+        id: z.number().int(),
+        amount_laari: z.number().int(),
+        state: z.string(),
+        requested_at: z.string().nullable(),
+        /** The BANK's reference — never an approval-queue id. */
+        bank_reference: z.string().nullable(),
+      }),
+    ),
+  }),
+);
+
+export function getWallet(options: RequestOptions = {}) {
+  return apiFetch('/api/customer/wallet', CustomerWalletSchema, {
+    signal: options.signal,
+  });
+}
+
+export function requestWithdrawal(amountLaari: number) {
+  return apiFetch(
+    '/api/customer/wallet/withdrawals',
+    dataWrapped(
+      z.object({
+        id: z.number().int(),
+        amount_laari: z.number().int(),
+        state: z.string(),
+        balance_laari: z.number().int(),
+      }),
+    ),
+    { method: 'POST', body: { amount_laari: amountLaari } },
+  );
+}
