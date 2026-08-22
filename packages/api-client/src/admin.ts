@@ -1,5 +1,5 @@
-import { z } from 'zod';
-import { apiBaseUrl, apiFetch, apiFetchBlob } from './client';
+import { z } from "zod";
+import { apiBaseUrl, apiFetch, apiFetchBlob } from "./client";
 import {
   BankSlugSchema,
   CashbackPercentInputSchema,
@@ -17,7 +17,7 @@ import {
   type ClaimState,
   type PromotionStatus,
   type SettlementState,
-} from './resources';
+} from "./resources";
 
 /**
  * Typed contracts for the admin surface: the settlement matching queue,
@@ -45,7 +45,7 @@ function queryString(
     }
   }
   const encoded = search.toString();
-  return encoded === '' ? '' : `?${encoded}`;
+  return encoded === "" ? "" : `?${encoded}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -115,7 +115,7 @@ export function recordAdminSettlementPayment(
   return apiFetch(
     `/api/admin/settlements/${settlementId}/payments`,
     SettlementPaymentResponseSchema,
-    { method: 'POST', body, signal: options.signal },
+    { method: "POST", body, signal: options.signal },
   );
 }
 
@@ -127,7 +127,7 @@ export function matchAdminSettlementPayment(
   return apiFetch(
     `/api/admin/payments/${paymentId}/match`,
     AdminSettlementResponseSchema,
-    { method: 'POST', signal: options.signal },
+    { method: "POST", signal: options.signal },
   );
 }
 
@@ -154,7 +154,7 @@ export function rejectAdminSettlement(
   return apiFetch(
     `/api/admin/settlements/${settlementId}/reject`,
     AdminSettlementResponseSchema,
-    { method: 'POST', body, signal: options.signal },
+    { method: "POST", body, signal: options.signal },
   );
 }
 
@@ -240,7 +240,7 @@ export type MerchantStandingListResponse = z.infer<
 export function listAdminMerchants(
   options: RequestOptions = {},
 ): Promise<MerchantStandingListResponse> {
-  return apiFetch('/api/admin/merchants', MerchantStandingListResponseSchema, {
+  return apiFetch("/api/admin/merchants", MerchantStandingListResponseSchema, {
     signal: options.signal,
   });
 }
@@ -269,7 +269,7 @@ export function setAdminMerchantFeatured(
   return apiFetch(
     `/api/admin/merchants/${merchantId}/featured`,
     MerchantFeaturedResponseSchema,
-    { method: 'PUT', body: { featured }, signal: options.signal },
+    { method: "PUT", body: { featured }, signal: options.signal },
   );
 }
 
@@ -299,23 +299,28 @@ export type AdminBranchUpdateResponse = z.infer<
 export function updateAdminMerchantBranch(
   merchantId: number,
   branchId: number,
-  body: { name?: string; address?: string; lat?: number | null; lng?: number | null },
+  body: {
+    name?: string;
+    address?: string;
+    lat?: number | null;
+    lng?: number | null;
+  },
   options: RequestOptions = {},
 ): Promise<AdminBranchUpdateResponse> {
   return apiFetch(
     `/api/admin/merchants/${merchantId}/branches/${branchId}`,
     AdminBranchUpdateResponseSchema,
-    { method: 'PATCH', body, signal: options.signal },
+    { method: "PATCH", body, signal: options.signal },
   );
 }
 
 export const MerchantNoticeTypeSchema = z.enum([
-  'reminder_day10',
-  'urgent_day13',
-  'due_day15',
-  'suspended',
-  'reinstated',
-  'write_off',
+  "reminder_day10",
+  "urgent_day13",
+  "due_day15",
+  "suspended",
+  "reinstated",
+  "write_off",
 ]);
 export type MerchantNoticeType = z.infer<typeof MerchantNoticeTypeSchema>;
 
@@ -461,7 +466,7 @@ export function updateAdminMerchant(
   return apiFetch(
     `/api/admin/merchants/${merchantId}`,
     AdminMerchantDetailResponseSchema,
-    { method: 'PATCH', body, signal: options.signal },
+    { method: "PATCH", body, signal: options.signal },
   );
 }
 
@@ -489,7 +494,7 @@ export function suspendAdminMerchant(
   return apiFetch(
     `/api/admin/merchants/${merchantId}/suspend`,
     MerchantStatusChangeResponseSchema,
-    { method: 'POST', body, signal: options.signal },
+    { method: "POST", body, signal: options.signal },
   );
 }
 
@@ -506,7 +511,7 @@ export function reinstateAdminMerchant(
   return apiFetch(
     `/api/admin/merchants/${merchantId}/reinstate`,
     MerchantStatusChangeResponseSchema,
-    { method: 'POST', body, signal: options.signal },
+    { method: "POST", body, signal: options.signal },
   );
 }
 
@@ -533,7 +538,7 @@ export function resetAdminMerchantStaffPassword(
   return apiFetch(
     `/api/admin/merchants/${merchantId}/staff/${userId}/reset-password`,
     AdminStaffResetPasswordResponseSchema,
-    { method: 'POST', signal: options.signal },
+    { method: "POST", signal: options.signal },
   );
 }
 
@@ -558,7 +563,7 @@ export function setAdminMerchantStaffActive(
   return apiFetch(
     `/api/admin/merchants/${merchantId}/staff/${userId}`,
     AdminMerchantStaffResponseSchema,
-    { method: 'PATCH', body: { is_active: isActive }, signal: options.signal },
+    { method: "PATCH", body: { is_active: isActive }, signal: options.signal },
   );
 }
 
@@ -567,7 +572,7 @@ export function setAdminMerchantStaffActive(
 // ---------------------------------------------------------------------------
 
 /** active | suspended | closed — the customers_status_check literals. */
-export const CustomerStatusSchema = z.enum(['active', 'suspended', 'closed']);
+export const CustomerStatusSchema = z.enum(["active", "suspended", "closed"]);
 export type CustomerStatus = z.infer<typeof CustomerStatusSchema>;
 
 export const AdminCustomerRowSchema = z.object({
@@ -693,7 +698,7 @@ export function updateAdminCustomer(
   return apiFetch(
     `/api/admin/customers/${customerId}`,
     AdminCustomerDetailResponseSchema,
-    { method: 'PATCH', body, signal: options.signal },
+    { method: "PATCH", body, signal: options.signal },
   );
 }
 
@@ -720,7 +725,7 @@ export function resetAdminCustomerPassword(
   return apiFetch(
     `/api/admin/customers/${customerId}/reset-password`,
     AdminCustomerResetPasswordResponseSchema,
-    { method: 'POST', signal: options.signal },
+    { method: "POST", signal: options.signal },
   );
 }
 
@@ -744,13 +749,13 @@ export type CustomerStatusChangeResponse = z.infer<
  */
 export function setAdminCustomerStatus(
   customerId: number,
-  body: { status: 'active' | 'suspended'; reason?: string },
+  body: { status: "active" | "suspended"; reason?: string },
   options: RequestOptions = {},
 ): Promise<CustomerStatusChangeResponse> {
   return apiFetch(
     `/api/admin/customers/${customerId}/status`,
     CustomerStatusChangeResponseSchema,
-    { method: 'POST', body, signal: options.signal },
+    { method: "POST", body, signal: options.signal },
   );
 }
 
@@ -758,16 +763,16 @@ export function setAdminCustomerStatus(
 // Reconciliation runs
 // ---------------------------------------------------------------------------
 
-export const ReconciliationIssueSchema = z.discriminatedUnion('kind', [
+export const ReconciliationIssueSchema = z.discriminatedUnion("kind", [
   z.object({
-    kind: z.literal('unbalanced_journal'),
+    kind: z.literal("unbalanced_journal"),
     journal_id: z.number().int(),
     currency: z.string(),
     debit_laari: z.number().int(),
     credit_laari: z.number().int(),
   }),
   z.object({
-    kind: z.literal('balance_mismatch'),
+    kind: z.literal("balance_mismatch"),
     account: z.string(),
     derived_laari: z.number().int(),
     ledger_laari: z.number().int(),
@@ -778,7 +783,7 @@ export type ReconciliationIssue = z.infer<typeof ReconciliationIssueSchema>;
 export const ReconciliationRunSchema = z.object({
   id: z.number().int(),
   ran_at: z.string(),
-  status: z.enum(['ok', 'divergent']),
+  status: z.enum(["ok", "divergent"]),
   journals_checked: z.number().int(),
   issues: z.array(ReconciliationIssueSchema).nullable(),
   /** Per-account derived vs ledger balances, keyed by account code. */
@@ -853,8 +858,8 @@ export function createAdminPayoutBatch(
   body: CreatePayoutBatchRequest,
   options: RequestOptions = {},
 ): Promise<PayoutBatchResponse> {
-  return apiFetch('/api/admin/payout-batches', PayoutBatchResponseSchema, {
-    method: 'POST',
+  return apiFetch("/api/admin/payout-batches", PayoutBatchResponseSchema, {
+    method: "POST",
     body,
     signal: options.signal,
   });
@@ -880,7 +885,7 @@ export function approveAdminPayoutBatch(
   return apiFetch(
     `/api/admin/payout-batches/${batchId}/approve`,
     PayoutBatchResponseSchema,
-    { method: 'POST', signal: options.signal },
+    { method: "POST", signal: options.signal },
   );
 }
 
@@ -900,7 +905,7 @@ export function sendAdminPayoutBatchViaApi(
   return apiFetch(
     `/api/admin/payout-batches/${batchId}/send-via-api`,
     PayoutBatchResponseSchema,
-    { method: 'POST', body, signal: options.signal },
+    { method: "POST", body, signal: options.signal },
   );
 }
 
@@ -912,7 +917,7 @@ export function cancelAdminPayoutBatch(
   return apiFetch(
     `/api/admin/payout-batches/${batchId}/cancel`,
     PayoutBatchResponseSchema,
-    { method: 'POST', signal: options.signal },
+    { method: "POST", signal: options.signal },
   );
 }
 
@@ -932,7 +937,7 @@ export function exportAdminPayoutBatch(
   options: RequestOptions = {},
 ): Promise<Blob> {
   return apiFetchBlob(`/api/admin/payout-batches/${batchId}/export`, {
-    method: 'POST',
+    method: "POST",
     signal: options.signal,
   });
 }
@@ -949,11 +954,11 @@ export function uploadAdminPayoutSheet(
   options: RequestOptions = {},
 ): Promise<PayoutBatchResponse> {
   const body = new FormData();
-  body.append('file', file);
+  body.append("file", file);
   return apiFetch(
     `/api/admin/payout-batches/${batchId}/import`,
     PayoutBatchResponseSchema,
-    { method: 'POST', body, signal: options.signal },
+    { method: "POST", body, signal: options.signal },
   );
 }
 
@@ -972,7 +977,7 @@ export function markAdminPayoutItemPaid(
     `/api/admin/payout-batches/${batchId}/items/${itemId}/mark-paid`,
     PayoutBatchResponseSchema,
     {
-      method: 'POST',
+      method: "POST",
       body: { bank_reference: bankReference },
       signal: options.signal,
     },
@@ -994,7 +999,7 @@ export function markAdminPayoutItemFailed(
     `/api/admin/payout-batches/${batchId}/items/${itemId}/mark-failed`,
     PayoutBatchResponseSchema,
     {
-      method: 'POST',
+      method: "POST",
       body: { failure_reason: failureReason },
       signal: options.signal,
     },
@@ -1015,7 +1020,7 @@ export function settleAllAdminPayoutItems(
     `/api/admin/payout-batches/${batchId}/settle-all`,
     PayoutBatchResponseSchema,
     {
-      method: 'POST',
+      method: "POST",
       body: { bank_reference: bankReference },
       signal: options.signal,
     },
@@ -1102,7 +1107,7 @@ export function approveAdminClaim(
   return apiFetch(
     `/api/admin/claims/${claimId}/approve`,
     AdminClaimResponseSchema,
-    { method: 'POST', body, signal: options.signal },
+    { method: "POST", body, signal: options.signal },
   );
 }
 
@@ -1121,7 +1126,7 @@ export function rejectAdminClaim(
   return apiFetch(
     `/api/admin/claims/${claimId}/reject`,
     AdminClaimResponseSchema,
-    { method: 'POST', body, signal: options.signal },
+    { method: "POST", body, signal: options.signal },
   );
 }
 
@@ -1211,7 +1216,7 @@ export function listAdminPlatformBankAccounts(
   options: RequestOptions = {},
 ): Promise<PlatformBankAccountListResponse> {
   return apiFetch(
-    '/api/admin/platform/bank-accounts',
+    "/api/admin/platform/bank-accounts",
     PlatformBankAccountListResponseSchema,
     { signal: options.signal },
   );
@@ -1222,7 +1227,7 @@ export const CreatePlatformBankAccountRequestSchema = z.object({
   account_no: z.string().min(1).max(255),
   account_name: z.string().min(1).max(255),
   /** MVR only in v1; defaults to MVR when omitted. */
-  currency: z.literal('MVR').optional(),
+  currency: z.literal("MVR").optional(),
   is_primary: z.boolean().optional(),
   active: z.boolean().optional(),
 });
@@ -1236,9 +1241,9 @@ export function createAdminPlatformBankAccount(
   options: RequestOptions = {},
 ): Promise<PlatformBankAccountResponse> {
   return apiFetch(
-    '/api/admin/platform/bank-accounts',
+    "/api/admin/platform/bank-accounts",
     PlatformBankAccountResponseSchema,
-    { method: 'POST', body, signal: options.signal },
+    { method: "POST", body, signal: options.signal },
   );
 }
 
@@ -1246,7 +1251,7 @@ export const UpdatePlatformBankAccountRequestSchema = z.object({
   bank_name: BankSlugSchema.optional(),
   account_no: z.string().min(1).max(255).optional(),
   account_name: z.string().min(1).max(255).optional(),
-  currency: z.literal('MVR').optional(),
+  currency: z.literal("MVR").optional(),
   is_primary: z.boolean().optional(),
   active: z.boolean().optional(),
 });
@@ -1263,7 +1268,7 @@ export function updateAdminPlatformBankAccount(
   return apiFetch(
     `/api/admin/platform/bank-accounts/${id}`,
     PlatformBankAccountResponseSchema,
-    { method: 'PATCH', body, signal: options.signal },
+    { method: "PATCH", body, signal: options.signal },
   );
 }
 
@@ -1333,7 +1338,7 @@ export function getAdminFeeTierSchedules(
   options: RequestOptions = {},
 ): Promise<FeeTierScheduleIndexResponse> {
   return apiFetch(
-    '/api/admin/platform/fee-tiers',
+    "/api/admin/platform/fee-tiers",
     FeeTierScheduleIndexResponseSchema,
     { signal: options.signal },
   );
@@ -1364,9 +1369,9 @@ export function createAdminFeeTierSchedule(
   options: RequestOptions = {},
 ): Promise<FeeTierScheduleResponse> {
   return apiFetch(
-    '/api/admin/platform/fee-tiers',
+    "/api/admin/platform/fee-tiers",
     FeeTierScheduleResponseSchema,
-    { method: 'POST', body, signal: options.signal },
+    { method: "POST", body, signal: options.signal },
   );
 }
 
@@ -1401,11 +1406,11 @@ export type PlatformSetting = z.infer<typeof PlatformSettingSchema>;
 
 /** The known setting keys; the server is authoritative and may add more. */
 export const PlatformSettingKeySchema = z.enum([
-  'min_payout_laari',
-  'settlement_due_days',
-  'write_off_days',
-  'default_validation_window_days',
-  'default_min_eligible_laari',
+  "min_payout_laari",
+  "settlement_due_days",
+  "write_off_days",
+  "default_validation_window_days",
+  "default_min_eligible_laari",
   /**
    * PLAN §1 prompt-payment discount: the percent taken off the PLATFORM FEE
    * when a merchant settles everything outstanding promptly ("0.00" disables
@@ -1414,13 +1419,13 @@ export const PlatformSettingKeySchema = z.enum([
    * `settlement_due_days` or the incentive rewards nothing; the range (1–15)
    * enforces the outer bound.
    */
-  'prompt_discount_rate_percent',
-  'prompt_discount_max_age_days',
+  "prompt_discount_rate_percent",
+  "prompt_discount_max_age_days",
   /**
    * The window a NEW store is created with, as distinct from the ceiling it
    * may raise itself to (`default_validation_window_days`).
    */
-  'new_merchant_validation_window_days',
+  "new_merchant_validation_window_days",
   /**
    * MARKETPLACE (PLAN-marketplace.md §10). `marketplace_enabled` is a
    * BOOLEAN carried as 0/1 — the settings table stores integers, and the
@@ -1428,8 +1433,8 @@ export const PlatformSettingKeySchema = z.enum([
    * marketplaces" is not a question. `marketplace_fee_percent` is a rate and
    * follows the same 2-decimal string wire format as the other percent key.
    */
-  'marketplace_enabled',
-  'marketplace_fee_percent',
+  "marketplace_enabled",
+  "marketplace_fee_percent",
 ]);
 export type PlatformSettingKey = z.infer<typeof PlatformSettingKeySchema>;
 
@@ -1445,7 +1450,7 @@ export function getAdminPlatformSettings(
   options: RequestOptions = {},
 ): Promise<PlatformSettingsResponse> {
   return apiFetch(
-    '/api/admin/platform/settings',
+    "/api/admin/platform/settings",
     PlatformSettingsResponseSchema,
     { signal: options.signal },
   );
@@ -1475,7 +1480,7 @@ export function updateAdminPlatformSetting(
   return apiFetch(
     `/api/admin/platform/settings/${encodeURIComponent(key)}`,
     PlatformSettingsResponseSchema,
-    { method: 'PATCH', body, signal: options.signal },
+    { method: "PATCH", body, signal: options.signal },
   );
 }
 
@@ -1516,9 +1521,13 @@ export type AppReleasesResponse = z.infer<typeof AppReleasesResponseSchema>;
 export function getAdminAppReleases(
   options: RequestOptions = {},
 ): Promise<AppReleasesResponse> {
-  return apiFetch('/api/admin/platform/app-releases', AppReleasesResponseSchema, {
-    signal: options.signal,
-  });
+  return apiFetch(
+    "/api/admin/platform/app-releases",
+    AppReleasesResponseSchema,
+    {
+      signal: options.signal,
+    },
+  );
 }
 
 /**
@@ -1531,18 +1540,22 @@ export function updateAdminAppReleases(
   body: AppReleases,
   options: RequestOptions = {},
 ): Promise<AppReleasesResponse> {
-  return apiFetch('/api/admin/platform/app-releases', AppReleasesResponseSchema, {
-    method: 'PUT',
-    body,
-    signal: options.signal,
-  });
+  return apiFetch(
+    "/api/admin/platform/app-releases",
+    AppReleasesResponseSchema,
+    {
+      method: "PUT",
+      body,
+      signal: options.signal,
+    },
+  );
 }
 
 // ---------------------------------------------------------------------------
 // Admin users (superadmin only)
 // ---------------------------------------------------------------------------
 
-export const AdminRoleSchema = z.enum(['admin', 'superadmin']);
+export const AdminRoleSchema = z.enum(["admin", "superadmin"]);
 export type AdminRole = z.infer<typeof AdminRoleSchema>;
 
 /**
@@ -1572,7 +1585,7 @@ export type AdminUserResponse = z.infer<typeof AdminUserResponseSchema>;
 export function listAdminUsers(
   options: RequestOptions = {},
 ): Promise<AdminUserListResponse> {
-  return apiFetch('/api/admin/admins', AdminUserListResponseSchema, {
+  return apiFetch("/api/admin/admins", AdminUserListResponseSchema, {
     signal: options.signal,
   });
 }
@@ -1602,8 +1615,8 @@ export function createAdminUser(
   body: CreateAdminUserRequest,
   options: RequestOptions = {},
 ): Promise<CreateAdminUserResponse> {
-  return apiFetch('/api/admin/admins', CreateAdminUserResponseSchema, {
-    method: 'POST',
+  return apiFetch("/api/admin/admins", CreateAdminUserResponseSchema, {
+    method: "POST",
     body,
     signal: options.signal,
   });
@@ -1628,7 +1641,7 @@ export function updateAdminUser(
   options: RequestOptions = {},
 ): Promise<AdminUserResponse> {
   return apiFetch(`/api/admin/admins/${id}`, AdminUserResponseSchema, {
-    method: 'PATCH',
+    method: "PATCH",
     body,
     signal: options.signal,
   });
@@ -1680,7 +1693,7 @@ export interface ZoneInput {
 export function listZones(
   options: RequestOptions = {},
 ): Promise<ZoneListResponse> {
-  return apiFetch('/api/admin/zones', ZoneListResponseSchema, {
+  return apiFetch("/api/admin/zones", ZoneListResponseSchema, {
     signal: options.signal,
   });
 }
@@ -1694,8 +1707,8 @@ export function reorderZones(
   ids: number[],
   options: RequestOptions = {},
 ): Promise<ZoneListResponse> {
-  return apiFetch('/api/admin/zones/order', ZoneListResponseSchema, {
-    method: 'PUT',
+  return apiFetch("/api/admin/zones/order", ZoneListResponseSchema, {
+    method: "PUT",
     body: { ids },
     signal: options.signal,
   });
@@ -1706,8 +1719,8 @@ export function createZone(
   body: ZoneInput,
   options: RequestOptions = {},
 ): Promise<ZoneResponse> {
-  return apiFetch('/api/admin/zones', ZoneResponseSchema, {
-    method: 'POST',
+  return apiFetch("/api/admin/zones", ZoneResponseSchema, {
+    method: "POST",
     body,
     signal: options.signal,
   });
@@ -1720,7 +1733,7 @@ export function updateZone(
   options: RequestOptions = {},
 ): Promise<ZoneResponse> {
   return apiFetch(`/api/admin/zones/${id}`, ZoneResponseSchema, {
-    method: 'PUT',
+    method: "PUT",
     body,
     signal: options.signal,
   });
@@ -1735,7 +1748,7 @@ export async function deleteZone(
   options: RequestOptions = {},
 ): Promise<void> {
   await apiFetch(`/api/admin/zones/${id}`, z.undefined(), {
-    method: 'DELETE',
+    method: "DELETE",
     signal: options.signal,
   });
 }
@@ -1753,7 +1766,7 @@ export type BrandColorResponse = z.infer<typeof BrandColorResponseSchema>;
 export function getAdminBrandColor(
   options: RequestOptions = {},
 ): Promise<BrandColorResponse> {
-  return apiFetch('/api/admin/platform/brand', BrandColorResponseSchema, {
+  return apiFetch("/api/admin/platform/brand", BrandColorResponseSchema, {
     signal: options.signal,
   });
 }
@@ -1766,8 +1779,8 @@ export function setAdminBrandColor(
   color: string | null,
   options: RequestOptions = {},
 ): Promise<BrandColorResponse> {
-  return apiFetch('/api/admin/platform/brand', BrandColorResponseSchema, {
-    method: 'PUT',
+  return apiFetch("/api/admin/platform/brand", BrandColorResponseSchema, {
+    method: "PUT",
     body: { color },
     signal: options.signal,
   });
@@ -1791,7 +1804,14 @@ export const PendingPaymentSchema = z.object({
   account_name: z.string().nullable(),
   /** The bank's idempotency key. The same string identifies it everywhere. */
   internal_ref: z.string(),
-  state: z.enum(['pending', 'processing', 'pending_approval', 'sent', 'failed', 'cancelled']),
+  state: z.enum([
+    "pending",
+    "processing",
+    "pending_approval",
+    "sent",
+    "failed",
+    "cancelled",
+  ]),
   attempts: z.number().int(),
   trx_id: z.string().nullable(),
   /**
@@ -1814,7 +1834,7 @@ export const PendingPaymentsResponseSchema = z.object({
 });
 
 export function listPendingPayments(
-  state = 'pending',
+  state = "pending",
   options: RequestOptions = {},
 ) {
   return apiFetch(
@@ -1842,10 +1862,14 @@ const PayoutActionSchema = dataWrapped(
 );
 
 export function sendPendingPayment(id: number, profileId?: number) {
-  return apiFetch(`/api/admin/pending-payments/${id}/send`, PayoutActionSchema, {
-    method: 'POST',
-    body: profileId === undefined ? {} : { profile_id: profileId },
-  });
+  return apiFetch(
+    `/api/admin/pending-payments/${id}/send`,
+    PayoutActionSchema,
+    {
+      method: "POST",
+      body: profileId === undefined ? {} : { profile_id: profileId },
+    },
+  );
 }
 
 /** Record a transfer made by hand — every transfer, until the tunnel exists. */
@@ -1853,7 +1877,7 @@ export function markPendingPaymentSent(id: number, trxId: string) {
   return apiFetch(
     `/api/admin/pending-payments/${id}/mark-sent`,
     PayoutActionSchema,
-    { method: 'POST', body: { trx_id: trxId } },
+    { method: "POST", body: { trx_id: trxId } },
   );
 }
 
@@ -1861,7 +1885,7 @@ export function cancelPendingPayment(id: number, reason: string) {
   return apiFetch(
     `/api/admin/pending-payments/${id}/cancel`,
     PayoutActionSchema,
-    { method: 'POST', body: { reason } },
+    { method: "POST", body: { reason } },
   );
 }
 
@@ -1931,9 +1955,13 @@ export type TransferSettingsResponse = z.infer<
 >;
 
 export function getTransferSettings(options: RequestOptions = {}) {
-  return apiFetch('/api/admin/transfer-settings', TransferSettingsResponseSchema, {
-    signal: options.signal,
-  });
+  return apiFetch(
+    "/api/admin/transfer-settings",
+    TransferSettingsResponseSchema,
+    {
+      signal: options.signal,
+    },
+  );
 }
 
 export function updateTransferSettings(body: {
@@ -1944,10 +1972,14 @@ export function updateTransferSettings(body: {
   verify_window_minutes?: number;
   verify_min_score?: number;
 }) {
-  return apiFetch('/api/admin/transfer-settings', TransferSettingsResponseSchema, {
-    method: 'PATCH',
-    body,
-  });
+  return apiFetch(
+    "/api/admin/transfer-settings",
+    TransferSettingsResponseSchema,
+    {
+      method: "PATCH",
+      body,
+    },
+  );
 }
 
 export function updateTransferProfile(
@@ -1966,7 +1998,7 @@ export function updateTransferProfile(
   return apiFetch(
     `/api/admin/transfer-settings/profiles/${id}`,
     TransferSettingsResponseSchema,
-    { method: 'PATCH', body },
+    { method: "PATCH", body },
   );
 }
 
@@ -1978,7 +2010,7 @@ export function updateWatchedAccount(
   return apiFetch(
     `/api/admin/transfer-settings/watched-accounts/${id}`,
     TransferSettingsResponseSchema,
-    { method: 'PATCH', body },
+    { method: "PATCH", body },
   );
 }
 
@@ -1987,7 +2019,7 @@ export function updateWatchedAccount(
 export const MerchantSettlementBatchSchema = z.object({
   id: z.number().int(),
   reference: z.string(),
-  state: z.enum(['draft', 'approved', 'processing', 'completed', 'cancelled']),
+  state: z.enum(["draft", "approved", "processing", "completed", "cancelled"]),
   total_laari: z.number().int(),
   merchant_count: z.number().int(),
   /** Money held back for want of bank details — surfaced, never silent. */
@@ -2010,7 +2042,7 @@ export const MerchantSettlementsResponseSchema = z.object({
 
 export function listMerchantPayoutBatches(options: RequestOptions = {}) {
   return apiFetch(
-    '/api/admin/merchant-settlements',
+    "/api/admin/merchant-settlements",
     MerchantSettlementsResponseSchema,
     { signal: options.signal },
   );
@@ -2044,7 +2076,10 @@ export const MerchantSettlementDetailSchema = dataWrapped(
   }),
 );
 
-export function getMerchantPayoutBatch(id: number, options: RequestOptions = {}) {
+export function getMerchantPayoutBatch(
+  id: number,
+  options: RequestOptions = {},
+) {
   return apiFetch(
     `/api/admin/merchant-settlements/${id}`,
     MerchantSettlementDetailSchema,
@@ -2054,9 +2089,9 @@ export function getMerchantPayoutBatch(id: number, options: RequestOptions = {})
 
 export function buildMerchantPayoutBatch() {
   return apiFetch(
-    '/api/admin/merchant-settlements',
+    "/api/admin/merchant-settlements",
     dataWrapped(z.object({ id: z.number().int(), reference: z.string() })),
-    { method: 'POST', body: {} },
+    { method: "POST", body: {} },
   );
 }
 
@@ -2064,7 +2099,7 @@ export function approveMerchantPayoutBatch(id: number) {
   return apiFetch(
     `/api/admin/merchant-settlements/${id}/approve`,
     dataWrapped(z.object({ state: z.string() })),
-    { method: 'POST', body: {} },
+    { method: "POST", body: {} },
   );
 }
 
@@ -2072,7 +2107,7 @@ export function cancelMerchantPayoutBatch(id: number) {
   return apiFetch(
     `/api/admin/merchant-settlements/${id}/cancel`,
     dataWrapped(z.object({ state: z.string() })),
-    { method: 'POST', body: {} },
+    { method: "POST", body: {} },
   );
 }
 
@@ -2084,7 +2119,7 @@ export function sendMerchantPayoutBatchViaApi(
   return apiFetch(
     `/api/admin/merchant-settlements/${batchId}/send`,
     dataWrapped(z.object({ queued: z.number().int() })),
-    { method: 'POST', body },
+    { method: "POST", body },
   );
 }
 
@@ -2100,7 +2135,7 @@ export function sendMerchantPayoutItem(batchId: number, itemId: number) {
         queued: z.boolean().optional(),
       }),
     ),
-    { method: 'POST', body: {} },
+    { method: "POST", body: {} },
   );
 }
 
@@ -2112,7 +2147,13 @@ export const KybApplicationSchema = z.object({
   merchant_slug: z.string().nullable(),
   merchant_status: z.string().nullable(),
   contact_phone: z.string().nullable(),
-  state: z.enum(['not_enrolled', 'pending_kyb', 'active', 'rejected', 'suspended']),
+  state: z.enum([
+    "not_enrolled",
+    "pending_kyb",
+    "active",
+    "rejected",
+    "suspended",
+  ]),
   business_type: z.string().nullable(),
   fulfilment: z.string().nullable(),
   prep_time_min: z.number().int().nullable(),
@@ -2123,7 +2164,10 @@ export const KybApplicationSchema = z.object({
 });
 export type KybApplication = z.infer<typeof KybApplicationSchema>;
 
-export function listKybApplications(state = 'pending_kyb', options: RequestOptions = {}) {
+export function listKybApplications(
+  state = "pending_kyb",
+  options: RequestOptions = {},
+) {
   return apiFetch(
     `/api/admin/marketplace/kyb?state=${encodeURIComponent(state)}`,
     z.object({ data: z.array(KybApplicationSchema) }),
@@ -2142,7 +2186,10 @@ export const KybDocumentSchema = z.object({
   uploaded_at: z.string().nullable(),
 });
 
-export function getKybApplication(merchantId: number, options: RequestOptions = {}) {
+export function getKybApplication(
+  merchantId: number,
+  options: RequestOptions = {},
+) {
   return apiFetch(
     `/api/admin/marketplace/kyb/${merchantId}`,
     dataWrapped(
@@ -2159,7 +2206,7 @@ export function approveKyb(merchantId: number) {
   return apiFetch(
     `/api/admin/marketplace/kyb/${merchantId}/approve`,
     dataWrapped(KybApplicationSchema),
-    { method: 'POST', body: {} },
+    { method: "POST", body: {} },
   );
 }
 
@@ -2167,7 +2214,7 @@ export function rejectKyb(merchantId: number, reason: string) {
   return apiFetch(
     `/api/admin/marketplace/kyb/${merchantId}/reject`,
     dataWrapped(KybApplicationSchema),
-    { method: 'POST', body: { reason } },
+    { method: "POST", body: { reason } },
   );
 }
 
@@ -2180,7 +2227,12 @@ export const OrderPaymentSchema = z.object({
   customer_phone: z.string().nullable(),
   total_payable_laari: z.number().int(),
   payment_method: z.string(),
-  payment_state: z.enum(['awaiting_proof', 'proof_submitted', 'verified', 'refused']),
+  payment_state: z.enum([
+    "awaiting_proof",
+    "proof_submitted",
+    "verified",
+    "refused",
+  ]),
   has_receipt: z.boolean(),
   proof_submitted_at: z.string().nullable(),
   /**
@@ -2198,7 +2250,10 @@ export const OrderPaymentSchema = z.object({
 });
 export type OrderPayment = z.infer<typeof OrderPaymentSchema>;
 
-export function listOrderPayments(state = 'proof_submitted', options: RequestOptions = {}) {
+export function listOrderPayments(
+  state = "proof_submitted",
+  options: RequestOptions = {},
+) {
   return apiFetch(
     `/api/admin/marketplace/payments?payment_state=${encodeURIComponent(state)}`,
     z.object({ data: z.array(OrderPaymentSchema) }),
@@ -2210,7 +2265,7 @@ export function verifyOrderPayment(orderId: number) {
   return apiFetch(
     `/api/admin/marketplace/payments/${orderId}/verify`,
     dataWrapped(z.object({ payment_state: z.string() })),
-    { method: 'POST', body: {} },
+    { method: "POST", body: {} },
   );
 }
 
@@ -2220,6 +2275,224 @@ export function refuseOrderPayment(orderId: number, reason: string) {
     dataWrapped(
       z.object({ payment_state: z.string(), refused_reason: z.string() }),
     ),
-    { method: 'POST', body: { reason } },
+    { method: "POST", body: { reason } },
   );
+}
+
+// ---------------------------------------------------------------------------
+// Platform clients — "IsleBooks would like to …" (superadmin only)
+// ---------------------------------------------------------------------------
+
+/**
+ * A registered platform: software that may ask ANY merchant on Manfaa for
+ * access, on a consent screen of ours. The merchant still decides, but the
+ * asking is the privilege, which is why only a superadmin registers one.
+ *
+ * A developer without a registration is not blocked — they use the
+ * per-merchant key, which the merchant issues themselves and which reaches
+ * exactly one shop.
+ */
+export const PlatformClientSchema = z.object({
+  id: z.number().int(),
+  name: z.string(),
+  display_name: z.string().nullable(),
+  description: z.string().nullable(),
+  website: z.string().nullable(),
+  contact: z.string().nullable(),
+  /** Public identifier; travels in the authorize URL. */
+  client_id: z.string().nullable(),
+  /**
+   * A plugin on merchants' own servers: no secret (PKCE is its proof) and
+   * no callback list (the callback arrives with each request and the
+   * merchant's consent is the registration). Fixed at registration.
+   */
+  public_client: z.boolean(),
+  /** The secret itself is never readable after issuance — only this flag. */
+  has_secret: z.boolean(),
+  redirect_uris: z.array(z.string()),
+  /** The ceiling: what this platform may ASK a merchant for. */
+  allowed_abilities: z.array(z.string()),
+  connect_enabled: z.boolean(),
+  integration_status: z.string().nullable(),
+  /** Live grants across all merchants. */
+  connections: z.number().int(),
+});
+export type PlatformClient = z.infer<typeof PlatformClientSchema>;
+
+export const ConnectAbilityInfoSchema = z.object({
+  ability: z.string(),
+  /** The sentence the shopkeeper reads. */
+  consent_line: z.string(),
+  /** The warning under it, where one is warranted. */
+  caution: z.string().nullable(),
+});
+export type ConnectAbilityInfo = z.infer<typeof ConnectAbilityInfoSchema>;
+
+export const PlatformClientListResponseSchema = z.object({
+  data: z.array(PlatformClientSchema),
+  meta: z.object({ abilities: z.array(ConnectAbilityInfoSchema) }),
+});
+export type PlatformClientListResponse = z.infer<
+  typeof PlatformClientListResponseSchema
+>;
+
+/** Registration and rotation both hand back the secret — once. */
+export const PlatformClientSecretResponseSchema = z.object({
+  data: PlatformClientSchema.extend({
+    /** Null for a public client — there is nothing to hand over. */
+    client_secret: z.string().nullable(),
+    connections_revoked: z.number().int().optional(),
+  }),
+});
+export type PlatformClientSecretResponse = z.infer<
+  typeof PlatformClientSecretResponseSchema
+>;
+
+export const PlatformClientResponseSchema = dataWrapped(PlatformClientSchema);
+export type PlatformClientResponse = z.infer<
+  typeof PlatformClientResponseSchema
+>;
+
+/** GET /api/admin/platform-clients — every registration. Superadmin only. */
+export function listPlatformClients(
+  options: RequestOptions = {},
+): Promise<PlatformClientListResponse> {
+  return apiFetch(
+    "/api/admin/platform-clients",
+    PlatformClientListResponseSchema,
+    {
+      signal: options.signal,
+    },
+  );
+}
+
+export const PlatformClientWriteSchema = z.object({
+  name: z.string().min(1).max(120),
+  display_name: z.string().max(120).nullish(),
+  description: z.string().max(500).nullish(),
+  /** HTTPS only — an authorization code must never cross the wire in clear. */
+  website: z.string().max(255).nullish(),
+  contact: z.string().max(255).nullish(),
+  /** Required for a confidential platform; omitted for a public client. */
+  redirect_uris: z.array(z.string()).max(10).optional(),
+  allowed_abilities: z.array(z.string()).min(1),
+  connect_enabled: z.boolean().optional(),
+  /** Create-only. */
+  public_client: z.boolean().optional(),
+});
+export type PlatformClientWrite = z.infer<typeof PlatformClientWriteSchema>;
+
+/** POST /api/admin/platform-clients — registers a platform (201). */
+export function createPlatformClient(
+  body: PlatformClientWrite,
+  options: RequestOptions = {},
+): Promise<PlatformClientSecretResponse> {
+  return apiFetch(
+    "/api/admin/platform-clients",
+    PlatformClientSecretResponseSchema,
+    { method: "POST", body, signal: options.signal },
+  );
+}
+
+/** PATCH /api/admin/platform-clients/{id} — everything but the secret. */
+export function updatePlatformClient(
+  id: number,
+  body: Partial<PlatformClientWrite> & { integration_status?: string },
+  options: RequestOptions = {},
+): Promise<PlatformClientResponse> {
+  return apiFetch(
+    `/api/admin/platform-clients/${id}`,
+    PlatformClientResponseSchema,
+    { method: "PATCH", body, signal: options.signal },
+  );
+}
+
+/**
+ * POST /api/admin/platform-clients/{id}/rotate — a new secret, and every
+ * token the old one produced is cut. Rotation happens because a secret
+ * leaked; leaving the grants alive would mean rotating changed nothing.
+ */
+export function rotatePlatformClientSecret(
+  id: number,
+  options: RequestOptions = {},
+): Promise<PlatformClientSecretResponse> {
+  return apiFetch(
+    `/api/admin/platform-clients/${id}/rotate`,
+    PlatformClientSecretResponseSchema,
+    { method: "POST", signal: options.signal },
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Brand marks (superadmin only)
+// ---------------------------------------------------------------------------
+
+/**
+ * One of the platform's five brand slots. `url` ALWAYS renders — it serves
+ * the packaged default until a superadmin uploads something — which is why
+ * every surface can point an <img> at it with no fallback logic.
+ */
+export const BrandAssetSlotSchema = z.enum([
+  "landscape_light",
+  "landscape_dark",
+  "square_light",
+  "square_dark",
+  "favicon",
+]);
+export type BrandAssetSlot = z.infer<typeof BrandAssetSlotSchema>;
+
+export const BrandAssetSchema = z.object({
+  slot: BrandAssetSlotSchema,
+  label: z.string(),
+  shape: z.enum(["landscape", "square", "favicon"]),
+  url: z.string(),
+  /** False means the packaged default is showing. */
+  is_custom: z.boolean(),
+  original_name: z.string().nullable(),
+  updated_at: z.string().nullable(),
+  updated_by: z.string().nullable(),
+});
+export type BrandAsset = z.infer<typeof BrandAssetSchema>;
+
+export const BrandAssetListResponseSchema = z.object({
+  data: z.array(BrandAssetSchema),
+});
+export type BrandAssetListResponse = z.infer<
+  typeof BrandAssetListResponseSchema
+>;
+
+/** GET /api/admin/brand — all five slots. Superadmin only. */
+export function listBrandAssets(
+  options: RequestOptions = {},
+): Promise<BrandAssetListResponse> {
+  return apiFetch("/api/admin/brand", BrandAssetListResponseSchema, {
+    signal: options.signal,
+  });
+}
+
+/**
+ * POST /api/admin/brand/{slot} — replaces one mark. SVG is refused for every
+ * slot: it is a document that may carry script, and it would be served from
+ * our own origin on every surface.
+ */
+export function uploadBrandAsset(
+  slot: BrandAssetSlot,
+  file: File,
+): Promise<BrandAssetListResponse> {
+  const body = new FormData();
+  body.append("file", file);
+
+  return apiFetch(`/api/admin/brand/${slot}`, BrandAssetListResponseSchema, {
+    method: "POST",
+    body,
+  });
+}
+
+/** DELETE /api/admin/brand/{slot} — back to the packaged default. */
+export function resetBrandAsset(
+  slot: BrandAssetSlot,
+): Promise<BrandAssetListResponse> {
+  return apiFetch(`/api/admin/brand/${slot}`, BrandAssetListResponseSchema, {
+    method: "DELETE",
+  });
 }

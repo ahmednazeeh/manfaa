@@ -13,9 +13,9 @@ import {
   BookOpen,
   Check,
   Copy,
-  FlaskConical,
   KeyRound,
   LoaderCircle,
+  Plug,
   Plus,
   ShieldOff,
   TriangleAlert,
@@ -25,8 +25,6 @@ import { toast } from 'sonner';
 import {
   INTEGRATION_GUIDE_URL,
   INTEGRATIONS_EMAIL,
-  SANDBOX_API_BASE_URL,
-  SANDBOX_GUIDE_URL,
   VENDOR_API_BASE_URL,
 } from '@/lib/integration';
 import { vendorAbilityHint, vendorAbilityLabel } from '@/lib/labels';
@@ -37,6 +35,7 @@ import {
   useRevokeCredential,
 } from '@/lib/queries';
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
+import { WebhooksSection } from './webhooks-section';
 import {
   Alert,
   AlertContent,
@@ -583,23 +582,55 @@ export default function ApiAccessSettingsPage() {
                     const revoked = isRevoked(credential);
                     const lastUsed = formatMoment(credential.last_used_at);
 
+                    // Approved on a consent screen rather than typed into
+                    // a form: the store owns it either way, but "you pressed
+                    // Authorise for this app" is a different fact from "you
+                    // made yourself a key", and the row should say which.
+                    const connected =
+                      credential.pos_vendor !== null &&
+                      credential.issuer.type === 'merchant_user';
+
                     return (
                       <TableRow
                         key={credential.id}
                         className={revoked ? 'opacity-60' : undefined}
                       >
                         <TableCell>
-                          <div className="font-medium">
-                            {credential.display_name}
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <span className="font-medium">
+                              {credential.display_name}
+                            </span>
+                            {connected && !revoked && (
+                              <Badge
+                                variant="primary"
+                                appearance="light"
+                                size="sm"
+                              >
+                                <Plug className="size-3" />
+                                {t('apiAccess.connectedApp')}
+                              </Badge>
+                            )}
                           </div>
                           <div className="text-xs text-muted-foreground">
-                            {credential.issuer.type === 'merchant_user'
-                              ? t('apiAccess.issuedByStore', {
-                                  name:
-                                    credential.issuer.name ??
-                                    t('apiAccess.issuedByStoreUnknown'),
+                            {connected && credential.connected_from
+                              ? t('apiAccess.connectedFromHint', {
+                                  name: credential.display_name,
+                                  host: credential.connected_from.replace(
+                                    /^https:\/\//,
+                                    '',
+                                  ),
                                 })
-                              : t('apiAccess.issuedByManfaa')}
+                              : connected
+                              ? t('apiAccess.connectedAppHint', {
+                                  name: credential.display_name,
+                                })
+                              : credential.issuer.type === 'merchant_user'
+                                ? t('apiAccess.issuedByStore', {
+                                    name:
+                                      credential.issuer.name ??
+                                      t('apiAccess.issuedByStoreUnknown'),
+                                  })
+                                : t('apiAccess.issuedByManfaa')}
                           </div>
                           {revoked && (
                             <Badge
@@ -647,6 +678,10 @@ export default function ApiAccessSettingsPage() {
         )}
       </Card>
 
+      {/* A store's own webhook endpoints (owner, 2026-08-22) — the same
+          permissions as the credentials above, so it sits on this page. */}
+      <WebhooksSection />
+
       <Card>
         <CardHeader>
           <CardTitle>{t('apiAccess.guideTitle')}</CardTitle>
@@ -661,12 +696,6 @@ export default function ApiAccessSettingsPage() {
             <code dir="ltr" className="text-mono text-xs break-all">
               {VENDOR_API_BASE_URL}
             </code>
-            <span className="text-xs text-muted-foreground">
-              {t('apiAccess.sandboxUrlLabel')}
-            </span>
-            <code dir="ltr" className="text-mono text-xs break-all">
-              {SANDBOX_API_BASE_URL}
-            </code>
           </div>
 
           <div className="flex flex-wrap gap-2.5">
@@ -680,20 +709,10 @@ export default function ApiAccessSettingsPage() {
                 {t('apiAccess.guideLink')}
               </a>
             </Button>
-            <Button variant="outline" size="sm" asChild>
-              <a
-                href={SANDBOX_GUIDE_URL}
-                target="_blank"
-                rel="noreferrer noopener"
-              >
-                <FlaskConical />
-                {t('apiAccess.sandboxLink')}
-              </a>
-            </Button>
           </div>
 
           <p className="text-xs text-muted-foreground">
-            {t('apiAccess.sandboxNote')}{' '}
+            {t('apiAccess.testingNote')}{' '}
             <a
               dir="ltr"
               className="underline"

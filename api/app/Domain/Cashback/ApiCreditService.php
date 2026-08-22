@@ -49,6 +49,7 @@ final readonly class ApiCreditService
         ?string $idempotencyKey = null,
         ?array $lines = null,
         ?int $overrideRateBp = null,
+        ?string $origin = null,
     ): Transaction {
         // Only active and suspended merchants may reach the recorder (§7:
         // suspension stops cashback creation, not ingestion). Closed is
@@ -77,7 +78,10 @@ final readonly class ApiCreditService
         return $this->recorder->record(
             merchant: $merchant,
             actor: $actor,
-            origin: $ref->origin(),
+            // `online_link` is honoured only for code-keyed sales: a
+            // phone-keyed sale stays `api_phone`, because that value marks
+            // how the customer was matched, which matters more than where.
+            origin: $origin === 'online_link' && ! $ref->isPhone ? 'online_link' : $ref->origin(),
             customerCode: $customerCode,
             invoiceNo: $invoiceNo,
             eligible: $eligible,

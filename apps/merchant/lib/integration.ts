@@ -24,33 +24,22 @@ export const VENDOR_API_BASE_URL = orDefault(
   'https://api.manfaa.app/api',
 );
 
-/** Sandbox base (PLAN §9.5): fixture merchants, no real cashback. */
-export const SANDBOX_API_BASE_URL = orDefault(
-  process.env.NEXT_PUBLIC_SANDBOX_API_URL,
-  'https://sandbox.api.manfaa.app/api',
-);
-
 /**
- * The vendor documentation. The narrative guide is no longer a page of its
- * own: scripts/merge-guide-into-spec.py folds it into the spec description,
- * so /docs/ renders the guide and the endpoint reference as one document
- * with a single sidebar.
+ * The narrative guide, as its own page.
+ *
+ * It used to be folded whole into the spec description, so /docs/ was both
+ * documents at once. That stopped on 2026-08-19: the reference page now
+ * merges only what you cannot make a single call without (auth, idempotency,
+ * errors, testing), because it had grown to ~5,600 words of prose before the
+ * first endpoint. Webhooks, retry expectations and the go-live checklist live
+ * only here now — so a button labelled "Integration guide" has to point at
+ * the guide, not at the reference.
  */
 export const INTEGRATION_GUIDE_URL = orDefault(
   process.env.NEXT_PUBLIC_INTEGRATION_GUIDE_URL,
-  'https://manfaa.app/docs/',
+  'https://manfaa.app/docs/integration-guide.html',
 );
 
-/**
- * Its sandbox section — fixtures, test customer codes, the go-live path.
- * Scalar namespaces description anchors under `#description/`, and it is NOT
- * derived from the URL above: a deployment that repoints the guide would
- * otherwise synthesise an anchor its target does not have.
- */
-export const SANDBOX_GUIDE_URL = orDefault(
-  process.env.NEXT_PUBLIC_SANDBOX_GUIDE_URL,
-  'https://manfaa.app/docs/#description/sandbox-fixtures',
-);
 
 /**
  * Sandbox credentials are still issued by us, not self-serve: the fixture

@@ -31,6 +31,11 @@ class CredentialResource extends JsonResource
             // Free-text partner name from the merchant self-serve path;
             // null on admin-issued rows, which carry a pos_vendor instead.
             'label' => $this->label,
+            // Which store a public-client grant ("Connect with Manfaa" from
+            // a plugin) came from — `https://shop.example.mv`; null on
+            // everything else. Shown so a merchant with two stores can tell
+            // the two connections apart before revoking one.
+            'connected_from' => $this->connected_from,
             // What a panel should print for this credential, resolved once
             // here so admin and merchant never disagree about the fallback.
             'display_name' => $this->posVendor?->name ?? $this->label ?? 'API credential',
