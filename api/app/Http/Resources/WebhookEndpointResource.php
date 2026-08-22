@@ -24,12 +24,21 @@ class WebhookEndpointResource extends JsonResource
     {
         $endpoint = $this->resource;
 
+        $last = $endpoint->relationLoaded('deliveries') ? $endpoint->deliveries->first() : null;
+
         return [
             'id' => $endpoint->id,
             'pos_vendor_id' => $endpoint->pos_vendor_id,
             'url' => $endpoint->url,
             'events' => $endpoint->events,
             'active' => $endpoint->active,
+            // "Last heard from", for the registry screen: the newest delivery.
+            'last_delivery' => $last === null ? null : [
+                'event' => $last->event,
+                'status' => $last->status,
+                'response_status' => $last->response_status,
+                'attempted_at' => ($last->delivered_at ?? $last->updated_at)?->toIso8601String(),
+            ],
             'created_at' => $endpoint->created_at?->toIso8601String(),
         ];
     }

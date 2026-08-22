@@ -61,6 +61,7 @@ import {
 import { PageHeader } from '@/components/admin/page-header';
 import { useAdminUser } from '@/components/auth/admin-guard';
 import { PlatformClientDialog } from '@/components/settings/platform-client-dialog';
+import { VendorWebhooksDialog } from '@/components/settings/vendor-webhooks-dialog';
 
 /**
  * Platforms that may put "IsleBooks would like to … Authorise / Deny" in
@@ -226,6 +227,7 @@ export default function PlatformClientsPage() {
                                 </Button>
                               }
                             />
+                            <VendorWebhooksDialog client={client} />
                             {client.public_client ? null : (
                               <RotateSecret client={client} />
                             )}

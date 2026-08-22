@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Admin;
 
 use App\Domain\Webhooks\EndpointUrlGuard;
+use App\Domain\Webhooks\MerchantEndpointService;
 use App\Domain\Webhooks\WebhookEvents;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\WebhookEndpointResource;
@@ -62,10 +63,25 @@ class WebhookEndpointController extends Controller
     {
         $endpoints = WebhookEndpoint::query()
             ->where('pos_vendor_id', $vendor->id)
+            ->with(['deliveries' => fn ($q) => $q->latest('id')->limit(1)])
             ->orderBy('id')
             ->get();
 
         return WebhookEndpointResource::collection($endpoints);
+    }
+
+    /** Queue one `webhook.test` so the platform can prove its URL before any real event. */
+    public function test(PosVendor $vendor, WebhookEndpoint $endpoint, MerchantEndpointService $endpoints): JsonResponse
+    {
+        if ($endpoint->pos_vendor_id !== $vendor->id) {
+            abort(404);
+        }
+
+        $delivery = $endpoints->sendTest($endpoint);
+
+        return response()->json(['data' => [
+            'delivery' => ['id' => $delivery->getKey(), 'event' => $delivery->event, 'status' => $delivery->status],
+        ]], 202);
     }
 
     public function destroy(PosVendor $vendor, WebhookEndpoint $endpoint): JsonResponse

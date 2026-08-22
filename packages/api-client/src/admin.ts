@@ -2496,3 +2496,96 @@ export function resetBrandAsset(
     method: "DELETE",
   });
 }
+
+// ---------------------------------------------------------------------------
+// Vendor-owned webhook endpoints (the superadmin registry; owner, 2026-08-22)
+// ---------------------------------------------------------------------------
+
+/**
+ * One endpoint a POS PLATFORM owns: it receives every connected merchant's
+ * events for that platform (each event carries `merchant_id`). Registered
+ * here by a superadmin; the signing secret is shown exactly once.
+ */
+export const VendorWebhookEndpointSchema = z.object({
+  id: z.number().int(),
+  pos_vendor_id: z.number().int(),
+  url: z.string(),
+  events: z.array(z.string()),
+  active: z.boolean(),
+  last_delivery: z
+    .object({
+      event: z.string(),
+      status: z.string(),
+      response_status: z.number().int().nullable(),
+      attempted_at: z.string().nullable(),
+    })
+    .nullable()
+    .optional()
+    .default(null),
+  created_at: z.string().nullable(),
+});
+export type VendorWebhookEndpoint = z.infer<typeof VendorWebhookEndpointSchema>;
+
+export const VendorWebhookEndpointListResponseSchema = z.object({
+  data: z.array(VendorWebhookEndpointSchema),
+});
+
+export const CreateVendorWebhookEndpointResponseSchema = z.object({
+  /** Shown once; there is no retrieval path. */
+  secret: z.string(),
+  endpoint: VendorWebhookEndpointSchema,
+});
+export type CreateVendorWebhookEndpointResponse = z.infer<
+  typeof CreateVendorWebhookEndpointResponseSchema
+>;
+
+/** GET /api/admin/pos-vendors/{vendor}/webhook-endpoints */
+export function listVendorWebhookEndpoints(
+  vendorId: number,
+  options: RequestOptions = {},
+): Promise<VendorWebhookEndpoint[]> {
+  return apiFetch(
+    `/api/admin/pos-vendors/${vendorId}/webhook-endpoints`,
+    VendorWebhookEndpointListResponseSchema,
+    { signal: options.signal },
+  ).then((r) => r.data);
+}
+
+/** POST /api/admin/pos-vendors/{vendor}/webhook-endpoints — 201 with the once-only secret. */
+export function createVendorWebhookEndpoint(
+  vendorId: number,
+  body: { url: string; events: string[] },
+  options: RequestOptions = {},
+): Promise<CreateVendorWebhookEndpointResponse> {
+  return apiFetch(
+    `/api/admin/pos-vendors/${vendorId}/webhook-endpoints`,
+    CreateVendorWebhookEndpointResponseSchema,
+    { method: "POST", body, signal: options.signal },
+  );
+}
+
+/** DELETE /api/admin/pos-vendors/{vendor}/webhook-endpoints/{id} */
+export async function deleteVendorWebhookEndpoint(
+  vendorId: number,
+  endpointId: number,
+  options: RequestOptions = {},
+): Promise<void> {
+  await apiFetch(
+    `/api/admin/pos-vendors/${vendorId}/webhook-endpoints/${endpointId}`,
+    z.object({ data: z.object({ deleted: z.boolean() }) }),
+    { method: "DELETE", signal: options.signal },
+  );
+}
+
+/** POST …/webhook-endpoints/{id}/test — queues one signed `webhook.test`. */
+export async function testVendorWebhookEndpoint(
+  vendorId: number,
+  endpointId: number,
+  options: RequestOptions = {},
+): Promise<void> {
+  await apiFetch(
+    `/api/admin/pos-vendors/${vendorId}/webhook-endpoints/${endpointId}/test`,
+    z.object({ data: z.object({ delivery: z.object({ id: z.number().int(), event: z.string(), status: z.string() }) }) }),
+    { method: "POST", signal: options.signal },
+  );
+}

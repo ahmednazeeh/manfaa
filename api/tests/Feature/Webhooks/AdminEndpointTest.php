@@ -2,12 +2,14 @@
 
 declare(strict_types=1);
 
+use App\Jobs\SendWebhook;
 use App\Models\AdminUser;
 use App\Models\PosVendor;
 use App\Models\WebhookDelivery;
 use App\Models\WebhookEndpoint;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
@@ -27,7 +29,7 @@ it('rejects unauthenticated endpoint management', function () {
 });
 
 it('creates an endpoint, shows the secret exactly once, and stores it encrypted', function () {
-    $response = $this->actingAs(AdminUser::factory()->create(), 'admin')
+    $response = $this->actingAs(AdminUser::factory()->create(['role' => 'superadmin']), 'admin')
         ->postJson("/api/admin/pos-vendors/{$this->vendor->id}/webhook-endpoints", [
             'url' => 'https://vendor.example/hooks',
             'events' => ['merchant.rate_changed', 'merchant.suspended'],
@@ -52,7 +54,7 @@ it('creates an endpoint, shows the secret exactly once, and stores it encrypted'
 });
 
 it('validates url and event names', function () {
-    $admin = AdminUser::factory()->create();
+    $admin = AdminUser::factory()->create(['role' => 'superadmin']);
 
     $this->actingAs($admin, 'admin')
         ->postJson("/api/admin/pos-vendors/{$this->vendor->id}/webhook-endpoints", [
@@ -94,7 +96,7 @@ it('lists a vendor endpoints without ever serialising the secret', function () {
         'active' => true,
     ]);
 
-    $response = $this->actingAs(AdminUser::factory()->create(), 'admin')
+    $response = $this->actingAs(AdminUser::factory()->create(['role' => 'superadmin']), 'admin')
         ->getJson("/api/admin/pos-vendors/{$this->vendor->id}/webhook-endpoints")
         ->assertOk()
         ->assertJsonCount(1, 'data')
@@ -120,7 +122,7 @@ it('deletes an endpoint (cascading its deliveries) and 404s across vendors', fun
         'status' => 'pending',
     ]);
 
-    $admin = AdminUser::factory()->create();
+    $admin = AdminUser::factory()->create(['role' => 'superadmin']);
 
     // Another vendor cannot address this endpoint.
     $otherVendor = PosVendor::query()->create(['name' => 'Other']);
@@ -134,4 +136,32 @@ it('deletes an endpoint (cascading its deliveries) and 404s across vendors', fun
 
     expect(WebhookEndpoint::query()->count())->toBe(0)
         ->and(WebhookDelivery::query()->count())->toBe(0);
+});
+
+it('is superadmin work, and can send a test to a vendor endpoint', function () {
+    $this->actingAs(AdminUser::factory()->create(['role' => 'admin']), 'admin')
+        ->getJson("/api/admin/pos-vendors/{$this->vendor->id}/webhook-endpoints")
+        ->assertForbidden();
+
+    $super = AdminUser::factory()->create(['role' => 'superadmin']);
+    $id = $this->actingAs($super, 'admin')
+        ->postJson("/api/admin/pos-vendors/{$this->vendor->id}/webhook-endpoints", [
+            'url' => 'https://pos.example.mv/manfaa/webhook',
+            'events' => ['merchant.rate_changed'],
+        ])->assertCreated()->json('endpoint.id');
+
+    Queue::fake();
+
+    $this->actingAs($super, 'admin')
+        ->postJson("/api/admin/pos-vendors/{$this->vendor->id}/webhook-endpoints/{$id}/test")
+        ->assertStatus(202)
+        ->assertJsonPath('data.delivery.event', 'webhook.test');
+
+    Queue::assertPushed(SendWebhook::class, 1);
+
+    $this->actingAs($super, 'admin')
+        ->getJson("/api/admin/pos-vendors/{$this->vendor->id}/webhook-endpoints")
+        ->assertOk()
+        ->assertJsonPath('data.0.last_delivery.event', 'webhook.test')
+        ->assertJsonPath('data.0.last_delivery.status', 'pending');
 });

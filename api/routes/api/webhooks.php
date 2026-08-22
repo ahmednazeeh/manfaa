@@ -4,16 +4,21 @@ use App\Http\Controllers\Admin\WebhookEndpointController;
 use App\Http\Controllers\Merchant\RateController;
 use App\Http\Controllers\Merchant\WebhookEndpointController as MerchantWebhookEndpointController;
 use App\Http\Middleware\EnsureMerchantApproved;
+use App\Http\Middleware\EnsureSuperadmin;
 use Illuminate\Support\Facades\Route;
 
 // §9.3 outbound webhooks + the §7 rate-change rules.
 //
 // Admin: per-vendor webhook endpoint registry (secret shown once at
 // creation, stored encrypted, never retrievable).
-Route::prefix('admin')->middleware('auth:admin')->group(function () {
+// Superadmin, like the platform registry these endpoints belong to: an
+// endpoint receives every connected merchant's events for that platform.
+Route::prefix('admin')->middleware(['auth:admin', EnsureSuperadmin::class])->group(function () {
     Route::post('pos-vendors/{vendor}/webhook-endpoints', [WebhookEndpointController::class, 'store']);
     Route::get('pos-vendors/{vendor}/webhook-endpoints', [WebhookEndpointController::class, 'index']);
     Route::delete('pos-vendors/{vendor}/webhook-endpoints/{endpoint}', [WebhookEndpointController::class, 'destroy']);
+    Route::post('pos-vendors/{vendor}/webhook-endpoints/{endpoint}/test', [WebhookEndpointController::class, 'test'])
+        ->middleware('throttle:6,1');
 });
 
 // Merchant panel: read the standing rate (rate.view, seeded to every role —
