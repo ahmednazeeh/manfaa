@@ -1,0 +1,26 @@
+{
+  "$schema": "https://schemas.wp.org/trunk/block.json",
+  "apiVersion": 3,
+  "name": "manfaa/panel",
+  "version": "0.3.0",
+  "title": "Manfaa code",
+  "category": "woocommerce",
+  "description": "Lets the buyer enter their Manfaa code and shows the estimated cashback.",
+  "textdomain": "manfaa-cashback",
+  "parent": [
+    "woocommerce/cart-order-summary-block",
+    "woocommerce/checkout-order-summary-block"
+  ],
+  "attributes": {
+    "lock": {
+      "type": "object",
+      "default": { "remove": true, "move": true }
+    }
+  },
+  "supports": {
+    "html": false,
+    "multiple": false,
+    "reusable": false,
+    "inserter": false
+  }
+}

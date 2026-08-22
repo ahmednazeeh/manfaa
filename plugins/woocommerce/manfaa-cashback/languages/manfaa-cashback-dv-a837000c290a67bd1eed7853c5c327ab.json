@@ -1,0 +1,38 @@
+{
+ "translation-revision-date": "2026-08-22 03:44+0000",
+ "generator": "manfaa build",
+ "domain": "messages",
+ "locale_data": {
+  "messages": {
+   "": {
+    "domain": "messages",
+    "lang": "dv",
+    "plural-forms": "nplurals=2; plural=(n != 1);"
+   },
+   "Manfaa code": [
+    "މަންފާ ކޯޑު"
+   ],
+   "6-digit code": [
+    "6 އަކުރުގެ ކޯޑު"
+   ],
+   "Checking…": [
+    "ބަލަނީ…"
+   ],
+   "Manfaa code applied.": [
+    "މަންފާ ކޯޑު ބޭނުންކުރެވިއްޖެ."
+   ],
+   "We'll check this code when your order is placed.": [
+    "އޯޑަރު ހުށަހެޅުމުން މި ކޯޑު ބަލާނަން."
+   ],
+   "Enter the code from your Manfaa app to earn cashback on this order.": [
+    "މި އޯޑަރުން ކޭޝްބެކް ލިބުމަށް މަންފާ އެޕުން ކޯޑު ޖައްސަވާ."
+   ],
+   "Add MVR %s more to earn cashback": [
+    "ކޭޝްބެކް ލިބުމަށް އިތުރު MVR %s އިތުރުކުރައްވާ"
+   ],
+   "Estimated Manfaa cashback": [
+    "އަންދާޒާ މަންފާ ކޭޝްބެކް"
+   ]
+  }
+ }
+}

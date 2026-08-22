@@ -1,0 +1,14 @@
+.manfaa-panel { margin: 1em 0; padding: 1em; border: 1px solid rgba(0,0,0,.12); border-radius: 8px; background: #faf8ff; }
+.manfaa-panel__label { display: block; font-weight: 600; margin-bottom: .4em; }
+.manfaa-panel__row { display: flex; align-items: center; gap: .5em; }
+.manfaa-panel__input { flex: 0 1 11em; font-size: 1.15em; letter-spacing: .18em; padding: .45em .6em; border: 1px solid rgba(0,0,0,.25); border-radius: 6px; }
+.manfaa-panel--valid .manfaa-panel__input { border-color: #1a8f4b; }
+.manfaa-panel--invalid .manfaa-panel__input { border-color: #c0392b; }
+.manfaa-panel__tick { color: #1a8f4b; font-weight: 700; }
+.manfaa-panel__hint { margin: .5em 0 0; font-size: .9em; color: rgba(0,0,0,.65); }
+.manfaa-panel--invalid .manfaa-panel__hint { color: #c0392b; }
+.manfaa-panel--valid .manfaa-panel__hint { color: #1a8f4b; }
+.manfaa-panel[dir="rtl"] .manfaa-panel__input { direction: ltr; text-align: right; }
+.manfaa-estimate th, .manfaa-estimate td { font-weight: 600; color: #5b2ca0; }
+.manfaa-estimate-row .wc-block-components-totals-item__value { color: #5b2ca0; font-weight: 600; }
+.manfaa-badge-product { display: inline-block; margin: .25em 0 .75em; padding: .25em .7em; border-radius: 999px; background: #efe9fb; color: #5b2ca0; font-size: .9em; font-weight: 600; }

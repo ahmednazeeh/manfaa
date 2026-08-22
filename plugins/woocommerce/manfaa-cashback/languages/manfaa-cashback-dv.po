@@ -1,0 +1,66 @@
+# Dhivehi — buyer-facing strings. Drafted 2026-08-22; needs a native reviewer (same as the apps).
+msgid ""
+msgstr ""
+"Project-Id-Version: Manfaa Cashback 0.1.0\n"
+"Report-Msgid-Bugs-To: integrations@manfaa.app\n"
+"PO-Revision-Date: 2026-08-22 03:44+0000\n"
+"Language: dv\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"X-Domain: manfaa-cashback\n"
+
+msgid "Manfaa code"
+msgstr "މަންފާ ކޯޑު"
+
+msgid "6-digit code"
+msgstr "6 އަކުރުގެ ކޯޑު"
+
+msgid "Apply"
+msgstr "ބޭނުންކުރޭ"
+
+msgid "Enter the code from your Manfaa app to earn cashback on this order."
+msgstr "މި އޯޑަރުން ކޭޝްބެކް ލިބުމަށް މަންފާ އެޕުން ކޯޑު ޖައްސަވާ."
+
+msgid "Checking…"
+msgstr "ބަލަނީ…"
+
+msgid "Manfaa code applied."
+msgstr "މަންފާ ކޯޑު ބޭނުންކުރެވިއްޖެ."
+
+msgid "Manfaa code removed."
+msgstr "މަންފާ ކޯޑު ނަގައިފި."
+
+msgid "We'll check this code when your order is placed."
+msgstr "އޯޑަރު ހުށަހެޅުމުން މި ކޯޑު ބަލާނަން."
+
+msgid "No Manfaa account has this code. Check the digits in your app."
+msgstr "މި ކޯޑުގެ މަންފާ އެކައުންޓެއް ނެތް. އެޕުން އަކުރުތައް ޗެކްކުރައްވާ."
+
+msgid "This Manfaa account cannot earn cashback right now."
+msgstr "މި މަންފާ އެކައުންޓަށް މިވަގުތު ކޭޝްބެކް ނުލިބޭނެ."
+
+msgid "Manfaa code confirmed."
+msgstr "މަންފާ ކޯޑު ކަށަވަރުވެއްޖެ."
+
+msgid "Cashback will go to %s."
+msgstr "ކޭޝްބެކް ލިބޭނީ %s އަށް."
+
+msgid "Enter the 6-digit code from your Manfaa app."
+msgstr "މަންފާ އެޕުން 6 އަކުރުގެ ކޯޑު ޖައްސަވާ."
+
+msgid "Please reload the page and try again."
+msgstr "ޞަފްޙާ އަލުން ލޯޑުކޮށް އަލުން މަސައްކަތްކުރައްވާ."
+
+msgid "The Manfaa code must be 6 digits, or left empty."
+msgstr "މަންފާ ކޯޑަކީ 6 އަކުރު ނުވަތަ ހުސްކޮށް ބާއްވަންވާނެ."
+
+msgid "Estimated Manfaa cashback"
+msgstr "އަންދާޒާ މަންފާ ކޭޝްބެކް"
+
+msgid "Add MVR %s more to earn cashback"
+msgstr "ކޭޝްބެކް ލިބުމަށް އިތުރު MVR %s އިތުރުކުރައްވާ"
+
+msgid "Earn up to MVR %s Manfaa cashback"
+msgstr "MVR %s އާ ހަމައަށް މަންފާ ކޭޝްބެކް ލިބޭނެ"
