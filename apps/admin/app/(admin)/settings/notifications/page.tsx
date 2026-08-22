@@ -10,14 +10,10 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { LoaderCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiErrorMessage } from '@/lib/api-error';
+import { useMarketplaceEnabled } from '@/hooks/use-marketplace-enabled';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
@@ -59,7 +55,8 @@ function TemplateCard({ template }: { template: NotificationTemplate }) {
     });
 
   const save = useMutation({
-    mutationFn: () => updateNotificationTemplate(template.id, { body_en: bodyEn }),
+    mutationFn: () =>
+      updateNotificationTemplate(template.id, { body_en: bodyEn }),
     onSuccess: () => {
       invalidate();
       toast.success('Message saved.');
@@ -159,11 +156,24 @@ function TemplateCard({ template }: { template: NotificationTemplate }) {
 }
 
 export default function NotificationsSettingsPage() {
+  // Undefined while loading counts as ON, so the list does not flash the
+  // marketplace moments away on every page load.
+  const marketplace = useMarketplaceEnabled() ?? true;
+
   const query = useQuery({
     queryKey: ['admin', 'notification-templates'],
     queryFn: ({ signal }) => listNotificationTemplates({ signal }),
     select: (response) => response.data,
   });
+
+  // The order moments and the enrolment outcomes cannot fire with the
+  // marketplace off — every route behind them refuses — so listing nine
+  // templates nothing can send describes a platform this one is not. The
+  // rows still exist; an admin can write the copy before launch by turning
+  // the marketplace on.
+  const templates = (query.data ?? []).filter(
+    (template) => marketplace || !template.marketplace_only,
+  );
 
   return (
     <div className="flex flex-col gap-5">
@@ -172,11 +182,11 @@ export default function NotificationsSettingsPage() {
           Customer notifications
         </h1>
         <p className="max-w-3xl text-sm text-muted-foreground">
-          The SMS messages Manfaa sends to customers — always in English.
-          Each one is billed per send and cannot be unsubscribed from, so
-          they arrive switched off unless there is a reason otherwise. The
-          moments themselves are fixed in code — you write the words and
-          decide whether they go.
+          The SMS messages Manfaa sends to customers — always in English. Each
+          one is billed per send and cannot be unsubscribed from, so they arrive
+          switched off unless there is a reason otherwise. The moments
+          themselves are fixed in code — you write the words and decide whether
+          they go.
         </p>
       </div>
 
@@ -186,7 +196,7 @@ export default function NotificationsSettingsPage() {
           <Skeleton className="h-64 w-full" />
         </div>
       ) : (
-        (query.data ?? []).map((template) => (
+        templates.map((template) => (
           <TemplateCard key={template.id} template={template} />
         ))
       )}

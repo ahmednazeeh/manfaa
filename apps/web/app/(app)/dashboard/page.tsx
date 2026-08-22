@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { displayName } from '@/lib/display-name';
 import { type CustomerBalance } from '@manfaa/api-client';
 import { MoneyText, useFormatMoney } from '@manfaa/ui';
 import { BadgeCheck, CalendarClock, HandCoins, Landmark } from 'lucide-react';
@@ -205,7 +206,7 @@ function PayoutSummary({
 export default function DashboardPage() {
   const { me } = useLayout();
   const { data: balance, isPending, error } = useBalance();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
 
   return (
     <div className="container">
@@ -213,7 +214,9 @@ export default function DashboardPage() {
         <ToolbarHeading>
           <ToolbarPageTitle>{t('dashboard.title')}</ToolbarPageTitle>
           <ToolbarDescription>
-            {t('dashboard.greeting', { name: me.name })}
+            {t('dashboard.greeting', {
+                name: displayName(me.name, me.name_dv, i18n.language),
+              })}
           </ToolbarDescription>
         </ToolbarHeading>
         <AvatarEditor me={me} />

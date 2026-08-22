@@ -2,13 +2,13 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { BrandMark } from '@manfaa/ui';
 import { LogOut, Moon, ShieldAlert, Sun } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { useTranslation } from 'react-i18next';
 import { isOnboardingStatus } from '@/lib/api';
-import { toAbsoluteUrl } from '@/lib/helpers';
-import { can } from '@/lib/roles';
 import { isUnauthorized, useLogout, useMe, useSetupState } from '@/lib/queries';
+import { can } from '@/lib/roles';
 import {
   Alert,
   AlertContent,
@@ -103,15 +103,9 @@ export default function SetupPage() {
   return (
     <div className="grow min-h-screen w-full bg-muted/40 flex flex-col">
       <header className="flex items-center gap-2.5 px-5 py-4">
-        <img
-          src={toAbsoluteUrl('/media/app/default-logo.svg?v=mf2')}
-          className="dark:hidden h-[22px]"
-          alt={t('common.appName')}
-        />
-        <img
-          src={toAbsoluteUrl('/media/app/default-logo-dark.svg?v=mf2')}
-          className="hidden dark:block h-[22px]"
-          alt={t('common.appName')}
+        <BrandMark
+          className="h-9 w-auto max-w-[200px] object-contain"
+          alt="Manfaa"
         />
         <div className="ms-auto flex items-center gap-1.5">
           <LanguageSwitcher />

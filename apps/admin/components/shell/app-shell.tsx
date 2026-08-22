@@ -7,14 +7,11 @@ import { listHolds, listStoreReviews } from '@manfaa/api-client';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   BadgeCheck,
-  HandCoins,
-  Radio,
-  Receipt,
-  Wallet,
   Banknote,
   ClipboardCheck,
   CreditCard,
   FileDiff,
+  HandCoins,
   Landmark,
   LogOut,
   Map as MapIcon,
@@ -22,6 +19,9 @@ import {
   MessageSquare,
   Palette,
   Percent,
+  Plug,
+  Radio,
+  Receipt,
   Scale,
   ShieldAlert,
   ShieldCheck,
@@ -30,6 +30,7 @@ import {
   Store,
   Tags,
   Users,
+  Wallet,
   type LucideIcon,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -38,6 +39,7 @@ import { apiErrorMessage } from '@/lib/api-error';
 import { listChangeRequests } from '@/lib/change-requests';
 import { adminRoleLabel } from '@/lib/labels';
 import { cn } from '@/lib/utils';
+import { useMarketplaceEnabled } from '@/hooks/use-marketplace-enabled';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useAdminUser } from '@/components/auth/admin-guard';
@@ -50,6 +52,12 @@ interface NavItem {
   icon: LucideIcon;
   /** Hidden unless the signed-in admin's role is superadmin. */
   superadminOnly?: boolean;
+  /**
+   * Hidden while the marketplace is switched off. These are the screens
+   * whose API routes carry EnsureMarketplaceEnabled, so with it off they
+   * could only ever show a 403.
+   */
+  marketplaceOnly?: boolean;
   /** Optional live counter rendered after the label (e.g. queue size). */
   badge?: ComponentType;
 }
@@ -162,9 +170,20 @@ const NAV_ITEMS: NavItem[] = [
     href: '/merchant-settlements',
     label: 'Merchant settlements',
     icon: HandCoins,
+    marketplaceOnly: true,
   },
-  { href: '/marketplace/kyb', label: 'Marketplace KYB', icon: BadgeCheck },
-  { href: '/marketplace/payments', label: 'Order payments', icon: Receipt },
+  {
+    href: '/marketplace/kyb',
+    label: 'Marketplace KYB',
+    icon: BadgeCheck,
+    marketplaceOnly: true,
+  },
+  {
+    href: '/marketplace/payments',
+    label: 'Order payments',
+    icon: Receipt,
+    marketplaceOnly: true,
+  },
   { href: '/reconciliation', label: 'Reconciliation', icon: Scale },
 ];
 
@@ -181,6 +200,12 @@ const SETTINGS_ITEMS: NavItem[] = [
     href: '/settings/notifications',
     label: 'Notifications',
     icon: MessageSquare,
+  },
+  {
+    href: '/settings/platform-clients',
+    label: 'Connected platforms',
+    icon: Plug,
+    superadminOnly: true,
   },
   {
     href: '/settings/admins',
@@ -214,9 +239,16 @@ function NavLinks({ orientation }: { orientation: 'vertical' | 'horizontal' }) {
   const pathname = usePathname();
   const user = useAdminUser();
 
-  const settingsItems = SETTINGS_ITEMS.filter(
-    (item) => !item.superadminOnly || user.role === 'superadmin',
-  );
+  // Undefined while the flag loads — treated as ON, so the nav does not
+  // flicker items away on every page load.
+  const marketplace = useMarketplaceEnabled() ?? true;
+
+  const visible = (item: NavItem) =>
+    (!item.superadminOnly || user.role === 'superadmin') &&
+    (!item.marketplaceOnly || marketplace);
+
+  const navItems = NAV_ITEMS.filter(visible);
+  const settingsItems = SETTINGS_ITEMS.filter(visible);
 
   const isActive = (href: string) =>
     pathname === href || pathname.startsWith(`${href}/`);
@@ -224,7 +256,7 @@ function NavLinks({ orientation }: { orientation: 'vertical' | 'horizontal' }) {
   if (orientation === 'horizontal') {
     return (
       <nav className="flex flex-row gap-1 overflow-x-auto pb-px">
-        {[...NAV_ITEMS, ...settingsItems].map((item) => (
+        {[...navItems, ...settingsItems].map((item) => (
           <NavLink key={item.href} item={item} active={isActive(item.href)} />
         ))}
       </nav>
@@ -233,7 +265,7 @@ function NavLinks({ orientation }: { orientation: 'vertical' | 'horizontal' }) {
 
   return (
     <nav className="flex flex-col gap-1">
-      {NAV_ITEMS.map((item) => (
+      {navItems.map((item) => (
         <NavLink key={item.href} item={item} active={isActive(item.href)} />
       ))}
       <div className="mt-4 mb-1 px-3 text-xs font-semibold tracking-wide text-muted-foreground/70 uppercase">

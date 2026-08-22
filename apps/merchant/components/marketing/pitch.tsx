@@ -1,5 +1,6 @@
 'use client';
 
+import { BrandMark } from '@manfaa/ui';
 import { HandCoins, Percent, Store } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { toAbsoluteUrl } from '@/lib/helpers';
@@ -99,32 +100,25 @@ export function PitchPanel() {
     // room to centre — below that it simply starts at the top.
     <div className="hidden h-screen flex-col overflow-y-auto bg-violet-600/5 p-12 lg:flex xl:p-16">
       <div className="m-auto flex w-full flex-col gap-10">
-      <div className="flex items-center gap-2">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={toAbsoluteUrl('/media/app/mini-logo.svg?v=mf2')}
-          className="h-5"
-          alt=""
-          aria-hidden
-        />
-        <span className="text-lg font-semibold tracking-tight text-mono">
-          {t('common.appName')}
-        </span>
-        <span className="text-lg font-semibold text-violet-600 dark:text-violet-400">
-          {t('marketing.wordmark')}
-        </span>
-      </div>
+        <div className="flex items-center gap-2">
+          {/* The platform mark, superadmin-replaceable. "Merchant"
+            stays as the product suffix it has always been. */}
+          <BrandMark className="h-[22px] w-auto" alt="Manfaa" />
+          <span className="text-lg font-semibold text-violet-600 dark:text-violet-400">
+            {t('marketing.wordmark')}
+          </span>
+        </div>
 
-      <div className="flex max-w-md flex-col gap-6">
-        <h2 className="text-2xl font-semibold leading-snug text-mono">
-          {t('marketing.panelTitle')}
-        </h2>
-        <PitchPoints />
-      </div>
+        <div className="flex max-w-md flex-col gap-6">
+          <h2 className="text-2xl font-semibold leading-snug text-mono">
+            {t('marketing.panelTitle')}
+          </h2>
+          <PitchPoints />
+        </div>
 
-      {/* The phone is the first thing worth dropping on a short screen:
+        {/* The phone is the first thing worth dropping on a short screen:
           it costs 531px and says nothing the words above do not. */}
-      <MerchantPhone className="hidden xl:[@media(min-height:900px)]:flex" />
+        <MerchantPhone className="hidden xl:[@media(min-height:900px)]:flex" />
       </div>
     </div>
   );

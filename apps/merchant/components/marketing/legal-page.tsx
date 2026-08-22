@@ -1,9 +1,9 @@
 'use client';
 
-import Link from 'next/link';
 import { ReactNode } from 'react';
+import Link from 'next/link';
+import { BrandMark } from '@manfaa/ui';
 import { useTranslation } from 'react-i18next';
-import { toAbsoluteUrl } from '@/lib/helpers';
 import { Button } from '@/components/ui/button';
 
 /**
@@ -27,16 +27,9 @@ export function LegalPage({
     <div className="flex min-h-screen w-full flex-col bg-background">
       <header className="mx-auto flex w-full max-w-6xl items-center justify-between gap-3 px-5 py-4 sm:px-8">
         <Link href="/" className="flex items-center gap-2">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={toAbsoluteUrl('/media/app/mini-logo.svg?v=mf2')}
-            className="h-5"
-            alt=""
-            aria-hidden
-          />
-          <span className="text-lg font-semibold tracking-tight text-mono">
-            {t('common.appName')}
-          </span>
+          {/* The platform mark, superadmin-replaceable. "Merchant"
+              stays as the product suffix it has always been. */}
+          <BrandMark className="h-[22px] w-auto" alt="Manfaa" />
           <span className="text-lg font-semibold text-violet-600 dark:text-violet-400">
             {t('marketing.wordmark')}
           </span>

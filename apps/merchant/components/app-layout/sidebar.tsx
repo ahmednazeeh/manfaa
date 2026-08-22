@@ -1,10 +1,10 @@
 'use client';
 
+import Link from 'next/link';
+import { BrandMark } from '@manfaa/ui';
 import { ChevronFirst } from 'lucide-react';
-import { toAbsoluteUrl } from '@/lib/helpers';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
-import Link from 'next/link';
 import { useLayout } from './context';
 import { SidebarMenu } from './sidebar-menu';
 
@@ -13,31 +13,19 @@ function SidebarHeader() {
 
   return (
     <div className="sidebar-header hidden lg:flex items-center relative justify-between px-3 lg:px-6 shrink-0">
-      <Link href="/dashboard">
-        <div className="dark:hidden">
-          <img
-            src={toAbsoluteUrl('/media/app/default-logo.svg?v=mf2')}
-            className="default-logo h-[22px] max-w-none"
-            alt="Manfaa"
-          />
-          <img
-            src={toAbsoluteUrl('/media/app/mini-logo.svg?v=mf2')}
-            className="small-logo h-[22px] max-w-none"
-            alt="Manfaa"
-          />
-        </div>
-        <div className="hidden dark:block">
-          <img
-            src={toAbsoluteUrl('/media/app/default-logo-dark.svg?v=mf2')}
-            className="default-logo h-[22px] max-w-none"
-            alt="Manfaa"
-          />
-          <img
-            src={toAbsoluteUrl('/media/app/mini-logo.svg?v=mf2')}
-            className="small-logo h-[22px] max-w-none"
-            alt="Manfaa"
-          />
-        </div>
+      {/* The collapse classes go on the WRAPPERS, never on the images.
+          demo1.css hides `.small-logo` while the sidebar is expanded, but
+          BrandMark's own `dark:block` on the same element beat it in the
+          cascade and both marks drew at once. Different elements, no fight:
+          the span decides collapsed-vs-expanded, the images inside decide
+          light-vs-dark. */}
+      <Link href="/dashboard" aria-label="Manfaa" className="flex items-center">
+        <span className="default-logo">
+          <BrandMark className="h-9 w-auto max-w-[190px] object-contain" />
+        </span>
+        <span className="small-logo">
+          <BrandMark shape="square" className="h-8 w-auto object-contain" />
+        </span>
       </Link>
       <Button
         onClick={() => setSidebarCollapse(!sidebarCollapse)}

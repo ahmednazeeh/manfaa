@@ -1,6 +1,6 @@
-import { z } from 'zod';
-import { apiFetch } from './client';
-import { MerchantBranchSchema, MerchantRoleSummarySchema } from './merchant';
+import { z } from "zod";
+import { apiFetch } from "./client";
+import { MerchantBranchSchema, MerchantRoleSummarySchema } from "./merchant";
 import {
   CashbackPercentInputSchema,
   dataWrapped,
@@ -8,7 +8,7 @@ import {
   MerchantChannelSchema,
   MerchantStatusSchema,
   PercentSchema,
-} from './resources';
+} from "./resources";
 
 /**
  * Store self-signup + onboarding (§1 decision 2026-08-15, Task #24):
@@ -66,9 +66,9 @@ export function requestMerchantSignupOtp(
   options: RequestOptions = {},
 ): Promise<MerchantSignupRequestOtpResponse> {
   return apiFetch(
-    '/api/merchant/signup/request-otp',
+    "/api/merchant/signup/request-otp",
     MerchantSignupRequestOtpResponseSchema,
-    { method: 'POST', body, signal: options.signal },
+    { method: "POST", body, signal: options.signal },
   );
 }
 
@@ -103,9 +103,9 @@ export function verifyMerchantSignupOtp(
   options: RequestOptions = {},
 ): Promise<MerchantSignupVerifyOtpResponse> {
   return apiFetch(
-    '/api/merchant/signup/verify-otp',
+    "/api/merchant/signup/verify-otp",
     MerchantSignupVerifyOtpResponseSchema,
-    { method: 'POST', body, signal: options.signal },
+    { method: "POST", body, signal: options.signal },
   );
 }
 
@@ -168,8 +168,9 @@ export const MerchantAuthUserSchema = z.object({
 });
 export type MerchantAuthUser = z.infer<typeof MerchantAuthUserSchema>;
 
-export const MerchantAuthUserResponseSchema =
-  dataWrapped(MerchantAuthUserSchema);
+export const MerchantAuthUserResponseSchema = dataWrapped(
+  MerchantAuthUserSchema,
+);
 export type MerchantAuthUserResponse = z.infer<
   typeof MerchantAuthUserResponseSchema
 >;
@@ -186,9 +187,9 @@ export function registerMerchantSignup(
   options: RequestOptions = {},
 ): Promise<MerchantAuthUserResponse> {
   return apiFetch(
-    '/api/merchant/signup/register',
+    "/api/merchant/signup/register",
     MerchantAuthUserResponseSchema,
-    { method: 'POST', body, signal: options.signal },
+    { method: "POST", body, signal: options.signal },
   );
 }
 
@@ -288,10 +289,10 @@ export type MerchantSetupStateResponse = z.infer<
  *    ceiling.
  */
 export const OnboardingErrorCodeSchema = z.enum([
-  'setup_not_editable',
-  'setup_incomplete',
-  'not_pending_review',
-  'rate_not_priced',
+  "setup_not_editable",
+  "setup_incomplete",
+  "not_pending_review",
+  "rate_not_priced",
 ]);
 export type OnboardingErrorCode = z.infer<typeof OnboardingErrorCodeSchema>;
 
@@ -303,7 +304,7 @@ export type OnboardingErrorCode = z.infer<typeof OnboardingErrorCodeSchema>;
 export function getMerchantSetup(
   options: RequestOptions = {},
 ): Promise<MerchantSetupStateResponse> {
-  return apiFetch('/api/merchant/setup', MerchantSetupStateResponseSchema, {
+  return apiFetch("/api/merchant/setup", MerchantSetupStateResponseSchema, {
     signal: options.signal,
   });
 }
@@ -341,9 +342,9 @@ export function updateMerchantSetupProfile(
   options: RequestOptions = {},
 ): Promise<MerchantSetupStateResponse> {
   return apiFetch(
-    '/api/merchant/setup/profile',
+    "/api/merchant/setup/profile",
     MerchantSetupStateResponseSchema,
-    { method: 'PATCH', body, signal: options.signal },
+    { method: "PATCH", body, signal: options.signal },
   );
 }
 
@@ -371,9 +372,9 @@ export function updateMerchantSetupLocation(
   options: RequestOptions = {},
 ): Promise<MerchantSetupStateResponse> {
   return apiFetch(
-    '/api/merchant/setup/location',
+    "/api/merchant/setup/location",
     MerchantSetupStateResponseSchema,
-    { method: 'PATCH', body, signal: options.signal },
+    { method: "PATCH", body, signal: options.signal },
   );
 }
 
@@ -388,7 +389,7 @@ export const MerchantLogoResponseSchema = dataWrapped(
   z.object({
     /** Absolute URL of the logo on display — cache-bust when re-rendering. */
     logo_url: z.string().nullable(),
-    status: z.literal('pending_review').optional(),
+    status: z.literal("pending_review").optional(),
     /** Present exactly when the upload queued rather than applied. */
     change_request: MerchantChangeRequestSchema.optional(),
   }),
@@ -401,9 +402,9 @@ function uploadLogo(
   options: RequestOptions,
 ): Promise<MerchantLogoResponse> {
   const form = new FormData();
-  form.append('logo', file);
+  form.append("logo", file);
   return apiFetch(path, MerchantLogoResponseSchema, {
-    method: 'POST',
+    method: "POST",
     body: form,
     signal: options.signal,
   });
@@ -419,7 +420,7 @@ export function uploadMerchantSetupLogo(
   file: File | Blob,
   options: RequestOptions = {},
 ): Promise<MerchantLogoResponse> {
-  return uploadLogo('/api/merchant/setup/logo', file, options);
+  return uploadLogo("/api/merchant/setup/logo", file, options);
 }
 
 /**
@@ -430,7 +431,7 @@ export function uploadMerchantSettingsLogo(
   file: File | Blob,
   options: RequestOptions = {},
 ): Promise<MerchantLogoResponse> {
-  return uploadLogo('/api/merchant/settings/logo', file, options);
+  return uploadLogo("/api/merchant/settings/logo", file, options);
 }
 
 export const UpdateMerchantSetupRateRequestSchema = z.object({
@@ -454,11 +455,15 @@ export function updateMerchantSetupRate(
   body: UpdateMerchantSetupRateRequest,
   options: RequestOptions = {},
 ): Promise<MerchantSetupStateResponse> {
-  return apiFetch('/api/merchant/setup/rate', MerchantSetupStateResponseSchema, {
-    method: 'PATCH',
-    body,
-    signal: options.signal,
-  });
+  return apiFetch(
+    "/api/merchant/setup/rate",
+    MerchantSetupStateResponseSchema,
+    {
+      method: "PATCH",
+      body,
+      signal: options.signal,
+    },
+  );
 }
 
 /**
@@ -470,9 +475,9 @@ export function submitMerchantSetup(
   options: RequestOptions = {},
 ): Promise<MerchantSetupStateResponse> {
   return apiFetch(
-    '/api/merchant/setup/submit',
+    "/api/merchant/setup/submit",
     MerchantSetupStateResponseSchema,
-    { method: 'POST', signal: options.signal },
+    { method: "POST", signal: options.signal },
   );
 }
 
@@ -481,9 +486,9 @@ export function submitMerchantSetup(
 // ---------------------------------------------------------------------------
 
 export const StoreReviewStateSchema = z.enum([
-  'pending_review',
-  'rejected',
-  'draft',
+  "pending_review",
+  "rejected",
+  "draft",
 ]);
 export type StoreReviewState = z.infer<typeof StoreReviewStateSchema>;
 
@@ -550,7 +555,7 @@ export function listStoreReviews(
   const query =
     params.state !== undefined
       ? `?state=${encodeURIComponent(params.state)}`
-      : '';
+      : "";
   return apiFetch(
     `/api/admin/store-reviews${query}`,
     StoreReviewListResponseSchema,
@@ -582,7 +587,7 @@ export function approveStoreReview(
   return apiFetch(
     `/api/admin/store-reviews/${merchantId}/approve`,
     StoreReviewApprovalResponseSchema,
-    { method: 'POST', signal: options.signal },
+    { method: "POST", signal: options.signal },
   );
 }
 
@@ -619,7 +624,7 @@ export function rejectStoreReview(
   return apiFetch(
     `/api/admin/store-reviews/${merchantId}/reject`,
     StoreReviewRejectionResponseSchema,
-    { method: 'POST', body, signal: options.signal },
+    { method: "POST", body, signal: options.signal },
   );
 }
 
@@ -664,7 +669,7 @@ export type StoreCategoryListResponse = z.infer<
 export const OFFER_ARTWORK = {
   width: 1200,
   height: 675,
-  ratio: '16:9',
+  ratio: "16:9",
   minWidth: 800,
   minHeight: 450,
   maxKb: 2048,
@@ -675,7 +680,7 @@ export const OFFER_ARTWORK = {
  * edge to edge; one without is laid out from its words and the store's live
  * rate. Never a blend of the two.
  */
-export const OfferKindSchema = z.enum(['text', 'image']);
+export const OfferKindSchema = z.enum(["text", "image"]);
 export type OfferKind = z.infer<typeof OfferKindSchema>;
 
 /**
@@ -684,11 +689,11 @@ export type OfferKind = z.infer<typeof OfferKindSchema>;
  * they just saved is nowhere to be seen.
  */
 export const OfferLiveStateSchema = z.enum([
-  'live',
-  'inactive',
-  'scheduled',
-  'ended',
-  'store_not_trading',
+  "live",
+  "inactive",
+  "scheduled",
+  "ended",
+  "store_not_trading",
 ]);
 export type OfferLiveState = z.infer<typeof OfferLiveStateSchema>;
 
@@ -734,7 +739,7 @@ export type StoreOfferResponse = z.infer<typeof StoreOfferResponseSchema>;
 export function listStoreOffers(
   options: RequestOptions = {},
 ): Promise<StoreOfferListResponse> {
-  return apiFetch('/api/admin/store-offers', StoreOfferListResponseSchema, {
+  return apiFetch("/api/admin/store-offers", StoreOfferListResponseSchema, {
     signal: options.signal,
   });
 }
@@ -757,8 +762,8 @@ export function createStoreOffer(
   body: StoreOfferInput,
   options: RequestOptions = {},
 ): Promise<StoreOfferResponse> {
-  return apiFetch('/api/admin/store-offers', StoreOfferResponseSchema, {
-    method: 'POST',
+  return apiFetch("/api/admin/store-offers", StoreOfferResponseSchema, {
+    method: "POST",
     body,
     signal: options.signal,
   });
@@ -770,7 +775,7 @@ export function updateStoreOffer(
   options: RequestOptions = {},
 ): Promise<StoreOfferResponse> {
   return apiFetch(`/api/admin/store-offers/${id}`, StoreOfferResponseSchema, {
-    method: 'PATCH',
+    method: "PATCH",
     body,
     signal: options.signal,
   });
@@ -786,12 +791,12 @@ export function uploadStoreOfferImage(
   options: RequestOptions = {},
 ): Promise<StoreOfferResponse> {
   const body = new FormData();
-  body.append('image', file);
+  body.append("image", file);
 
   return apiFetch(
     `/api/admin/store-offers/${id}/image`,
     StoreOfferResponseSchema,
-    { method: 'POST', body, signal: options.signal },
+    { method: "POST", body, signal: options.signal },
   );
 }
 
@@ -803,7 +808,7 @@ export function deleteStoreOfferImage(
   return apiFetch(
     `/api/admin/store-offers/${id}/image`,
     StoreOfferResponseSchema,
-    { method: 'DELETE', signal: options.signal },
+    { method: "DELETE", signal: options.signal },
   );
 }
 
@@ -815,7 +820,7 @@ export function listStoreCategories(
   options: RequestOptions = {},
 ): Promise<StoreCategoryListResponse> {
   return apiFetch(
-    '/api/admin/store-categories',
+    "/api/admin/store-categories",
     StoreCategoryListResponseSchema,
     { signal: options.signal },
   );
@@ -841,8 +846,8 @@ export function createStoreCategory(
   body: CreateStoreCategoryRequest,
   options: RequestOptions = {},
 ): Promise<StoreCategoryResponse> {
-  return apiFetch('/api/admin/store-categories', StoreCategoryResponseSchema, {
-    method: 'POST',
+  return apiFetch("/api/admin/store-categories", StoreCategoryResponseSchema, {
+    method: "POST",
     body,
     signal: options.signal,
   });
@@ -871,7 +876,7 @@ export function updateStoreCategory(
   return apiFetch(
     `/api/admin/store-categories/${id}`,
     StoreCategoryResponseSchema,
-    { method: 'PATCH', body, signal: options.signal },
+    { method: "PATCH", body, signal: options.signal },
   );
 }
 
@@ -887,12 +892,12 @@ export function uploadStoreCategoryIcon(
   options: RequestOptions = {},
 ): Promise<StoreCategoryResponse> {
   const body = new FormData();
-  body.append('icon', file);
+  body.append("icon", file);
 
   return apiFetch(
     `/api/admin/store-categories/${id}/icon`,
     StoreCategoryResponseSchema,
-    { method: 'POST', body, signal: options.signal },
+    { method: "POST", body, signal: options.signal },
   );
 }
 
@@ -904,7 +909,7 @@ export function deleteStoreCategoryIcon(
   return apiFetch(
     `/api/admin/store-categories/${id}/icon`,
     StoreCategoryResponseSchema,
-    { method: 'DELETE', signal: options.signal },
+    { method: "DELETE", signal: options.signal },
   );
 }
 
@@ -923,6 +928,12 @@ export const NotificationTemplateSchema = z.object({
   label: z.string(),
   /** When it fires, in the words of someone deciding whether to enable it. */
   description: z.string(),
+  /**
+   * Only reachable with the marketplace switched on — the order moments and
+   * the enrolment outcomes. The panel hides these while it is off, because
+   * nothing can send them and a list of dead moments misleads.
+   */
+  marketplace_only: z.boolean(),
   /**
    * The one and only body: every notification sends English by decision
    * (2026-08-17). Dhivehi bodies are gone from the wire entirely.
@@ -955,7 +966,7 @@ export function listNotificationTemplates(
   options: RequestOptions = {},
 ): Promise<NotificationTemplateListResponse> {
   return apiFetch(
-    '/api/admin/notification-templates',
+    "/api/admin/notification-templates",
     NotificationTemplateListResponseSchema,
     { signal: options.signal },
   );
@@ -975,6 +986,6 @@ export function updateNotificationTemplate(
   return apiFetch(
     `/api/admin/notification-templates/${id}`,
     NotificationTemplateResponseSchema,
-    { method: 'PATCH', body, signal: options.signal },
+    { method: "PATCH", body, signal: options.signal },
   );
 }

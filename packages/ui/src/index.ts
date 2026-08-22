@@ -8,10 +8,18 @@ export {
   resolveMoneyLocale,
   type MoneyLocale,
   type MoneyTextProps,
-} from './money-text';
+} from "./money-text";
+
+// The platform logo, served from /api/brand and replaceable by a superadmin
+// without a deploy.
+export {
+  BrandMark,
+  type BrandMarkProps,
+  type BrandMarkShape,
+} from "./brand-mark";
 
 // RTL wiring for Dhivehi (Thaana): 'dv' -> dir="rtl" on <html>.
-export { getDirection, useDirection, type Direction } from './direction';
+export { getDirection, useDirection, type Direction } from "./direction";
 
 // Google Maps: the loader and its types only. The map components themselves
 // live in the apps that use them — Tailwind does not scan this package.
@@ -31,8 +39,8 @@ export {
   type GMarker,
   type GPolygon,
   type GPolyline,
-} from './maps';
+} from "./maps";
 
 // Single theming entry point for all three apps: light-first with dark mode.
 // Re-exported so apps depend on @manfaa/ui, not on next-themes directly.
-export { ThemeProvider, useTheme } from 'next-themes';
+export { ThemeProvider, useTheme } from "next-themes";

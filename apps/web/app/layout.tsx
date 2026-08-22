@@ -3,11 +3,11 @@ import { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import { ThemeProvider } from 'next-themes';
 import { cn } from '@/lib/utils';
-import { BrandThemeApplier } from '@/components/app/brand-theme';
 import { I18nProvider } from '@/providers/i18n-provider';
 import { QueryProvider } from '@/providers/query-provider';
 import { Toaster } from '@/components/ui/sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { BrandThemeApplier } from '@/components/app/brand-theme';
 import '@/styles/globals.css';
 // Thaana @font-face + `html[lang='dv'] body` font rule (self-hosted fonts).
 import '@manfaa/ui/styles.css';
@@ -15,6 +15,10 @@ import '@manfaa/ui/styles.css';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
+  // Served by the API, so a superadmin can replace it without a deploy.
+  // The app/favicon.ico file convention is deliberately NOT used alongside
+  // this: two declarations would be two sources for one mark.
+  icons: { icon: '/api/brand/favicon' },
   title: {
     template: '%s | Manfaa',
     default: 'Manfaa', // a default is required when creating a template

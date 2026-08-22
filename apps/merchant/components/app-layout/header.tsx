@@ -1,13 +1,15 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
+import { usePathname, useRouter } from 'next/navigation';
+import { BrandMark } from '@manfaa/ui';
 import { LogOut, Menu, Moon, Sun } from 'lucide-react';
-import { toAbsoluteUrl } from '@/lib/helpers';
+import { useTheme } from 'next-themes';
+import { useLogout } from '@/lib/queries';
 import { cn } from '@/lib/utils';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useScrollPosition } from '@/hooks/use-scroll-position';
-import { useLogout } from '@/lib/queries';
-import { LanguageSwitcher } from '@/components/app/language-switcher';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -24,9 +26,7 @@ import {
   SheetHeader,
   SheetTrigger,
 } from '@/components/ui/sheet';
-import { useTheme } from 'next-themes';
-import { usePathname, useRouter } from 'next/navigation';
-import Link from 'next/link';
+import { LanguageSwitcher } from '@/components/app/language-switcher';
 import { useLayout } from './context';
 import { SidebarMenu } from './sidebar-menu';
 
@@ -120,9 +120,8 @@ export function Header() {
         {/* Mobile logo + menu */}
         <div className="flex lg:hidden items-center gap-2.5">
           <Link href="/dashboard" className="shrink-0">
-            <img
-              src={toAbsoluteUrl('/media/app/mini-logo.svg?v=mf2')}
-              className="h-[25px] w-full"
+            <BrandMark
+              className="h-8 w-auto max-w-[150px] object-contain"
               alt="Manfaa"
             />
           </Link>

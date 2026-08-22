@@ -2,16 +2,17 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { BrandMark } from '@manfaa/ui';
 import { Search } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useMe } from '@/lib/queries';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
-import { StoreSearch } from '@/components/app/store-search';
 import {
   LanguageSwitcher,
   ThemeToggle,
 } from '@/components/app/header-controls';
+import { StoreSearch } from '@/components/app/store-search';
 
 /**
  * Shared chrome for every PUBLIC page (/, /discover, /store/[slug]):
@@ -65,11 +66,8 @@ export function PublicHeader() {
     <header className="sticky top-0 z-40 border-b border-border bg-background">
       <div className="container flex h-16 items-center gap-3">
         <div className="flex shrink-0 items-center gap-6">
-          <Link
-            href="/"
-            className="text-lg font-semibold tracking-tight text-mono"
-          >
-            {t('common.appName')}
+          <Link href="/" aria-label={t('common.appName')}>
+            <BrandMark className="h-9 w-auto max-w-[200px] object-contain" />
           </Link>
           <nav
             aria-label={t('nav.publicNav')}

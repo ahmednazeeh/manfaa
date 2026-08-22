@@ -33,7 +33,6 @@ import {
   CardTable,
   CardTitle,
 } from '@/components/ui/card';
-import { BankLabel } from '@/components/admin/bank-select';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   Table,
@@ -44,6 +43,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { BankLabel } from '@/components/admin/bank-select';
 import { PageHeader } from '@/components/admin/page-header';
 import {
   PaymentStateBadge,
@@ -410,7 +410,37 @@ export default function SettlementDetailPage() {
                         {fundingMethodLabel(payment.method)}
                       </TableCell>
                       <TableCell className="font-mono text-xs">
-                        {payment.bank_ref ?? '—'}
+                        {/* The bank's own reference once matched, else what
+                            the merchant typed. `bank_ref` is usually empty:
+                            the slip carries the reference, which is what
+                            auto-matching reads. */}
+                        {payment.matched_trx_id ?? payment.bank_ref ?? '—'}
+                        {/* The other names the same credit answers to. BML
+                            files a transfer under an internal statement id
+                            but prints a different reference on the merchant's
+                            slip — so the id above is often NOT the one the
+                            merchant quotes when they ask about a payment. */}
+                        {(payment.matched_trx_refs ?? [])
+                          .filter((ref) => ref !== payment.matched_trx_id)
+                          .map((ref) => (
+                            <p key={ref} className="text-muted-foreground">
+                              {ref}
+                            </p>
+                          ))}
+                        {payment.matched_trx_id &&
+                        payment.matched_payer_name ? (
+                          <p
+                            className="mt-1 font-sans text-xs text-muted-foreground"
+                            title={
+                              payment.matched_by_rule
+                                ? `Matched by ${payment.matched_by_rule}`
+                                : undefined
+                            }
+                          >
+                            from {payment.matched_payer_name}
+                            {payment.auto_matched ? ' · auto' : ''}
+                          </p>
+                        ) : null}
                       </TableCell>
                       <TableCell>
                         {payment.has_slip ? (

@@ -1,10 +1,10 @@
-import { z } from 'zod';
+import { z } from "zod";
 import {
   bpToPercentString,
   isPercentDeltaString,
   isPercentInput,
   isPercentString,
-} from './percent';
+} from "./percent";
 
 /**
  * Zod schemas mirroring the Laravel JsonResources shared by the merchant and
@@ -132,7 +132,7 @@ export function paginated<Schema extends z.ZodType>(schema: Schema) {
  * Display copy NEVER says "both" — the UI renders it as "In Store & Online"
  * (localised).
  */
-export const MerchantChannelSchema = z.enum(['in_store', 'online', 'both']);
+export const MerchantChannelSchema = z.enum(["in_store", "online", "both"]);
 export type MerchantChannel = z.infer<typeof MerchantChannelSchema>;
 
 // ---------------------------------------------------------------------------
@@ -153,19 +153,19 @@ export type MerchantChannel = z.infer<typeof MerchantChannelSchema>;
  * straight through the wizard.
  */
 export const ChangeRequestKindSchema = z.enum([
-  'profile',
-  'branch_create',
-  'branch_update',
-  'branch_delete',
+  "profile",
+  "branch_create",
+  "branch_update",
+  "branch_delete",
 ]);
 export type ChangeRequestKind = z.infer<typeof ChangeRequestKindSchema>;
 
 export const ChangeRequestStatusSchema = z.enum([
-  'pending',
-  'approved',
-  'rejected',
+  "pending",
+  "approved",
+  "rejected",
   /** Replaced by a newer submission against the same target — never applied. */
-  'superseded',
+  "superseded",
 ]);
 export type ChangeRequestStatus = z.infer<typeof ChangeRequestStatusSchema>;
 
@@ -239,7 +239,7 @@ export type MerchantChangeRequest = z.infer<typeof MerchantChangeRequestSchema>;
  * logo upload adds the `logo_url` STILL being served).
  */
 export const QueuedChangeSchema = z.object({
-  status: z.literal('pending_review'),
+  status: z.literal("pending_review"),
   change_request: MerchantChangeRequestSchema,
 });
 export type QueuedChange = z.infer<typeof QueuedChangeSchema>;
@@ -263,25 +263,25 @@ export type QueuedChange = z.infer<typeof QueuedChangeSchema>;
  */
 export const BANKS = [
   {
-    slug: 'bml',
-    label: 'Bank of Maldives',
-    shortLabel: 'BML',
+    slug: "bml",
+    label: "Bank of Maldives",
+    shortLabel: "BML",
     /** Served from each app's public/banks — see the logo files there. */
-    logo: '/banks/bml.svg',
+    logo: "/banks/bml.svg",
   },
   {
-    slug: 'mib',
-    label: 'Maldives Islamic Bank',
-    shortLabel: 'MIB',
-    logo: '/banks/mib.png',
+    slug: "mib",
+    label: "Maldives Islamic Bank",
+    shortLabel: "MIB",
+    logo: "/banks/mib.png",
   },
 ] as const;
 
 export type Bank = (typeof BANKS)[number];
-export type BankSlug = Bank['slug'];
+export type BankSlug = Bank["slug"];
 
 /** The slug a form submits. Closed, because a WRITE may only name a real bank. */
-export const BankSlugSchema = z.enum(['bml', 'mib']);
+export const BankSlugSchema = z.enum(["bml", "mib"]);
 
 /**
  * Resolves a stored or submitted bank, tolerating the free-text era the same
@@ -290,7 +290,7 @@ export const BankSlugSchema = z.enum(['bml', 'mib']);
  * instead of asserting a bank nobody chose.
  */
 export function bankOf(value: string | null | undefined): Bank | null {
-  if (value === null || value === undefined || value.trim() === '') {
+  if (value === null || value === undefined || value.trim() === "") {
     return null;
   }
   const needle = value.trim().toLowerCase();
@@ -306,7 +306,7 @@ export function bankOf(value: string | null | undefined): Bank | null {
 
 /** What to print for a bank field: the real name, or the raw value verbatim. */
 export function bankLabel(value: string | null | undefined): string {
-  return bankOf(value)?.label ?? (value ?? '');
+  return bankOf(value)?.label ?? value ?? "";
 }
 
 /**
@@ -316,12 +316,12 @@ export function bankLabel(value: string | null | undefined): string {
  * EVER visible publicly; public payloads expose ACTIVE merchants only.
  */
 export const MerchantStatusSchema = z.enum([
-  'draft',
-  'pending_review',
-  'rejected',
-  'active',
-  'suspended',
-  'closed',
+  "draft",
+  "pending_review",
+  "rejected",
+  "active",
+  "suspended",
+  "closed",
 ]);
 export type MerchantStatus = z.infer<typeof MerchantStatusSchema>;
 
@@ -330,14 +330,14 @@ export type MerchantStatus = z.infer<typeof MerchantStatusSchema>;
 // ---------------------------------------------------------------------------
 
 export const TransactionStateSchema = z.enum([
-  'tracked',
-  'awaiting_validation',
-  'payable_unfunded',
-  'on_hold',
-  'confirmed',
-  'paid',
-  'reversed',
-  'written_off',
+  "tracked",
+  "awaiting_validation",
+  "payable_unfunded",
+  "on_hold",
+  "confirmed",
+  "paid",
+  "reversed",
+  "written_off",
 ]);
 export type TransactionState = z.infer<typeof TransactionStateSchema>;
 
@@ -348,12 +348,12 @@ export type TransactionState = z.infer<typeof TransactionStateSchema>;
  * claim-originated row would fail the response parse and blank the screen.
  */
 export const TransactionOriginSchema = z.enum([
-  'pos',
-  'manual',
-  'online_link',
-  'api_phone',
-  'card_linked',
-  'claim',
+  "pos",
+  "manual",
+  "online_link",
+  "api_phone",
+  "card_linked",
+  "claim",
 ]);
 export type TransactionOrigin = z.infer<typeof TransactionOriginSchema>;
 
@@ -402,23 +402,23 @@ export type TransactionOrigin = z.infer<typeof TransactionOriginSchema>;
  *   admin_release_stale     an admin releasing one of those holds
  */
 export const TRANSACTION_REASON_CODES = [
-  'auto_validation_window',
-  'backdated_final',
-  'below_minimum',
-  'merchant_suspended',
-  'merchant_unpublished',
-  'settlement_allocated',
-  'payout_completed',
-  'merchant_default_90d',
-  'claim_approved',
-  'customer_refund',
-  'till_void',
-  'duplicate',
-  'other',
-  'admin_release',
-  'admin_reject',
-  'stale_timestamp',
-  'admin_release_stale',
+  "auto_validation_window",
+  "backdated_final",
+  "below_minimum",
+  "merchant_suspended",
+  "merchant_unpublished",
+  "settlement_allocated",
+  "payout_completed",
+  "merchant_default_90d",
+  "claim_approved",
+  "customer_refund",
+  "till_void",
+  "duplicate",
+  "other",
+  "admin_release",
+  "admin_reject",
+  "stale_timestamp",
+  "admin_release_stale",
 ] as const;
 export const TransactionReasonCodeSchema = z.enum(TRANSACTION_REASON_CODES);
 export type TransactionReasonCode = (typeof TRANSACTION_REASON_CODES)[number];
@@ -443,7 +443,7 @@ export function isTransactionReasonCode(
  * nothing (even during promotions), `rate` overrides the standing rate with
  * the category's own `cashback_rate_percent`.
  */
-export const ProductCategoryModeSchema = z.enum(['excluded', 'rate']);
+export const ProductCategoryModeSchema = z.enum(["excluded", "rate"]);
 export type ProductCategoryMode = z.infer<typeof ProductCategoryModeSchema>;
 
 /**
@@ -455,10 +455,10 @@ export type ProductCategoryMode = z.infer<typeof ProductCategoryModeSchema>;
  * these lines consume the per-customer promo cap).
  */
 export const TransactionLinePricedBySchema = z.enum([
-  'excluded',
-  'category',
-  'standing',
-  'promotion',
+  "excluded",
+  "category",
+  "standing",
+  "promotion",
 ]);
 export type TransactionLinePricedBy = z.infer<
   typeof TransactionLinePricedBySchema
@@ -546,7 +546,7 @@ export type Transaction = z.infer<typeof TransactionSchema>;
  * a history reader why the credit skipped the validation window. No admin
  * approval is involved — on_hold is now fraud/velocity only.
  */
-export const BACKDATED_REASON_CODE = 'backdated_final';
+export const BACKDATED_REASON_CODE = "backdated_final";
 
 /**
  * The 409 `code` a reversal of a backdated credit answers with — merchant
@@ -554,7 +554,7 @@ export const BACKDATED_REASON_CODE = 'backdated_final';
  * plain failure so a POS can tell the cashier the truth: this one needs an
  * admin adjustment, retrying will never work.
  */
-export const BACKDATED_IRREVERSIBLE_CODE = 'backdated_irreversible';
+export const BACKDATED_IRREVERSIBLE_CODE = "backdated_irreversible";
 
 /**
  * Days past the merchant's validation window before the API treats a credit
@@ -584,13 +584,13 @@ export function parseOccurredAt(occurredAt: string | number | Date): number {
   if (occurredAt instanceof Date) {
     return occurredAt.getTime();
   }
-  if (typeof occurredAt === 'number') {
+  if (typeof occurredAt === "number") {
     return occurredAt;
   }
   const trimmed = occurredAt.trim();
   return Date.parse(
     OFFSETLESS_INSTANT.test(trimmed)
-      ? `${trimmed.replace(' ', 'T')}+05:00`
+      ? `${trimmed.replace(" ", "T")}+05:00`
       : trimmed,
   );
 }
@@ -612,7 +612,7 @@ export function isBackdatedOccurrence(
   validationWindowDays: number,
   now: Date = new Date(),
 ): boolean {
-  if (occurredAt === undefined || occurredAt === null || occurredAt === '') {
+  if (occurredAt === undefined || occurredAt === null || occurredAt === "") {
     return false;
   }
 
@@ -633,10 +633,10 @@ export function isBackdatedOccurrence(
 // ---------------------------------------------------------------------------
 
 export const PromotionStatusSchema = z.enum([
-  'draft',
-  'published',
-  'ended',
-  'cancelled',
+  "draft",
+  "published",
+  "ended",
+  "cancelled",
 ]);
 export type PromotionStatus = z.infer<typeof PromotionStatusSchema>;
 
@@ -687,10 +687,10 @@ export type Promotion = z.infer<typeof PromotionSchema>;
 // ---------------------------------------------------------------------------
 
 export const ClaimStateSchema = z.enum([
-  'open',
-  'in_review',
-  'approved',
-  'rejected',
+  "open",
+  "in_review",
+  "approved",
+  "rejected",
 ]);
 export type ClaimState = z.infer<typeof ClaimStateSchema>;
 
@@ -699,16 +699,16 @@ export type ClaimState = z.infer<typeof ClaimStateSchema>;
 // ---------------------------------------------------------------------------
 
 export const SettlementStateSchema = z.enum([
-  'draft',
-  'awaiting_payment',
-  'payment_review',
-  'settled',
-  'partially_settled',
-  'cancelled',
+  "draft",
+  "awaiting_payment",
+  "payment_review",
+  "settled",
+  "partially_settled",
+  "cancelled",
 ]);
 export type SettlementState = z.infer<typeof SettlementStateSchema>;
 
-export const SettlementFundingMethodSchema = z.enum(['bank', 'wallet']);
+export const SettlementFundingMethodSchema = z.enum(["bank", "wallet"]);
 export type SettlementFundingMethod = z.infer<
   typeof SettlementFundingMethodSchema
 >;
@@ -729,9 +729,9 @@ export const SettlementLineSchema = z.object({
 export type SettlementLine = z.infer<typeof SettlementLineSchema>;
 
 export const SettlementPaymentStateSchema = z.enum([
-  'pending',
-  'matched',
-  'rejected',
+  "pending",
+  "matched",
+  "rejected",
 ]);
 export type SettlementPaymentState = z.infer<
   typeof SettlementPaymentStateSchema
@@ -744,7 +744,39 @@ export const SettlementPaymentSchema = z.object({
   amount_mvr: z.string(),
   currency: z.string(),
   method: z.string(),
+  /** What the MERCHANT typed. Often null — the slip carries the reference. */
   bank_ref: z.string().nullable(),
+
+  /**
+   * What the BANK says, once matched — kept separate from `bank_ref`
+   * because "claimed" and "confirmed" are different facts.
+   *
+   * Unique in the database where not null, so one bank credit can never
+   * settle two payments. That index is what makes dedup safe; this field is
+   * how a reader sees which credit was spent.
+   */
+  matched_trx_id: z.string().nullable(),
+  /** The payer as the BANK names them, which may not be the store. */
+  matched_payer_name: z.string().nullable(),
+  matched_score: z.number().int().nullable(),
+  /**
+   * Which evidence won, strongest first: `reference` (typed),
+   * `receipt_reference` (a bank-issued reference read off the slip),
+   * `receipt_name` (the payer named on the slip verbatim),
+   * `receipt_name_fuzzy` (the payer named on the slip allowing for spelling —
+   * BML prints "AHMD.NAZEEH" for "AHMED NAZEEH"), or `name` (the registered
+   * account name, fuzzy). Only the first three score 100.
+   */
+  matched_by_rule: z.string().nullable(),
+  /**
+   * Every identifier the matched credit answered to. `matched_trx_id` is the
+   * one dedup keys on (a single stable value a unique index can hold); this
+   * carries the others — notably the reference BML prints on the merchant's
+   * slip, which is what an operator reconciling by hand actually has.
+   */
+  matched_trx_refs: z.array(z.string()).default([]),
+  auto_matched: z.boolean(),
+
   /**
    * Path on the private `slips` disk. It is NOT fetchable — the disk has no
    * URL and is not served. Branch on `has_slip`; read the bytes only through
@@ -842,13 +874,13 @@ export type SettlementRejection = z.infer<typeof SettlementRejectionSchema>;
  * `rejected` (with the reason) when the transfer could not be verified.
  */
 export const SettlementMerchantStatusCodeSchema = z.enum([
-  'draft',
-  'awaiting_payment',
-  'verifying',
-  'settled',
-  'partially_settled',
-  'rejected',
-  'cancelled',
+  "draft",
+  "awaiting_payment",
+  "verifying",
+  "settled",
+  "partially_settled",
+  "rejected",
+  "cancelled",
 ]);
 export type SettlementMerchantStatusCode = z.infer<
   typeof SettlementMerchantStatusCodeSchema
@@ -881,11 +913,11 @@ export type SettlementMerchantStatus = z.infer<
  *  - `disabled`            the platform has the incentive switched off (0bp).
  */
 export const PromptDiscountReasonSchema = z.enum([
-  'eligible',
-  'not_all_outstanding',
-  'line_too_old',
-  'clock_not_started',
-  'disabled',
+  "eligible",
+  "not_all_outstanding",
+  "line_too_old",
+  "clock_not_started",
+  "disabled",
 ]);
 export type PromptDiscountReason = z.infer<typeof PromptDiscountReasonSchema>;
 
@@ -942,9 +974,9 @@ export type Settlement = z.infer<typeof SettlementSchema>;
  * SettlementAllocator write no others.
  */
 export const WALLET_MOVEMENT_TYPES = [
-  'top_up',
-  'settlement',
-  'settlement_credit',
+  "top_up",
+  "settlement",
+  "settlement_credit",
 ] as const;
 export type WalletMovementType = (typeof WALLET_MOVEMENT_TYPES)[number];
 
@@ -981,21 +1013,21 @@ export type Wallet = z.infer<typeof WalletSchema>;
 // ---------------------------------------------------------------------------
 
 export const PayoutBatchStateSchema = z.enum([
-  'draft',
-  'approved',
-  'processing',
-  'sent',
-  'completed',
-  'partially_failed',
-  'cancelled',
+  "draft",
+  "approved",
+  "processing",
+  "sent",
+  "completed",
+  "partially_failed",
+  "cancelled",
 ]);
 export type PayoutBatchState = z.infer<typeof PayoutBatchStateSchema>;
 
 export const PayoutItemStateSchema = z.enum([
-  'pending',
-  'sent',
-  'paid',
-  'failed',
+  "pending",
+  "sent",
+  "paid",
+  "failed",
 ]);
 export type PayoutItemState = z.infer<typeof PayoutItemStateSchema>;
 

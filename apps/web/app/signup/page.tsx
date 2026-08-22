@@ -5,12 +5,12 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { ApiError } from '@manfaa/api-client';
+import { BrandMark } from '@manfaa/ui';
 import { LoaderCircle, TriangleAlert } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { z } from 'zod';
 import { normalizeMaldivesPhone } from '@/lib/format';
-import { toAbsoluteUrl } from '@/lib/helpers';
 import {
   useRegister,
   useRequestOtp,
@@ -19,7 +19,6 @@ import {
 } from '@/lib/queries';
 import { Alert, AlertIcon, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
-import { PayoutAccountStep } from '@/components/app/payout-account-step';
 import { Card, CardContent } from '@/components/ui/card';
 import {
   Form,
@@ -30,12 +29,13 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
-import { PhoneInput } from '@/components/app/phone-input';
 import {
   InputOTP,
   InputOTPGroup,
   InputOTPSlot,
 } from '@/components/ui/input-otp';
+import { PayoutAccountStep } from '@/components/app/payout-account-step';
+import { PhoneInput } from '@/components/app/phone-input';
 
 type Step = 'phone' | 'code' | 'details' | 'bank';
 
@@ -183,14 +183,10 @@ export default function SignupPage() {
       <Card className="w-full max-w-[420px]">
         <CardContent className="p-8 flex flex-col gap-6">
           <div className="flex flex-col items-center gap-3">
-            <img
-              src={toAbsoluteUrl('/media/app/default-logo.svg?v=mf2')}
-              className="dark:hidden h-[26px]"
-              alt={t('common.appName')}
-            />
-            <img
-              src={toAbsoluteUrl('/media/app/default-logo-dark.svg?v=mf2')}
-              className="hidden dark:block h-[26px]"
+            {/* Square, matching the sign-in card beside it. */}
+            <BrandMark
+              shape="square"
+              className="h-14 w-auto object-contain"
               alt={t('common.appName')}
             />
             <div className="text-center">

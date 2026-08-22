@@ -1,9 +1,10 @@
 'use client';
 
 import { ReactNode, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { isOnboardingStatus } from '@/lib/api';
 import { isUnauthorized, useMe } from '@/lib/queries';
+import { loginUrlReturningTo } from '@/lib/return-to';
 import { AppLayout } from '@/components/app-layout/app-layout';
 import { ErrorBlock } from '@/components/app/async-states';
 import { ScreenLoader } from '@/components/screen-loader';
@@ -21,17 +22,20 @@ import { ScreenLoader } from '@/components/screen-loader';
  */
 export default function ProtectedLayout({ children }: { children: ReactNode }) {
   const router = useRouter();
+  const pathname = usePathname();
   const { data: me, isPending, error } = useMe();
 
   const onboarding = me !== undefined && isOnboardingStatus(me.merchant.status);
 
   useEffect(() => {
     if (isUnauthorized(error)) {
-      router.replace('/login');
+      // Carry where they were headed, so a lapsed session does not silently
+      // swallow a request the merchant was in the middle of answering.
+      router.replace(loginUrlReturningTo(pathname));
     } else if (onboarding) {
       router.replace('/setup');
     }
-  }, [error, onboarding, router]);
+  }, [error, onboarding, pathname, router]);
 
   if (isPending || isUnauthorized(error) || onboarding) {
     return <ScreenLoader />;

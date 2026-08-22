@@ -469,6 +469,16 @@ is additive. Customer app stays phone-only (owner call).
       fields submits only when the form is complete (same _submittable
       gate as the CTA). Widget-tested in credit_test.dart, plus a 1.3
       text-scale no-overflow pass on the till.)
+      REVISED 2026-08-20 (owner report): the submit-on-Enter for the
+      INVOICE/AMOUNT fields is removed. It went beyond this bullet's own
+      line — which asked only that "scanner-gun Enter submits the code
+      field" — and on a touch keyboard the return key is the tick in the
+      corner, where a thumb goes to dismiss the keyboard, so cashiers were
+      crediting customers mid-entry by accident. The return key now WALKS
+      the form (invoice → eligible → full sale → dismiss) and never
+      finalises; crediting takes the deliberate "Credit now" press. The
+      code field is unchanged, so the gun still walks the till hands-free.
+      Guarded by credit_test.dart ("the keyboard must never spend money").)
 
 ### WL — merchant.manfaa.app landing (web side-quest; owner-approved 2026-08-17)
 

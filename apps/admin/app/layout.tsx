@@ -14,6 +14,10 @@ import '@manfaa/ui/styles.css';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
+  // Served by the API, so a superadmin can replace it without a deploy.
+  // The app/favicon.ico file convention is deliberately NOT used alongside
+  // this: two declarations would be two sources for one mark.
+  icons: { icon: '/api/brand/favicon' },
   title: {
     template: '%s | Manfaa Admin',
     default: 'Manfaa Admin', // a default is required when creating a template

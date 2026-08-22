@@ -1,9 +1,9 @@
 'use client';
 
 import Link from 'next/link';
+import { BrandMark } from '@manfaa/ui';
 import { ChevronFirst } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { toAbsoluteUrl } from '@/lib/helpers';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { useLayout } from './context';
@@ -15,21 +15,22 @@ function SidebarHeader() {
 
   return (
     <div className="sidebar-header hidden lg:flex items-center relative justify-between px-3 lg:px-6 shrink-0">
-      {/* The coral M mark + the app's own wordmark (the template SVGs spell
-          "METRONIC"). The mark always shows; the `default-logo` class hides
-          the word while the sidebar is collapsed (demo1.css). */}
+      {/* The collapse classes go on the WRAPPERS, never on the images.
+          demo1.css hides `.small-logo` while the sidebar is expanded, but
+          BrandMark's own `dark:block` on the same element beat it in the
+          cascade and both marks drew at once. Different elements, no fight:
+          the span decides collapsed-vs-expanded, the images inside decide
+          light-vs-dark. */}
       <Link
         href="/dashboard"
-        className="flex items-center gap-2"
         aria-label={t('common.appName')}
+        className="flex items-center"
       >
-        <img
-          src={toAbsoluteUrl('/media/app/mini-logo.svg?v=mf2')}
-          className="h-[22px] max-w-none shrink-0"
-          alt=""
-        />
-        <span className="default-logo text-lg font-semibold tracking-tight text-mono">
-          {t('common.appName')}
+        <span className="default-logo">
+          <BrandMark className="h-9 w-auto max-w-[190px] object-contain" />
+        </span>
+        <span className="small-logo">
+          <BrandMark shape="square" className="h-8 w-auto object-contain" />
         </span>
       </Link>
       <Button

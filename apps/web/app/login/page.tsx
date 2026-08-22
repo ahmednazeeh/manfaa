@@ -4,10 +4,10 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ApiError } from '@manfaa/api-client';
+import { BrandMark } from '@manfaa/ui';
 import { LoaderCircle, TriangleAlert } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { normalizeMaldivesPhone } from '@/lib/format';
-import { toAbsoluteUrl } from '@/lib/helpers';
 import {
   useRegister,
   useRequestOtp,
@@ -44,8 +44,7 @@ export default function LoginPage() {
   const [signupToken, setSignupToken] = useState('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const busy =
-    requestOtp.isPending || verify.isPending || register.isPending;
+  const busy = requestOtp.isPending || verify.isPending || register.isPending;
 
   const describe = (error: unknown, fallback: string): string => {
     const keys = validationErrorKeys(error);
@@ -126,16 +125,11 @@ export default function LoginPage() {
       <Card className="w-full max-w-[400px]">
         <CardContent className="p-8 flex flex-col gap-6">
           <div className="flex flex-col items-center gap-3">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={toAbsoluteUrl('/media/app/default-logo.svg?v=mf2')}
-              className="dark:hidden h-[26px]"
-              alt={t('common.appName')}
-            />
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={toAbsoluteUrl('/media/app/default-logo-dark.svg?v=mf2')}
-              className="hidden dark:block h-[26px]"
+            {/* Square here, not the wordmark: the card is 400px wide and a
+                landscape mark either shrinks to unreadable or crowds it. */}
+            <BrandMark
+              shape="square"
+              className="h-14 w-auto"
               alt={t('common.appName')}
             />
             <div className="text-center">

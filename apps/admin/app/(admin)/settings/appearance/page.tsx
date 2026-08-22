@@ -7,14 +7,11 @@ import { Check, LoaderCircle, RotateCcw } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiErrorMessage } from '@/lib/api-error';
 import { Button } from '@/components/ui/button';
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { PageHeader } from '@/components/admin/page-header';
+import { useAdminUser } from '@/components/auth/admin-guard';
+import { BrandAssets } from '@/components/settings/brand-assets';
 
 /**
  * The storefront accent, as a superadmin lever (owner, 2026-08-17 — born of
@@ -36,6 +33,7 @@ const PRESETS: { name: string; hex: string }[] = [
 
 export default function AppearancePage() {
   const queryClient = useQueryClient();
+  const me = useAdminUser();
 
   const brand = useQuery({
     queryKey: ['admin', 'brand-color'],
@@ -77,8 +75,15 @@ export default function AppearancePage() {
     <div className="flex flex-col gap-5">
       <PageHeader
         title="Appearance"
-        description="The accent colour the customer storefront and dashboard wear. Contrast is governed automatically — any hue stays readable."
+        description="How the platform looks to everyone outside it — the marks on every website surface, and the accent the storefront wears."
       />
+
+      {/* Logos live beside the accent because they are the same decision:
+          what the platform looks like. A separate screen would be one more
+          place to look for the same thing. */}
+      <div className="max-w-2xl">
+        <BrandAssets canEdit={me.role === 'superadmin'} />
+      </div>
 
       <Card className="max-w-2xl">
         <CardHeader>
@@ -100,9 +105,7 @@ export default function AppearancePage() {
                     className="size-10 rounded-full border border-border inline-flex items-center justify-center group-hover:scale-105 transition-transform"
                     style={{
                       background:
-                        preset.hex === ''
-                          ? 'oklch(0.48 0.12 195)'
-                          : preset.hex,
+                        preset.hex === '' ? 'oklch(0.48 0.12 195)' : preset.hex,
                     }}
                   >
                     {selected && <Check className="size-4 text-white" />}
@@ -140,7 +143,9 @@ export default function AppearancePage() {
           <div className="flex items-center gap-2.5">
             <Button
               disabled={!dirty || !validHex || save.isPending}
-              onClick={() => save.mutate(value === '' ? null : value.toLowerCase())}
+              onClick={() =>
+                save.mutate(value === '' ? null : value.toLowerCase())
+              }
             >
               {save.isPending && <LoaderCircle className="animate-spin" />}
               Save
