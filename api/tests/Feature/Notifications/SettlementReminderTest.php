@@ -156,27 +156,31 @@ it('stays silent on day 9 when the preview says no discount is earnable', functi
     expect(MerchantNotice::query()->count())->toBe(0);
 });
 
-// -------------------------------------------------------- settlement_due_soon
+// ------------------------------------------- days 13 and 14 belong to the ladder
 
-it('fires on days 13 and 14 quoting the outstanding total and the overdue date', function () {
+it('leaves days 13 and 14 to the escalation ladder', function () {
+    // `settlement_due_soon` fired on exactly the two mornings
+    // EscalationLadder already sends `urgent_day13` on, from a second
+    // scheduler running at the same hour: two pushes AND two texts a day
+    // saying much the same thing (owner, 2026-08-20). The sweep now keeps
+    // only the discount deadline, which the ladder has no equivalent for.
     Queue::fake();
     [, $owner, $clockStart] = reminderFixture();
     reminderDevice($owner);
 
-    // Day 13: two mornings before the clock (1 Aug + 15d) runs out on 16 Aug.
+    foreach ([13, 14] as $day) {
+        Carbon::setTestNow($clockStart->addDays($day));
+        $this->artisan('manfaa:remind-settlements')->assertExitCode(0);
+    }
+
+    expect(reminderPushes())->toHaveCount(0);
+
+    // The ladder still covers those mornings, so the merchant is not left
+    // in silence — the message simply arrives once.
     Carbon::setTestNow($clockStart->addDays(13));
-    $this->artisan('manfaa:remind-settlements')->assertExitCode(0);
+    $this->artisan('manfaa:escalate')->assertExitCode(0);
 
-    $push = reminderPushes()->sole();
-    expect($push['key'])->toBe('settlement_due_soon')
-        ->and($push['body'])->toBe('MVR 27.50 becomes overdue on 16 Aug 2026. Settle before then to stay in good standing.');
-
-    // Day 14: the "1 day left" morning fires again — a new cycle-day.
-    Carbon::setTestNow($clockStart->addDays(14));
-    $this->artisan('manfaa:remind-settlements')->assertExitCode(0);
-
-    expect(reminderPushes())->toHaveCount(2)
-        ->and(MerchantNotice::query()->where('type', 'settlement_due_soon')->count())->toBe(2);
+    expect(reminderPushes()->sole()['key'])->toBe('urgent_day13');
 });
 
 it('sends nothing new when re-run the same day', function () {
@@ -184,7 +188,8 @@ it('sends nothing new when re-run the same day', function () {
     [, $owner, $clockStart] = reminderFixture();
     reminderDevice($owner);
 
-    Carbon::setTestNow($clockStart->addDays(13));
+    // Day 9 — the discount deadline, the sweep's only remaining moment.
+    Carbon::setTestNow($clockStart->addDays(9));
     $this->artisan('manfaa:remind-settlements')->assertExitCode(0);
     $this->artisan('manfaa:remind-settlements')->assertExitCode(0);
 
@@ -212,12 +217,11 @@ it('computes its day thresholds from the live platform settings', function () {
     $this->artisan('manfaa:remind-settlements')->assertExitCode(0);
     expect(reminderPushes()->sole()['key'])->toBe('prompt_discount_expiring');
 
-    // Due-soon moves out to days 18/19, quoting 1 Aug + 20d = 21 Aug.
+    // And nothing at the old due-soon mornings: those are the ladder's.
     Carbon::setTestNow($clockStart->addDays(18));
     $this->artisan('manfaa:remind-settlements')->assertExitCode(0);
 
-    $dueSoon = reminderPushes()->where('key', 'settlement_due_soon')->sole();
-    expect($dueSoon['body'])->toContain('21 Aug 2026');
+    expect(reminderPushes()->where('key', 'settlement_due_soon'))->toHaveCount(0);
 });
 
 // ----------------------------------------------------------- ladder to push
@@ -258,12 +262,15 @@ it('keeps the body English for a Dhivehi device, localising only the title', fun
     reminderDevice($owner, locale: 'dv');
     app()->setLocale('dv');
 
-    Carbon::setTestNow($clockStart->addDays(13));
+    // Day 9 — the discount deadline, the sweep's only remaining moment.
+    Carbon::setTestNow($clockStart->addDays(9));
     $this->artisan('manfaa:remind-settlements')->assertExitCode(0);
 
     $push = reminderPushes()->sole();
-    expect($push['title'])->toBe('ސުންގަޑި ކައިރިވަނީ')
-        ->and($push['body'])->toBe('MVR 27.50 becomes overdue on 16 Aug 2026. Settle before then to stay in good standing.');
+    // Title localised, body English: the money and the dates are the same
+    // figures the settlement screen shows.
+    expect($push['title'])->toBe(NotificationTemplateKey::PromptDiscountExpiring->pushTitle()['dv'])
+        ->and($push['body'])->toContain('MVR');
 });
 
 it('reaches only staff holding settlements.view', function () {
@@ -283,7 +290,7 @@ it('reaches only staff holding settlements.view', function () {
     )->create();
     reminderDevice($cashier);
 
-    Carbon::setTestNow($clockStart->addDays(13));
+    Carbon::setTestNow($clockStart->addDays(9));
     $this->artisan('manfaa:remind-settlements')->assertExitCode(0);
 
     // A deadline reaching a till that cannot open Settlements is noise.
@@ -295,16 +302,16 @@ it('caches the reminder templates as attributes, never models', function () {
     [, $owner, $clockStart] = reminderFixture();
     reminderDevice($owner);
 
-    Carbon::setTestNow($clockStart->addDays(13));
+    Carbon::setTestNow($clockStart->addDays(9));
     $this->artisan('manfaa:remind-settlements')->assertExitCode(0);
 
     // The 2026-08-17 poisoning incident: a cached MODEL deserialises as
     // __PHP_Incomplete_Class under another build. The slot must hold a
     // plain attribute array.
-    $cached = Cache::get('notification_template:v1:'.NotificationTemplateKey::SettlementDueSoon->value);
+    $cached = Cache::get('notification_template:v1:'.NotificationTemplateKey::PromptDiscountExpiring->value);
 
     expect($cached)->toBeArray()
-        ->and($cached['key'])->toBe('settlement_due_soon')
+        ->and($cached['key'])->toBe('prompt_discount_expiring')
         ->and($cached['body_en'])->toContain('{{amount}}');
 });
 

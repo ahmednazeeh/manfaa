@@ -57,6 +57,7 @@ final class HomeController extends Controller
             'data' => [
                 'customer' => [
                     'name' => $customer->name,
+                    'name_dv' => $customer->name_dv,
                     // The code and its QR are the app's whole job at a till.
                     'customer_code' => $customer->customer_code,
                     // Null until a picture is set; the top bar's circle.

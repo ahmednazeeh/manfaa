@@ -47,4 +47,31 @@ final class LinePricingException extends RuntimeException
             $eligibleLaari,
         ));
     }
+
+    /**
+     * An id that is not one of this merchant's categories.
+     *
+     * Says only that WE do not know it, never whether it exists elsewhere —
+     * another merchant's id must be indistinguishable from a made-up one.
+     */
+    public static function unknownCategoryId(int $id): self
+    {
+        return new self(
+            'unknown_category',
+            sprintf('No product category with id %d exists for this merchant.', $id),
+        );
+    }
+
+    /** Both identifiers sent, and they name different categories. */
+    public static function conflictingCategoryLine(string $slug, int $id): self
+    {
+        return new self(
+            'conflicting_category',
+            sprintf(
+                'A line sent both category "%s" and category_id %d, and they name different categories. Send one.',
+                $slug,
+                $id,
+            ),
+        );
+    }
 }

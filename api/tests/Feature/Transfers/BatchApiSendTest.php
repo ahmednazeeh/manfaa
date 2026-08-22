@@ -387,3 +387,119 @@ it('will not sweep the same batch twice at once', function (): void {
     expect((new SendMerchantPayoutBatchViaApi(7))->middleware()[0]->key)
         ->toBe('settlement-run:7');
 });
+
+/** Sweep a one-row batch and hand back that row, refreshed. */
+function sendOneAndFetch(): PayoutItem
+{
+    $batch = approvedBatch(1);
+    app(BatchApiSender::class)->sendCustomerBatch($batch, TransferProfileRef::resolve());
+
+    return $batch->items()->firstOrFail();
+}
+
+/* ------------------------------------------------------------------ *
+ * The shapes the bank ACTUALLY sends.
+ *
+ * Everything above this line fakes `status: 'success'` — a spelling this
+ * client invented and the upstream has never used. It passed for months
+ * while the real answer, `success: true` with `status: 'completed'`, fell
+ * through to "the bank answered in a way we do not recognise". The first
+ * live transfer (MNF000003, 2026-08-20) moved MVR 200.00 and was filed as
+ * unrecognised, with no bank reference recorded against a paid payout.
+ *
+ * These use the real bodies, verbatim from the upstream's own responses.
+ * ------------------------------------------------------------------ */
+
+it('reads a plain profile\'s real success body', function () {
+    // faisanet, faisanet2, faisanet3.
+    Http::fake(['*' => Http::response([
+        'success' => true,
+        'status' => 'completed',
+        'trx_id' => '804759601',
+        'message' => 'Transfer completed successfully',
+        'account_name' => 'Ahmed Nazeeh',
+        'name_source' => 'bank',
+    ], 200)]);
+
+    $item = sendOneAndFetch();
+
+    expect($item->state)->toBe(PayoutItemState::Paid);
+    expect($item->bank_reference)->toBe('804759601');
+});
+
+it('reads a dual-control profile\'s real success body', function () {
+    // faisanet4 answers with three extra fields on success. `trx_id` and
+    // `message` come from the APPROVAL step, not the submit.
+    Http::fake(['*' => Http::response([
+        'success' => true,
+        'status' => 'completed',
+        'pending_approval' => false,
+        'approval_id' => 'rec_4417',
+        'approval' => ['status' => 'approved', 'approved_by' => 'second'],
+        'trx_id' => '804759612',
+        'message' => 'Approved and completed',
+        'account_name' => 'Ahmed Nazeeh',
+        'name_source' => 'bank',
+    ], 200)]);
+
+    $item = sendOneAndFetch();
+
+    // The money moved: paid, carrying the APPROVAL's reference.
+    expect($item->state)->toBe(PayoutItemState::Paid);
+    expect($item->bank_reference)->toBe('804759612');
+});
+
+it('does not mistake a dual-control SUCCESS for one still awaiting approval',
+    function () {
+        // The trap: a completed dual-control transfer carries an
+        // `approval_id` exactly like a parked one. Only `pending_approval`
+        // separates them, so keying off the id would park a paid transfer.
+        Http::fake(['*' => Http::response([
+            'success' => true,
+            'status' => 'completed',
+            'pending_approval' => false,
+            'approval_id' => 'rec_4417',
+            'trx_id' => '804759612',
+        ], 200)]);
+
+        expect(sendOneAndFetch()->state)->toBe(PayoutItemState::Paid);
+    });
+
+it('still parks a transfer that IS waiting for a second approver', function () {
+    Http::fake(['*' => Http::response([
+        'success' => true,
+        'status' => 'pending_approval',
+        'pending_approval' => true,
+        'approval_id' => 'rec_4418',
+        'trx_id' => '',
+    ], 200)]);
+
+    $item = sendOneAndFetch();
+
+    // A customer row records a park as Sent-with-a-reason rather than a
+    // state of its own; what matters here is that it is NOT treated as
+    // completed and carries no bank reference.
+    expect($item->state)->toBe(PayoutItemState::Sent);
+    expect($item->failure_reason)->toContain('second approver');
+    expect($item->failure_reason)->toContain('rec_4418');
+    expect($item->bank_reference)->toBeIn([null, '']);
+});
+
+it('adopts the reference when the upstream reports a completed duplicate',
+    function () {
+        // The 409 path carried the same invented spelling, so a repeat of an
+        // already-paid transfer read as "a previous attempt failed".
+        Http::fake(['*' => Http::response([
+            'error' => 'duplicate',
+            'existing' => [
+                'success' => true,
+                'status' => 'completed',
+                'trx_id' => '804759601',
+            ],
+        ], 409)]);
+
+        $item = sendOneAndFetch();
+
+        expect($item->state)->toBe(PayoutItemState::Paid);
+        expect($item->bank_reference)->toBe('804759601');
+    });

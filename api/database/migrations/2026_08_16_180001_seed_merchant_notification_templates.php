@@ -22,10 +22,6 @@ return new class extends Migration
      * @var array<string, array{en: string, dv: string}>
      */
     private const SEED = [
-        'settlement_due' => [
-            'en' => 'Settlement {{reference}}: transfer {{amount}} to Manfaa, then upload your receipt.',
-            'dv' => 'ސެޓްލްމަންޓް {{reference}}: މަންފާއަށް {{amount}} ފޮނުވުމަށްފަހު ރަސީދު އަޕްލޯޑް ކުރައްވާ.',
-        ],
         'settlement_accepted' => [
             'en' => 'Settlement {{reference}} is paid off. Thank you.',
             'dv' => 'ސެޓްލްމަންޓް {{reference}} ދައްކާ ނިމިއްޖެ. ޝުކުރިއްޔާ.',

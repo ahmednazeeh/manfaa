@@ -118,6 +118,12 @@ final readonly class MerchantPayoutBuilder
     {
         return Suborder::query()
             ->join('merchants', 'merchants.id', '=', 'suborders.merchant_id')
+            // The customer's money must have ARRIVED. Without this a shop
+            // could be paid for an order nobody ever paid for — deliver it,
+            // wait out the validation window, and the batch wires real
+            // money against a transfer that never happened.
+            ->join('orders', 'orders.id', '=', 'suborders.order_id')
+            ->where('orders.payment_state', 'verified')
             ->where('suborders.state', 'delivered')
             ->whereNull('suborders.payout_item_id')
             ->where('suborders.payable_to_merchant_laari', '>', 0)

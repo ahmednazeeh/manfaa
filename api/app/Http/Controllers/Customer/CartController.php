@@ -52,7 +52,22 @@ final class CartController extends Controller
         $cart = $this->cart($request);
         $item = $cart->items()->firstOrNew(['branch_product_id' => $listing->id]);
 
-        $item->qty = (int) $item->qty + $validated['qty'];
+        $wanted = (int) $item->qty + $validated['qty'];
+
+        // Against the WANTED total, not against one. Stock was checked as
+        // "is there any", so a basket could hold a thousand of a shelf that
+        // held three — and the order's value, and therefore its refund, had
+        // no ceiling at all.
+        if (! $listing->canSupply($wanted)) {
+            return new JsonResponse([
+                'message' => $listing->stock_qty === null
+                    ? 'That item is not available right now.'
+                    : sprintf('Only %d left at this shop.', (int) $listing->stock_qty),
+                'code' => 'insufficient_stock',
+            ], 409);
+        }
+
+        $item->qty = $wanted;
         // Snapshot the price it went in at, so a later change can be SAID.
         $item->unit_price_laari = (int) $listing->price_laari;
         $item->save();
@@ -74,6 +89,19 @@ final class CartController extends Controller
             $row->delete();
 
             return $this->respond($request);
+        }
+
+        // The stepper goes through here, so the ceiling has to be here too —
+        // guarding only the ADD path would leave the same hole one tap away.
+        $listing = $row->listing;
+
+        if ($listing === null || ! $listing->canSupply($validated['qty'])) {
+            return new JsonResponse([
+                'message' => $listing?->stock_qty === null
+                    ? 'That item is not available right now.'
+                    : sprintf('Only %d left at this shop.', (int) $listing->stock_qty),
+                'code' => 'insufficient_stock',
+            ], 409);
         }
 
         $row->forceFill(['qty' => $validated['qty']])->save();

@@ -7,7 +7,9 @@ use App\Models\Merchant;
 use App\Models\MerchantBranch;
 use App\Models\MerchantMarketplaceProfile;
 use App\Models\MerchantRate;
+use App\Models\Order;
 use App\Models\Product;
+use App\Models\Suborder;
 use App\Models\Zone;
 
 /*
@@ -60,5 +62,29 @@ if (! function_exists('vendor')) {
         ]);
 
         return compact('merchant', 'branch', 'product', 'listing');
+    }
+}
+
+if (! function_exists('payFor')) {
+    /**
+     * Mark an order's payment verified, as an admin (or the bank-history
+     * matcher) does before any shop ever sees it.
+     *
+     * Every fulfilment test needs this now: since the 2026-08-19 audit,
+     * nothing may be accepted, advanced, rejected or amended until the money
+     * has actually arrived. Tests that skip it are asserting against a state
+     * a shop is never shown.
+     */
+    function payFor(Suborder $suborder): Suborder
+    {
+        Order::query()
+            ->whereKey($suborder->order_id)
+            ->update([
+                'payment_state' => 'verified',
+                'verified_at' => now(),
+                'state' => 'under_review',
+            ]);
+
+        return $suborder->refresh();
     }
 }

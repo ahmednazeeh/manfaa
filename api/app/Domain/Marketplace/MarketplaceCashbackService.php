@@ -41,6 +41,15 @@ final readonly class MarketplaceCashbackService
             return null;
         }
 
+        // Cashback is a share of money we RECEIVED. The validation sweeper
+        // later confirms these rows on the stated assumption that the
+        // customer had paid us — so if that were ever untrue, the platform
+        // would be paying cashback out of its own pocket on a sale that
+        // never happened.
+        if ($suborder->order?->payment_state !== 'verified') {
+            return null;
+        }
+
         $customer = $suborder->order?->customer;
 
         if ($customer === null || $suborder->cashback_laari <= 0) {

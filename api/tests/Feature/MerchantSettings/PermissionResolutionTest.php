@@ -206,6 +206,13 @@ it('seeds Staff with every surface that carried no gate before permissions exist
         'settlements.view',
         'settlements.preview',
         'wallet.view',
+        // Added deliberately, and later than the rest: the order queue is
+        // counter work — the people who pick and hand over marketplace
+        // orders are the same staff standing at the till. What they still
+        // cannot do is `marketplace.enrol`, which is Manager and above:
+        // committing the business to selling online, and uploading the
+        // owner's identity papers to do it, is not a cashier's call.
+        'marketplace.manage',
     ]);
 
     // Staff is a strict subset of Manager, and Manager reaches none of the

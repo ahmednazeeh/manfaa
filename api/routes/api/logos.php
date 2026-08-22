@@ -48,5 +48,5 @@ Route::get('store-offers/{id}/image', StoreOfferImageController::class)
  */
 Route::get('map/tiles/{z}/{x}/{y}.png', MapTileController::class)
     ->whereNumber(['z', 'x', 'y'])
-    ->middleware('throttle:600,1')
+    ->middleware('throttle:map-tiles')
     ->name('map.tile');

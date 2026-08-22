@@ -74,6 +74,29 @@ return Application::configure(basePath: dirname(__DIR__))
                 | Request::HEADER_X_FORWARDED_PREFIX,
         );
 
+        /*
+         * Only OUR hosts may name this application (security audit
+         * 2026-08-19).
+         *
+         * X-Forwarded-Host is trusted from any client above — that is what
+         * makes the proxy work — which meant a request could declare itself
+         * to be from anywhere, and every absolute URL built with url()
+         * inherited it. The public storefront caches its answers for sixty
+         * seconds, so one poisoned request served attacker-hosted logo and
+         * image URLs to whoever asked next.
+         *
+         * An allowlist fixes it at the right layer: the header stays
+         * trusted for proto and port, and a host we do not serve is refused
+         * outright rather than reflected.
+         */
+        $middleware->trustHosts(at: [
+            'manfaa.app',
+            'www.manfaa.app',
+            'api.manfaa.app',
+            'admin.manfaa.app',
+            'merchant.manfaa.app',
+        ]);
+
         // API-only app: never redirect guests to a (nonexistent) login page —
         // an unauthenticated request without an Accept header would otherwise
         // 500 on route('login'). Null → AuthenticationException → JSON 401.

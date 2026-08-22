@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Domain\Money\Laari;
+use App\Domain\Settlement\SettlementBuilder;
 use App\Domain\Settlement\WalletFunding;
 use App\Models\AdminUser;
 use App\Models\Merchant;
@@ -198,18 +199,23 @@ it('requires the right guard on every route', function () {
     $this->getJson('/api/admin/settlements/1/slip')->assertUnauthorized();
 });
 
-it('keeps the admin fallback: admin-built batch, recorded payment, match', function () {
+it('keeps the admin fallback: payment recorded off a statement, then matched', function () {
+    // ADMIN-BUILT BATCHES ARE GONE (owner, 2026-08-20): only merchants
+    // create settlements, always with a receipt. The endpoint that built one
+    // for them had no client and no settlement had ever reached the state it
+    // produced, so it and its `settlement_due` notification were removed.
+    //
+    // What survives, and is what this covers: a transfer reconciled off a
+    // bank statement. The admin records it against the merchant's own batch
+    // and matches it — no slip, no merchant action.
+    $settlement = app(SettlementBuilder::class)
+        ->submit(app(SettlementBuilder::class)->createDraft($this->fixture->merchant));
+
+    expect($settlement->state->value)->toBe('awaiting_payment');
+
     $this->actingAs($this->admin, 'admin');
 
-    $merchantId = $this->fixture->merchant->id;
-
-    $settlementId = $this->postJson("/api/admin/merchants/{$merchantId}/settlements", ['settle_all' => true])
-        ->assertCreated()
-        ->assertJsonPath('data.state', 'awaiting_payment')
-        ->assertJsonPath('data.amount_due_laari', 11825)
-        ->json('data.id');
-
-    $paymentId = $this->postJson("/api/admin/settlements/{$settlementId}/payments", [
+    $paymentId = $this->postJson("/api/admin/settlements/{$settlement->id}/payments", [
         'amount' => 11825,
         'bank_ref' => 'BML-FALLBACK-1',
         'slip_path' => 'reconciled-from-statement',
@@ -221,4 +227,14 @@ it('keeps the admin fallback: admin-built batch, recorded payment, match', funct
     $this->postJson("/api/admin/payments/{$paymentId}/match")
         ->assertOk()
         ->assertJsonPath('data.state', 'settled');
+});
+
+it('no longer lets an admin raise a settlement for a merchant', function () {
+    // The route is gone, not merely unused: only merchants create
+    // settlements now, and the code says so rather than the convention.
+    $this->actingAs($this->admin, 'admin');
+
+    $this->postJson("/api/admin/merchants/{$this->fixture->merchant->id}/settlements", [
+        'settle_all' => true,
+    ])->assertNotFound();
 });

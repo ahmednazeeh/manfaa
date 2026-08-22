@@ -5,8 +5,10 @@ declare(strict_types=1);
 use App\Http\Controllers\Customer\ActivityController;
 use App\Http\Controllers\Customer\AddressController;
 use App\Http\Controllers\Customer\AvatarController;
+use App\Http\Controllers\Mobile\CustomerProfileController;
 use App\Http\Controllers\Customer\CartController;
 use App\Http\Controllers\Customer\FavouriteController;
+use App\Http\Controllers\Customer\MarketSearchController;
 use App\Http\Controllers\Customer\OrderController as MarketOrderController;
 use App\Http\Controllers\Customer\WalletController;
 use App\Http\Controllers\Devices\CustomerDevicesController;
@@ -200,6 +202,9 @@ Route::prefix('mobile/v1')
                     // One timeline: marketplace orders AND cashback.
                     Route::get('activity', [ActivityController::class, 'index']);
 
+                    Route::get('search', MarketSearchController::class);
+                    Route::get('products/{branchProduct}', [MarketSearchController::class, 'show'])
+                        ->whereNumber('branchProduct');
                     Route::get('favourites', [FavouriteController::class, 'index']);
                     Route::post('favourites/{branch}', [FavouriteController::class, 'toggle'])
                         ->whereNumber('branch')->middleware('throttle:120,1');
@@ -231,6 +236,12 @@ Route::prefix('mobile/v1')
                 // Reading the picture is the public capability URL in
                 // customer.php — the app's image loader sends no bearer
                 // token, so the URL itself must carry the authorisation.
+                // Correcting the Thaana name a model wrote at registration.
+                // Throttled like the other self-service writes: it is a typo
+                // fix, not something anyone does in a loop.
+                Route::patch('profile', [CustomerProfileController::class, 'update'])
+                    ->middleware('throttle:20,1');
+
                 Route::post('avatar', [AvatarController::class, 'store'])
                     ->middleware('throttle:10,1,mobile-avatar-upload');
                 Route::delete('avatar', [AvatarController::class, 'destroy'])
@@ -295,11 +306,28 @@ Route::prefix('mobile/v1')
                  * store that is not active has no business fulfilling.
                  */
                 Route::prefix('marketplace')
-                    ->middleware(['marketplace', 'merchant.can:marketplace.manage'])
+                    // EnsureMerchantApproved matches the web routes exactly
+                    // (routes/api/marketplace.php): a store that is not
+                    // trading has no business working a queue or a shelf,
+                    // and the app was the one door that did not say so.
+                    ->middleware([
+                        'marketplace',
+                        'merchant.can:marketplace.manage',
+                        EnsureMerchantApproved::class,
+                    ])
                     ->group(function (): void {
                         // Whether this store sells at all, which is what the
                         // app needs before it draws an Orders tab.
                         Route::get('enrolment', [MarketplaceEnrolmentController::class, 'show']);
+                        // Applying, from the phone. A shopkeeper who cannot
+                        // find how to join cannot join — pointing at a
+                        // desktop portal is an answer, not a door.
+                        Route::post('enrolment', [MarketplaceEnrolmentController::class, 'enrol'])
+                            ->middleware('merchant.can:marketplace.enrol');
+                        Route::post('documents', [MarketplaceEnrolmentController::class, 'upload'])
+                            ->middleware(['merchant.can:marketplace.enrol', 'throttle:20,1']);
+                        Route::post('submit', [MarketplaceEnrolmentController::class, 'submit'])
+                            ->middleware(['merchant.can:marketplace.enrol', 'throttle:20,1']);
 
                         Route::get('orders', [MerchantOrderController::class, 'index']);
                         Route::get('orders/{suborder}', [MerchantOrderController::class, 'show'])

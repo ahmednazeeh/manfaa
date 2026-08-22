@@ -39,6 +39,10 @@ final class SessionController extends Controller
             'data' => [
                 'id' => $customer->getKey(),
                 'name' => $customer->name,
+                // Their name in Thaana. Null until the queued writer fills it
+                // in, and null forever if the model could not — the clients
+                // fall back to `name`, never to an empty header.
+                'name_dv' => $customer->name_dv,
                 'customer_code' => $customer->customer_code,
                 'phone' => $customer->phone,
                 // Null until a picture is set. Content-addressed (a new

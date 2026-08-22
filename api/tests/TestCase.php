@@ -3,6 +3,7 @@
 namespace Tests;
 
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
+use Illuminate\Support\Facades\Http;
 
 abstract class TestCase extends BaseTestCase
 {
@@ -54,5 +55,21 @@ abstract class TestCase extends BaseTestCase
             );
         }
 
+        /*
+         * No test may reach the network.
+         *
+         * The transfer profiles tests build carry the REAL bank gateway
+         * (http://10.99.0.1:3005), because that is what the code under test
+         * reads. A targeted fake — Http::fake(['*\/faisanet/history*' => …])
+         * — covers the one URL it names and lets every other call through to
+         * that gateway for real. That is how it was found: the suite sat in
+         * SYN-SENT against the bank, ten seconds a call, because the tunnel
+         * happened to be down. With the tunnel up it would have been talking
+         * to the bank instead.
+         *
+         * preventStrayRequests turns any un-faked call into an immediate
+         * failure naming the URL. A hang becomes a sentence.
+         */
+        Http::preventStrayRequests();
     }
 }

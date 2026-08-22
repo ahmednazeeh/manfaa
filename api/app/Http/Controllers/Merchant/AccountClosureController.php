@@ -149,6 +149,11 @@ class AccountClosureController extends Controller
                 ->where('merchant_id', $store->id)
                 ->update(['is_active' => false]);
 
+            // The STORE's own API credentials, which closure used to leave
+            // live. Staff tokens were revoked below and these were not, so a
+            // POS integration token outlived the business it belonged to.
+            $store->tokens()->delete();
+
             foreach (MerchantUser::query()->where('merchant_id', $store->id)->get() as $staff) {
                 $staff->tokens()->delete();
 

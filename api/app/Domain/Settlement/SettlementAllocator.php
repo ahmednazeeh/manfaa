@@ -11,6 +11,7 @@ use App\Domain\Money\Laari;
 use App\Domain\Notifications\NotificationService;
 use App\Domain\Notifications\NotificationTemplateKey;
 use App\Jobs\PollSettlementPayment;
+use App\Jobs\ReadSettlementReceipt;
 use App\Models\AdminUser;
 use App\Models\Settlement;
 use App\Models\SettlementPayment;
@@ -166,7 +167,16 @@ final class SettlementAllocator
             return;
         }
 
-        DB::afterCommit(fn () => PollSettlementPayment::dispatch((int) $payment->getKey()));
+        DB::afterCommit(function () use ($payment): void {
+            // The slip first: the poll asks whether the bank's payer and
+            // reference appear on it, and it retries for the whole window,
+            // so text landing a few seconds later is still in time.
+            if ($payment->slip_path !== null) {
+                ReadSettlementReceipt::dispatch((int) $payment->getKey());
+            }
+
+            PollSettlementPayment::dispatch((int) $payment->getKey());
+        });
     }
 
     /**
@@ -324,7 +334,16 @@ final class SettlementAllocator
             }
 
             foreach ($newlyAllocated as $line) {
-                $this->allocator->allocate($line, Actor::admin($actor->id), $now);
+                // An automatic match has no admin behind it. `matched_by`
+                // above already stays null for that case; this line did not,
+                // and read `->id` straight off the null — so the whole
+                // auto-match path died the moment it tried to allocate.
+                // `system` is the actor the ledger has for exactly this.
+                $this->allocator->allocate(
+                    $line,
+                    $actor !== null ? Actor::admin($actor->id) : Actor::system(),
+                    $now,
+                );
             }
 
             // Fund the newly allocated total: the pre-posted adjustment credit

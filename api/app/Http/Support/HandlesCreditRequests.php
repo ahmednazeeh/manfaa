@@ -21,6 +21,7 @@ use App\Http\Middleware\EnsureMerchantPermission;
 use App\Models\MerchantUser;
 use App\Models\Transaction;
 use App\Rules\PercentRate;
+use Closure;
 use Illuminate\Http\JsonResponse;
 
 /**
@@ -63,9 +64,32 @@ trait HandlesCreditRequests
             // the merchant's product-category slugs, or null for the
             // default "everything else" bucket. Line amounts must sum to
             // eligible_amount.
-            'lines' => ['sometimes', 'array', 'min:1', 'max:100'],
+            'lines' => [
+                'sometimes', 'array', 'min:1', 'max:100',
+                // Every line must NAME its category — by slug (null meaning
+                // the explicit "everything else" bucket) or by id. Checked
+                // here rather than with required_without, whose wildcard
+                // does not resolve per item and fires on every line.
+                function (string $attribute, mixed $value, Closure $fail): void {
+                    foreach ((array) $value as $index => $line) {
+                        if (! is_array($line)) {
+                            continue;
+                        }
+
+                        if (! array_key_exists('category', $line)
+                            && ! array_key_exists('category_id', $line)) {
+                            $fail(sprintf(
+                                'lines.%s must name a category: send "category" '
+                                .'(the slug, or null for everything else) or "category_id".',
+                                $index,
+                            ));
+                        }
+                    }
+                },
+            ],
             'lines.*' => ['array'],
-            'lines.*.category' => ['present', 'nullable', 'string', 'max:80'],
+            'lines.*.category' => ['sometimes', 'nullable', 'string', 'max:80'],
+            'lines.*.category_id' => ['sometimes', 'nullable', 'integer', 'min:1'],
             'lines.*.amount_laari' => ['required', 'integer', 'min:1'],
         ];
     }

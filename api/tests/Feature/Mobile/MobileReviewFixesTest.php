@@ -73,7 +73,7 @@ it('runs no query inside the caller transaction', function () {
     MerchantUser::factory()->for($merchant)->owner()->create();
 
     DB::table('notification_templates')
-        ->where('key', NotificationTemplateKey::SettlementDue->value)
+        ->where('key', NotificationTemplateKey::SettlementAccepted->value)
         ->update(['active' => true]);
 
     $duringTransaction = null;
@@ -83,7 +83,7 @@ it('runs no query inside the caller transaction', function () {
         DB::flushQueryLog();
 
         app(NotificationService::class)->sendToMerchantStaff(
-            NotificationTemplateKey::SettlementDue,
+            NotificationTemplateKey::SettlementAccepted,
             $merchant,
             ['amount' => 'MVR 1.00', 'reference' => 'ST-1'],
             Permission::SettlementsView,

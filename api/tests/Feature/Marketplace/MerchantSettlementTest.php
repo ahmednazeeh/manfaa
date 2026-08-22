@@ -66,7 +66,7 @@ function settledOrder($test, int $qty = 3, int $daysAgo = 10): Suborder
     $test->actingAs($test->customer, 'customer')
         ->postJson('/api/customer/orders', ['payment_method' => 'bml'])->assertCreated();
 
-    $sub = Suborder::query()->latest('id')->firstOrFail();
+    $sub = payFor(Suborder::query()->latest('id')->firstOrFail());
 
     $test->actingAs($test->shopkeeper, 'merchant');
     $test->postJson("/api/merchant/marketplace/orders/{$sub->id}/accept")->assertOk();
@@ -227,7 +227,7 @@ it('sends through the bank API with the same idempotency key', function () {
 
     $this->actingAs($this->admin, 'admin')
         ->postJson("/api/admin/merchant-settlements/{$batch->id}/items/{$item->id}/send")
-        ->assertOk()->assertJsonPath('data.state', 'sent');
+        ->assertAccepted()->assertJsonPath('data.state', 'sent');
 
     Http::assertSent(fn ($request): bool => $request['internal_ref'] === $item->internal_ref);
 });
@@ -251,7 +251,8 @@ it('never re-sends a parked merchant transfer', function () {
     $send = fn () => $this->actingAs($this->admin, 'admin')
         ->postJson("/api/admin/merchant-settlements/{$batch->id}/items/{$item->id}/send");
 
-    $send()->assertOk()->assertJsonPath('data.state', 'pending_approval');
+    // 202: the send is queued now rather than performed in the request.
+    $send()->assertAccepted()->assertJsonPath('data.state', 'pending_approval');
 
     // Alive, not failed. A queue record id is not a bank reference.
     expect($item->fresh()->approval_id)->toBe('rec_9')

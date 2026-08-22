@@ -25,6 +25,8 @@ class SettlementPayment extends Model
             'rejected_by' => 'integer',
             'rejected_at' => 'immutable_datetime',
             'auto_matched' => 'boolean',
+            // Every identifier the matched bank credit answered to.
+            'matched_trx_refs' => 'array',
             'matched_score' => 'integer',
             'poll_started_at' => 'immutable_datetime',
             'poll_until' => 'immutable_datetime',

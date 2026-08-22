@@ -157,6 +157,22 @@ final readonly class BatchApiSender
                 'approval_id' => $result->approvalId,
             ])->save();
 
+            // One line per bank call, because reconciling a payment after
+            // the fact needs to know WHICH answer produced it. `duplicate`
+            // is the load-bearing field: it separates "the upstream
+            // recognised our reference and gave back the payment it already
+            // made" from "a second payment was made just now" — and those
+            // look identical in the row afterwards.
+            Log::info('Payout item answered by the bank', [
+                'item' => $locked->id,
+                'internal_ref' => $locked->idempotency_key,
+                'outcome' => $result->outcome->name,
+                'duplicate' => $result->wasDuplicate,
+                'trx_id' => $result->trxId,
+                'approval_id' => $result->approvalId,
+                'error_code' => $result->errorCode,
+            ]);
+
             match ($result->outcome) {
                 // The money moved. Straight down the ledger path a filled
                 // sheet uses.

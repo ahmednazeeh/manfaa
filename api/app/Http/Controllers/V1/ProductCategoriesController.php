@@ -31,10 +31,15 @@ class ProductCategoriesController extends V1Controller
             ->where('active', true)
             ->orderBy('sort')
             ->orderBy('id')
-            ->get(['slug', 'name_en', 'name_dv', 'mode', 'rate_bp']);
+            ->get(['id', 'slug', 'name_en', 'name_dv', 'mode', 'rate_bp']);
 
         return new JsonResponse([
             'data' => $categories->map(fn (MerchantProductCategory $category): array => [
+                // Both identifiers. `category` is the slug and is immutable
+                // once created, so it is a stable key; `category_id` is
+                // there for integrators who would rather store an integer.
+                // Either may be sent on a transaction line.
+                'category_id' => $category->id,
                 'category' => $category->slug,
                 'name_en' => $category->name_en,
                 'name_dv' => $category->name_dv,

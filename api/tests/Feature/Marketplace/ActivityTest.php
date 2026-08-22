@@ -58,7 +58,7 @@ function anOrder($test, int $qty = 2): Suborder
     $test->actingAs($test->customer, 'customer')
         ->postJson('/api/customer/orders', ['payment_method' => 'bml'])->assertCreated();
 
-    return Suborder::query()->latest('id')->firstOrFail();
+    return payFor(Suborder::query()->latest('id')->firstOrFail());
 }
 
 it('merges marketplace orders and cashback into one timeline', function () {

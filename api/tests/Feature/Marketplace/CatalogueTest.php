@@ -8,6 +8,7 @@ use App\Models\BranchProduct;
 use App\Models\Merchant;
 use App\Models\MerchantBranch;
 use App\Models\MerchantChangeRequest;
+use App\Models\MerchantMarketplaceProfile;
 use App\Models\MerchantProductCategory;
 use App\Models\MerchantUser;
 use App\Models\Product;
@@ -29,6 +30,9 @@ beforeEach(function () {
     app(PlatformConfig::class)->set('marketplace_enabled', 1);
 
     $this->merchant = Merchant::factory()->create(['status' => 'active']);
+    // isBuyable() now asks whether the SHOP may sell, not only whether the
+    // shelf has one — so the fixture has to be an approved vendor.
+    MerchantMarketplaceProfile::factory()->for($this->merchant)->create();
     $this->male = MerchantBranch::factory()->for($this->merchant)->create(['name' => 'Malé']);
     $this->hulhumale = MerchantBranch::factory()->for($this->merchant)->create(['name' => 'Hulhumalé']);
     $this->owner = MerchantUser::factory()->for($this->merchant)->owner()->create();
@@ -60,10 +64,10 @@ function listOnShelf($test, int $productId): void
 it('serves the curated aisles a merchant files products under', function () {
     $this->getJson('/api/merchant/marketplace/categories')
         ->assertOk()
-        ->assertJsonPath('data.0.slug', 'rice-grains')
+        ->assertJsonPath('data.marketplace.0.slug', 'rice-grains')
         // Curated, not merchant-invented: otherwise "Oil", "Oils" and
         // "Cooking Oil" become three aisles by the second merchant.
-        ->assertJsonCount(12, 'data');
+        ->assertJsonCount(12, 'data.marketplace');
 });
 
 it('creates a product without queuing anything', function () {

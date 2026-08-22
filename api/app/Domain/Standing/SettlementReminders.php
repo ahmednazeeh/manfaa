@@ -31,19 +31,20 @@ use Illuminate\Support\Facades\DB;
  *   max age, PLAN §1). The saving quoted is the settle-all preview's own
  *   `discount_laari` — the server figure the settlement screen shows — and
  *   a preview that grants nothing sends nothing.
- * - `settlement_due_soon`, the two mornings before the oldest line goes
- *   overdue: age == settlement_due_days − 2 and − 1 (days 13 and 14 on
- *   defaults). The amount is the summed stored integers of everything
- *   payable — the same arithmetic as the dashboard's outstanding total.
+ * `settlement_due_soon` used to live here too, on days 13 and 14 — the same
+ * two mornings EscalationLadder already sends `urgent_day13` on. Merchants
+ * were getting two pushes and two texts a day from two schedulers saying
+ * much the same thing (owner, 2026-08-20). The ladder is the single
+ * escalation authority now; this file keeps only the discount deadline,
+ * which the ladder has no equivalent for.
  *
- * Both thresholds come from PlatformConfig at run time, never constants.
+ * The threshold comes from PlatformConfig at run time, never a constant.
  *
  * Dedupe is EscalationLadder's mechanism — an evidenced merchant_notices
- * row consulted before sending — scoped per BUSINESS DAY rather than per
- * cycle, because settlement_due_soon legitimately fires on two consecutive
- * mornings of one cycle. Within a cycle each calendar day maps to exactly
- * one age, so "already sent this business day" IS "already sent for this
- * cycle-day": re-running the command the same day sends nothing new.
+ * row consulted before sending — scoped per BUSINESS DAY. Within a cycle
+ * each calendar day maps to exactly one age, so "already sent this business
+ * day" IS "already sent for this cycle-day": re-running the command the
+ * same day sends nothing new.
  */
 final readonly class SettlementReminders
 {
@@ -90,10 +91,6 @@ final readonly class SettlementReminders
                 $sent++;
             }
 
-            if (($age === $dueDays - 2 || $age === $dueDays - 1)
-                && $this->remindDueSoon((int) $row->merchant_id, (int) $row->outstanding_laari, $clockStart, $dueDays, $age, $today, $timezone)) {
-                $sent++;
-            }
         }
 
         return $sent;
@@ -145,48 +142,6 @@ final readonly class SettlementReminders
         $this->notifications->sendToMerchantStaff($key, $merchant, [
             'amount' => NotificationService::money($saving),
             'rate' => self::rate((string) $preview['discount']['rate_percent']),
-        ], Permission::SettlementsView);
-
-        return true;
-    }
-
-    /**
-     * "MVR X becomes overdue on DATE." — X the summed stored integers of
-     * everything payable, DATE the business-timezone day the oldest line's
-     * 15-day clock runs out.
-     */
-    private function remindDueSoon(
-        int $merchantId,
-        int $outstandingLaari,
-        CarbonImmutable $clockStart,
-        int $dueDays,
-        int $age,
-        CarbonImmutable $today,
-        string $timezone,
-    ): bool {
-        $key = NotificationTemplateKey::SettlementDueSoon;
-
-        if ($this->alreadySentToday($merchantId, $key->value, $today)) {
-            return false;
-        }
-
-        $merchant = Merchant::query()->find($merchantId);
-
-        if ($merchant === null) {
-            return false;
-        }
-
-        $overdueOn = $clockStart->setTimezone($timezone)->startOfDay()->addDays($dueDays);
-
-        $this->notices->record($merchantId, $key->value, [
-            'age_days' => $age,
-            'outstanding_laari' => $outstandingLaari,
-            'overdue_on' => $overdueOn->toDateString(),
-        ], channel: 'push');
-
-        $this->notifications->sendToMerchantStaff($key, $merchant, [
-            'amount' => NotificationService::money($outstandingLaari),
-            'date' => $overdueOn->format('j M Y'),
         ], Permission::SettlementsView);
 
         return true;

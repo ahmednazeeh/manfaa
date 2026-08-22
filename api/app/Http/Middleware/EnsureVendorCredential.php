@@ -35,6 +35,33 @@ final class EnsureVendorCredential
             return new JsonResponse(['message' => 'Unauthenticated.'], 401);
         }
 
+        // The token proves WHO, never that they may still trade. A store
+        // that closed or was rejected keeps its Sanctum tokens — closure
+        // revokes staff tokens and not the store's own — and those tokens
+        // never expire. Without this an ex-merchant's credential kept
+        // reading customer names and reversing transactions forever:
+        // TransactionsController refused a non-trading store on its own, but
+        // reverse, the rate read and the customer lookup did not, so the
+        // check belongs here, once, in front of all four.
+        //
+        // Suspended is deliberately still allowed in: a suspended store must
+        // be able to settle what it owes, and §7 leniency records its sales
+        // as ineligible rather than refusing them.
+        //
+        // The refusal is the PUBLISHED one — 403 forbidden_ability with the
+        // exact wording quoted in docs/openapi.yaml and the integration
+        // guide — not a 401. The token is perfectly valid; what is missing
+        // is the merchant's standing, and telling a vendor their credential
+        // is bad sends them rotating a key that was never the problem.
+        if (! in_array($user->status, ['active', 'suspended'], true)) {
+            return new JsonResponse([
+                'error' => [
+                    'code' => 'forbidden_ability',
+                    'message' => 'This merchant account is not active on the platform.',
+                ],
+            ], 403);
+        }
+
         return $next($request);
     }
 }

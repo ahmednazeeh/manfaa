@@ -43,18 +43,55 @@ final readonly class LineSetParser
             fn (?string $slug): bool => $slug !== null,
         )));
 
-        $categories = MerchantProductCategory::query()
+        $ids = array_values(array_unique(array_filter(
+            array_map(
+                fn (array $row): ?int => isset($row['category_id']) ? (int) $row['category_id'] : null,
+                $raw,
+            ),
+            fn (?int $id): bool => $id !== null,
+        )));
+
+        // ONE query covering both ways of naming a category. Scoped to this
+        // merchant either way — an id from another merchant must be as
+        // invisible as a slug from one, or the identifier becomes an oracle
+        // for other people's categories.
+        $owned = MerchantProductCategory::query()
             ->where('merchant_id', $merchant->id)
-            ->whereIn('slug', $slugs)
-            ->get()
-            ->keyBy('slug');
+            ->where(fn ($query) => $query
+                ->whereIn('slug', $slugs)
+                ->orWhereIn('id', $ids))
+            ->get();
+
+        $categories = $owned->keyBy('slug');
+        $byId = $owned->keyBy('id');
 
         $seen = [];
         $sum = 0;
         $lines = [];
 
         foreach ($raw as $row) {
+            $id = isset($row['category_id']) ? (int) $row['category_id'] : null;
             $slug = $row['category'] ?? null;
+
+            // Both, and disagreeing, is a caller bug worth naming rather
+            // than silently preferring one.
+            if ($id !== null && $slug !== null) {
+                $named = $byId->get($id);
+
+                if ($named === null || $named->slug !== $slug) {
+                    throw LinePricingException::conflictingCategoryLine($slug, $id);
+                }
+            }
+
+            if ($id !== null) {
+                $resolved = $byId->get($id)
+                    ?? throw LinePricingException::unknownCategoryId($id);
+
+                // Keyed by slug so a line sent by id and a line sent by slug
+                // for the SAME category still collide as a duplicate.
+                $slug = $resolved->slug;
+            }
+
             $key = $slug ?? "\0default";
 
             if (isset($seen[$key])) {

@@ -79,6 +79,9 @@ class NotificationTemplatesController extends Controller
             'key' => $key->value,
             'label' => $key->label(),
             'description' => $key->description(),
+            // The panel hides these while the marketplace is off — nothing
+            // can send them, and a screen full of dead moments misleads.
+            'marketplace_only' => $key->isMarketplace(),
             'body_en' => $template->body_en,
             'active' => $template->active,
             'variables' => collect($key->variables())

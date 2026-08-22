@@ -460,31 +460,16 @@ final class SettlementBuilder
                 return $settlement;
             }
 
-            $settlement->forceFill(['state' => SettlementState::AwaitingPayment])->save();
-
-            // The store now owes a transfer, and the prompt-payment discount
-            // is money with a clock on it.
+            // Reached only by a caller that submits WITHOUT a receipt. The
+            // one such path — the admin's storeForMerchant — was removed on
+            // 2026-08-20, so nothing in the product lands here today; the
+            // state and this branch remain because submit() is shared and a
+            // future caller could legitimately leave a batch owing.
             //
-            // GATED ON COMMITTED STATE, because submit() is reused by paths
-            // where the batch never rests in awaiting_payment:
-            // createAndSubmitWithReceipt() moves it straight to
-            // payment_review, and createAndSettleFromWallet() settles it
-            // outright. Telling a store to go and transfer money for a batch
-            // it has already paid produces a duplicate bank transfer landing
-            // as an unmatched deposit. The check runs after the commit, so
-            // it sees the state the caller actually left behind.
-            $this->notifications->sendToMerchantStaff(
-                NotificationTemplateKey::SettlementDue,
-                $settlement->merchant,
-                [
-                    'amount' => NotificationService::money((int) $settlement->amount_due_laari),
-                    'reference' => (string) $settlement->reference,
-                ],
-                Permission::SettlementsView,
-                when: fn (): bool => Settlement::query()
-                    ->whereKey($settlement->getKey())
-                    ->value('state') === SettlementState::AwaitingPayment->value,
-            );
+            // Its `settlement_due` notification went with that endpoint: a
+            // moment nothing can produce is a message nobody can receive,
+            // and it sat on the settings page implying otherwise.
+            $settlement->forceFill(['state' => SettlementState::AwaitingPayment])->save();
 
             return $settlement;
         });

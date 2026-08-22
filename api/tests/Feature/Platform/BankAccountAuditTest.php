@@ -69,20 +69,26 @@ it('stamps the acting superadmin on create and update', function () {
     expect($row->created_by)->toBe($creator->id)->and($row->updated_by)->toBe($editor->id);
 });
 
-it('refuses changing account_no in place — replacement is create-new plus deactivate-old', function () {
+it('lets an account number be corrected in place, and still supports replacement', function () {
     $superadmin = AdminUser::factory()->create(['role' => 'superadmin']);
     $this->actingAs($superadmin, 'admin');
 
     $id = $this->postJson('/api/admin/platform/bank-accounts', bankAuditPayload())
         ->assertCreated()->json('data.id');
 
-    // An actual mutation is refused and nothing changes.
+    // OWNER DECISION (2026-08-19), reversing an earlier immutability rule:
+    // the account number is always updatable. A typed-in account number gets
+    // typed wrong, and forcing a correction through create-new-plus-
+    // deactivate-old leaves a dead row that never received anything and an
+    // operator wondering which of two accounts is real.
     $this->patchJson("/api/admin/platform/bank-accounts/{$id}", ['account_no' => '6660000999999'])
-        ->assertStatus(422);
+        ->assertOk()
+        ->assertJsonPath('data.account_no', '6660000999999');
 
-    expect(PlatformBankAccount::query()->findOrFail($id)->account_no)->toBe('7730000123456');
+    expect(PlatformBankAccount::query()->findOrFail($id)->account_no)->toBe('6660000999999');
 
-    // Echoing the UNCHANGED number back (edit forms do) still works.
+    // Put it back, and change a sibling field in the same breath — edit
+    // forms echo every field, changed or not.
     $this->patchJson("/api/admin/platform/bank-accounts/{$id}", [
         'account_no' => '7730000123456',
         'account_name' => 'Manfaa Pvt Ltd (Operations)',

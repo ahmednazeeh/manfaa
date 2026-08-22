@@ -49,10 +49,38 @@ class BranchProduct extends Model
      * count cappuccinos. Zero is the opposite statement — counted, and there
      * is none — which is why the two cannot share a column meaning.
      */
+    /**
+     * Can a shopper actually buy this, right now?
+     *
+     * Four conditions, and they are genuinely independent (security audit
+     * 2026-08-19). The listing being active says nothing about the SHOP: a
+     * store that closed, was suspended, paused itself, or had its
+     * marketplace approval withdrawn kept selling through the cart, because
+     * only the shelf was ever consulted.
+     */
     public function isBuyable(): bool
     {
-        return $this->state === 'active'
-            && ($this->stock_qty === null || $this->stock_qty > 0);
+        if ($this->state !== 'active') {
+            return false;
+        }
+
+        if ($this->stock_qty !== null && $this->stock_qty <= 0) {
+            return false;
+        }
+
+        $merchant = $this->branch?->merchant;
+
+        return $merchant !== null
+            && $merchant->status === 'active'
+            && $merchant->unpublished_at === null
+            && $merchant->marketplace?->state === 'active';
+    }
+
+    /** As above, for a wanted quantity — the shelf must hold that many. */
+    public function canSupply(int $qty): bool
+    {
+        return $this->isBuyable()
+            && ($this->stock_qty === null || $this->stock_qty >= $qty);
     }
 
     /** Counted, and running out. Drives the "Low stock" chip in products.png. */

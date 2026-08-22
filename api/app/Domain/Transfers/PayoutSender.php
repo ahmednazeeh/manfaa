@@ -141,7 +141,13 @@ final readonly class PayoutSender
         bool $retryable = false,
     ): CustomerPayout {
         $payout->forceFill([
-            'state' => 'failed',
+            // `refunded`, NOT `failed`, when the money goes back. `failed`
+            // is in SENDABLE, so an admin retrying the obvious way would
+            // send a transfer whose amount is already sitting in the
+            // customer's wallet — the same laari out twice. Refunded is
+            // terminal: getting it out again means a fresh withdrawal,
+            // which debits the wallet exactly once.
+            'state' => $retryable ? 'refunded' : 'failed',
             'error_code' => $code,
             'failure_reason' => $message,
             'processed_at' => CarbonImmutable::now(),

@@ -66,8 +66,5 @@ Route::prefix('admin')->middleware('auth:admin')->group(function () {
     Route::post('settlements/{id}/payments', [AdminSettlementController::class, 'storePayment'])->whereNumber('id');
     Route::post('settlements/{id}/reject', [AdminSettlementController::class, 'reject'])->whereNumber('id');
     Route::post('payments/{id}/match', [SettlementPaymentController::class, 'match'])->whereNumber('id');
-    // The documented fallback (PLAN §1): admin-built batch for a merchant who
-    // cannot submit through the panel, landing in awaiting_payment.
-    Route::post('merchants/{merchant}/settlements', [AdminSettlementController::class, 'storeForMerchant'])->whereNumber('merchant');
     Route::post('merchants/{merchant}/wallet/top-ups', [WalletController::class, 'storeTopUp'])->whereNumber('merchant');
 });

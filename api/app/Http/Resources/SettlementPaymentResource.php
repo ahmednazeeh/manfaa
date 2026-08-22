@@ -24,7 +24,29 @@ class SettlementPaymentResource extends JsonResource
             'amount_mvr' => Laari::of($this->amount_laari)->formatMvr(),
             'currency' => $this->currency,
             'method' => $this->method,
+            // What the MERCHANT told us. Left exactly as they typed it —
+            // often nothing, because the slip carries the reference.
             'bank_ref' => $this->bank_ref,
+
+            // What the BANK says, once matched. Deliberately a separate
+            // field rather than backfilled into bank_ref: "the merchant
+            // claimed this" and "we found this in the statement" are
+            // different facts, and collapsing them loses the ability to
+            // tell a confirmed payment from a claimed one.
+            //
+            // `matched_trx_id` is UNIQUE in the database (partial, where not
+            // null), so one bank credit can never settle two payments —
+            // that index, not this field, is what makes dedup safe.
+            'matched_trx_id' => $this->matched_trx_id,
+            // Every identifier that credit answered to. BML files a transfer
+            // under an internal statement id but prints a different reference
+            // on the merchant's slip, so the id we keyed on is often NOT the
+            // one an operator is holding while they reconcile.
+            'matched_trx_refs' => $this->matched_trx_refs ?? [],
+            'matched_payer_name' => $this->matched_payer_name,
+            'matched_score' => $this->matched_score,
+            'matched_by_rule' => $this->matched_by_rule,
+            'auto_matched' => (bool) $this->auto_matched,
             'slip_path' => $this->slip_path,
             // Receipt-first (PLAN §1): the mime and size are what the BYTES
             // said at upload, never the client's filename or Content-Type.

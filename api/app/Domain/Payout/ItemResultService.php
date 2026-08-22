@@ -47,6 +47,7 @@ final readonly class ItemResultService
         private TransitionService $transitions,
         private Postings $postings,
         private NotificationService $notifications,
+        private PaidMerchantNotifier $paidMerchants,
     ) {}
 
     public function accepts(PayoutBatch $batch): bool
@@ -70,6 +71,13 @@ final readonly class ItemResultService
         $item->forceFill([
             'state' => PayoutItemState::Paid,
             'bank_reference' => $reference,
+            // Clear what an earlier attempt left behind. A paid row still
+            // reading "Needs review: the bank answered in a way we do not
+            // recognise" sends somebody chasing a settled payment — which
+            // is exactly what MNF000003 did after it was reconciled on
+            // 2026-08-20.
+            'failure_reason' => null,
+            'error_code' => null,
         ])->save();
 
         foreach (Transaction::query()->where('payout_item_id', $item->id)->orderBy('id')->get() as $transaction) {
@@ -129,6 +137,16 @@ final readonly class ItemResultService
             $batch->forceFill(['state' => PayoutBatchState::PartiallyFailed])->save();
         } elseif ($paid === $total) {
             $batch->forceFill(['state' => PayoutBatchState::Completed])->save();
+        } else {
+            // The pass covered only part of the batch; more outcomes are
+            // still coming, so it is not news yet.
+            return;
         }
+
+        // The run is closed either way. Tell the shops whose customers it
+        // reached — a merchant settled this money weeks ago and has heard
+        // nothing since. Sent once per merchant per batch, and only about
+        // items that actually paid.
+        $this->paidMerchants->notify($batch);
     }
 }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Domain\Customers;
 
+use App\Jobs\WriteCustomerDhivehiName;
 use App\Models\Customer;
 use App\Models\OtpCode;
 use Carbon\CarbonImmutable;
@@ -286,7 +287,17 @@ final readonly class OtpService
                 'signup_token_expires_at' => null,
             ])->save();
 
-            return $this->createCustomer((string) $otp->phone, $name, $password, $now);
+            $customer = $this->createCustomer((string) $otp->phone, $name, $password, $now);
+
+            // Write their name in Thaana (owner, 2026-08-21). AFTER the
+            // commit, not inside it: the queue must not see a customer id
+            // that a rollback is about to take away, and signup must not wait
+            // on — or fail because of — an API call to Anthropic.
+            DB::afterCommit(
+                fn () => WriteCustomerDhivehiName::dispatch((int) $customer->getKey()),
+            );
+
+            return $customer;
         });
     }
 

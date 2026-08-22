@@ -57,11 +57,18 @@ enum Permission: string
     // second one belongs with whoever answers for the shop.
     case StorePublication = 'store.publication';
 
-    // Opening the shop on the marketplace, and everything that follows from
-    // it — enrolment, KYB papers, the catalogue, delivery terms. Separate
-    // from profile.edit because it commits the business to selling online
-    // and to handing us identity documents.
+    // Working the marketplace: the order queue and the shelf. COUNTER work,
+    // so an ordinary cashier holds it — they are the people who pick and
+    // hand over an order.
     case MarketplaceManage = 'marketplace.manage';
+
+    // Committing the BUSINESS to the marketplace: applying, uploading
+    // identity papers, submitting for review. Deliberately a different
+    // permission from the one above (security audit 2026-08-19). Granting
+    // staff the order queue had handed every cashier the authority to enrol
+    // the company and send its registration documents to us — the same
+    // permission was doing two jobs of wildly different weight.
+    case MarketplaceEnrol = 'marketplace.enrol';
     case BrandingUpdate = 'branding.update';
 
     case BranchesView = 'branches.view';
@@ -137,7 +144,8 @@ enum Permission: string
             self::ProfileView => 'View the store profile',
             self::ProfileEdit => 'Edit the store profile',
             self::StorePublication => 'Pause and resume the store on the app',
-            self::MarketplaceManage => 'Manage the marketplace shop',
+            self::MarketplaceManage => 'Work marketplace orders and products',
+            self::MarketplaceEnrol => 'Apply to sell on the marketplace',
             self::BrandingUpdate => 'Change the store logo',
 
             self::BranchesView => 'View branches',
@@ -202,6 +210,7 @@ enum Permission: string
             self::ProfileEdit,
             self::StorePublication,
             self::MarketplaceManage,
+            self::MarketplaceEnrol,
             self::BrandingUpdate,
             self::SetupView,
             self::SetupEdit,

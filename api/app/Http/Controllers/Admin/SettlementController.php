@@ -5,7 +5,6 @@ namespace App\Http\Controllers\Admin;
 use App\Domain\Money\Laari;
 use App\Domain\Settlement\DuplicateBankRefException;
 use App\Domain\Settlement\InvalidSettlementStateException;
-use App\Domain\Settlement\NotEligibleForSettlementException;
 use App\Domain\Settlement\ReceiptSlip;
 use App\Domain\Settlement\SettlementAllocator;
 use App\Domain\Settlement\SettlementBuilder;
@@ -33,10 +32,14 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
  *
  * The receipt-first flow (PLAN §1) makes this queue a review of EVIDENCE:
  * every merchant-created batch arrives in payment_review with a slip
- * attached. Admin-side recording (storePayment) and admin-side batch
- * creation (storeForMerchant) remain as the documented fallback for
- * transfers reconciled off a bank statement, or a merchant who cannot use
- * the panel — that path is the reason awaiting_payment still exists.
+ * attached. Admin-side recording (storePayment) remains, for a transfer
+ * reconciled off a bank statement.
+ *
+ * Admin-side batch CREATION (storeForMerchant) was removed on 2026-08-20:
+ * only merchants create settlements (owner). It had no client — nothing in
+ * the api-client or the panel ever called it — and no settlement has ever
+ * reached awaiting_payment, the state it alone produced. Its notification
+ * went with it.
  */
 class SettlementController extends Controller
 {
@@ -60,39 +63,6 @@ class SettlementController extends Controller
         return new SettlementResource(
             Settlement::query()->findOrFail($id)->load(['lines.transaction', 'payments']),
         );
-    }
-
-    /**
-     * The documented fallback (PLAN §1): an admin builds and submits a batch
-     * on a merchant's behalf, landing it in awaiting_payment so the transfer
-     * can be recorded against it once it arrives. The merchant panel has no
-     * equivalent — there, a batch only ever exists with its receipt.
-     */
-    public function storeForMerchant(Request $request, int $merchantId, SettlementBuilder $builder): JsonResponse
-    {
-        $validated = $request->validate([
-            'settle_all' => ['required_without:transaction_ids', 'boolean'],
-            'transaction_ids' => ['required_without:settle_all', 'array', 'min:1'],
-            'transaction_ids.*' => ['integer'],
-        ]);
-
-        $merchant = Merchant::query()->findOrFail($merchantId);
-
-        $ids = (bool) ($validated['settle_all'] ?? false)
-            ? null
-            : array_map(intval(...), $validated['transaction_ids'] ?? []);
-
-        try {
-            $settlement = $builder->submit($builder->createDraft($merchant, $ids));
-        } catch (NotEligibleForSettlementException $e) {
-            abort(422, $e->getMessage());
-        } catch (InvalidSettlementStateException|SettlementLockedException $e) {
-            abort(409, $e->getMessage());
-        }
-
-        return (new SettlementResource($settlement->refresh()->load('lines.transaction')))
-            ->response($request)
-            ->setStatusCode(201);
     }
 
     public function storePayment(Request $request, int $id, SettlementAllocator $allocator): JsonResponse

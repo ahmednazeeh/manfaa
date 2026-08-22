@@ -55,7 +55,7 @@ function deliverOrder($test, int $qty = 3): Suborder
     $test->actingAs($test->customer, 'customer')
         ->postJson('/api/customer/orders', ['payment_method' => 'bml'])->assertCreated();
 
-    $sub = Suborder::query()->latest('id')->firstOrFail();
+    $sub = payFor(Suborder::query()->latest('id')->firstOrFail());
 
     $test->actingAs($test->shopkeeper, 'merchant');
     $test->postJson("/api/merchant/marketplace/orders/{$sub->id}/accept")->assertOk();
@@ -163,7 +163,7 @@ it('credits only what was actually supplied after an amendment', function () {
     $this->actingAs($this->customer, 'customer')
         ->postJson('/api/customer/orders', ['payment_method' => 'bml'])->assertCreated();
 
-    $sub = Suborder::query()->latest('id')->firstOrFail();
+    $sub = payFor(Suborder::query()->latest('id')->firstOrFail());
     $this->actingAs($this->shopkeeper, 'merchant');
     $this->postJson("/api/merchant/marketplace/orders/{$sub->id}/accept")->assertOk();
 
@@ -200,7 +200,7 @@ it('credits nothing for an order that was never handed over', function () {
     $this->actingAs($this->customer, 'customer')
         ->postJson('/api/customer/orders', ['payment_method' => 'bml'])->assertCreated();
 
-    $sub = Suborder::query()->latest('id')->firstOrFail();
+    $sub = payFor(Suborder::query()->latest('id')->firstOrFail());
 
     $this->actingAs($this->shopkeeper, 'merchant')
         ->postJson("/api/merchant/marketplace/orders/{$sub->id}/reject", ['reason' => 'Closed today.'])

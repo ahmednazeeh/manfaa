@@ -273,7 +273,7 @@ it('sends a merchant moment only to staff who may act on it', function () {
     }
 
     app(NotificationService::class)->sendToMerchantStaff(
-        NotificationTemplateKey::SettlementDue,
+        NotificationTemplateKey::SettlementAccepted,
         $merchant,
         ['amount' => 'MVR 500.00', 'reference' => 'ST-1'],
         Permission::SettlementsView,

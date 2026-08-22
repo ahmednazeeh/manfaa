@@ -7,6 +7,7 @@ use App\Models\MerchantProductCategory;
 use App\Models\MerchantRate;
 use App\Models\MerchantUser;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Arr;
 use Tests\TestCase;
 
 uses(TestCase::class, RefreshDatabase::class);
@@ -228,10 +229,17 @@ it('lists ACTIVE categories to vendors under rates:read', function () {
         ->getJson('/api/v1/merchants/me/product-categories')
         ->assertOk();
 
-    expect($response->json('data'))->toBe([
-        ['category' => 'fruits', 'name_en' => 'Fruits', 'name_dv' => null, 'mode' => 'excluded', 'cashback_rate_percent' => null],
-        ['category' => 'veggies', 'name_en' => 'Veggies', 'name_dv' => 'ތަރުކާރީ', 'mode' => 'rate', 'cashback_rate_percent' => '2.00'],
-    ]);
+    // `category_id` rides alongside the slug so an integrator who would
+    // rather store an integer can; both may be sent on a transaction line.
+    $rows = $response->json('data');
+
+    expect(array_map(fn (array $row): array => Arr::except($row, 'category_id'), $rows))
+        ->toBe([
+            ['category' => 'fruits', 'name_en' => 'Fruits', 'name_dv' => null, 'mode' => 'excluded', 'cashback_rate_percent' => null],
+            ['category' => 'veggies', 'name_en' => 'Veggies', 'name_dv' => 'ތަރުކާރީ', 'mode' => 'rate', 'cashback_rate_percent' => '2.00'],
+        ]);
+
+    expect($rows[0]['category_id'])->toBeInt();
 });
 
 it('renders ACTIVE category rates on the public store page without ids or slugs', function () {

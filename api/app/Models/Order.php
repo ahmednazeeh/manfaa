@@ -22,6 +22,8 @@ class Order extends Model
     {
         return [
             'address_snapshot' => 'array',
+            // Every identifier the matched bank credit answered to.
+            'matched_trx_refs' => 'array',
             'items_laari' => 'integer',
             'delivery_laari' => 'integer',
             'total_payable_laari' => 'integer',

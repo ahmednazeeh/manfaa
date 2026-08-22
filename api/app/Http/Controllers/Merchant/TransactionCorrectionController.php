@@ -41,7 +41,8 @@ class TransactionCorrectionController extends Controller
             'eligible_amount' => ['required', 'integer', 'min:1'],
             'sale_amount' => ['sometimes', 'nullable', 'integer', 'min:0'],
             'lines' => ['sometimes', 'nullable', 'array', 'min:1'],
-            'lines.*.category' => ['present', 'nullable', 'string', 'max:80'],
+            'lines.*.category' => ['sometimes', 'nullable', 'string', 'max:80'],
+            'lines.*.category_id' => ['sometimes', 'nullable', 'integer', 'min:1'],
             'lines.*.amount_laari' => ['required', 'integer', 'min:1'],
         ]);
 

@@ -7,6 +7,7 @@ use App\Http\Controllers\Customer\AddressController;
 use App\Http\Controllers\Customer\CartController;
 use App\Http\Controllers\Customer\FavouriteController;
 use App\Http\Controllers\Customer\MarketController;
+use App\Http\Controllers\Customer\MarketSearchController;
 use App\Http\Controllers\Customer\OrderController;
 use App\Http\Controllers\Merchant\DeliveryRuleController;
 use App\Http\Controllers\Merchant\MarketplaceEnrolmentController;
@@ -30,6 +31,8 @@ use Illuminate\Support\Facades\Route;
 Route::prefix('merchant/marketplace')
     ->middleware(['auth:merchant', 'marketplace'])
     ->group(function (): void {
+        // READING it is counter-level: the app asks this to decide whether
+        // to draw an Orders tab at all.
         Route::get('enrolment', [MarketplaceEnrolmentController::class, 'show'])
             ->middleware('merchant.can:marketplace.manage');
 
@@ -37,17 +40,19 @@ Route::prefix('merchant/marketplace')
         // still in the wizard, or frozen for review, has no business
         // applying to sell online on top of it.
         Route::post('enrolment', [MarketplaceEnrolmentController::class, 'enrol'])
-            ->middleware(['merchant.can:marketplace.manage', EnsureMerchantApproved::class]);
+            ->middleware(['merchant.can:marketplace.enrol', EnsureMerchantApproved::class]);
 
         Route::post('documents', [MarketplaceEnrolmentController::class, 'upload'])
-            ->middleware(['merchant.can:marketplace.manage', EnsureMerchantApproved::class, 'throttle:20,1']);
+            ->middleware(['merchant.can:marketplace.enrol', EnsureMerchantApproved::class, 'throttle:20,1']);
 
+        // Identity papers. A cashier has no business reading the owner's
+        // passport.
         Route::get('documents/{document}', [MarketplaceEnrolmentController::class, 'download'])
             ->whereNumber('document')
-            ->middleware('merchant.can:marketplace.manage');
+            ->middleware('merchant.can:marketplace.enrol');
 
         Route::post('submit', [MarketplaceEnrolmentController::class, 'submit'])
-            ->middleware(['merchant.can:marketplace.manage', EnsureMerchantApproved::class]);
+            ->middleware(['merchant.can:marketplace.enrol', EnsureMerchantApproved::class]);
     });
 
 /*
@@ -120,6 +125,11 @@ Route::prefix('market')
     ->group(function (): void {
         Route::get('branches', [MarketController::class, 'index']);
         Route::get('branches/{branch}', [MarketController::class, 'show'])->whereNumber('branch');
+        // PRODUCT search across every shop — the way into the marketplace,
+        // rather than a directory of stores the shopper must guess between.
+        Route::get('search', MarketSearchController::class);
+        Route::get('products/{branchProduct}', [MarketSearchController::class, 'show'])
+            ->whereNumber('branchProduct');
     });
 
 /*

@@ -44,6 +44,9 @@ final class RolePresetService
             Permission::SettlementsView,
             Permission::SettlementsPreview,
             Permission::WalletView,
+            // The order queue is counter work — the people who pick and
+            // hand over orders are exactly the staff who need it.
+            Permission::MarketplaceManage,
         ];
     }
 
@@ -75,6 +78,9 @@ final class RolePresetService
             Permission::PromotionsPublish,
             Permission::PromotionsCancel,
 
+            // Committing the business to the marketplace is a manager's
+            // call, never a cashier's.
+            Permission::MarketplaceEnrol,
             Permission::ProductCategoriesCreate,
             Permission::ProductCategoriesEdit,
 

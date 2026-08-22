@@ -21,7 +21,6 @@ return new class extends Migration
      */
     private const array SEED = [
         'prompt_discount_expiring' => 'Settle everything outstanding today and keep your {{rate}} prompt-payment discount — you save {{amount}}.',
-        'settlement_due_soon' => '{{amount}} becomes overdue on {{date}}. Settle before then to stay in good standing.',
         'reminder_day10' => 'Reminder: your store owes {{amount}} in cashback and fees. Please settle by {{date}}.',
         'urgent_day13' => 'Urgent: {{amount}} is still outstanding and falls due on {{date}}. Settle now to keep cashback running.',
         'due_day15' => 'Payment due: {{amount}} must be settled today ({{date}}). Unsettled stores are suspended tomorrow.',

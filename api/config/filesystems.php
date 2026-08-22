@@ -62,6 +62,17 @@ return [
         // logo — pre-approval and live alike — is answered by
         // MerchantLogoController, which reads the status and decides. See
         // App\Domain\Onboarding\MerchantLogo.
+        // Platform brand marks uploaded by a superadmin. Private disk
+        // served through a controller, like every other upload here: the
+        // same url then works on every app host with no second nginx block.
+        'brand' => [
+            'driver' => 'local',
+            'root' => storage_path('app/brand'),
+            'serve' => false,
+            'throw' => false,
+            'report' => false,
+        ],
+
         'logos' => [
             'driver' => 'local',
             'root' => storage_path('app/logos'),

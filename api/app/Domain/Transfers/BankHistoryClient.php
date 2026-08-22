@@ -8,6 +8,7 @@ use App\Models\TransferProfile;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use RuntimeException;
 use Throwable;
 
 /**
@@ -32,6 +33,68 @@ final readonly class BankHistoryClient
 
     /** See TransferClient: a host that is not there should fail fast. */
     private const int CONNECT_TIMEOUT_SECONDS = 10;
+
+    /**
+     * Tell the bank gateway a credit has been spent, so it stops returning it.
+     *
+     * The gateway hides a marked reference from every caller's history — which
+     * is the ONLY thing standing between two platforms reading one BML feed.
+     * Manfaa's own dedup ({@see BankCreditClaim}) never leaves this database;
+     * IsleBooks polls the same account and cannot see it. Without this call a
+     * credit Manfaa already settled stays visible for IsleBooks to claim.
+     *
+     * BML only. The route is `/bml/mark-used` and MIB's upstream has no
+     * equivalent, so a MIB profile is a no-op rather than a failed request.
+     *
+     * `refNo` is the reference the SLIP carries — `matched_trx_id`, which
+     * {@see BankRow::key()} already keys on for exactly this reason. Handing
+     * it the FT statement id instead marks nothing, which is why the caller
+     * checks the affected count rather than trusting `success`.
+     *
+     * @return bool true when the gateway actually hid a row
+     */
+    public function markUsed(TransferProfile $profile, string $reference): bool
+    {
+        $key = (string) config('services.transfer.api_key');
+        $reference = trim($reference);
+
+        if ($key === '' || $reference === '' || ! $profile->isBml()) {
+            return false;
+        }
+
+        $response = Http::withHeaders(['x-api-key' => $key])
+            ->asJson()
+            ->timeout(self::TIMEOUT_SECONDS)
+            ->connectTimeout(self::CONNECT_TIMEOUT_SECONDS)
+            ->post(
+                sprintf(
+                    '%s/%s/mark-used',
+                    rtrim($profile->base_url, '/'),
+                    trim($profile->segment, '/'),
+                ),
+                ['refNo' => $reference, 'used' => 1],
+            );
+
+        if (! $response->successful()) {
+            throw new RuntimeException(
+                "The bank gateway refused mark-used [{$response->status()}].",
+            );
+        }
+
+        // `success: true` with nothing affected means the reference did not
+        // match a row — a silent no-op we must not mistake for a claim.
+        $affected = (int) $response->json('bml_transactions_affected', 0)
+            + (int) $response->json('bank_notifications_affected', 0);
+
+        if ($affected === 0) {
+            Log::warning('mark-used matched no bank row', [
+                'profile' => $profile->name,
+                'reference' => $reference,
+            ]);
+        }
+
+        return $affected > 0;
+    }
 
     /**
      * @return list<BankRow>

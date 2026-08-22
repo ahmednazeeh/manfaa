@@ -6,6 +6,7 @@ namespace App\Http\Controllers\Customer;
 
 use App\Domain\Marketplace\DeliveryQuote;
 use App\Domain\Money\Percent;
+use App\Domain\Onboarding\MerchantLogo;
 use App\Domain\Onboarding\OnboardingService;
 use App\Http\Controllers\Controller;
 use App\Models\BranchProduct;
@@ -87,6 +88,12 @@ final class MarketController extends Controller
                 ),
                 'fulfilment' => $profile?->fulfilment,
                 'favourite' => in_array($branch->id, $favourites, true),
+                // The shop's own mark. A letter in a circle is a
+                // placeholder, not a brand.
+                'logo_url' => MerchantLogo::url(
+                    (string) $branch->merchant?->slug,
+                    $branch->merchant?->logo_path,
+                ),
                 // Null, never 0.0 — a new shop has no rating, and showing it
                 // zero stars would libel it on its first day (§11.2).
                 'rating' => $profile?->ratingAverage(),
@@ -146,6 +153,10 @@ final class MarketController extends Controller
             'store_name' => $row->merchant->name,
             'branch_name' => $row->name,
             'address' => $row->address,
+            'logo_url' => MerchantLogo::url(
+                (string) $row->merchant->slug,
+                $row->merchant->logo_path,
+            ),
             'rating' => $row->merchant->marketplace?->ratingAverage(),
             'rating_count' => $row->merchant->marketplace?->rating_count ?? 0,
             'delivery' => DeliveryQuote::for($rule, 0)->toArray(),

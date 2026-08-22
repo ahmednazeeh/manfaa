@@ -2,6 +2,8 @@
 
 namespace App\Providers;
 
+use App\Domain\Customers\ClaudeDhivehiNameWriter;
+use App\Domain\Customers\DhivehiNameWriter;
 use App\Domain\Customers\MsgOwlSmsSender;
 use App\Domain\Customers\SmsSender;
 use App\Domain\Push\FcmPushSender;
@@ -26,6 +28,17 @@ class AppServiceProvider extends ServiceProvider
         if ((string) config('services.msgowl.key') !== '') {
             $this->app->bind(SmsSender::class, MsgOwlSmsSender::class);
         }
+
+        // Writing a customer's name in Thaana. Bound unconditionally, unlike
+        // the senders below: the writer itself decides what an absent key
+        // means (it returns null), so there is no second driver to pick.
+        $this->app->singleton(
+            DhivehiNameWriter::class,
+            fn (): DhivehiNameWriter => new ClaudeDhivehiNameWriter(
+                ($key = (string) config('services.anthropic.api_key')) === '' ? null : $key,
+                (string) config('services.anthropic.model'),
+            ),
+        );
 
         // Push provider selection, same stance: FCM only when a service
         // account is actually configured, otherwise the interface's #[Bind]
@@ -91,6 +104,17 @@ class AppServiceProvider extends ServiceProvider
          * throw on getAuthIdentifier(), so it falls to the address instead
          * of 500-ing; it cannot reach this route anyway.
          */
+        /*
+         * The public map-tile proxy. 600/min per IP was far too generous
+         * for a route that costs us THREE upstream fetches on a miss
+         * against a twenty-worker pool — one address could saturate it.
+         * A map pans at a few dozen tiles; 120 a minute is a comfortable
+         * ceiling for a human and a hard floor for a script.
+         */
+        RateLimiter::for('map-tiles', function (Request $request): Limit {
+            return Limit::perMinute(120)->by((string) $request->ip());
+        });
+
         RateLimiter::for('mobile-credits', function (Request $request): Limit {
             $user = $request->user();
 
@@ -130,6 +154,33 @@ class AppServiceProvider extends ServiceProvider
                     ? $user::class.':'.$user->getAuthIdentifier()
                     : 'ip:'.$request->ip(),
             );
+        });
+
+        /*
+         * Sign-in, per ACCOUNT as well as per IP (security audit
+         * 2026-08-19).
+         *
+         * Every web login carried only `throttle:5,1`, which is per IP. A
+         * password spray from a botnet gets five attempts PER ADDRESS
+         * against one account and is never slowed by the account itself —
+         * and the mobile app's per-account lockout was bypassed simply by
+         * posting to the web door instead.
+         *
+         * Two limits, deliberately: the address stops one host hammering,
+         * and the identifier stops many hosts hammering one person. The
+         * identifier is hashed so an email never lands in a cache key.
+         */
+        RateLimiter::for('login', function (Request $request): array {
+            $identifier = mb_strtolower(trim(
+                (string) ($request->input('email') ?? $request->input('phone') ?? ''),
+            ));
+
+            return [
+                Limit::perMinute(5)->by('login-ip:'.$request->ip()),
+                Limit::perMinutes(15, 10)->by(
+                    'login-id:'.($identifier === '' ? $request->ip() : sha1($identifier)),
+                ),
+            ];
         });
 
         RateLimiter::for('discovery', function (Request $request): Limit {

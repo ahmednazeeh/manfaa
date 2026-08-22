@@ -145,8 +145,13 @@ final readonly class TransferClient
         }
 
         $status = (string) ($body['status'] ?? '');
+        $trxId = (string) ($body['trx_id'] ?? '');
 
-        if ($status === 'pending_approval') {
+        // PARKED, and this test must come first: a dual-control profile
+        // carries an `approval_id` on SUCCESS too, so keying off that field
+        // alone would file a completed payment as still waiting.
+        // `pending_approval` is the flag that actually distinguishes them.
+        if ($status === 'pending_approval' || ($body['pending_approval'] ?? null) === true) {
             return new TransferResult(
                 TransferOutcome::PendingApproval,
                 // Deliberately NOT trxId: an approvals-queue record id is
@@ -157,10 +162,16 @@ final readonly class TransferClient
             );
         }
 
-        $trxId = (string) ($body['trx_id'] ?? '');
-
-        if ($status === 'success' && $trxId !== '') {
-            return new TransferResult(TransferOutcome::Sent, trxId: $trxId);
+        if (self::succeeded($body, $status) && $trxId !== '') {
+            return new TransferResult(
+                TransferOutcome::Sent,
+                trxId: $trxId,
+                // Present only on a dual-control profile, where it is the
+                // recId of the submit the approval then released. Kept for
+                // the audit trail: it is how a completed transfer is traced
+                // back to who released it.
+                approvalId: (string) ($body['approval_id'] ?? '') ?: null,
+            );
         }
 
         // A 200 we do not recognise. Not obviously a failure, so not
@@ -183,7 +194,7 @@ final readonly class TransferClient
         $status = (string) ($existing['status'] ?? '');
         $trxId = (string) ($existing['trx_id'] ?? '');
 
-        if ($status === 'success') {
+        if (self::succeeded($existing, $status)) {
             // Already paid. Adopt the reference rather than sending again —
             // this single branch is the difference between idempotent and
             // double-paying.
@@ -194,7 +205,7 @@ final readonly class TransferClient
             );
         }
 
-        if ($status === 'pending_approval') {
+        if ($status === 'pending_approval' || ($existing['pending_approval'] ?? null) === true) {
             return new TransferResult(
                 TransferOutcome::PendingApproval,
                 approvalId: (string) ($existing['approval_id'] ?? ''),
@@ -216,6 +227,31 @@ final readonly class TransferClient
             wasDuplicate: true,
             message: 'A previous attempt with this reference failed.',
         );
+    }
+
+    /**
+     * Did this body report a completed transfer?
+     *
+     * The upstream says `"success": true` with `"status": "completed"`.
+     * This code accepted only `status === 'success'` — a shape the bank
+     * never sends — so the FIRST real transfer through the tunnel
+     * (MNF000003, 2026-08-20) moved the money and was filed as
+     * `unrecognised_response`, leaving a paid payout sitting in Needs
+     * review with no bank reference against it.
+     *
+     * Both spellings are accepted now: `success` because the tests and this
+     * client believed in it for months and an upstream may yet use it, and
+     * `completed` because that is what actually arrives.
+     *
+     * @param  array<string, mixed>  $body
+     */
+    private static function succeeded(array $body, string $status): bool
+    {
+        if (($body['success'] ?? null) === true) {
+            return true;
+        }
+
+        return in_array($status, ['completed', 'success'], true);
     }
 
     /**

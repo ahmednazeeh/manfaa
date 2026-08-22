@@ -180,6 +180,12 @@ function merchantPermissionMatrix(): array
         // enrolment that does not exist yet (state `not_enrolled`), 403
         // without the authority.
         'marketplace enrolment' => ['method' => 'GET', 'uri' => '/api/merchant/marketplace/enrolment', 'payload' => [], 'permission' => 'marketplace.manage', 'allowed' => 200],
+        // Applying to sell — and reading the identity papers that go with
+        // it — is a SEPARATE authority from running the shop day to day. A
+        // cashier who may edit prices has no business uploading the owner's
+        // passport. 404 for a document that does not exist is the permitted
+        // answer; 403 is the refusal, and it must come first.
+        'marketplace papers' => ['method' => 'GET', 'uri' => '/api/merchant/marketplace/documents/1', 'payload' => [], 'permission' => 'marketplace.enrol', 'allowed' => 404],
         'setup read' => ['method' => 'GET', 'uri' => '/api/merchant/setup', 'payload' => [], 'permission' => 'setup.view', 'allowed' => 200],
         // The wizard's writes answer 409 setup_not_editable on an approved
         // store — past the wizard, but past it for a reason that is not

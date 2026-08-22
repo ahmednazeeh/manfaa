@@ -60,4 +60,17 @@ return [
         'api_key' => env('TETHERX_TRANSFER_API_KEY'),
     ],
 
+    /*
+     * Anthropic — writing a customer's English name in Thaana at registration
+     * (owner, 2026-08-21).
+     *
+     * Every field is optional at boot on purpose: the job that uses this is
+     * queued and swallows its own failures, so an unset key degrades to "the
+     * customer has no Dhivehi name yet" rather than a broken signup.
+     */
+    'anthropic' => [
+        'api_key' => env('ANTHROPIC_API_KEY'),
+        'model' => env('ANTHROPIC_MODEL', 'claude-opus-5'),
+    ],
+
 ];

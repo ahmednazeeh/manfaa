@@ -21,6 +21,9 @@ class CustomerResource extends JsonResource
             'id' => $this->id,
             'customer_code' => $this->customer_code,
             'name' => $this->name,
+            // The same name in Thaana, written at registration. Null is
+            // normal and means "show the English one".
+            'name_dv' => $this->name_dv,
             'phone' => $this->maskedPhone(),
             'status' => $this->status,
             'kyc_status' => $this->kyc_status,

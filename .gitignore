@@ -38,3 +38,23 @@ Thumbs.db
 
 # App download artifacts (the page and its images are committed; the APK is not).
 download/public/*.apk
+
+# The manfaa service user's $HOME is this directory (server isolation, 2026-08-21);
+# pnpm/corepack/npm/psysh drop their caches here when builds run as that user.
+.cache/
+.config/
+.npm/
+
+# WooCommerce plugin: local dev store and tooling, never shipped
+plugins/woocommerce/dev-site/
+plugins/woocommerce/.tools/
+plugins/woocommerce/manfaa-cashback/vendor/
+plugins/woocommerce/manfaa-cashback/node_modules/
+.android/
+.flutter
+.gradle/
+.local/
+.pub-cache/
+.wp-cli/
+# Built plugin zips + manifest are published artefacts, like the APKs
+download/public/woocommerce/

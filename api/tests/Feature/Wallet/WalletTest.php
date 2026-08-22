@@ -7,6 +7,7 @@ use App\Domain\Wallet\WalletException;
 use App\Domain\Wallet\WalletService;
 use App\Models\AdminUser;
 use App\Models\Customer;
+use App\Models\CustomerPayout;
 use App\Models\CustomerWallet;
 use App\Models\TransferProfile;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -170,6 +171,32 @@ it('refuses to re-send a parked transfer', function () {
     expect($payout->fresh()->attempts)->toBe(1);
 });
 
+it('cannot send the same laari twice after a refund to the wallet', function () {
+    // The audit's finding: a retryable refusal returned the money to the
+    // wallet AND left the row `failed`, which is sendable. An admin doing
+    // the obvious thing — retry the failed transfer — sent money the
+    // customer already had back, and could withdraw again.
+    Http::fake(['*' => Http::response(['error_code' => 'invalid_account'], 400)]);
+
+    $this->wallet->credit($this->customer, 50000, 'refund');
+    $payout = $this->wallet->requestWithdrawal($this->customer, 10000);
+
+    $failed = app(PayoutSender::class)->send($payout);
+
+    expect($failed->state)->toBe('refunded');
+    expect(CustomerWallet::query()->sole()->balance_laari)->toBe(50000);
+
+    // Terminal: the admin queue cannot re-send it.
+    expect(in_array('refunded', CustomerPayout::SENDABLE, true))->toBeFalse();
+
+    $admin = AdminUser::factory()->create(['role' => 'superadmin']);
+
+    $this->actingAs($admin, 'admin')
+        ->postJson("/api/admin/pending-payments/{$payout->id}/send")
+        ->assertStatus(409)
+        ->assertJsonPath('code', 'not_sendable');
+});
+
 it('puts the money back when the failure PROVES nothing left the bank', function () {
     // A refused account number was refused before anything moved, so the
     // customer gets their balance back and can correct the account.
@@ -180,7 +207,7 @@ it('puts the money back when the failure PROVES nothing left the bank', function
 
     $failed = app(PayoutSender::class)->send($payout);
 
-    expect($failed->state)->toBe('failed');
+    expect($failed->state)->toBe('refunded');
     expect(CustomerWallet::query()->sole()->balance_laari)->toBe(50000);
 });
 
