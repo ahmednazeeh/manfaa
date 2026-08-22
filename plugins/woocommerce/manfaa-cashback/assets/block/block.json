@@ -2,7 +2,7 @@
   "$schema": "https://schemas.wp.org/trunk/block.json",
   "apiVersion": 3,
   "name": "manfaa/panel",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "title": "Manfaa code",
   "category": "woocommerce",
   "description": "Lets the buyer enter their Manfaa code and shows the estimated cashback.",

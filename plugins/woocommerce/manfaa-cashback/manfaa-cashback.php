@@ -3,7 +3,7 @@
  * Plugin Name: Manfaa Cashback
  * Plugin URI: https://manfaa.app/docs/integration-guide.html
  * Description: Pays Manfaa cashback on WooCommerce orders. Buyers enter their Manfaa code on the cart; cashback is posted when the order reaches the status you choose and reversed on cancellation or refund.
- * Version: 0.3.0
+ * Version: 0.3.1
  * Author: Manfaa
  * Author URI: https://manfaa.app
  * Text Domain: manfaa-cashback
@@ -22,7 +22,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'MANFAA_CASHBACK_VERSION', '0.3.0' );
+define( 'MANFAA_CASHBACK_VERSION', '0.3.1' );
 define( 'MANFAA_CASHBACK_FILE', __FILE__ );
 define( 'MANFAA_CASHBACK_DIR', __DIR__ );
 define( 'MANFAA_CASHBACK_MIN_WC', '9.0' );

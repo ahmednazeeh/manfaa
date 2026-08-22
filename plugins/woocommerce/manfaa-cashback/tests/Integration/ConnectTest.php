@@ -72,6 +72,31 @@ final class ConnectTest extends TestCase
         Connect::complete('the-code', $query['state'], $user);
     }
 
+    public function test_the_connect_button_leaves_the_site_for_the_consent_screen(): void
+    {
+        // wp_safe_redirect() would bounce a foreign host back to wp-admin —
+        // which is exactly what happened on the first live install.
+        $user = self::factory()->user->create(['role' => 'administrator']);
+        wp_set_current_user($user);
+        $_REQUEST['_wpnonce'] = wp_create_nonce('manfaa_connect');
+
+        $captured = null;
+        add_filter('wp_redirect', static function (string $location) use (&$captured): string {
+            $captured = $location;
+
+            return $location;
+        });
+        add_filter('wp_redirect_status', static fn (): int => throw new \RuntimeException('redirected'));
+
+        try {
+            \Manfaa\Cashback\Admin\Settings::actionConnect();
+        } catch (\RuntimeException) {
+            // exit is unreachable; the status filter is our stand-in.
+        }
+
+        self::assertStringStartsWith('https://merchant.manfaa.app/connect?', (string) $captured);
+    }
+
     public function test_the_state_is_bound_to_the_user_who_started(): void
     {
         $url = Connect::beginUrl(5);

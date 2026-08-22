@@ -163,7 +163,16 @@ final class Settings
     public static function actionConnect(): void
     {
         self::guard('manfaa_connect');
-        wp_safe_redirect(Connect::beginUrl(get_current_user_id()));
+
+        // NOT wp_safe_redirect: that helper only allows this site's own
+        // host and silently falls back to wp-admin for any other — which
+        // is exactly where the consent screen is not. The destination is
+        // the panel host from settings, never anything from the request.
+        $url = Connect::beginUrl(get_current_user_id());
+        $host = (string) wp_parse_url($url, PHP_URL_HOST);
+
+        add_filter('allowed_redirect_hosts', static fn (array $hosts): array => array_merge($hosts, [$host]));
+        wp_redirect($url); // phpcs:ignore WordPress.Security.SafeRedirect.wp_redirect_wp_redirect
         exit;
     }
 
