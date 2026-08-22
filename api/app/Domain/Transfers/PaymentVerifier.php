@@ -7,6 +7,7 @@ namespace App\Domain\Transfers;
 use App\Domain\MerchantAccess\Permission;
 use App\Domain\Notifications\NotificationService;
 use App\Domain\Notifications\NotificationTemplateKey;
+use App\Jobs\MarkBankCreditUsed;
 use App\Models\Order;
 use App\Models\PlatformBankAccount;
 use App\Models\TransferProfile;
@@ -34,6 +35,7 @@ final readonly class PaymentVerifier
         private BankHistoryClient $history,
         private NameMatcher $names,
         private NotificationService $notifications,
+        private BankCreditClaim $claims,
     ) {}
 
     /**
@@ -78,17 +80,17 @@ final readonly class PaymentVerifier
                 continue;
             }
 
-            // Already used to verify a different order. This check is a
-            // COURTESY — it lets us move to the next row instead of
-            // throwing — but the guarantee is the unique index on
-            // matched_trx_id, because two workers reading the same history
-            // at the same instant would both see it unclaimed.
-            $claimed = Order::query()
-                ->where('matched_trx_id', $row->reference)
-                ->whereKeyNot($order->getKey())
-                ->exists();
-
-            if ($claimed) {
+            // Already spent. This check is a COURTESY — it lets us move to
+            // the next row instead of throwing — but the guarantee is the
+            // unique index on matched_trx_id, because two workers reading the
+            // same history at the same instant would both see it unclaimed.
+            //
+            // It asks about SETTLEMENTS too. This used to look only at
+            // `orders`, so a credit already spent settling a merchant's bill
+            // could still verify a customer's order — one MVR arriving, two
+            // things marked paid. The unique indexes cannot catch that: they
+            // are per-table.
+            if ($this->claims->taken($row, exceptOrder: (int) $order->getKey())) {
                 continue;
             }
 
@@ -98,7 +100,16 @@ final readonly class PaymentVerifier
                 continue;
             }
 
-            return $this->verify($order, $row, $score);
+            if (! $this->verify($order, $row, $score)) {
+                return false;
+            }
+
+            // Hide the credit from the shared BML feed. The order side reads
+            // the same account as settlements, and IsleBooks reads it too —
+            // see MarkBankCreditUsed. verify() has committed the match.
+            MarkBankCreditUsed::dispatch((int) $profile->getKey(), $row->key());
+
+            return true;
         }
 
         return false;
@@ -114,7 +125,7 @@ final readonly class PaymentVerifier
             // doing its job, not an error.
             Log::info('Bank reference already claimed', [
                 'order' => $order->reference,
-                'trx' => $row->reference,
+                'trx' => $row->key(),
             ]);
 
             return false;
@@ -128,7 +139,7 @@ final readonly class PaymentVerifier
 
         Log::info('Order payment auto-verified', [
             'order' => $order->reference,
-            'trx' => $row->reference,
+            'trx' => $row->key(),
             'score' => $score,
         ]);
 
@@ -217,7 +228,10 @@ final readonly class PaymentVerifier
                 'verified_at' => CarbonImmutable::now(),
                 'state' => 'under_review',
                 'auto_verified' => true,
-                'matched_trx_id' => $row->reference,
+                // The merchant-facing reference, not the internal statement id.
+                'matched_trx_id' => $row->key(),
+                // Every name this credit answers to. See BankCreditClaim.
+                'matched_trx_refs' => $row->identifiers(),
                 // Kept whether or not it verified: an operator reading this
                 // later needs to see what the bank actually said, not our
                 // conclusion about it.

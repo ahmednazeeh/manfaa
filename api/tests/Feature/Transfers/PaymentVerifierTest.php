@@ -238,16 +238,24 @@ it('matches an order paid into a second bank once that bank is mapped', function
     $order = awaitingOrder();
     $order->forceFill(['payment_method' => 'bml'])->save();
 
-    Http::fake(['*/bml/history*' => Http::response([[
-        'id' => 'row-1',
-        'reference' => 'FT26082700001',
-        'narrative3' => 'AHMD NAZEEH',
-        'amount' => 125,
-        'minus' => false,
-    ]])]);
+    Http::fake([
+        '*/bml/history*' => Http::response([[
+            'id' => 'row-1',
+            'reference' => 'FT26082700001',
+            'narrative3' => 'AHMD NAZEEH',
+            'amount' => 125,
+            'minus' => false,
+        ]]),
+        // The order side hides a matched credit from the shared feed too.
+        '*/bml/mark-used' => Http::response(['success' => true, 'bml_transactions_affected' => 1, 'bank_notifications_affected' => 0]),
+    ]);
 
     expect(app(PaymentVerifier::class)->attempt($order))->toBeTrue();
+    // No narrative2 on this row, so the key falls back to the statement id.
     expect($order->refresh()->matched_trx_id)->toBe('FT26082700001');
+
+    Http::assertSent(fn ($request) => str_ends_with($request->url(), '/bml/mark-used')
+        && $request['refNo'] === 'FT26082700001');
 });
 
 it('leaves an order a human already verified alone', function (): void {
