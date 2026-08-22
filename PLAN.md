@@ -111,6 +111,10 @@ exclusions always hold. Change here if wrong.
 │   ├── ui/                    Metronic components, theme, i18n, RTL primitives
 │   ├── api-client/            typed fetch client + zod schemas, generated from OpenAPI
 │   └── config/                eslint, tsconfig, tailwind preset
+├── plugins/
+│   └── woocommerce/
+│       └── manfaa-cashback/   the WooCommerce plugin (PHP 8.1, no build step, PHPUnit via wp-phpunit);
+│                              dev-site/ and .tools/ beside it are gitignored (2026-08-22)
 ├── docs/
 │   ├── design-review.md
 │   └── openapi.yaml           written before the API implementation
@@ -718,6 +722,588 @@ symlink, so styled markup there would ship with its classes missing.
 
 `leaflet`, `react-leaflet` and `@types/leaflet` dropped from all three apps —
 zero imports, inherited template weight.
+
+### Platform connect — DONE (2026-08-19)
+
+"IsleBooks would like to record sales and accrue cashback — Authorise /
+Deny." OAuth 2.0 authorization code with PKCE, for platforms that serve many
+merchants rather than one store. What comes out is the SAME `api_credentials`
+row and the same Sanctum token the panel mints today — the flow is only a
+delivery mechanism, and the value is that the key is never displayed, so it
+cannot be pasted into a support chat or a screenshot.
+
+TWO TIERS, on the owner's instruction: a platform credential lets its holder
+put a consent screen in front of ANY shopkeeper on Manfaa, so **a superadmin
+registers the platform** (`/settings/platform-clients` → client_id +
+client_secret shown once, exact-match https callbacks, an ability CEILING, and
+a `connect_enabled` flag that is off until reviewed). A developer without a
+registration is not blocked — the per-merchant key still works and reaches
+exactly one shop.
+
+**The token does not expire** (owner decision — an accounting integration that
+dies at three in the morning is the worse outcome). Every other control is
+sized to that:
+
+- the CODE expires in 60s and is single-use, because it is the only part that
+  travels through a browser redirect;
+- re-authorisation REPLACES the previous grant, since with no expiry a shop
+  reconnecting every few months would accumulate tokens it had forgotten;
+- rotating a platform secret cuts every grant it ever produced — rotation
+  happens because a secret leaked, and leaving the grants alive would mean
+  rotating changed nothing for whoever holds them;
+- the merchant sees it as "Connected app" in Settings › API access, and
+  revokes it there.
+
+Pressing Authorise needs `api_credentials.create`, not merely `.view` — it IS
+issuing a key, just without anybody seeing it. A lapsed session no longer
+swallows the request: `?next=` carries the consent URL through login.
+
+Suite: `tests/Feature/Connect/PlatformConnectTest.php`, 21 tests — unknown
+client, disabled client, scope beyond the ceiling, redirect mismatch (a
+registered-but-different URI included), wrong secret, verifier mismatch, code
+reuse, code past its minute, a code presented by a rival platform, staff
+without the permission, re-authorisation replacing, rotation cutting.
+
+Docs: guide §2.1 and `POST /v1/connect/token` in the reference.
+
+Three things the suite caught on the way, none of them about connect:
+
+- **Settlement auto-match never worked past the match.** `matchPayment()`
+  documents `$actor === null` as "an automatic match against the bank's own
+  history", and `matched_by` honoured it — but the allocation loop below read
+  `Actor::admin($actor->id)` straight off the null. Every auto-matched
+  settlement died at the moment it tried to allocate. `Actor::system()` is
+  what the ledger has for this and is now what it uses.
+- **Tests were calling the live bank gateway.** Transfer tests carry the real
+  URL (`http://10.99.0.1:3005`) because that is what the code reads, and a
+  targeted `Http::fake(['*/faisanet/history*' => …])` lets every OTHER url
+  through to the network. It only showed as slowness — 41 minutes, the suite
+  sitting in SYN-SENT — because the tunnel happened to be down. With it up,
+  the suite would have been talking to the bank. `tests/TestCase.php` now
+  calls `Http::preventStrayRequests()`; the transfers suite went from hanging
+  to 3.4 seconds.
+- **`marketplace.enrol` gated four routes but no test row**, so RoleMatrixTest
+  — whose whole job is "a permission nothing checks is not a permission" —
+  failed correctly. Staff holds `marketplace.manage` (the order queue is
+  counter work); Manager and up hold `.enrol` (committing the business, and
+  uploading the owner's papers, is not a cashier's call).
+
+The bank-account immutability test was rewritten to the owner's 2026-08-19
+reversal: the account number is always updatable in place.
+
+### One set of docs, on both hosts — DONE (2026-08-19)
+
+`https://api.manfaa.app/` served Laravel's stock welcome page: 70KB of
+Tailwind boilerplate on the host a POS developer hits first. It now redirects
+to `/docs/`, and the API host serves the docs directory from **the same files
+on disk** manfaa.app serves — verified byte-identical across both hosts.
+
+The intermediate step is worth recording because it was the wrong instinct: a
+hand-written developer landing, then a generated one. Both were a SECOND
+telling of the endpoints, the abilities and the limits, in their own design.
+Owner's call, and correct: duplicate pages with different designs cost more
+every time an endpoint is added or a doc is updated than they ever save a
+reader. There is now one reference, one guide, one spec, reachable at the same
+paths on either host.
+
+| Path | api.manfaa.app | manfaa.app |
+|---|---|---|
+| `/` | → `/docs/` | marketing site |
+| `/docs/` | reference | reference |
+| `/docs/integration-guide.html` | guide | guide |
+| `/docs/integration-guide` | → `.html` | → `.html` |
+| `/docs/openapi.yaml` · `openapi.docs.yaml` | spec | spec |
+| `/api/v1/docs` · `/api/v1/openapi.yaml` | → canonical `/docs/…` | — |
+
+Four broken paths fixed on the way:
+
+- `api.manfaa.app/docs/integration-guide` redirected to `/docs/`, which that
+  host did not serve — straight into a Laravel 404.
+- `manfaa.app/docs/integration-guide` opened the API REFERENCE. A path named
+  integration-guide now opens the integration guide.
+- The merchant panel's **"Integration guide"** button pointed at `/docs/`,
+  right while the whole guide was folded into the spec description and wrong
+  the moment that stopped (same day, MERGE_ONLY). Webhooks, retry expectations
+  and the go-live checklist live only in the guide now.
+- `SANDBOX_GUIDE_URL` anchored `#description/sandbox-fixtures`; the heading is
+  the spec's own `Sandbox` now, so the anchor silently dropped the reader at
+  the top of the page.
+
+`api/routes/web.php` registers nothing, and `resources/views/` is empty — the
+front door is static, so it survives PHP being down.
+
+**OWNER DECISION NEEDED — the sandbox host does not exist.**
+`sandbox.api.manfaa.app` does not resolve, yet the guide's environment table
+names it and `SANDBOX_API_BASE_URL` in the merchant panel defaults to it.
+`docs/openapi.yaml` meanwhile lists two servers with the SAME url, one
+labelled Production and one Sandbox. Left alone deliberately: pointing the
+sandbox constant at `api.manfaa.app` would invite vendors to run test
+transactions against production, which is far worse than a host that fails to
+resolve. Either stand the host up, or say sandbox is per-arrangement and strip
+the URLs.
+
+**Cloudflare rewrites the email address in the docs.** Scrape Shield's email
+obfuscation turns `integrations@manfaa.app` into a JS-decoded blob, so anyone
+reading without JavaScript — or copying from a text view — sees
+`[email protected]`. It is the only byte that differs between the two hosts.
+A dashboard setting, not a code change.
+
+### Brand marks a superadmin can replace — DONE (2026-08-19)
+
+The platform's logos were committed files — `default-logo.svg`,
+`default-logo-dark.svg`, `mini-logo.svg` — duplicated across apps/web and
+apps/merchant and changeable only by a deploy. They are now five uploads on
+Settings › Appearance, beside the accent colour, because they are the same
+decision: what the platform looks like.
+
+FIVE slots, no more: `landscape_light`, `landscape_dark`, `square_light`,
+`square_dark`, `favicon`. One set covers every surface.
+
+The load-bearing design is that **`/api/brand/{slot}` always answers an
+image** — the uploaded one when set, the packaged default from
+`api/resources/brand/` otherwise. That guarantee is what lets three
+frontends point an `<img>` at it with no fallback branch, no "has a brand
+been set?" query and no loading state. Freshness is an ETag over the bytes,
+not a cache-busting token a built frontend could not know: a replacement is
+live on the next page load, with no rebuild of anything.
+
+Shared `<BrandMark>` lives in `@manfaa/ui` — one component, both apps. Light
+and dark are two `<img>` rather than a themed `src`, because a themed src
+cannot resolve on first render and the logo would visibly swap after
+hydration.
+
+| Surface | Mark |
+|---|---|
+| manfaa.app header | landscape (was plain text) |
+| manfaa.app/login | square — the card is 400px and a wordmark crowds it |
+| manfaa.app/dashboard | landscape expanded, square collapsed (`default-logo`/`small-logo`) |
+| merchant dashboard | same pair |
+| merchant login · signup · landing · legal · pitch panel | landscape, with "Merchant" kept as the violet suffix |
+| all three panels | favicon via `metadata.icons`; the `app/favicon.ico` file convention removed so there is one source |
+
+SVG is refused for every slot. It is a document that may carry script and
+would be served from our own origin on manfaa.app, merchant. and admin.
+alike — the widest stored-XSS surface the platform has. The packaged
+defaults are SVG because we wrote them; the response carries `nosniff` and a
+`default-src 'none'; sandbox` CSP regardless.
+
+Owner's call on the merchant auth lockup (asked, 2026-08-19): the brand mark
+REPLACES the M + "Manfaa", and "Merchant" stays. Adding the mark above the
+existing lockup — the literal reading — rendered "Manfaa" twice.
+
+**Sizing, and two hazards the round uncovered.** The marks were first sized
+at 22–26px, which was right for the old SVG wordmark (93.2×22, aspect
+4.24:1) and wrong for an uploaded PNG: the owner's is 3.05:1 with up to 16%
+transparent padding, so at the same HEIGHT roughly a third less ink landed on
+screen and it read as small. Now sized against the real containers (70px
+sidebar header, 64px public header) with `object-contain` and a `max-w` cap,
+so an unusual aspect cannot blow out the layout.
+
+The sidebar then drew BOTH marks at once. `demo1.css` hides `.small-logo`
+while the sidebar is expanded, but BrandMark put its own `dark:block` on the
+SAME element and won the cascade. The collapse class now goes on a wrapper
+span and the light/dark classes stay on the images — different elements,
+nothing to fight over. Verified by computed style, collapsed and expanded.
+
+**A foreign service worker was running on manfaa.app.** Cache
+`storefront-shell-v1`, never in this repository — from another tenant's
+storefront, registered during an earlier port/vhost mixup (the 3000–3002
+hazard). It intercepted every request on the origin and cached FAILURES, so a
+404 served during the seconds a Next.js service restarts was stored forever
+and the app could not load its own chunks: "This page couldn't load … until
+hard refresh". curl never reproduced it — curl has no service worker; it was
+found with `caches.keys()` in the page, holding a stored 404 for the exact
+chunk. `apps/*/public/sw.js` is now a kill switch that unregisters itself and
+empties every cache; confirmed clearing a live poisoned browser (workers 0,
+caches [], chunk 200). Also fixed alongside: `.next` was root-owned from
+building as root while the services run as www-data (EACCES on every
+prerender-cache write, 218 in three days).
+
+Suite: `tests/Feature/Brand/BrandAssetTest.php`, 13 tests — every slot serves
+before any upload, no session needed (these are the login-page logos),
+replace deletes the file it replaced, a row whose file is gone still serves a
+logo, reset returns to the default, ordinary admins refused, SVG refused,
+non-image refused, undersized refused, ico accepted for the favicon, and the
+ETag changing on upload.
+
+`api/routes/web.php` now registers nothing and `resources/views/` is empty.
+ExampleTest was rewritten from Laravel's scaffolding assertion (`/` is 200)
+to the decision it replaced: the API host has no page of its own.
+
+### The apps draw the real logo now — DONE (2026-08-19)
+
+Both apps drew their own brand: `ManfaaMark`, a hand-painted CustomPaint "M",
+plus the word "Manfaa" as a Text beside it. That was a THIRD drawing of the
+logo after the web panels and the launcher icon, and it meant replacing the
+brand needed a code change and a store release.
+
+Headers now render the platform's landscape mark, light or dark by theme;
+boot and sign-in render the square one. `ManfaaWordmark` and
+`MerchantWordmark` became that image — the merchant lockup keeping "Merchant"
+as its violet suffix, the same shape the web panel settled on.
+
+Three layers, in the order a widget gets them:
+
+1. **Bundled** — `assets/brand/*.png` in each APK (~248KB). A first launch on
+   a plane still has a logo, and no header is ever blank.
+2. **Cached** — bytes on disk from the last run, read into memory by
+   `BrandAssetCache.load()` BEFORE `runApp`, so a widget reads them
+   synchronously and the header never flashes the bundled mark then swaps.
+3. **Fetched** — refreshed from `/api/brand/{slot}` when the cache is older
+   than 24 hours.
+
+The refresh is off the critical path: `load()` returns as soon as the disk
+cache is in memory and the network call runs after, bumping a `ValueNotifier`
+only when bytes actually changed. Boot never waits on a logo, and a dead
+network costs nothing. `BrandRefreshOnResume` asks again when the app returns
+to the foreground — phones are pocketed, not restarted, so boot alone would
+leave a week-old app showing a week-old mark.
+
+Refusals that matter: a response whose content-type is not `image/` is
+dropped (a captive portal answering 200 with a login page would otherwise put
+hotel wifi in the header), and a failed fetch keeps whatever the slot had.
+
+Suite: `packages/manfaa_core/test/brand_assets_test.dart`, 10 tests — nothing
+cached before first fetch, all four slots cached after, a second process
+reading disk without touching the network, refetch once past its life, no
+refetch while fresh, a replaced logo repainting, an unchanged one NOT
+repainting, a failed network keeping the old mark, a non-image refused, and
+every slot naming an asset both apps actually bundle.
+
+**The customer golden harness was blind to images.** It had no precache step,
+so `Image.asset` never decoded before the shot and every customer golden
+painted an empty box where the logo belongs — invisible while the wordmark
+was drawn text, obvious the moment it became an image. The merchant harness
+has carried that step since its bank marks landed; the customer one now does
+too. All 345 mobile tests green; goldens regenerated across both apps.
+
+**Sizing, the same lesson as the web headers.** The marks were first placed
+at `size * 1.25` — 27.5px — which suited the hand-painted mark they replaced
+and not an uploaded logo carrying ~16% transparent padding, leaving ~23px of
+ink beside a 40px avatar. The row's height is set by that avatar, so the mark
+is now `size * 1.8` (39.6px) and sits level with it.
+
+The merchant tablet rail was worse than small: it is 96px wide and a
+landscape mark at 34px is already ~93px across, so it could not have grown
+without overflowing. It uses the SQUARE mark now, exactly as the collapsed
+web sidebar does.
+
+**The /app page carried its own copy of the version.** The binaries were
+replaced and the page still advertised v1.0.17 / v1.0.13, which reads exactly
+like a deploy that did not happen — the numbers beside each download were
+hand-typed and had to be remembered every release. `scripts/deploy-apks.sh`
+now publishes both APKs, reads `versionName` and size back OUT of the file it
+just published, rewrites the page from that, and purges Cloudflare. The page
+can no longer claim a version that is not there.
+
+Shipped: customer 1.0.18+19, merchant 1.0.14+15 — page, binaries and build
+outputs verified identical after deploy.
+
+### The admin nav follows the marketplace switch — DONE (2026-08-20)
+
+With `marketplace_enabled` off, three admin screens could only ever answer
+403 — their routes already carry `EnsureMarketplaceEnabled` — yet the nav
+still offered them. They now hide with the switch:
+
+| Nav item | Route |
+|---|---|
+| Merchant settlements | `/admin/merchant-settlements` |
+| Marketplace KYB | `/admin/marketplace/kyb` |
+| Order payments | `/admin/marketplace/payments` |
+
+`marketplaceOnly` on a NavItem, mirroring the existing `superadminOnly`, fed
+by `useMarketplaceEnabled()` (5-minute staleTime — a launch switch, not a
+live value). Undefined while loading counts as ON, so the nav does not
+flicker items away on every page load.
+
+**Store reviews was on the owner's list and is deliberately NOT hidden.** It
+is `StoreReviewController` — the superadmin approval queue for self-signed-up
+stores — not a marketplace screen. Hiding it with the marketplace off would
+have removed the queue that approves every merchant on the platform, cashback
+included. Zones is likewise ungated server-side and stays.
+
+The flag is compared with `Number(value) === 1` rather than `=== 1`: the
+api-client's `PlatformSettingValueSchema` is `z.union([z.number().int(),
+z.string()])`, so a string is contract-legal, and this box has already been
+bitten once by a numeric arriving as a string through the Redis cache. Read
+wrongly it would hide working menus silently — the kind of bug nobody
+reports, because they assume the screen was removed on purpose.
+
+### The bank's success shape — FIXED (2026-08-20)
+
+The first real transfer through the tunnel moved MVR 200.00 and was filed as
+`unrecognised_response`, leaving a PAID payout sitting in Needs review with no
+bank reference (item 3, `MNF000003`, batch PB-20260819).
+
+`TransferClient` accepted only `status === 'success'`. The upstream sends
+`"success": true` with `"status": "completed"` — for plain profiles AND for
+dual control. The success branch could therefore never match, on any profile;
+faisanet4 was incidental. The 409 duplicate path carried the same invented
+spelling, so a repeat of an already-paid transfer read as "a previous attempt
+failed".
+
+**The tests are why this survived to production.** Seventeen places faked
+`['status' => 'success', 'trx_id' => …]` — a shape we invented and the bank
+has never sent. Green suite, broken money path. Five tests now use the real
+bodies verbatim; verified load-bearing by restoring the old rule, under which
+four of them fail.
+
+Dual control's trap, handled explicitly: a COMPLETED faisanet4 transfer
+carries an `approval_id` exactly as a parked one does. Only `pending_approval`
+separates them, so the parked test runs first and keys on that flag —
+otherwise the fix itself would have parked paid transfers.
+
+**Reconciled by re-sending** (owner's call), which is safe precisely because
+the upstream is idempotent on `internal_ref`: it answered 409 with the payment
+it had already made. `duplicate: true` in the new audit line is the proof no
+second payment was made; the row adopted reference `805351758` and the batch
+completed.
+
+Two things that made that safe to interpret, both added here:
+
+- **`Payout item answered by the bank`** — one log line per bank call carrying
+  `duplicate`, the outcome and the reference. `wasDuplicate` existed on
+  TransferResult and was recorded nowhere, so "adopted the existing payment"
+  and "made a second one" were indistinguishable afterwards.
+- **`applyPaid` clears `failure_reason` and `error_code`.** The reconciled row
+  stayed `paid` while still reading "Needs review: the bank answered in a way
+  we do not recognise", which would send somebody chasing a settled payment.
+
+### Telling shops their customers were paid, and a flag that never arrived — DONE (2026-08-20)
+
+**`customers_paid`.** A merchant settles cashback to the platform weeks
+before the customers who earned it are paid, and until now the one party who
+funded the money never learned it landed. When a payout run closes, each
+store whose customers it reached gets one push: how many of their customers
+were paid and how much.
+
+Batch-level, hooked in `ItemResultService::conclude()` — the single point
+where a pass closes, so both the API sweep and a marked-up sheet go through
+it. Only `paid` items count: telling a shop their customers were paid when
+the transfer bounced is worse than silence. Addressed to staff holding
+`wallet.view`, since it is news about the shop's money.
+
+**Push only.** `smsToMerchantContact()` defaults to TRUE, so it would have
+texted every merchant on every payout run. Every other merchant moment is
+something the shop must act on; this one is news with nothing to do about it,
+and an SMS here is a recurring bill for that.
+
+Four exhaustive match maps had to be completed for the new key — label,
+description, push title, audience — which is the catalogue doing its job.
+
+**The marketplace flag never reached a running app.** `configProvider` is a
+plain FutureProvider, fetched once and cached for the process, so flipping
+`marketplace_enabled` did nothing until the app was killed. (The ETag cache
+is in-memory, so a true restart was always fine — the staleness was resume.)
+`BrandRefreshOnResume` became the general `OnAppResume`, and both apps now
+re-read the brand marks AND invalidate `configProvider` when they come back
+to the foreground. A conditional GET that usually answers 304.
+
+Shipped: customer 1.0.19+20, merchant 1.0.15+16.
+
+### Webhooks a merchant can own — DONE (2026-08-22)
+
+**The gap.** Webhook endpoints were per POS vendor, registered by an admin,
+and the dispatcher found them through the credential's vendor. A token the
+merchant issued themselves has no vendor, so a store with its own shop, an
+ERP, or a plugin could never be told its rate changed or a sale was reversed
+— and nothing on *Settings › API access* let them set one up. That made a
+plugin with "no manual webhook setup" impossible.
+
+**Merchant-owned endpoints.** `webhook_endpoints` now has EITHER
+`pos_vendor_id` OR `merchant_id` (a CHECK enforces exactly one owner), plus
+`api_credential_id`, `label` and `created_by_merchant_user_id`. The
+dispatcher's entitlement query is the union: the merchant's own endpoints, or
+the vendors behind its live credentials. One `MerchantEndpointService` holds
+the rules for both doors — cap of 5 active per store, the same SSRF URL guard
+as the admin registry, `whsec_` secret shown exactly once.
+
+Two doors: the panel (owner-only, mirrors the credential wizard — add,
+remove, **Send test**, with a once-only secret handover) and
+`GET/POST /v1/webhooks`, `DELETE /v1/webhooks/{id}` under the new
+`webhooks:manage` ability. A credential sees and removes only endpoints it
+registered itself; re-registering the same URL from the same credential
+replaces rather than stacks; **revoking the credential switches its
+endpoints off** (`CredentialService::revoke` → `deactivateForCredential`),
+while panel-made endpoints outlive every token. `webhook.test` is a real
+signed delivery to one endpoint (6/min per endpoint), not subscribable, never
+sent to vendor endpoints.
+
+Credentials issued here are the same `ApiCredential` rows the admin creates
+for POS vendors — same abilities, same revocation — the only difference is
+`pos_vendor_id` is null, which is exactly why the old dispatcher could not
+reach them.
+
+**Docs.** The guide's §6 is split into *Webhooks — POS vendors* and
+*Webhooks — Merchants* with a comparison table and a `/v1/webhooks` example;
+the spec gained both as tags (every event is listed under both, `webhook.test`
+under Merchants only), the three operations, `MerchantWebhookEndpoint` /
+`WebhookRegisterRequest` schemas, the ability row and the
+`webhook_not_found` / `endpoint_cap_reached` codes.
+
+**Build trap found on deploy.** The `manfaa` service user's `$HOME` is the
+repo root, and Next 16 refuses to infer a workspace root that contains
+`$HOME` — it fell back to `apps/merchant`, could not resolve the pnpm-linked
+`next`, and the aborted build had already wiped `.next`, so the merchant
+panel was down for ~5 minutes. `turbopack.root` is now pinned to the
+monorepo in all three `apps/*/next.config.mjs`.
+
+15 new tests (`tests/Feature/Webhooks/MerchantEndpointTest.php`); full API
+suite 1745 green. Migration applied, queue restarted, panel rebuilt, docs
+rebuilt and verified live.
+
+### Connect with Manfaa for software that cannot keep a secret — DONE (2026-08-22)
+
+**Why.** The owner chose OAuth-first for the WooCommerce plugin
+(PLAN-woocommerce §2.1). Platform connect was built for a confidential
+platform — one server, a secret, a fixed callback list. A plugin is the
+opposite: one codebase on thousands of stores, each with its own callback,
+none able to hide a secret from the shop owner who can read every file.
+
+**Public clients.** `pos_vendors.public_client`: no secret (rotate → 409),
+no callback list, PKCE the only proof. The plugin sends its own callback;
+`assertRedirect` runs it through the webhook SSRF guard (https, public
+host, no fragment, ≤255); the consent screen shows *"This will connect
+shop.example.mv — if that is not your website, press Deny"*; the exact URL
+is bound into the code as before. A public client that SENDS a secret is
+refused `invalid_client` — that caller is misconfigured or is not the
+plugin. The grant records `api_credentials.connected_from`
+(`https://shop.example.mv`); "re-authorising replaces" became per origin,
+so a merchant with two WooCommerce stores keeps both, and the panel's
+credential row says which store each one is.
+
+**Companions.** `GET /v1/me` (store, the token's real abilities,
+`connected_from`, rate summary — what a plugin's *Test connection* reads);
+`GET /v1/transactions/{id}` (own merchant only, either writing ability —
+what `409 duplicate_invoice` adoption fetches); `origin: online_link` on
+`POST /v1/transactions` (code-keyed only; phone-keyed stays `api_phone`,
+because that value marks *how* the customer was matched).
+
+**Sandbox dropped** (owner): the non-existent `sandbox.api.manfaa.app` is
+gone from the spec's servers, the guide's environment table, the panel's
+guide card and `integration.ts`; the spec's *Sandbox* section is now
+*Testing*, and the guide's §1 is "the fixture set the examples use".
+
+`php artisan manfaa:register-woocommerce-client` seeded the one public
+client on production — **`mfa_gewk290rpqxqol48uais1cqs`**, the id the
+plugin ships with. 16 new tests; full suite green; docs live.
+
+### Manfaa Cashback for WooCommerce — BUILT (2026-08-22), owner's live pass pending
+
+The plugin the owner asked for, at `plugins/woocommerce/manfaa-cashback/`
+(plan and decisions in PLAN-woocommerce.md). A buyer enters their Manfaa
+code on the cart or at checkout — a real inner block on the Cart and
+Checkout Blocks, a PHP panel on the classic pages — sees the estimated
+cashback in the totals, and the sale is posted when the order reaches the
+status the merchant chose (Completed by default), reversed on cancel,
+full refund or trash. **Connect with Manfaa** is the public-client OAuth
+flow shipped in the previous entry: no key is ever copied, and the plugin
+registers its own webhook afterwards.
+
+Settings are a top-level menu: connection (Connect, token fallback, test,
+sync), pricing (general rate or per-category mapping with the first-in-
+synced-list rule and orphan flags), the awarding policy (items after
+discounts, ex- or inc-GST), cart/checkout and display options, posting
+status and reversal policy, invoice prefix. Orders carry a Manfaa column
+and a metabox with Retry and Refresh status; a daily sweep refreshes
+pending sales.
+
+Money: 2-dp-then-laari, per-bucket ceiling rounding identical to the
+server's, lines that always sum to `eligible_amount`. Posting: the body is
+frozen at the status hook and re-sent byte-identical under a deterministic
+`Idempotency-Key`; `409 duplicate_invoice` is adopted by reading the sale
+back; the state table in PLAN-woocommerce §4 is implemented row for row.
+
+42 PHPUnit tests green on both order datastores (HPOS caught a
+double-reverse on full refunds — fixed). Published at
+manfaa.app/app/woocommerce/ and linked from /app; guide §4.1 gained *The
+WooCommerce plugin*. Awaiting the owner's pass on a real https store.
+
+### The store's minimum reaches the marketplace, and a mislabelled ceiling — DONE (2026-08-22)
+
+The owner asked what "Default validation window" and "New merchant
+validation window" were, whether merchants set their own, and whether the
+minimum eligible sale was enforced.
+
+**Two settings, one wrong label.** `default_validation_window_days` is the
+CEILING a store may raise its own window to (Merchant panel › Settings ›
+Preferences validates `max:` it); `new_merchant_validation_window_days` is
+what a new store starts on. The admin copy described the ceiling as the
+thing applied to new merchants — the other setting's job. Relabelled
+*Maximum validation window* with copy that says who sets what. Merchants
+do set their own (0 … ceiling), and the minimum eligible sale too.
+
+**The minimum was enforced everywhere except the marketplace.**
+`CreditRecorder` zeroes any sale under `min_eligible_laari`
+(`below_minimum`, still recorded) — the POS API, the panel's credit
+screen, the WooCommerce plugin, amendments and claims all go through it.
+`CartPricer` never looked at it: a MVR 20 basket at a MVR 50-minimum
+store earned cashback online while the same sale at the till would not.
+Now the per-shop items total is judged against the store's minimum at
+pricing (cashback 0, `below_cashback_minimum` + `cashback_shortfall_laari`
+on the subcart so the cart says *"Add MVR x more to earn cashback here"*
+on web and in the app) and the minimum is FROZEN on the suborder
+(`cashback_min_laari`) so a partial fulfilment that drops the supplied
+items under it zeroes the cashback too — online exactly as at the till.
+
+**Found on the way: re-pricing lost the category rates.** Checkout priced
+each line with its override (excluded = 0, category rate, else standing)
+but stored only the standing rate, so an amend re-priced every line at
+the standing rate — an excluded category started paying the moment a shop
+dropped a unit. Each line now freezes its own `cashback_rate_bp`;
+recompute uses it (rows from before fall back to the suborder's rate).
+
+3 new tests in `FulfilmentTest`; full suite 1764 green. Migration
+applied, admin + web rebuilt, customer app 1.0.28+29 built for the hint.
+
+### Partial refunds, and the push that closes the loop — DONE (2026-08-22)
+
+WC3 of the WooCommerce plan. **`PATCH /v1/transactions/{id}`** lets an
+integration reduce a pending sale to what the buyer kept — the same
+`AmendmentService` the panel uses, re-pricing at the terms frozen on the
+row, refusing a confirmed or backdated sale with the panel's own codes.
+The plugin's new recommended partial-refund policy uses it: one frozen
+body per refund, a refund that empties the order becomes a reversal, and
+a sale that had already confirmed keeps its cashback with a note saying
+so — a plugin should not quietly take a whole reward back over a small
+return.
+
+**`cashback_reversed`** (owner decision): the other end of
+`cashback_earned`. Sent from `ReversalService` on both outcomes — in
+place or credit memo, the customer's balance drops the same way — once
+per sale, never for a sale that earned nothing, and push-only: a text
+per reversal would be a recurring bill for telling someone money they had
+not yet received is not coming. The reason is a phrase with its own
+leading space so the template stays a sentence when it is empty.
+
+Also in the plugin: the product badge ("Earn up to MVR x Manfaa
+cashback", off by default) and a drafted Dhivehi translation with RTL
+mirroring on a `dv` locale (needs the native reviewer, like the apps).
+
+API suite 1773 green; plugin 46/46 on both datastores. Plugin 0.2.0
+published; customer app 1.0.29 routes the new push.
+
+### The plugin updates itself — DONE (2026-08-22)
+
+WC4, the last WooCommerce round. `Support\Updater` reads
+`manfaa.app/app/woocommerce/manifest.json` twice a day (cached; a failed
+fetch is remembered for an hour so a broken CDN does not cost a request
+per admin page), and when the version there is newer, WordPress's own
+updater shows the row and installs the zip the manifest names — only a
+`https://manfaa.app/` package is ever honoured. Same one-click, same
+rollback, same *View details* as any other plugin. Version discipline is
+the APKs': the build script refuses a zip whose header, constant and
+readme disagree.
+
+Proof was done for real: a 0.2.9 install on the dev store saw 0.3.0 in
+the live manifest and upgraded through the WordPress upgrader from the
+CDN-served zip. The guide's §8 gained the merchant's own go-live
+checklist for the plugin (MVR, https, all five permissions,
+`MANFAA_CASHBACK_KEY`, pricing mode, posting status, one end-to-end
+order, where pending money shows).
+
+Plugin 0.3.0 published; suite 50/50 on both datastores. WC0–WC4 done;
+the owner's live pass and the Dhivehi review remain.
 
 ### Queue (updated 2026-08-17) — the mobile programme
 

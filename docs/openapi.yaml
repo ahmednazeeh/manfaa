@@ -152,22 +152,24 @@ info:
     [`#/components/schemas/MachineCode`](#/components/schemas/MachineCode).
     `message` is human-readable and may change; never match on it.
 
-    ## Sandbox
+    ## Testing
 
-    A full sandbox environment (see `servers`) provides fixture merchants,
-    test credentials, and published test customer refs, so no vendor ever
-    debugs against production or mints real cashback doing it. Sandbox
-    tokens are issued alongside production credentials at onboarding; the
-    fixture data set is published in the vendor integration guide.
+    There is no separate sandbox host at present. Integrate against
+    production with the merchant's own credential and a real customer code
+    you control: every sale you record can be reversed with
+    `POST /v1/transactions/{id}/reverse` while it is pending, and nothing
+    is paid out before the merchant settles. The worked examples in the
+    integration guide are computed against a fixed fixture set (a
+    `2.00 %` store with a `5000` laari minimum) so the integers can be
+    checked by hand. Ask integrations@manfaa.app for a test merchant if you
+    are not integrating for a specific store.
   contact:
     name: Manfaa integrations
     email: integrations@manfaa.app
 
 servers:
   - url: https://api.manfaa.app/api
-    description: Production. (Domain is the PLAN §14 placeholder until the production domain is confirmed.)
-  - url: https://api.manfaa.app/api
-    description: Sandbox — fixture merchants and test customer refs (PLAN §9.5). No real cashback is ever created here.
+    description: Production.
 
 security:
   - vendorToken: []
@@ -179,6 +181,55 @@ tags:
     description: Merchant configuration reads for the till.
   - name: Customers
     description: Customer confirmation at the point of sale.
+  - name: Connect
+    description: |
+      "Connect with Manfaa" — the merchant approves you on a Manfaa consent
+      screen and your software collects the token. Two kinds of client:
+
+      - **Confidential platform** (one server serving many merchants, e.g.
+        a bookkeeping SaaS): registered by Manfaa with a `client_secret`
+        and an exact list of callback URLs. Email integrations@manfaa.app.
+      - **Public client** (software on the *merchant's own* server — the
+        Manfaa WooCommerce plugin): **no secret** and no callback list. The
+        plugin sends its own callback URL; the consent screen shows its
+        host ("This will connect shop.example.mv"); the owner's approval
+        binds that exact URL into the code. PKCE is the only proof, and a
+        public client that sends a `client_secret` is refused. Each grant
+        remembers the store it came from, and the same store reconnecting
+        replaces its grant while a second store of the same merchant gets
+        its own.
+
+      Either way the token that comes out is an ordinary merchant credential
+      (see `vendorToken`) — same abilities, same revocation from the panel.
+  - name: Webhooks — POS vendors
+    description: |
+      Signed events delivered to an endpoint owned by a **POS platform** that
+      serves many merchants (a till vendor, IsleBooks). One endpoint per
+      platform, registered by Manfaa when we onboard you — email
+      integrations@manfaa.app. Every event carries `merchant_id`; you route
+      it on your side. You hear about a merchant for as long as it holds a
+      live credential issued for your platform.
+
+      Envelope, signature and retries are identical to merchant webhooks —
+      see `WebhookEvent`.
+  - name: Webhooks — Merchants
+    description: |
+      Signed events delivered to an endpoint owned by **one store**, which
+      hears only that store's events. Two ways to register one:
+
+      - the store owner types the URL into the merchant panel
+        (*Settings › API access › Webhooks*), or
+      - the store's own credential calls `POST /v1/webhooks` — the
+        no-manual-setup path for a plugin: the owner pastes one token, the
+        plugin registers its callback URL itself.
+
+      An endpoint registered by a credential is switched off when that
+      credential is revoked; panel-made endpoints outlive every token. Up to
+      5 active endpoints per store. The signing secret is shown exactly once
+      at registration.
+
+      Envelope, signature and retries are identical to POS-vendor webhooks —
+      see `WebhookEvent`.
 
 paths:
 
@@ -207,6 +258,23 @@ paths:
         categorised call is worked end to end here instead, where the two
         halves cannot drift apart.
 
+        Get the allowed categories first — they are the merchant's own,
+        and anything not on this list is refused:
+
+        ```json
+        // GET /v1/merchants/me/product-categories
+        {
+          "data": [
+            { "category_id": 41, "category": "fruits",  "mode": "excluded", "cashback_rate_percent": null },
+            { "category_id": 42, "category": "veggies", "mode": "rate",     "cashback_rate_percent": "2.00" }
+          ]
+        }
+        ```
+
+        Then send the sale. Name each line by `category_id` **or** by
+        `category` — whichever your system already stores. `null` is the
+        explicit "everything else" bucket.
+
         ```json
         // POST /v1/transactions  — a basket of three categories
         {
@@ -214,9 +282,9 @@ paths:
           "customer_ref": "482917",
           "eligible_amount": 100000,
           "lines": [
-            { "category": "fruits",  "amount_laari": 30000 },
-            { "category": "veggies", "amount_laari": 25000 },
-            { "category": null,      "amount_laari": 45000 }
+            { "category_id": 41, "amount_laari": 30000 },
+            { "category_id": 42, "amount_laari": 25000 },
+            { "category": null,  "amount_laari": 45000 }
           ]
         }
         ```
@@ -418,7 +486,8 @@ paths:
                   eligible_amount: 100000
                   occurred_at: '2026-08-15T10:30:00+05:00'
                   lines:
-                    - category: fruits
+                    # By id or by slug — both are shown because both work.
+                    - category_id: 41
                       amount_laari: 30000
                     - category: veggies
                       amount_laari: 25000
@@ -980,7 +1049,9 @@ paths:
             generation; never reuse a key across different sales).
 
             Line-split failures (only possible when `lines` is sent):
-            `unknown_category` (not one of this merchant's slugs — refresh
+            `conflicting_category` (a line's `category` and `category_id`
+            name different categories),
+            `unknown_category` (not one of this merchant's categories — refresh
             `GET /v1/merchants/me/product-categories`), `inactive_category`
             (the category was deactivated), `duplicate_category_line` (a
             category — or the null default — appears twice), and
@@ -1411,8 +1482,9 @@ paths:
       x-required-ability: rates:read
       description: |
         The authenticated merchant's **active** product categories — the
-        allowed values for `lines[].category` on `POST /v1/transactions`.
-        `category` is the exact string to submit. `mode: excluded` lines
+        allowed values for `lines[].category` (or `lines[].category_id`) on
+        `POST /v1/transactions`. `category` is the exact string to submit;
+        `category_id` the exact integer, for integrations that prefer one. `mode: excluded` lines
         earn nothing (even during promotions); `mode: rate` lines earn
         their `cashback_rate_percent` instead of the standing rate. Amounts in no listed
         category belong on the default line (`category: null`), which earns
@@ -1437,14 +1509,33 @@ paths:
                       $ref: '#/components/schemas/ProductCategory'
               examples:
                 typical:
+                  summary: Two categories — and the bucket that is never listed
+                  description: |
+                    **"Everything else" has no row here, and never will.**
+                    It is not a category a merchant creates; it is what a
+                    line means when it names no category. Send it as
+                    `{"category": null, "amount_laari": …}` and it earns the
+                    store's standing rate.
+
+                    So a basket using this list looks like:
+
+                    ```json
+                    "lines": [
+                      { "category_id": 41, "amount_laari": 30000 },
+                      { "category_id": 42, "amount_laari": 25000 },
+                      { "category": null,  "amount_laari": 45000 }
+                    ]
+                    ```
                   value:
                     data:
-                      - category: fruits
+                      - category_id: 41
+                        category: fruits
                         name_en: Fruits
                         name_dv: މޭވާ
                         mode: excluded
                         cashback_rate_percent: null
-                      - category: veggies
+                      - category_id: 42
+                        category: veggies
                         name_en: Veggies
                         name_dv: ތަރުކާރީ
                         mode: rate
@@ -1554,15 +1645,519 @@ paths:
                       errors:
                         ref:
                           - The ref field format is invalid.
+  /v1/transactions/{id}:
+    patch:
+      operationId: amendTransaction
+      tags: [Transactions]
+      summary: Amend a pending sale — the partial-refund path
+      x-required-ability: transactions:write
+      description: |
+        Reduce (or correct) a sale that is still **pending** — inside its
+        validation window, `state: awaiting_validation`. Send the new
+        `eligible_amount`, optionally `sale_amount` and a fresh `lines[]`
+        split; the cashback is re-priced at the terms **frozen on the
+        sale** (the rate and fee it was created with), and the ledger
+        carries it off at what was recorded and back on at what is now
+        recorded. Below the store's minimum the sale re-prices to zero.
+
+        This is how an online store handles a partial refund: amend the
+        sale to what the buyer kept. Once the window has closed the sale is
+        `confirmed` and answers `409 not_amendable_state` — reverse it in
+        full (`/reverse`) or leave it; a backdated sale is final
+        (`409 backdated_irreversible`). Requires `Idempotency-Key`; a
+        replay under the same key returns the same body.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [eligible_amount]
+              properties:
+                eligible_amount:
+                  $ref: '#/components/schemas/LaariAmount'
+                sale_amount:
+                  type: [integer, 'null']
+                  description: The new receipt total in laari; must not be under `eligible_amount`.
+                lines:
+                  type: [array, 'null']
+                  description: A complete replacement split (same rules as on creation); omit to keep a single-rate sale single-rate.
+                  items:
+                    $ref: '#/components/schemas/TransactionLine'
+            example:
+              eligible_amount: 100000
+              sale_amount: 107000
+      responses:
+        '200':
+          description: Amended.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status, transaction]
+                properties:
+                  status:
+                    type: string
+                    const: amended
+                  transaction:
+                    $ref: '#/components/schemas/Transaction'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/ForbiddenAbility'
+        '404':
+          description: '`transaction_not_found` — no sale with that id belongs to this merchant.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: |
+            `not_amendable_state` — the sale is no longer pending (`meta.state`
+            says what it is). `backdated_irreversible` — credited outside the
+            window, final.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                confirmed:
+                  value:
+                    error:
+                      code: not_amendable_state
+                      message: This sale is confirmed and can no longer be edited here — the validation window has closed. Contact the platform for an adjustment.
+                      meta:
+                        state: confirmed
+        '422':
+          description: '`validation_failed` (`sale_amount` under `eligible_amount`, missing key), `lines_sum_mismatch`, `unknown_category`, `inactive_category`, `duplicate_category_line`.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    get:
+      operationId: getTransaction
+      tags: [Transactions]
+      summary: Read one sale back
+      x-required-ability: transactions:write
+      description: |
+        The sale as recorded, with its pricing `lines` when it had any.
+        Either writing ability reads (`transactions:write` **or**
+        `transactions:reverse`). Two uses: after a `409 duplicate_invoice`,
+        fetch `error.meta.transaction_id` to adopt the sale you posted
+        before a crash instead of treating it as an error; and polling a
+        sale's `state` for a "Refresh status" button. Another merchant's id
+        — or none — answers `404 transaction_not_found`.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: The sale.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [transaction]
+                properties:
+                  transaction:
+                    $ref: '#/components/schemas/Transaction'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/ForbiddenAbility'
+        '404':
+          description: '`transaction_not_found` — no sale with that id belongs to this merchant.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                unknown:
+                  value:
+                    error:
+                      code: transaction_not_found
+                      message: No transaction with that id belongs to this merchant.
+
+  /v1/me:
+    get:
+      operationId: whoAmI
+      tags: [Merchant]
+      summary: Who am I — the store and the token's own abilities
+      description: |
+        Needs no ability beyond a live credential: a token may always read
+        what it is. The one call a plugin's **Test connection** needs — the
+        store, the abilities the token actually carries (so it can warn
+        "refunds will not reverse cashback" when `transactions:reverse` is
+        missing), where a connected grant came from, and a rate summary.
+        The authoritative, cacheable rate card stays at
+        `GET /v1/merchants/me/rate`.
+      responses:
+        '200':
+          description: The token's identity.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [merchant, credential, rate]
+                properties:
+                  merchant:
+                    type: object
+                    properties:
+                      id: { type: integer }
+                      name: { type: string }
+                      slug: { type: string }
+                      status: { type: string }
+                      currency: { type: string, const: MVR }
+                  credential:
+                    type: object
+                    properties:
+                      id: { type: [integer, 'null'] }
+                      label:
+                        type: [string, 'null']
+                        description: The platform's display name, or the label the owner typed.
+                      abilities:
+                        type: array
+                        items: { type: string }
+                        description: What the ability gate will actually allow this token.
+                      connected_from:
+                        type: [string, 'null']
+                        description: '`https://shop.example.mv` for a public-client grant; null otherwise.'
+                      issued_at: { type: [string, 'null'], format: date-time }
+                  rate:
+                    type: [object, 'null']
+                    description: Null when no rate is effective (the store cannot earn yet).
+                    properties:
+                      cashback_rate_percent:
+                        $ref: '#/components/schemas/PercentString'
+                      min_eligible_laari: { type: integer }
+                      has_category_overrides: { type: boolean }
+              example:
+                merchant: { id: 12, name: Tea Plus, slug: tea-plus, status: active, currency: MVR }
+                credential:
+                  id: 41
+                  label: Manfaa for WooCommerce
+                  abilities: [transactions:write, transactions:reverse, rates:read, customers:lookup, webhooks:manage]
+                  connected_from: https://shop.example.mv
+                  issued_at: "2026-08-22T10:14:58+05:00"
+                rate: { cashback_rate_percent: "2.00", min_eligible_laari: 5000, has_category_overrides: false }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /v1/connect/token:
+    post:
+      operationId: exchangeConnectCode
+      tags: [Connect]
+      summary: Exchange an authorization code for a merchant token
+      security: []
+      description: |
+        The last step of the connect handshake: swap the one-time code the
+        merchant's browser delivered for the token your integration will
+        use. Server to server — the browser that carried the code never sees
+        what it becomes.
+
+        Unauthenticated in the bearer sense, because you have no token yet:
+        your `client_secret` and the PKCE `code_verifier` are the proof —
+        or, for a **public client** (a plugin on the merchant's server),
+        the `code_verifier` alone. A public client must **omit**
+        `client_secret`; sending one answers `401 invalid_client`.
+
+        **The token does not expire.** There is no refresh token and nothing
+        to renew; it lives until the merchant disconnects you, or until we
+        rotate your client secret. Re-authorisation by the same merchant
+        REPLACES the previous token — store the new one and discard the old.
+
+        The code is valid for **60 seconds and one use**. Full walkthrough,
+        including how to build the challenge, is in the guide under
+        Authentication.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [grant_type, client_id, code, redirect_uri, code_verifier]
+              properties:
+                grant_type:
+                  type: string
+                  enum: [authorization_code]
+                client_id:
+                  type: string
+                  description: Issued to you at platform registration.
+                  example: mfa_9f2c1a7b4e6d8g0h3j5k
+                client_secret:
+                  type: string
+                  description: Confidential platforms only — issued once at registration, never put in the browser. **Omit** for a public client.
+                code:
+                  type: string
+                  description: The `code` query parameter your callback received.
+                redirect_uri:
+                  type: string
+                  description: Must be byte-identical to the one you sent to the consent screen.
+                  example: https://islebooks.mv/manfaa/callback
+                code_verifier:
+                  type: string
+                  minLength: 43
+                  maxLength: 128
+                  description: The random string whose SHA-256 you sent as `code_challenge`.
+            example:
+              grant_type: authorization_code
+              client_id: mfa_9f2c1a7b4e6d8g0h3j5k
+              client_secret: '<your secret>'
+              code: 8Kj2mQ...
+              redirect_uri: https://islebooks.mv/manfaa/callback
+              code_verifier: dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk
+      responses:
+        '201':
+          description: Connected. Store the token against `merchant.id`.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  access_token:
+                    type: string
+                    description: 'Send as `Authorization: Bearer <token>` on every /v1 call.'
+                  token_type:
+                    type: string
+                    enum: [Bearer]
+                  scope:
+                    type: string
+                    description: Space-separated abilities the merchant granted.
+                  merchant:
+                    type: object
+                    properties:
+                      id: { type: integer }
+                      name: { type: string, nullable: true }
+              example:
+                access_token: 42|nQ7vK2pXmR8sT4wY6zB1cD3fG5hJ9kL0
+                token_type: Bearer
+                scope: transactions:write rates:read
+                merchant:
+                  id: 17
+                  name: Tea Plus
+        '400':
+          description: |
+            `invalid_grant` — the code is expired, already spent, issued to a
+            different platform, presented under a different `redirect_uri`,
+            or the verifier does not match the challenge. Start again from
+            the consent screen.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error: { type: string }
+                  error_description: { type: string }
+              example:
+                error: invalid_grant
+                error_description: That authorization code is not valid.
+        '401':
+          description: '`invalid_client` — unknown `client_id`, wrong or missing `client_secret` (confidential), a `client_secret` sent by a public client, or your registration is not enabled for connect.'
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error: { type: string }
+                  error_description: { type: string }
+              example:
+                error: invalid_client
+                error_description: That application is not registered for connect.
+
 
 # ---------------------------------------------------------------------------
 # Outbound webhooks (PLAN §9.3)
 # ---------------------------------------------------------------------------
+  /v1/webhooks:
+    get:
+      operationId: listWebhooks
+      tags: [Webhooks — Merchants]
+      summary: List the endpoints this credential registered
+      x-required-ability: webhooks:manage
+      description: |
+        Only endpoints registered **by this credential** are returned — never
+        the ones the store owner typed into the panel, and never another
+        credential's. Each carries its latest delivery so a plugin can show
+        "last heard from" on its settings page. The signing secret is never
+        included.
+      responses:
+        '200':
+          description: The credential's endpoints, newest first.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/MerchantWebhookEndpoint'
+              example:
+                data:
+                  - id: 41
+                    url: https://shop.example.mv/wp-json/manfaa/v1/webhook
+                    label: WooCommerce
+                    events: [merchant.rate_changed, transaction.reversed]
+                    active: true
+                    registered_by: credential
+                    api_credential_id: 17
+                    last_delivery:
+                      event: webhook.test
+                      status: delivered
+                      response_status: 200
+                      attempted_at: "2026-08-22T10:15:03+05:00"
+                    created_at: "2026-08-22T10:14:58+05:00"
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/ForbiddenAbility'
+    post:
+      operationId: registerWebhook
+      tags: [Webhooks — Merchants]
+      summary: Register a webhook endpoint for this store
+      x-required-ability: webhooks:manage
+      description: |
+        Registers an endpoint owned by the token's merchant and tied to the
+        calling credential. The response carries the plaintext signing
+        `secret` **exactly once** — store it; there is no retrieval path, and
+        losing it means registering again.
+
+        Re-registering the **same URL from the same credential replaces**
+        the earlier endpoint (and its secret) instead of stacking copies
+        toward the cap, so a plugin that is deactivated and re-activated
+        always ends with exactly one live endpoint. A different URL is a
+        second endpoint.
+
+        The URL must be `https://` on a public host: private and link-local
+        ranges, localhost and bare IPs are refused as `validation_failed`
+        (the worker POSTs wherever this row points).
+
+        When the credential is revoked in the panel, every endpoint it
+        registered is switched off (`active: false`) with it.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WebhookRegisterRequest'
+            example:
+              url: https://shop.example.mv/wp-json/manfaa/v1/webhook
+              label: WooCommerce
+              events: [merchant.rate_changed, merchant.suspended, merchant.reinstated, transaction.reversed]
+      responses:
+        '201':
+          description: Registered. `secret` is shown here and never again.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [secret, endpoint]
+                properties:
+                  secret:
+                    type: string
+                    description: The HMAC signing secret (`whsec_` + 48 chars). Shown once.
+                    pattern: '^whsec_[A-Za-z0-9]{48}$'
+                  endpoint:
+                    $ref: '#/components/schemas/MerchantWebhookEndpoint'
+              example:
+                secret: whsec_Qm4kz8Wd1xP0sLt7Rv2cHn9aYb3Ej6Fu5Gi8Kp1Ms4Nt7Vw0Xz
+                endpoint:
+                  id: 41
+                  url: https://shop.example.mv/wp-json/manfaa/v1/webhook
+                  label: WooCommerce
+                  events: [merchant.rate_changed, merchant.suspended, merchant.reinstated, transaction.reversed]
+                  active: true
+                  registered_by: credential
+                  api_credential_id: 17
+                  last_delivery: null
+                  created_at: "2026-08-22T10:14:58+05:00"
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/ForbiddenAbility'
+        '422':
+          description: |
+            `validation_failed` — not an `https://` public URL, empty or
+            unknown `events`, label over 80 characters.
+            `endpoint_cap_reached` — the store already has 5 active
+            endpoints (across panel and every credential); `meta.max_active`
+            carries the cap. Remove one first.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                privateHost:
+                  value:
+                    error:
+                      code: validation_failed
+                      message: The given data was invalid.
+                      errors:
+                        url:
+                          - The url must point at a public host.
+                cap:
+                  value:
+                    error:
+                      code: endpoint_cap_reached
+                      message: This store already has 5 active webhook endpoints. Remove one before adding another.
+                      meta:
+                        max_active: 5
+
+  /v1/webhooks/{id}:
+    delete:
+      operationId: deleteWebhook
+      tags: [Webhooks — Merchants]
+      summary: Remove an endpoint this credential registered
+      x-required-ability: webhooks:manage
+      description: |
+        Hard-deletes the endpoint and its delivery history. A plugin should
+        call this on deactivation so the store stops hearing from us at a
+        URL that no longer answers. Ids of endpoints the panel registered,
+        or another credential registered, answer `404 webhook_not_found` —
+        indistinguishable from an id that never existed.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '204':
+          description: Removed.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/ForbiddenAbility'
+        '404':
+          description: '`webhook_not_found` — no endpoint with that id was registered by this credential.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                unknown:
+                  value:
+                    error:
+                      code: webhook_not_found
+                      message: No webhook endpoint with that id was registered by this credential.
+
 webhooks:
 
   merchant.rate_changed:
     post:
       operationId: webhookMerchantRateChanged
+      tags: [Webhooks — POS vendors, Webhooks — Merchants]
       summary: The merchant's standing rate changed
       description: |
         Emitted whenever the merchant's rate changes. For decreases,
@@ -1610,6 +2205,7 @@ webhooks:
   merchant.suspended:
     post:
       operationId: webhookMerchantSuspended
+      tags: [Webhooks — POS vendors, Webhooks — Merchants]
       summary: The merchant was suspended
       description: |
         Emitted when the merchant is automatically suspended (settlement
@@ -1651,6 +2247,7 @@ webhooks:
   merchant.reinstated:
     post:
       operationId: webhookMerchantReinstated
+      tags: [Webhooks — POS vendors, Webhooks — Merchants]
       summary: The merchant was reinstated
       description: |
         Emitted when a suspended merchant settles and is reinstated.
@@ -1689,6 +2286,7 @@ webhooks:
   transaction.reversed:
     post:
       operationId: webhookTransactionReversed
+      tags: [Webhooks — POS vendors, Webhooks — Merchants]
       summary: A transaction was reversed
       description: |
         Emitted whenever one of the merchant's transactions transitions to
@@ -1732,6 +2330,54 @@ webhooks:
 # ---------------------------------------------------------------------------
 # Components
 # ---------------------------------------------------------------------------
+  webhook.test:
+    post:
+      operationId: webhookTest
+      tags: [Webhooks — Merchants]
+      summary: A store owner pressed "Send test"
+      description: |
+        Delivered to ONE merchant endpoint when its owner presses **Send
+        test** in the panel. Signed exactly like a real event, so your
+        verification code cannot tell it apart except by `type`. Verify the
+        signature, answer `2xx`, and do no other work. It cannot be
+        subscribed to and is never sent to POS-vendor endpoints.
+      parameters:
+        - $ref: '#/components/parameters/WebhookSignature'
+        - $ref: '#/components/parameters/WebhookTimestamp'
+        - $ref: '#/components/parameters/WebhookEventName'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/WebhookEvent'
+                - type: object
+                  properties:
+                    type:
+                      const: webhook.test
+                    data:
+                      type: object
+                      required: [merchant_id, endpoint_id, message]
+                      properties:
+                        merchant_id:
+                          type: integer
+                        endpoint_id:
+                          type: integer
+                        message:
+                          type: string
+            example:
+              id: evt_01J5A8Z0T2N9GQK4WMB3XVRD6H
+              type: webhook.test
+              created_at: "2026-08-22T10:15:00+05:00"
+              data:
+                merchant_id: 12
+                endpoint_id: 41
+                message: This is a test delivery from Manfaa. If you can verify the signature, you are set up.
+      responses:
+        '2xx':
+          description: Acknowledged.
+
 components:
 
   securitySchemes:
@@ -1743,10 +2389,12 @@ components:
         per POS vendor, independently revocable, so a merchant switching POS
         vendor never forces rotation across other merchants.
 
-        Two ways a token comes into existence, both producing the same
-        credential: Manfaa issues one at onboarding, or the **merchant's own
-        owner** issues one themselves from Settings › API access in the
-        merchant panel, choosing the abilities below. Either way the
+        Three ways a token comes into existence, all producing the same
+        credential: Manfaa issues one at onboarding; the **merchant's own
+        owner** issues one from Settings › API access in the merchant panel,
+        choosing the abilities below; or — for platforms serving many
+        merchants — the merchant approves you on a Manfaa consent screen and
+        your server collects the token (`POST /v1/connect/token`). The
         plaintext is shown exactly once at issuance and never again — only
         its SHA-256 digest is stored, so a lost token is replaced, never
         recovered. The merchant can revoke any of their tokens at any time
@@ -1761,6 +2409,7 @@ components:
         | `transactions:reverse` | `POST /v1/transactions/{id}/reverse` |
         | `rates:read` | `GET /v1/merchants/me/rate` |
         | `customers:lookup` | `GET /v1/customers/lookup` |
+        | `webhooks:manage` | `GET` / `POST /v1/webhooks`, `DELETE /v1/webhooks/{id}` — the credential's own webhook endpoints |
 
         A missing or revoked token returns `401`
         `{"message": "Unauthenticated."}`; a valid token lacking the
@@ -1929,7 +2578,10 @@ components:
         | `duplicate_invoice` | error | 409 | Never — sale already recorded |
         | `invalid_state` | error | 409 | Never — terminal state |
         | `backdated_irreversible` | error | 409 | Never — admin adjustment only |
+        | `not_amendable_state` | error | 409 | Never — the sale is past its window; reverse in full or leave it |
         | `transaction_not_found` | error | 404 | Never |
+        | `webhook_not_found` | error | 404 | Never |
+        | `endpoint_cap_reached` | error | 422 | After removing an endpoint (`meta.max_active`) |
         | `merchant_suspended` | reason (`200 recorded_ineligible`) | — | n/a — recorded, no cashback |
         | `below_minimum` | reason (`200 below_minimum`) | — | n/a — recorded, zero cashback |
         | `backdated_final` | reason (`201`, `state: payable_unfunded`) | — | n/a — accepted, payable now, irreversible |
@@ -1958,7 +2610,10 @@ components:
         - duplicate_invoice
         - invalid_state
         - backdated_irreversible
+        - not_amendable_state
         - transaction_not_found
+        - webhook_not_found
+        - endpoint_cap_reached
         - merchant_suspended
         - below_minimum
         - backdated_final
@@ -2072,6 +2727,16 @@ components:
       type: object
       required: [invoice_no, customer_ref, eligible_amount]
       properties:
+        origin:
+          type: string
+          enum: [pos, online_link]
+          default: pos
+          description: |
+            Where the sale happened — a till (`pos`, the default) or a web
+            shop (`online_link`; the WooCommerce plugin sends this).
+            Reporting only: pricing is identical. A sale keyed by the
+            customer's **phone** records `api_phone` whatever you send,
+            because that value marks how the customer was matched.
         invoice_no:
           type: string
           minLength: 1
@@ -2180,16 +2845,24 @@ components:
             the whole `eligible_amount` earns the standing rate, exactly as
             before — sending `lines` is never required.
 
-            Each line is `{category, amount_laari}`: `category` is one of
-            the merchant's active category slugs, or **`null` for the
-            default "everything else" bucket** (standing rate). Rules:
+            Each line names a category and an amount. Name the category
+            either by **slug** (`category`) — one of the merchant's active
+            category slugs, or **`null` for the default "everything else"
+            bucket** (standing rate) — or by **id** (`category_id`), from
+            the same listing endpoint. Rules:
 
             - amounts are laari integers ≥ 1 and **must sum to exactly
               `eligible_amount`** (`422 lines_sum_mismatch`);
             - each category — and the null default — may appear at most
               once (`422 duplicate_category_line`);
-            - unknown or other-merchant slugs are `422 unknown_category`;
-              deactivated ones are `422 inactive_category`.
+            - unknown or other-merchant slugs **and ids** are
+              `422 unknown_category` — another merchant's identifier is
+              deliberately indistinguishable from one that does not exist;
+              deactivated categories are `422 inactive_category`;
+            - a line carrying both `category` and `category_id` that name
+              different categories is `422 conflicting_category`. The same
+              category sent once by slug and once by id is still
+              `422 duplicate_category_line`.
 
             Pricing per line (§4 ceiling rounding per line, then summed —
             totals are the sum of the stored line integers): `excluded`
@@ -2204,11 +2877,31 @@ components:
             `lines` with per-line integers.
           items:
             type: object
-            required: [category, amount_laari]
+            required: [amount_laari]
+            description: |
+              A line names its category by **slug** (`category`) or by
+              **id** (`category_id`). Exactly one identifier must be
+              present — omitting both is a `validation_failed`, because a
+              missing field cannot be told apart from a deliberate default
+              line. Sending both is allowed only when they name the same
+              category (`422 conflicting_category` otherwise).
             properties:
               category:
                 type: ['string', 'null']
-                description: Category slug, or null for the default (standing-rate) bucket.
+                description: |
+                  Category slug, or **null** for the default
+                  (standing-rate) bucket. Slugs are immutable once created,
+                  so they are safe to store.
+              category_id:
+                type: integer
+                format: int64
+                minimum: 1
+                description: |
+                  The category's id, as listed by
+                  `GET /v1/merchants/me/product-categories`. An alternative
+                  to `category` for integrations that would rather store an
+                  integer. There is no id for the default bucket — send
+                  `"category": null` for that line.
               amount_laari:
                 allOf:
                   - $ref: '#/components/schemas/LaariAmount'
@@ -2218,13 +2911,22 @@ components:
       type: object
       description: |
         One merchant product category as listed to vendors. `category` is
-        the exact `lines[].category` value. `cashback_rate_percent` is null
-        exactly when `mode` is `excluded`.
-      required: [category, name_en, name_dv, mode, cashback_rate_percent]
+        the exact `lines[].category` value and `category_id` the exact
+        `lines[].category_id` value — either may be submitted.
+        `cashback_rate_percent` is null exactly when `mode` is `excluded`.
+      required: [category_id, category, name_en, name_dv, mode, cashback_rate_percent]
       properties:
+        category_id:
+          type: integer
+          format: int64
+          description: |
+            The category's id. May be submitted as `lines[].category_id`
+            instead of the slug — the two are interchangeable.
         category:
           type: string
-          description: The immutable slug submitted in transaction lines.
+          description: |
+            The immutable slug submitted as `lines[].category`. Immutable
+            once created, so it is safe to store long-term.
         name_en:
           type: string
         name_dv:
@@ -2705,6 +3407,7 @@ components:
             - merchant.suspended
             - merchant.reinstated
             - transaction.reversed
+            - webhook.test
         created_at:
           type: string
           format: date-time
@@ -2712,6 +3415,75 @@ components:
         data:
           type: object
           description: Event-specific payload — see the per-event schemas.
+
+    WebhookRegisterRequest:
+      type: object
+      required: [url, events]
+      properties:
+        url:
+          type: string
+          format: uri
+          maxLength: 2048
+          description: '`https://` on a public host. Private ranges, localhost and bare IPs are refused.'
+        label:
+          type: [string, 'null']
+          maxLength: 80
+          description: Shown in the merchant panel beside the URL (e.g. the plugin name).
+        events:
+          type: array
+          minItems: 1
+          items:
+            type: string
+            enum:
+              - merchant.rate_changed
+              - merchant.suspended
+              - merchant.reinstated
+              - transaction.reversed
+          description: Subscriptions. `webhook.test` is not subscribable — every endpoint receives it when the owner presses Send test.
+
+    MerchantWebhookEndpoint:
+      type: object
+      description: A merchant-owned endpoint as `/v1/webhooks` and the panel show it. Never carries the secret.
+      required: [id, url, label, events, active, registered_by, api_credential_id, last_delivery, created_at]
+      properties:
+        id:
+          type: integer
+        url:
+          type: string
+          format: uri
+        label:
+          type: [string, 'null']
+        events:
+          type: array
+          items:
+            type: string
+        active:
+          type: boolean
+          description: '`false` once the credential that registered it is revoked. An inactive endpoint receives nothing.'
+        registered_by:
+          type: string
+          enum: [credential, panel]
+          description: Which door registered it — a credential over `/v1/webhooks`, or the owner in the panel.
+        api_credential_id:
+          type: [integer, 'null']
+          description: The credential it is tied to; `null` for panel-made endpoints.
+        last_delivery:
+          type: [object, 'null']
+          description: The newest delivery of any event, or `null` if nothing has been sent yet.
+          properties:
+            event:
+              type: string
+            status:
+              type: string
+              enum: [pending, delivered, failed, exhausted]
+            response_status:
+              type: [integer, 'null']
+            attempted_at:
+              type: [string, 'null']
+              format: date-time
+        created_at:
+          type: string
+          format: date-time
 
     WebhookRateChangedData:
       type: object

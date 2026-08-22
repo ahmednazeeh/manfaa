@@ -59,38 +59,35 @@
   <span>Developer documentation</span>
 </header>
 <div class="wrap">
-<nav class="toc"><p>On this page</p><ul><li><a href="#1-sandbox-fixtures">1. Sandbox fixtures</a></li><li><a href="#2-authentication">2. Authentication</a></li><li><a href="#3-idempotency-required-on-every-write">3. Idempotency — required on every write</a></li><li><a href="#4-endpoints">4. Endpoints</a></li><li><a href="#5-errors">5. Errors</a></li><li><a href="#6-webhooks">6. Webhooks</a></li><li><a href="#7-retry-expectations">7. Retry expectations</a></li><li><a href="#8-go-live-checklist">8. Go-live checklist</a></li></ul></nav>
+<nav class="toc"><p>On this page</p><ul><li><a href="#1-the-fixture-set-the-examples-use">1. The fixture set the examples use</a></li><li><a href="#2-authentication">2. Authentication</a></li><li><a href="#3-idempotency-required-on-every-write">3. Idempotency — required on every write</a></li><li><a href="#4-endpoints">4. Endpoints</a></li><li><a href="#5-errors">5. Errors</a></li><li><a href="#6-webhooks">6. Webhooks</a></li><li><a href="#7-retry-expectations">7. Retry expectations</a></li><li><a href="#8-go-live-checklist">8. Go-live checklist</a></li></ul></nav>
 <h1 id="manfaa-vendor-integration-guide">Manfaa Vendor Integration Guide</h1>
-<p>For POS developers integrating a till or web shop in the Maldives with the Manfaa cashback platform. This guide walks the whole integration against the <strong>sandbox</strong>; the OpenAPI contract in <code>openapi.yaml</code> (openapi.yaml) is the authoritative reference for every field and code.</p>
-<div class="table-scroll"><table><thead><tr><th>Environment</th><th>Base URL</th></tr></thead><tbody><tr><td>Sandbox</td><td><code>https://sandbox.api.manfaa.app/api</code></td></tr><tr><td>Production</td><td><code>https://api.manfaa.app/api</code></td></tr></tbody></table></div>
-<p>Everything below uses the sandbox. Nothing you do there mints real cashback.</p>
+<p>For POS developers integrating a till or web shop in the Maldives with the Manfaa cashback platform. The OpenAPI contract in <code>openapi.yaml</code> (openapi.yaml) is the authoritative reference for every field and code.</p>
+<div class="table-scroll"><table><thead><tr><th>Environment</th><th>Base URL</th></tr></thead><tbody><tr><td>Production</td><td><code>https://api.manfaa.app/api</code></td></tr></tbody></table></div>
+<p>There is no separate sandbox host at present. Integrate against production with the merchant's own credential and a customer code you control: a sale you record can be reversed while it is pending (§4.2), and nothing is paid out before the merchant settles. The worked answers below are computed against the fixture set in §1 so every integer can be checked by hand.</p>
 <p><strong>The model in one paragraph:</strong> your till <strong>POSTs each eligible sale</strong> to us with the customer's 6-digit code; we compute cashback at the merchant's rate, run the settlement clock, and pay the customer. There is no polling — tills sit behind NAT, so all traffic is inbound to us, plus signed webhooks from us to you so your cached rate is never stale.</p>
 <p><strong>Money:</strong> every amount is an <strong>integer count of laari</strong> (1/100 rufiyaa). MVR 1,180.00 is <code>118000</code>. Never send a float — a fractional JSON number is rejected. Responses carry both the integer (<code>cashback_laari: 2360</code>) and a display string (<code>cashback_mvr: &quot;23.60&quot;</code>) for the receipt printer.</p>
 <p><strong>Rates:</strong> every rate on this API is a <strong>2-decimal percent string</strong> — 2% is <code>&quot;2.00&quot;</code>, the platform fee <code>&quot;0.75&quot;</code>, the same idiom as <code>cashback_mvr</code>. Basis points are how the platform stores and computes rates internally; they <strong>never appear in a request or a response</strong>, so there is no <code>rate_bp</code> or <code>fee_bp</code> field anywhere. Sending a rate, you may use a string (<code>&quot;2&quot;</code>, <code>&quot;2.5&quot;</code>, <code>&quot;2.50&quot;</code>) or a JSON number (<code>2</code>, <code>2.5</code>) with at most two decimals — a string is safer, since it cannot be reshaped by your JSON library's float handling. Read one by splitting on the <code>.</code> (or into a decimal type); never parse it to a binary float and multiply.</p>
 <p><em>(This is a clean break, not a versioned migration: no vendor is integrated yet, so <code>rate_bp</code>/<code>fee_bp</code> are simply gone rather than deprecated. If you built against an earlier draft of this guide, rename the fields — the numbers are the same, expressed as percent.)</em></p>
 <hr>
-<h2 id="1-sandbox-fixtures">1. Sandbox fixtures</h2>
-<p>Run <code>php artisan manfaa:sandbox</code> on the sandbox host (our team runs it for you at onboarding — the output below is what you receive). It is safe to re-run and prints the same token every time.</p>
-<div class="table-scroll"><table><thead><tr><th>Fixture</th><th>Value</th></tr></thead><tbody><tr><td>Merchant</td><td><strong>Sandbox Store</strong> (<code>sandbox-store</code>) — minimum eligible sale <code>5000</code> laari (MVR 50), validation window 3 days</td></tr><tr><td>Rate</td><td><code>&quot;2.00&quot;</code> now, with a <strong>scheduled decrease</strong> to <code>&quot;1.50&quot;</code> at the next 00:00 UTC+5 — so <code>GET /v1/merchants/me/rate</code> always shows a <code>pending_decrease</code></td></tr><tr><td>Branch</td><td>Sandbox Branch (id printed by the command)</td></tr><tr><td>POS vendor</td><td>Sandbox POS</td></tr><tr><td>Token</td><td>Printed by the command. Carries <strong>all four abilities</strong>. Sandbox-only.</td></tr></tbody></table></div>
+<h2 id="1-the-fixture-set-the-examples-use">1. The fixture set the examples use</h2>
+<p>Every worked answer in this guide is computed against one fixed store, so you can check the arithmetic. (It is what <code>php artisan manfaa:sandbox</code> seeds on a non-production environment; there is no hosted sandbox today — ask integrations@manfaa.app for a test merchant on production if you are not integrating for a specific store.)</p>
+<div class="table-scroll"><table><thead><tr><th>Fixture</th><th>Value</th></tr></thead><tbody><tr><td>Merchant</td><td><strong>Sandbox Store</strong> (<code>sandbox-store</code>) — minimum eligible sale <code>5000</code> laari (MVR 50), validation window 3 days</td></tr><tr><td>Rate</td><td><code>&quot;2.00&quot;</code> now, with a <strong>scheduled decrease</strong> to <code>&quot;1.50&quot;</code> at the next 00:00 UTC+5 — so <code>GET /v1/merchants/me/rate</code> always shows a <code>pending_decrease</code></td></tr><tr><td>Branch</td><td>Sandbox Branch (id printed by the command)</td></tr><tr><td>POS vendor</td><td>Sandbox POS</td></tr><tr><td>Token</td><td>Printed by the command. Carries every ability.</td></tr></tbody></table></div>
 <p>Published test customers:</p>
 <div class="table-scroll"><table><thead><tr><th>Code</th><th>Name</th><th>Phone</th><th>Behaviour</th></tr></thead><tbody><tr><td><code>111111</code></td><td>Aisha Mohamed</td><td>+960 711-1111</td><td>Earns normally. Lookup: <code>valid: true</code>, <code>&quot;Ais*** Moh***&quot;</code></td></tr><tr><td><code>222222</code></td><td>Hassan Ibrahim</td><td>+960 722-2222</td><td>Earns normally</td></tr><tr><td><code>333333</code></td><td>Mariyam Saeed</td><td>+960 733-3333</td><td><strong>Suspended</strong> — lookup answers <code>200</code> with <code>valid: false</code>; use it to test your blocked-customer handling</td></tr></tbody></table></div>
-<p>Export the printed token for the examples below:</p>
-<pre><code>export MANFAA_TOKEN=&quot;&lt;token printed by manfaa:sandbox&gt;&quot;
-export MANFAA_API=&quot;https://sandbox.api.manfaa.app/api&quot;</code></pre>
+<p>Export your token for the examples below:</p>
+<pre><code>export MANFAA_TOKEN=&quot;&lt;your merchant credential&gt;&quot;
+export MANFAA_API=&quot;https://api.manfaa.app/api&quot;</code></pre>
 <hr>
 <h2 id="2-authentication">2. Authentication</h2>
 <p>Every request carries a bearer token:</p>
 <pre><code>Authorization: Bearer &lt;token&gt;</code></pre>
-<p>Tokens are <strong>one per merchant per POS vendor</strong> and independently revocable — a merchant switching vendors never invalidates your tokens for other merchants. Store the token server-side or in the till's secure storage; it is shown exactly once (sandbox excepted).</p>
-<p>There are two ways to get one, and they produce the same credential:</p>
+<p>Tokens are <strong>one per merchant per POS vendor</strong> and independently revocable — a merchant switching vendors never invalidates your tokens for other merchants. Store the token server-side or in the till's secure storage; it is shown exactly once.</p>
+<p>There are three ways to get one, and they all produce the same credential:</p>
 <ul>
-<li><strong>Manfaa issues it at onboarding</strong> — the usual path when our team does the</li>
+<li><strong>Manfaa issues it at onboarding</strong> — the usual path when our team does the integration work for a physical store.</li>
+<li><strong>The merchant issues it themselves</strong> — the store's account OWNER opens Settings › API access in the merchant panel, names you as the integration partner, ticks the permissions you need, and hands you the token. This is the fastest route when the store already has a POS provider: no ticket, no waiting on us.</li>
+<li><strong>The merchant approves you on a consent screen</strong> — see §2.1. Use this if you are building a product for many Manfaa merchants rather than integrating one store; it needs a platform registration from us first.</li>
 </ul>
-<p>  integration work for a physical store.</p>
-<ul>
-<li><strong>The merchant issues it themselves</strong> — the store's account OWNER opens</li>
-</ul>
-<p>  Settings › API access in the merchant panel, names you as the integration   partner, ticks the permissions you need, and hands you the token. This is   the fastest route when the store already has a POS provider: no ticket, no   waiting on us.</p>
 <p>Ask the merchant for exactly the abilities you use, no more — the token cannot be widened later, and a narrower one is a shorter conversation when something goes wrong. If a token leaks, the merchant revokes it on that same screen and issues a replacement; revocation takes effect on the very next request and never touches their other credentials.</p>
 <p>Each token carries <strong>abilities</strong>, and every endpoint requires exactly one:</p>
 <div class="table-scroll"><table><thead><tr><th>Ability</th><th>Grants</th></tr></thead><tbody><tr><td><code>transactions:write</code></td><td><code>POST /v1/transactions</code></td></tr><tr><td><code>transactions:reverse</code></td><td><code>POST /v1/transactions/{id}/reverse</code></td></tr><tr><td><code>rates:read</code></td><td><code>GET /v1/merchants/me/rate</code></td></tr><tr><td><code>customers:lookup</code></td><td><code>GET /v1/customers/lookup</code></td></tr></tbody></table></div>
@@ -101,6 +98,56 @@ export MANFAA_API=&quot;https://sandbox.api.manfaa.app/api&quot;</code></pre>
 </ul>
 <p>Tokens are merchant-scoped. Every resource you touch belongs to the token's merchant; another merchant's transaction id answers <code>404</code>, deliberately indistinguishable from a nonexistent one.</p>
 <p><strong>Rate limit:</strong> 120 requests/minute per token. Exceeding it returns <code>429</code> <code>{&quot;message&quot;: &quot;Too Many Attempts.&quot;}</code> with a <code>Retry-After</code> header — wait and retry (with the same <code>Idempotency-Key</code> if it was a write).</p>
+<h3 id="21-connect-one-integration-many-merchants">2.1 Connect — one integration, many merchants</h3>
+<p>If your product serves many Manfaa merchants, asking every shopkeeper to paste a key is the wrong shape. Instead you send them to a Manfaa screen that says <em>&quot;IsleBooks would like to record sales and accrue cashback — Authorise / Deny&quot;</em>, and if they authorise, <strong>your server</strong> collects the token. The merchant never sees or handles it.</p>
+<p>The token this produces is an ordinary merchant token: same abilities, same endpoints, same <code>401</code>/<code>403</code> behaviour. <strong>It does not expire.</strong> There is no refresh token and nothing to renew — it lives until the merchant disconnects you, or until we rotate your client secret.</p>
+<p><strong>You need a platform registration first.</strong> Email integrations@manfaa.app with your product name, what it does, the permissions you need and your callback URL(s). A Manfaa superadmin registers you and sends back a <code>client_id</code> and a <code>client_secret</code>. Without one, use the per-merchant key above — it works the same and needs nothing from us.</p>
+<p>Registration fixes two things you cannot change at runtime:</p>
+<ul>
+<li>your <strong>callback URLs</strong>, matched exactly (not by prefix) and <code>https</code> only;</li>
+<li>the <strong>ceiling</strong> on what you may ask for. A request for anything outside it is refused before the merchant is shown it.</li>
+</ul>
+<p>The flow is OAuth 2.0 authorization code with PKCE, and it is four steps:</p>
+<p><strong>1. Send the merchant to the consent screen.</strong> PKCE is required: generate a random <code>code_verifier</code> (43–128 chars), keep it, and send its SHA-256 as <code>code_challenge</code>.</p>
+<pre><code>https://merchant.manfaa.app/connect
+  ?client_id=mfa_xxxxxxxxxxxx
+  &amp;redirect_uri=https://islebooks.mv/manfaa/callback
+  &amp;scope=transactions:write%20rates:read
+  &amp;state=&lt;your own anti-forgery value&gt;
+  &amp;code_challenge=&lt;base64url(sha256(verifier))&gt;
+  &amp;code_challenge_method=S256</code></pre>
+<p>If they are not signed in they will be asked to, and returned here afterwards.</p>
+<p><strong>2. They answer.</strong> The browser comes back to your <code>redirect_uri</code> with either <code>?code=…&amp;state=…</code> or <code>?error=access_denied&amp;state=…</code>. Check <code>state</code> matches what you sent, and treat a denial as final — do not immediately re-ask.</p>
+<p><strong>3. Exchange the code, server to server.</strong> The code is good for <strong>60 seconds and one use</strong>:</p>
+<pre><code>curl -X POST https://api.manfaa.app/api/v1/connect/token \
+  -H &quot;Content-Type: application/json&quot; \
+  -H &quot;Accept: application/json&quot; \
+  -d '{
+    &quot;grant_type&quot;: &quot;authorization_code&quot;,
+    &quot;client_id&quot;: &quot;mfa_xxxxxxxxxxxx&quot;,
+    &quot;client_secret&quot;: &quot;&lt;your secret&gt;&quot;,
+    &quot;code&quot;: &quot;&lt;the code&gt;&quot;,
+    &quot;redirect_uri&quot;: &quot;https://islebooks.mv/manfaa/callback&quot;,
+    &quot;code_verifier&quot;: &quot;&lt;the verifier from step 1&gt;&quot;
+  }'</code></pre>
+<pre><code>{
+  &quot;access_token&quot;: &quot;42|xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx&quot;,
+  &quot;token_type&quot;: &quot;Bearer&quot;,
+  &quot;scope&quot;: &quot;transactions:write rates:read&quot;,
+  &quot;merchant&quot;: { &quot;id&quot;: 17, &quot;name&quot;: &quot;Tea Plus&quot; }
+}</code></pre>
+<p>Failures use the OAuth error shape — <code>{&quot;error&quot;: &quot;...&quot;, &quot;error_description&quot;: &quot;...&quot;}</code> — with <code>invalid_client</code> (401) for a bad <code>client_id</code>/<code>client_secret</code>, and <code>invalid_grant</code> (400) for a code that is expired, already spent, yours under a different redirect, or presented without the matching verifier.</p>
+<p><strong>4. Store the token against that merchant</strong> and use it exactly as in §4. <code>merchant.id</code> in the response tells you which store you just connected.</p>
+<p><strong>Re-authorising replaces.</strong> If a merchant connects you again, the previous token is revoked the moment the new one is issued. Store the new one and discard the old. Because nothing expires, this is how a stale grant is cleaned up — so always overwrite, never keep both.</p>
+<p><strong>Disconnection is silent.</strong> A merchant can revoke you from Settings › API access at any time, and we do not call you when they do. Your next request simply answers <code>401</code> — treat that as disconnected and stop retrying rather than as a transient fault.</p>
+<h4 id="public-clients-software-on-the-merchants-own-server">Public clients — software on the merchant's own server</h4>
+<p>A plugin (the Manfaa WooCommerce plugin is one) runs on thousands of stores, each with its own callback URL, and none of them can keep a secret — the shop owner can read every file. For that shape Manfaa registers a <strong>public client</strong>, and the flow above changes in exactly three places:</p>
+<ul>
+<li><strong>No <code>client_secret</code>.</strong> Omit it from step 3; PKCE is the only proof. A public client that <em>sends</em> a secret is refused <code>401 invalid_client</code> — a plugin that thinks it has one is misconfigured.</li>
+<li><strong>No registered callbacks.</strong> Send whatever callback URL your install has (<code>https://shop.example.mv/wp-admin/admin.php?page=manfaa-cashback</code>). It must be <code>https</code> on a public host — private ranges, localhost and bare IPs are refused before the merchant sees anything — and it must not carry a fragment. The consent screen shows its host: *&quot;This will connect shop.example.mv. If that is not your website, press Deny.&quot;* The owner's approval binds that <strong>exact</strong> URL into the code, so step 3 must present the same string.</li>
+<li><strong>Re-authorising replaces per store, not per merchant.</strong> The grant remembers the origin it came from (<code>connected_from</code>, visible in the panel and in <code>GET /v1/me</code>). The same store connecting again replaces its own grant; a second store of the same merchant gets its own, up to the store's credential cap.</li>
+</ul>
+<p>After step 4 a plugin typically calls <code>GET /v1/me</code> to confirm which abilities it holds, then registers its webhook with <code>POST /v1/webhooks</code> (§6.2) — a complete setup with no key ever copied by hand.</p>
 <hr>
 <h2 id="3-idempotency-required-on-every-write">3. Idempotency — required on every write</h2>
 <p>Both write endpoints require an <code>Idempotency-Key</code> header. Generate a <strong>fresh UUID v4 per logical operation</strong> (per sale, per reversal) and persist it with the sale in your local queue <em>before</em> sending, so a crash-and-restart retries with the same key.</p>
@@ -124,31 +171,19 @@ export MANFAA_API=&quot;https://sandbox.api.manfaa.app/api&quot;</code></pre>
     &quot;occurred_at&quot;: &quot;2026-08-14T11:04:22+05:00&quot;
   }'</code></pre>
 <ul>
-<li><code>eligible_amount</code> is <strong>your merchant's own eligible total</strong> in laari, taken</li>
-</ul>
-<p>  at face value — how it is derived (GST, service charge, exclusions) is the   merchant's agreement with Manfaa, never recomputed by us.</p>
-<ul>
+<li><code>eligible_amount</code> is <strong>your merchant's own eligible total</strong> in laari, taken at face value — how it is derived (GST, service charge, exclusions) is the merchant's agreement with Manfaa, never recomputed by us.</li>
 <li><code>sale_amount</code> is optional, reference-only, never used in computation.</li>
-<li><code>occurred_at</code> is <strong>optional — omit it and we record the sale as of now</strong>,</li>
-</ul>
-<p>  which is what a till posting a sale as it rings it up means anyway. When   you do send it, two shapes are accepted:</p>
+<li><code>occurred_at</code> is <strong>optional — omit it and we record the sale as of now</strong>, which is what a till posting a sale as it rings it up means anyway. When you do send it, two shapes are accepted:</li>
 <ul>
-<li><strong>ISO 8601 with an offset</strong> — <code>2026-08-14T11:04:22+05:00</code>,</li>
+<li><strong>ISO 8601 with an offset</strong> — <code>2026-08-14T11:04:22+05:00</code>, <code>2026-08-14T06:04:22Z</code>, <code>2026-08-14T11:04:22+0500</code>. Read exactly as sent.</li>
+<li><strong>A plain wall clock with no offset</strong> — <code>2026-08-14 11:04:22</code> or <code>2026-08-14T11:04:22</code> — read as <strong>Maldives time (UTC+5)</strong>, so it means the instant <code>2026-08-14T06:04:22Z</code>. If your till writes `date('Y-m-d H:i:s')` off its own clock, just send that.</li>
 </ul>
-<p>    <code>2026-08-14T06:04:22Z</code>, <code>2026-08-14T11:04:22+0500</code>. Read exactly as sent.</p>
-<ul>
-<li><strong>A plain wall clock with no offset</strong> — <code>2026-08-14 11:04:22</code> or</li>
 </ul>
-<p>    <code>2026-08-14T11:04:22</code> — read as <strong>Maldives time (UTC+5)</strong>, so it means     the instant <code>2026-08-14T06:04:22Z</code>. If your till writes <code>date('Y-m-d     H:i:s')</code> off its own clock, just send that.</p>
 <p>  Anything else (<code>15/08/2026 11:04</code>, a date with no time, seconds omitted)   is <code>422 validation_failed</code>. The cashback rate applied is the merchant's   rate effective <em>at this instant</em>.</p>
 <ul>
-<li><code>cashback_rate_percent</code> (optional) overrides the rate **for this sale</li>
+<li><code>cashback_rate_percent</code> (optional) overrides the rate **for this sale only** — see the box below.</li>
+<li><code>branch_id</code> (optional) must be one of the merchant's branch ids from onboarding.</li>
 </ul>
-<p>  only** — see the box below.</p>
-<ul>
-<li><code>branch_id</code> (optional) must be one of the merchant's branch ids from</li>
-</ul>
-<p>  onboarding.</p>
 <p><strong><code>201</code> — created, cashback accrued</strong> (2.00% of 1,180.00, rounded up per line, customer-favourable):</p>
 <pre><code>{
   &quot;status&quot;: &quot;created&quot;,
@@ -178,7 +213,7 @@ export MANFAA_API=&quot;https://sandbox.api.manfaa.app/api&quot;</code></pre>
 <p><code>cashback_rate_percent</code> and <code>platform_fee_percent</code> are the terms <strong>frozen</strong> on this row at <code>occurred_at</code>. They never change afterwards, even if the merchant reprices tomorrow — and a reversal reverses the stored integers, never a recomputation.</p>
 <p>Print the conditional wording on the receipt: the customer <em>will earn</em> MVR 23.60 once the merchant confirms — nothing is promised before then.</p>
 <p><strong><code>200</code> — recorded, no cashback.</strong> This endpoint never rejects a well-formed sale for business reasons; the two no-cashback outcomes come back as <code>200</code> with a distinct <code>status</code> so the cashier always sees something truthful:</p>
-<p><em>Below the merchant's minimum</em> (sandbox: <code>eligible_amount</code> under <code>5000</code>):</p>
+<p><em>Below the merchant's minimum</em> (fixture store: <code>eligible_amount</code> under <code>5000</code>):</p>
 <pre><code>curl -s -X POST $MANFAA_API/v1/transactions \
   -H &quot;Authorization: Bearer $MANFAA_TOKEN&quot; \
   -H &quot;Idempotency-Key: $(uuidgen)&quot; \
@@ -201,7 +236,7 @@ export MANFAA_API=&quot;https://sandbox.api.manfaa.app/api&quot;</code></pre>
   }
 }</code></pre>
 <p>Not an error — do not retry. Show &quot;no cashback on this sale&quot; at the till.</p>
-<p><em>Merchant suspended</em> (settlement overdue past day 16 — you will have received the <code>merchant.suspended</code> webhook first). The sandbox merchant is active, so this one is not reproducible against <code>sandbox-store</code>; the shape is:</p>
+<p><em>Merchant suspended</em> (settlement overdue past day 16 — you will have received the <code>merchant.suspended</code> webhook first). The fixture merchant is active, so this one is not reproducible against it; the shape is:</p>
 <pre><code>{
   &quot;status&quot;: &quot;recorded_ineligible&quot;,
   &quot;reason&quot;: &quot;merchant_suspended&quot;,
@@ -231,7 +266,7 @@ export MANFAA_API=&quot;https://sandbox.api.manfaa.app/api&quot;</code></pre>
     &quot;eligible_amount&quot;: 118000,
     &quot;cashback_rate_percent&quot;: &quot;5.00&quot;
   }'</code></pre>
-<p>With the sandbox merchant's standing 2.00%, that sale is credited at 5.00%:</p>
+<p>With the fixture merchant's standing 2.00%, that sale is credited at 5.00%:</p>
 <div class="table-scroll"><table><thead><tr><th></th><th>Rate</th><th>Worked integer</th><th>Result</th></tr></thead><tbody><tr><td>Cashback</td><td><code>&quot;5.00&quot;</code> (500 bp internally)</td><td>ceil(118000 × 500 / 10000)</td><td><strong>5900</strong> laari</td></tr><tr><td>Platform fee</td><td><code>&quot;1.00&quot;</code> — the fee tier of the <strong>applied</strong> rate</td><td>ceil(118000 × 100 / 10000)</td><td><strong>1180</strong> laari</td></tr></tbody></table></div>
 <pre><code>{
   &quot;status&quot;: &quot;created&quot;,
@@ -251,46 +286,65 @@ export MANFAA_API=&quot;https://sandbox.api.manfaa.app/api&quot;</code></pre>
 }</code></pre>
 <p>Two rules, and both are refusals rather than silent adjustments:</p>
 <ul>
-<li><strong>An override may only raise the rate.</strong> Below the rate the sale would</li>
+<li><strong>An override may only raise the rate.</strong> Below the rate the sale would otherwise earn — the standing rate, or a live promotion covering this sale — it is <code>422 rate_below_advertised</code>, with the applicable rate in <code>error.meta.advertised_cashback_rate_percent</code>. The advertised rate is a public promise to the customer; a till must not be able to quietly pay less than the storefront says.</li>
 </ul>
-<p>  otherwise earn — the standing rate, or a live promotion covering this sale   — it is <code>422 rate_below_advertised</code>, with the applicable rate in   <code>error.meta.advertised_cashback_rate_percent</code>. The advertised rate is a   public promise to the customer; a till must not be able to quietly pay   less than the storefront says.</p>
 <p>  Because it only ever <em>raises</em>, an override <strong>equal</strong> to the rate the sale   already earns is accepted and changes nothing at all: the sale prices   exactly as if you had not sent the field. That matters during a   promotion. If you echo <code>active_promotion.cashback_rate_percent</code> from   <code>GET /v1/merchants/me/rate</code> back into the sale, the promotion still   prices it — including its <code>max_cashback_per_customer_laari</code> cap, which is   part of the offer the store published. Only a value strictly above the   promotion is a decision to pay more than the published offer, and that   sale is then priced by your number alone: no promotion is stamped on it,   and it consumes none of the customer's promotional headroom.</p>
-<p>  ``<code>json   {     &quot;error&quot;: {       &quot;code&quot;: &quot;rate_below_advertised&quot;,       &quot;message&quot;: &quot;cashback_rate_percent 1.50% is below the 2.00% this sale already earns — an override may only raise the advertised rate.&quot;,       &quot;meta&quot;: { &quot;advertised_cashback_rate_percent&quot;: &quot;2.00&quot; }     }   }   </code>``</p>
+<pre><code>{
+  &quot;error&quot;: {
+    &quot;code&quot;: &quot;rate_below_advertised&quot;,
+    &quot;message&quot;: &quot;cashback_rate_percent 1.50% is below the 2.00% this sale already earns — an override may only raise the advertised rate.&quot;,
+    &quot;meta&quot;: { &quot;advertised_cashback_rate_percent&quot;: &quot;2.00&quot; }
+  }
+}</code></pre>
 <ul>
-<li><strong>The platform must be able to price the fee for it.</strong> A rate above the</li>
+<li><strong>The platform must be able to price the fee for it.</strong> A rate above the ceiling of the active fee schedule is <code>422 rate_not_priced</code>, with the ceiling in <code>error.meta.ceiling_percent</code> (fixture schedule: <code>&quot;10.00&quot;</code>). Nothing you can fix at the till — the merchant's plan has to be widened by Manfaa first.</li>
 </ul>
-<p>  ceiling of the active fee schedule is <code>422 rate_not_priced</code>, with the   ceiling in <code>error.meta.ceiling_percent</code> (sandbox: <code>&quot;10.00&quot;</code>). Nothing you   can fix at the till — the merchant's plan has to be widened by Manfaa   first.</p>
 <p>Both refusals are terminal for that request: fix the value (or drop the field) and resend with a <strong>fresh</strong> <code>Idempotency-Key</code>. Nothing was recorded.</p>
 <p>They apply only to a sale that actually earns cashback. On a sale that earns none either way — a <strong>suspended</strong> merchant (<code>200 recorded_ineligible</code>) or one <strong>below the minimum</strong> (<code>200 below_minimum</code>) — the field is ignored rather than refused, and the sale is recorded exactly as it would be without it, frozen at the store's standing terms with <code>cashback_laari: 0</code>. Ingestion never stops for a rate that could not have been applied: the till still gets its <code>200</code> and the cashier still sees the truth.</p>
 <p><strong>With <code>lines</code>:</strong> the override becomes the rate of every line that would otherwise price at the standing rate (the <code>category: null</code> bucket). Category overrides and exclusions are untouched — an override never pays an excluded category, and never overwrites the merchant's rate card — and a live promotion still lifts any line it would pay more on. No line ever earns less than it would have without the override.</p>
 <p><strong>A merchant account that is not trading answers <code>403 forbidden_ability</code></strong> in the error envelope, with the message <em>&quot;This merchant account is not active on the platform.&quot;</em> — every status except <code>active</code> and <code>suspended</code>: a closed account, and a self-signed-up store that has not completed onboarding (still in setup, awaiting review, or sent back for changes). Suspended is not one of them: a suspended merchant's sales are still accepted, as <code>200 recorded_ineligible</code> above. Stop sending and contact us — retrying cannot succeed until the account is reinstated.</p>
 <h4 id="online-stores">Online stores</h4>
-<p>Web checkouts use the <strong>same endpoint, same contract</strong> — nothing above changes. Two ways to key the customer:</p>
+<p>Web checkouts use the <strong>same endpoint, same contract</strong> — nothing above changes. Send <code>origin: &quot;online_link&quot;</code> so the sale is reported as a web sale (a till omits it or sends <code>pos</code>). Two ways to key the customer:</p>
 <ul>
-<li><strong>Customer code at checkout</strong> — ask for the 6-digit code in your checkout</li>
+<li><strong>Customer code at checkout</strong> — ask for the 6-digit code in your checkout flow and send it as <code>customer_ref</code>, exactly like a till.</li>
+<li><strong>Phone-keyed posting</strong> — send the customer's Maldivian mobile as <code>customer_ref</code> instead: full <code>+960XXXXXXX</code>, or the 7-digit local form (mobiles start <code>7</code> or <code>9</code>; we normalise to <code>+960</code> E.164). Phone-keyed transactions record <code>origin: &quot;api_phone&quot;</code>; the reward still lands at Pending and confirms on settlement like any other sale. An unknown phone answers <code>422 customer_not_found</code>, exactly like an unknown code.</li>
 </ul>
-<p>  flow and send it as <code>customer_ref</code>, exactly like a till.</p>
-<ul>
-<li><strong>Phone-keyed posting</strong> — send the customer's Maldivian mobile as</li>
-</ul>
-<p>  <code>customer_ref</code> instead: full <code>+960XXXXXXX</code>, or the 7-digit local form   (mobiles start <code>7</code> or <code>9</code>; we normalise to <code>+960</code> E.164). Phone-keyed   transactions record <code>origin: &quot;api_phone&quot;</code>; the reward still lands at   Pending and confirms on settlement like any other sale. An unknown phone   answers <code>422 customer_not_found</code>, exactly like an unknown code.</p>
 <p>Mind the mistyped-phone risk: a one-digit slip is far more likely to be a <em>real, currently-assigned</em> number than a mistyped code is to be a real code, and it silently credits a stranger. Prefer a verified phone from your own account records over free-typed entry, or confirm the masked name via <code>GET /v1/customers/lookup</code> (§4.4) before posting. A later release will let customers reject transactions they don't recognise — until then, send a reversal if a customer reports a credit that isn't theirs.</p>
+<h4 id="the-woocommerce-plugin">The WooCommerce plugin</h4>
+<p>If the store runs WooCommerce you do not need any of the above: install <strong>Manfaa Cashback</strong> from <a href="https://manfaa.app/app/">manfaa.app/app</a> (a zip, under <em>Plugins › Add New › Upload</em>), press <strong>Connect with Manfaa</strong> on its settings screen, approve the connection on Manfaa, and you are back in WordPress connected — no key is ever copied. The plugin:</p>
+<ul>
+<li>adds a <strong>Manfaa code</strong> field to the cart and the checkout (Blocks and classic), confirms the code live and shows the <strong>estimated cashback</strong> in the totals;</li>
+<li>prices with the store's <strong>general rate</strong>, or <strong>per category</strong> by mapping WooCommerce product categories to the store's Manfaa categories — mapped categories are priced as mapped, everything else earns the standing rate;</li>
+<li>applies the merchant's <strong>awarding policy</strong> — items after discounts, excluding shipping, with or without GST;</li>
+<li>posts the sale through <code>POST /v1/transactions</code> when the order reaches the status the merchant chooses (<em>Completed</em> by default, or <em>Processing</em>), with a deterministic <code>Idempotency-Key</code> and a frozen body, so a retry can never be a second sale;</li>
+<li>reverses on cancellation, full refund and trash — one reverse per order, ever — and records the in-place vs credit-memo outcome on the order;</li>
+<li>on a <strong>partial refund</strong>, reduces the sale to what the buyer kept through <code>PATCH /v1/transactions/{id}</code> while the sale is still pending (the recommended policy), or does nothing, or reverses the whole sale — the merchant chooses;</li>
+<li>registers its own webhook (<code>POST /v1/webhooks</code>), so a rate change or a reversal made in the merchant panel reaches the store without anyone configuring anything.</li>
+</ul>
+<p>Requirements: WordPress 6.9+, WooCommerce 9.0+, PHP 8.1+, store currency <strong>MVR</strong>, and an <code>https://</code> site for Connect with Manfaa (a non-https site can paste an API token instead).</p>
 <h4 id="line-item-pricing-optional-lines-for-stores-with-category-rates">Line-item pricing — optional <code>lines</code> for stores with category rates</h4>
 <p>Some stores price cashback <strong>per product category</strong>: certain categories are excluded (earn nothing), others carry their own rate, and everything else earns the standing rate. If the merchant you integrate uses categories, split the eligible total into <code>lines</code>; if not — or if you simply don't send <code>lines</code> — the whole <code>eligible_amount</code> earns the standing rate exactly as before. <strong>Sending <code>lines</code> is never required.</strong></p>
-<p>Each line is <code>{category, amount_laari}</code>. <code>category</code> is one of the merchant's active slugs from <code>GET /v1/merchants/me/product-categories</code> (§4.5); <code>category: null</code> is the default &quot;everything else&quot; bucket. Rules:</p>
+<p>Each line names a category and an amount. Name it <strong>either way</strong>:</p>
+<pre><code>{ &quot;category&quot;: &quot;fruits&quot;, &quot;amount_laari&quot;: 30000 }   // by slug
+{ &quot;category_id&quot;: 42,    &quot;amount_laari&quot;: 30000 }   // by id — same thing
+{ &quot;category&quot;: null,     &quot;amount_laari&quot;: 45000 }   // everything else</code></pre>
+<p>Slugs are immutable once created, so either identifier is safe to store long-term; pick whichever your system holds more naturally. Sending both is fine when they agree and <code>422 conflicting_category</code> when they do not — we refuse rather than quietly pick one, because a disagreement is a bug in the caller and hiding it costs somebody money later.</p>
+<p><code>category</code> is one of the merchant's active slugs from <code>GET /v1/merchants/me/product-categories</code> (§4.5); <code>category: null</code> is the default &quot;everything else&quot; bucket. Rules:</p>
 <ul>
-<li>amounts are laari integers ≥ 1 and must sum to <strong>exactly</strong></li>
+<li>amounts are laari integers ≥ 1 and must sum to <strong>exactly</strong> <code>eligible_amount</code> → otherwise <code>422 lines_sum_mismatch</code>;</li>
+<li>each category (and the null default) at most once → <code>422 duplicate_category_line</code>;</li>
+<li>unknown slug <strong>or id</strong> → <code>422 unknown_category</code>; deactivated → <code>422 inactive_category</code>. Another merchant's identifier answers exactly as a made-up one does — it must never confirm that someone else's category exists;</li>
+<li>the same category sent once by slug and once by id is still <code>422 duplicate_category_line</code>.</li>
 </ul>
-<p>  <code>eligible_amount</code> → otherwise <code>422 lines_sum_mismatch</code>;</p>
-<ul>
-<li>each category (and the null default) at most once →</li>
-</ul>
-<p>  <code>422 duplicate_category_line</code>;</p>
-<ul>
-<li>unknown slug → <code>422 unknown_category</code>; deactivated →</li>
-</ul>
-<p>  <code>422 inactive_category</code>.</p>
 <p><strong>Worked example.</strong> Merchant standing rate <code>&quot;5.00&quot;</code>, category <code>veggies</code> overridden to <code>&quot;2.00&quot;</code>, category <code>fruits</code> excluded. A MVR 1,000.00 basket split 300.00 fruits + 250.00 veggies + 450.00 other:</p>
+<p>First, get the categories you may use. They are the merchant's own, and a category you did not get from here is refused:</p>
+<pre><code>curl -s $MANFAA_API/v1/merchants/me/product-categories \
+  -H &quot;Authorization: Bearer $MANFAA_TOKEN&quot;</code></pre>
+<pre><code>{ &quot;data&quot;: [
+  { &quot;category_id&quot;: 41, &quot;category&quot;: &quot;fruits&quot;,  &quot;mode&quot;: &quot;excluded&quot;, &quot;cashback_rate_percent&quot;: null },
+  { &quot;category_id&quot;: 42, &quot;category&quot;: &quot;veggies&quot;, &quot;mode&quot;: &quot;rate&quot;,     &quot;cashback_rate_percent&quot;: &quot;2.00&quot; }
+] }</code></pre>
+<p>Then send the sale. Name each category by <code>category_id</code> <strong>or</strong> by <code>category</code> — whichever your system already stores:</p>
 <pre><code>curl -s -X POST $MANFAA_API/v1/transactions \
   -H &quot;Authorization: Bearer $MANFAA_TOKEN&quot; \
   -H &quot;Idempotency-Key: $(uuidgen)&quot; \
@@ -301,11 +355,17 @@ export MANFAA_API=&quot;https://sandbox.api.manfaa.app/api&quot;</code></pre>
     &quot;eligible_amount&quot;: 100000,
     &quot;occurred_at&quot;: &quot;2026-08-15T10:30:00+05:00&quot;,
     &quot;lines&quot;: [
-      { &quot;category&quot;: &quot;fruits&quot;,  &quot;amount_laari&quot;: 30000 },
-      { &quot;category&quot;: &quot;veggies&quot;, &quot;amount_laari&quot;: 25000 },
-      { &quot;category&quot;: null,      &quot;amount_laari&quot;: 45000 }
+      { &quot;category_id&quot;: 41, &quot;amount_laari&quot;: 30000 },
+      { &quot;category_id&quot;: 42, &quot;amount_laari&quot;: 25000 },
+      { &quot;category&quot;: null,  &quot;amount_laari&quot;: 45000 }
     ]
   }'</code></pre>
+<p>The same basket by slug, if that suits you better — identical result:</p>
+<pre><code>&quot;lines&quot;: [
+  { &quot;category&quot;: &quot;fruits&quot;,  &quot;amount_laari&quot;: 30000 },
+  { &quot;category&quot;: &quot;veggies&quot;, &quot;amount_laari&quot;: 25000 },
+  { &quot;category&quot;: null,      &quot;amount_laari&quot;: 45000 }   // everything else
+]</code></pre>
 <p>Every line rounds <strong>up</strong> independently (§4 ceiling), then the transaction totals are the <em>sums of the line integers</em> — never recomputed on the whole amount:</p>
 <div class="table-scroll"><table><thead><tr><th>Line</th><th>Amount</th><th>Rate</th><th>Cashback</th><th>Fee tier</th><th>Fee</th></tr></thead><tbody><tr><td>fruits (excluded)</td><td>30000</td><td><code>&quot;0.00&quot;</code></td><td>0</td><td><code>&quot;0.00&quot;</code></td><td>0</td></tr><tr><td>veggies</td><td>25000</td><td><code>&quot;2.00&quot;</code></td><td>ceil(25000×200/10000) = <strong>500</strong></td><td><code>&quot;0.75&quot;</code></td><td>ceil(25000×75/10000) = <strong>188</strong></td></tr><tr><td>default</td><td>45000</td><td><code>&quot;5.00&quot;</code></td><td>ceil(45000×500/10000) = <strong>2250</strong></td><td><code>&quot;1.00&quot;</code></td><td>ceil(45000×100/10000) = <strong>450</strong></td></tr><tr><td><strong>Totals</strong></td><td>100000</td><td></td><td><strong>2750</strong></td><td></td><td><strong>638</strong></td></tr></tbody></table></div>
 <p>(The arithmetic is shown in basis points because that is exactly how the platform computes it: <code>&quot;2.00&quot;</code> is 200 bp, and <code>ceil(amount × bp / 10000)</code> is the §4 rule. On the wire you only ever see the percent string.)</p>
@@ -332,17 +392,17 @@ export MANFAA_API=&quot;https://sandbox.api.manfaa.app/api&quot;</code></pre>
 }</code></pre>
 <p>Notes:</p>
 <ul>
-<li>On a lined transaction, <code>cashback_rate_percent</code>/<code>platform_fee_percent</code> at</li>
+<li>On a lined transaction, <code>cashback_rate_percent</code>/<code>platform_fee_percent</code> at the transaction level are the <strong>base-rate snapshot</strong> (the standing rate, or your per-sale override when you sent one); per-line truth is in <code>lines</code> — each line carries the rate it actually earned, and <code>priced_by</code> says why.</li>
+<li>During a live promotion, every <strong>non-excluded</strong> line earns max(promotion rate, its own rate) — <code>priced_by: &quot;promotion&quot;</code> on the lifted lines. Excluded categories stay excluded even during promotions. A promotion's minimum purchase is judged against the whole <code>eligible_amount</code>, not per line. Per-customer promotion caps clip only the promotion-priced lines, in submitted order.</li>
+<li>Reversals work unchanged — reverse the transaction by id; the stored totals reverse as one.</li>
 </ul>
-<p>  the transaction level are the <strong>base-rate snapshot</strong> (the standing rate,   or your per-sale override when you sent one); per-line truth is in <code>lines</code>   — each line carries the rate it actually earned, and <code>priced_by</code> says why.</p>
-<ul>
-<li>During a live promotion, every <strong>non-excluded</strong> line earns</li>
-</ul>
-<p>  max(promotion rate, its own rate) — <code>priced_by: &quot;promotion&quot;</code> on the   lifted lines. Excluded categories stay excluded even during promotions.   A promotion's minimum purchase is judged against the whole   <code>eligible_amount</code>, not per line. Per-customer promotion caps clip only   the promotion-priced lines, in submitted order.</p>
-<ul>
-<li>Reversals work unchanged — reverse the transaction by id; the stored</li>
-</ul>
-<p>  totals reverse as one.</p>
+<h4 id="partial-refunds-patch-v1transactionsid">Partial refunds — <code>PATCH /v1/transactions/{id}</code></h4>
+<p>A buyer returns one item of three: the sale was not voided, it shrank. While the sale is still pending (inside its validation window) send the new figures and the cashback is re-priced at the terms frozen on the sale — never at today's rate:</p>
+<pre><code>curl -X PATCH $MANFAA_API/v1/transactions/9001 \
+  -H &quot;Authorization: Bearer $MANFAA_TOKEN&quot; -H &quot;Content-Type: application/json&quot; \
+  -H &quot;Idempotency-Key: woo:order:1042:amend:77&quot; \
+  -d '{&quot;eligible_amount&quot;: 20000, &quot;sale_amount&quot;: 20000}'</code></pre>
+<p><code>200 {&quot;status&quot;: &quot;amended&quot;, &quot;transaction&quot;: {…}}</code> with the new <code>cashback_laari</code>. Send <code>lines[]</code> too if the sale had them — a complete replacement split. Once the window has closed the sale is <code>confirmed</code> and the amend answers <code>409 not_amendable_state</code>: a confirmed sale is either reversed in full (§4.2) or left alone; nothing takes part of it back. The buyer is told when cashback is reversed (<code>cashback_reversed</code> push), but not when it is merely reduced — the pending amount in their app simply updates.</p>
 <h3 id="42-reverse-a-sale-post-v1transactionsidreverse">4.2 Reverse a sale — <code>POST /v1/transactions/{id}/reverse</code></h3>
 <p>Ability: <code>transactions:reverse</code>.</p>
 <p>&gt; <strong>Contractual obligation, not best-effort.</strong> Under the vendor integration &gt; agreement you MUST send a reversal for every refunded, voided, or &gt; duplicated sale you previously POSTed. Without it, a refunded sale keeps &gt; its cashback, the merchant is billed for it, and every till error runs in &gt; the merchant's favour. Wire this into your refund/void flow, with the same &gt; persist-then-send queue you use for sales.</p>
@@ -390,7 +450,7 @@ export MANFAA_API=&quot;https://sandbox.api.manfaa.app/api&quot;</code></pre>
 <p>Ability: <code>rates:read</code>.</p>
 <pre><code>curl -s $MANFAA_API/v1/merchants/me/rate \
   -H &quot;Authorization: Bearer $MANFAA_TOKEN&quot;</code></pre>
-<p>Sandbox answer (the scheduled decrease is part of the fixtures):</p>
+<p>Fixture answer (the scheduled decrease is part of the fixture set):</p>
 <pre><code>{
   &quot;cashback_rate_percent&quot;: &quot;2.00&quot;,
   &quot;platform_fee_percent&quot;: &quot;0.75&quot;,
@@ -424,7 +484,7 @@ export MANFAA_API=&quot;https://sandbox.api.manfaa.app/api&quot;</code></pre>
   -H &quot;Authorization: Bearer $MANFAA_TOKEN&quot;</code></pre>
 <pre><code>{ &quot;ref&quot;: &quot;111111&quot;, &quot;valid&quot;: true, &quot;name&quot;: &quot;Aisha Mohamed&quot;, &quot;masked_name&quot;: &quot;Ais*** Moh***&quot; }</code></pre>
 <p>The mask keeps the first three characters of each name part — enough to confirm, nothing more. No balance, phone number, or other customer data ever crosses this API.</p>
-<p>A known code that cannot currently earn (sandbox: <code>333333</code>) still answers <code>200</code>, with <code>valid: false</code> — show the cashier &quot;code exists but is blocked&quot;. An unknown code answers <code>404 customer_not_found</code>; re-read it with the customer (this is almost always a mistyped digit).</p>
+<p>A known code that cannot currently earn (fixture customer <code>333333</code>) still answers <code>200</code>, with <code>valid: false</code> — show the cashier &quot;code exists but is blocked&quot;. An unknown code answers <code>404 customer_not_found</code>; re-read it with the customer (this is almost always a mistyped digit).</p>
 <h3 id="45-product-categories-get-v1merchantsmeproduct-categories">4.5 Product categories — <code>GET /v1/merchants/me/product-categories</code></h3>
 <p>Ability: <code>rates:read</code>. The merchant's <strong>active</strong> product categories — the allowed <code>lines[].category</code> values for line-item pricing (§4.1):</p>
 <pre><code>curl -s $MANFAA_API/v1/merchants/me/product-categories \
@@ -446,8 +506,42 @@ export MANFAA_API=&quot;https://sandbox.api.manfaa.app/api&quot;</code></pre>
 <p>Transient coordination codes (e.g. <code>idempotency_key_in_flight</code>, <code>409</code>) are not part of the registry: <strong>anything not listed above — and any <code>5xx</code> — is retryable with the same <code>Idempotency-Key</code>.</strong></p>
 <hr>
 <h2 id="6-webhooks">6. Webhooks</h2>
-<p>We POST signed events to the HTTPS endpoint you register with us (one endpoint per POS vendor, subscribed to the events you choose). At registration you receive a signing secret (<code>whsec_…</code>) exactly once — store it like a password.</p>
-<div class="table-scroll"><table><thead><tr><th>Event</th><th>When</th><th>Do</th></tr></thead><tbody><tr><td><code>merchant.rate_changed</code></td><td>Rate changed (decreases announce the next-midnight boundary)</td><td>Refresh the till's cached rate</td></tr><tr><td><code>merchant.suspended</code></td><td>Automatic day-16 suspension</td><td>Stop advertising cashback; keep POSTing sales</td></tr><tr><td><code>merchant.reinstated</code></td><td>Merchant settled and was reinstated</td><td>Resume advertising</td></tr><tr><td><code>transaction.reversed</code></td><td>Any transaction reversed — including by Manfaa admins</td><td>Sync your local record; dedupe by <code>transaction_id</code> (your own reversals echo here too)</td></tr></tbody></table></div>
+<p>We POST signed events to HTTPS endpoints. There are two kinds of endpoint, and the difference is <strong>who owns it and whose events it hears</strong>:</p>
+<div class="table-scroll"><table><thead><tr><th></th><th>Webhooks — POS vendors (§6.1)</th><th>Webhooks — Merchants (§6.2)</th></tr></thead><tbody><tr><td>Owned by</td><td>A POS platform we registered (IsleBooks, a till vendor)</td><td>One store</td></tr><tr><td>Hears</td><td>Every merchant that platform integrates</td><td>That store's events only</td></tr><tr><td>Registered by</td><td>Manfaa, at integrations@manfaa.app</td><td>The store owner in the panel, <strong>or</strong> the store's own credential over <code>/v1/webhooks</code></td></tr><tr><td>Secret</td><td>One per endpoint, shown once</td><td>Same</td></tr><tr><td>Signature, retries, envelope</td><td>Identical</td><td>Identical</td></tr></tbody></table></div>
+<p>Everything under &quot;Delivery&quot; (§6.3) applies to both. If you are building a plugin or a custom shop for <strong>one</strong> store, you want §6.2.</p>
+<h3 id="61-webhooks-pos-vendors">6.1 Webhooks — POS vendors</h3>
+<p>One endpoint per POS vendor, subscribed to the events you choose, registered by us when we onboard your platform. Every event carries <code>merchant_id</code> in <code>data</code> — you route it to the right merchant on your side. You hear about a merchant for as long as that merchant holds a live credential for your platform; revoke it and the events stop.</p>
+<h3 id="62-webhooks-merchants">6.2 Webhooks — Merchants</h3>
+<p>A store's own endpoint. It hears <strong>only that store's</strong> events, so there is nothing to route.</p>
+<p>Two ways to register one:</p>
+<ul>
+<li><strong>In the panel</strong> — <em>Settings › API access › Webhooks</em>: URL, events, an optional name. The store owner sees the signing secret once, and can press <strong>Send test</strong> to receive a <code>webhook.test</code> delivery signed exactly like a real event. Up to <strong>5</strong> active endpoints per store.</li>
+<li><strong>Over the API</strong> — a credential with the <code>webhooks:manage</code> ability registers its own endpoint. This is how a plugin sets itself up with no manual step. The endpoint is tied to that credential: **revoking the credential switches the endpoint off**, and a credential only sees and removes endpoints it registered itself — never the ones typed into the panel.</li>
+</ul>
+<pre><code>curl -X POST $MANFAA_API/v1/webhooks \
+  -H &quot;Authorization: Bearer $MANFAA_TOKEN&quot; \
+  -H &quot;Content-Type: application/json&quot; \
+  -d '{&quot;url&quot;:&quot;https://shop.example.mv/wp-json/manfaa/v1/webhook&quot;,
+       &quot;label&quot;:&quot;WooCommerce — shop.example.mv&quot;,
+       &quot;events&quot;:[&quot;merchant.rate_changed&quot;,&quot;transaction.reversed&quot;]}'</code></pre>
+<pre><code>{
+  &quot;secret&quot;: &quot;whsec_…&quot;,
+  &quot;endpoint&quot;: {
+    &quot;id&quot;: 41,
+    &quot;url&quot;: &quot;https://shop.example.mv/wp-json/manfaa/v1/webhook&quot;,
+    &quot;label&quot;: &quot;WooCommerce — shop.example.mv&quot;,
+    &quot;events&quot;: [&quot;merchant.rate_changed&quot;, &quot;transaction.reversed&quot;],
+    &quot;active&quot;: true,
+    &quot;registered_by&quot;: &quot;credential&quot;,
+    &quot;api_credential_id&quot;: 17,
+    &quot;last_delivery&quot;: null,
+    &quot;created_at&quot;: &quot;2026-08-22T10:12:00+05:00&quot;
+  }
+}</code></pre>
+<p><code>secret</code> is in this response and nowhere else. Re-registering the <strong>same URL</strong> from the same credential replaces the earlier endpoint rather than adding a second (so a plugin re-activated or re-installed ends up with exactly one). <code>GET /v1/webhooks</code> lists what this credential registered; <code>DELETE /v1/webhooks/{id}</code> removes one. Refusals: <code>422 endpoint_cap_reached</code> (5 active already — <code>meta.max_active</code>), <code>404 webhook_not_found</code> (not yours), and a <code>422 validation_failed</code> for a non-<code>https://</code> or private-network URL.</p>
+<h3 id="63-delivery-common-to-both">6.3 Delivery — common to both</h3>
+<p>At registration you receive a signing secret (<code>whsec_…</code>) exactly once — store it like a password.</p>
+<div class="table-scroll"><table><thead><tr><th>Event</th><th>When</th><th>Do</th></tr></thead><tbody><tr><td><code>merchant.rate_changed</code></td><td>Rate changed (decreases announce the next-midnight boundary)</td><td>Refresh the till's cached rate</td></tr><tr><td><code>merchant.suspended</code></td><td>Automatic day-16 suspension</td><td>Stop advertising cashback; keep POSTing sales</td></tr><tr><td><code>merchant.reinstated</code></td><td>Merchant settled and was reinstated</td><td>Resume advertising</td></tr><tr><td><code>transaction.reversed</code></td><td>Any transaction reversed — including by Manfaa admins</td><td>Sync your local record; dedupe by <code>transaction_id</code> (your own reversals echo here too)</td></tr><tr><td><code>webhook.test</code></td><td>A store owner pressed <strong>Send test</strong> (merchant endpoints only)</td><td>Verify the signature, answer <code>2xx</code>, do nothing else. Cannot be subscribed to.</td></tr></tbody></table></div>
 <p>Every delivery carries:</p>
 <div class="table-scroll"><table><thead><tr><th>Header</th><th>Meaning</th></tr></thead><tbody><tr><td><code>X-Manfaa-Signature</code></td><td>Lowercase hex <code>HMAC-SHA256(secret, raw_body)</code></td></tr><tr><td><code>X-Manfaa-Timestamp</code></td><td>Unix seconds of this delivery <strong>attempt</strong> (fresh per retry, not signed)</td></tr><tr><td><code>X-Manfaa-Event</code></td><td>The event name, for routing before you parse</td></tr></tbody></table></div>
 <h3 id="verifying-the-signature">Verifying the signature</h3>
@@ -475,14 +569,10 @@ const valid = crypto.timingSafeEqual(Buffer.from(computed), Buffer.from(signatur
 <p><strong>Your retries to us (writes):</strong></p>
 <ol>
 <li>Persist the sale + its <code>Idempotency-Key</code> locally <em>before</em> the first send.</li>
-<li>On network failure / timeout / any <code>5xx</code> / <code>429</code> / <code>idempotency_key_in_flight</code>:</li>
-</ol>
-<p>   retry with the <strong>same key</strong>, backing off (e.g. 1 s, 5 s, 30 s, then every    few minutes until connectivity returns). The replay mechanics make this    safe indefinitely.</p>
-<ol>
+<li>On network failure / timeout / any <code>5xx</code> / <code>429</code> / <code>idempotency_key_in_flight</code>: retry with the <strong>same key</strong>, backing off (e.g. 1 s, 5 s, 30 s, then every few minutes until connectivity returns). The replay mechanics make this safe indefinitely.</li>
 <li>On any documented <code>4xx</code>: stop. It is terminal — surface it, fix it.</li>
-<li>Sales sent late still work (the rate is resolved at <code>occurred_at</code>, not at</li>
+<li>Sales sent late still work (the rate is resolved at <code>occurred_at</code>, not at receipt), but anything older than the validation window + 3 days lands in manual review — drain your offline queue promptly.</li>
 </ol>
-<p>   receipt), but anything older than the validation window + 3 days lands in    manual review — drain your offline queue promptly.</p>
 <p><strong>Our retries to you (webhooks):</strong> a delivery that does not get a <code>2xx</code> within 10 seconds is retried with backoff at ~1 min, 5 min, 30 min, 2 h, 8 h and 24 h after the first attempt (6 retries over ~35 hours). Retried deliveries carry the identical body and signature with a fresh <code>X-Manfaa-Timestamp</code>. After the final failure the event is parked and surfaced to Manfaa operations — never silently dropped — but do not rely on that: monitor your endpoint's availability.</p>
 <hr>
 <h2 id="8-go-live-checklist">8. Go-live checklist</h2>
@@ -498,6 +588,19 @@ const valid = crypto.timingSafeEqual(Buffer.from(computed), Buffer.from(signatur
 <li>[ ] Webhook signature verified over raw bytes, events deduped by <code>id</code></li>
 <li>[ ] Rate cache refreshed on <code>merchant.rate_changed</code>, advertising stopped on <code>merchant.suspended</code></li>
 </ul>
+<h3 id="woocommerce-plugin-go-live">WooCommerce plugin — go-live</h3>
+<p>For a store running the Manfaa Cashback plugin the list above is the plugin's job; the merchant's own checklist is shorter:</p>
+<ul>
+<li>[ ] Store currency is <strong>MVR</strong> (WooCommerce › Settings › General) — the plugin posts nothing and shows no estimate otherwise, and says so</li>
+<li>[ ] Site served over <strong>https://</strong> — <em>Connect with Manfaa</em> needs it (a non-https site can paste an API token instead)</li>
+<li>[ ] <strong>Connected</strong> as the store owner: Manfaa Cashback › Connection shows the store name and all five permissions (<code>transactions:write</code>, <code>transactions:reverse</code>, <code>rates:read</code>, <code>customers:lookup</code>, <code>webhooks:manage</code>); <em>Test connection</em> passes; the webhook is registered</li>
+<li>[ ] <code>MANFAA_CASHBACK_KEY</code> defined in <code>wp-config.php</code> (a random 32+ character string) so the connection secrets are not encrypted with a key that lives in the database — the settings screen says which it is using</li>
+<li>[ ] Pricing mode chosen — <em>Per category</em> mapped and synced if the Manfaa store has category rates or exclusions; <em>General rate</em> otherwise</li>
+<li>[ ] <strong>Posting status</strong> chosen (Completed by default; Processing if the store wants cashback pending from payment) and the partial-refund policy set</li>
+<li>[ ] One end-to-end test order: a real Manfaa customer's code at checkout → move the order to the posting status → the order's <em>Manfaa</em> column shows the amount and the customer sees it <strong>pending</strong> in their app → cancel the order → the column shows <em>Reversed</em> and the customer is told</li>
+<li>[ ] Where pending money shows for the buyer: the Manfaa app's Activity tab — pending until the store's validation window closes, then confirmed, then paid out on the next payout run</li>
+</ul>
+<p>Updates arrive through WordPress's own plugin updater from <code>manfaa.app/app/woocommerce/manifest.json</code>; <strong>Check for updates</strong> on the Plugins screen asks immediately.</p>
 <p>Questions: <strong>integrations@manfaa.app</strong>.</p>
 <footer>
   <a href="/docs/openapi.yaml">OpenAPI specification</a> ·

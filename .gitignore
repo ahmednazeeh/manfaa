@@ -58,3 +58,4 @@ plugins/woocommerce/manfaa-cashback/node_modules/
 .wp-cli/
 # Built plugin zips + manifest are published artefacts, like the APKs
 download/public/woocommerce/
+plugins/woocommerce/manfaa-cashback/.phpunit.result.cache

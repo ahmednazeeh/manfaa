@@ -1,16 +1,19 @@
 # Manfaa Vendor Integration Guide
 
 For POS developers integrating a till or web shop in the Maldives with the
-Manfaa cashback platform. This guide walks the whole integration against the
-**sandbox**; the OpenAPI contract in [`openapi.yaml`](openapi.yaml) is the
-authoritative reference for every field and code.
+Manfaa cashback platform. The OpenAPI contract in
+[`openapi.yaml`](openapi.yaml) is the authoritative reference for every
+field and code.
 
 | Environment | Base URL |
 |---|---|
-| Sandbox | `https://sandbox.api.manfaa.app/api` |
 | Production | `https://api.manfaa.app/api` |
 
-Everything below uses the sandbox. Nothing you do there mints real cashback.
+There is no separate sandbox host at present. Integrate against production
+with the merchant's own credential and a customer code you control: a sale
+you record can be reversed while it is pending (§4.2), and nothing is paid
+out before the merchant settles. The worked answers below are computed
+against the fixture set in §1 so every integer can be checked by hand.
 
 **The model in one paragraph:** your till **POSTs each eligible sale** to us
 with the customer's 6-digit code; we compute cashback at the merchant's rate,
@@ -40,11 +43,13 @@ numbers are the same, expressed as percent.)*
 
 ---
 
-## 1. Sandbox fixtures
+## 1. The fixture set the examples use
 
-Run `php artisan manfaa:sandbox` on the sandbox host (our team runs it for
-you at onboarding — the output below is what you receive). It is safe to
-re-run and prints the same token every time.
+Every worked answer in this guide is computed against one fixed store, so
+you can check the arithmetic. (It is what `php artisan manfaa:sandbox`
+seeds on a non-production environment; there is no hosted sandbox today —
+ask integrations@manfaa.app for a test merchant on production if you are not
+integrating for a specific store.)
 
 | Fixture | Value |
 |---|---|
@@ -52,7 +57,7 @@ re-run and prints the same token every time.
 | Rate | `"2.00"` now, with a **scheduled decrease** to `"1.50"` at the next 00:00 UTC+5 — so `GET /v1/merchants/me/rate` always shows a `pending_decrease` |
 | Branch | Sandbox Branch (id printed by the command) |
 | POS vendor | Sandbox POS |
-| Token | Printed by the command. Carries **all four abilities**. Sandbox-only. |
+| Token | Printed by the command. Carries every ability. |
 
 Published test customers:
 
@@ -62,11 +67,11 @@ Published test customers:
 | `222222` | Hassan Ibrahim | +960 722-2222 | Earns normally |
 | `333333` | Mariyam Saeed | +960 733-3333 | **Suspended** — lookup answers `200` with `valid: false`; use it to test your blocked-customer handling |
 
-Export the printed token for the examples below:
+Export your token for the examples below:
 
 ```sh
-export MANFAA_TOKEN="<token printed by manfaa:sandbox>"
-export MANFAA_API="https://sandbox.api.manfaa.app/api"
+export MANFAA_TOKEN="<your merchant credential>"
+export MANFAA_API="https://api.manfaa.app/api"
 ```
 
 ---
@@ -82,9 +87,9 @@ Authorization: Bearer <token>
 Tokens are **one per merchant per POS vendor** and independently revocable —
 a merchant switching vendors never invalidates your tokens for other
 merchants. Store the token server-side or in the till's secure storage; it
-is shown exactly once (sandbox excepted).
+is shown exactly once.
 
-There are two ways to get one, and they produce the same credential:
+There are three ways to get one, and they all produce the same credential:
 
 - **Manfaa issues it at onboarding** — the usual path when our team does the
   integration work for a physical store.
@@ -93,6 +98,9 @@ There are two ways to get one, and they produce the same credential:
   partner, ticks the permissions you need, and hands you the token. This is
   the fastest route when the store already has a POS provider: no ticket, no
   waiting on us.
+- **The merchant approves you on a consent screen** — see §2.1. Use this if
+  you are building a product for many Manfaa merchants rather than
+  integrating one store; it needs a platform registration from us first.
 
 Ask the merchant for exactly the abilities you use, no more — the token
 cannot be widened later, and a narrower one is a shorter conversation when
@@ -122,6 +130,127 @@ indistinguishable from a nonexistent one.
 **Rate limit:** 120 requests/minute per token. Exceeding it returns `429`
 `{"message": "Too Many Attempts."}` with a `Retry-After` header — wait and
 retry (with the same `Idempotency-Key` if it was a write).
+
+### 2.1 Connect — one integration, many merchants
+
+If your product serves many Manfaa merchants, asking every shopkeeper to
+paste a key is the wrong shape. Instead you send them to a Manfaa screen
+that says *"IsleBooks would like to record sales and accrue cashback —
+Authorise / Deny"*, and if they authorise, **your server** collects the
+token. The merchant never sees or handles it.
+
+The token this produces is an ordinary merchant token: same abilities, same
+endpoints, same `401`/`403` behaviour. **It does not expire.** There is no
+refresh token and nothing to renew — it lives until the merchant disconnects
+you, or until we rotate your client secret.
+
+**You need a platform registration first.** Email
+integrations@manfaa.app with your product name, what it does, the
+permissions you need and your callback URL(s). A Manfaa superadmin registers
+you and sends back a `client_id` and a `client_secret`. Without one, use the
+per-merchant key above — it works the same and needs nothing from us.
+
+Registration fixes two things you cannot change at runtime:
+
+- your **callback URLs**, matched exactly (not by prefix) and `https` only;
+- the **ceiling** on what you may ask for. A request for anything outside it
+  is refused before the merchant is shown it.
+
+The flow is OAuth 2.0 authorization code with PKCE, and it is four steps:
+
+**1. Send the merchant to the consent screen.** PKCE is required: generate a
+random `code_verifier` (43–128 chars), keep it, and send its SHA-256 as
+`code_challenge`.
+
+```
+https://merchant.manfaa.app/connect
+  ?client_id=mfa_xxxxxxxxxxxx
+  &redirect_uri=https://islebooks.mv/manfaa/callback
+  &scope=transactions:write%20rates:read
+  &state=<your own anti-forgery value>
+  &code_challenge=<base64url(sha256(verifier))>
+  &code_challenge_method=S256
+```
+
+If they are not signed in they will be asked to, and returned here
+afterwards.
+
+**2. They answer.** The browser comes back to your `redirect_uri` with
+either `?code=…&state=…` or `?error=access_denied&state=…`. Check `state`
+matches what you sent, and treat a denial as final — do not immediately
+re-ask.
+
+**3. Exchange the code, server to server.** The code is good for **60
+seconds and one use**:
+
+```bash
+curl -X POST https://api.manfaa.app/api/v1/connect/token \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json" \
+  -d '{
+    "grant_type": "authorization_code",
+    "client_id": "mfa_xxxxxxxxxxxx",
+    "client_secret": "<your secret>",
+    "code": "<the code>",
+    "redirect_uri": "https://islebooks.mv/manfaa/callback",
+    "code_verifier": "<the verifier from step 1>"
+  }'
+```
+
+```json
+{
+  "access_token": "42|xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+  "token_type": "Bearer",
+  "scope": "transactions:write rates:read",
+  "merchant": { "id": 17, "name": "Tea Plus" }
+}
+```
+
+Failures use the OAuth error shape — `{"error": "...", "error_description":
+"..."}` — with `invalid_client` (401) for a bad `client_id`/`client_secret`,
+and `invalid_grant` (400) for a code that is expired, already spent, yours
+under a different redirect, or presented without the matching verifier.
+
+**4. Store the token against that merchant** and use it exactly as in §4.
+`merchant.id` in the response tells you which store you just connected.
+
+**Re-authorising replaces.** If a merchant connects you again, the previous
+token is revoked the moment the new one is issued. Store the new one and
+discard the old. Because nothing expires, this is how a stale grant is
+cleaned up — so always overwrite, never keep both.
+
+**Disconnection is silent.** A merchant can revoke you from Settings › API
+access at any time, and we do not call you when they do. Your next request
+simply answers `401` — treat that as disconnected and stop retrying rather
+than as a transient fault.
+
+#### Public clients — software on the merchant's own server
+
+A plugin (the Manfaa WooCommerce plugin is one) runs on thousands of stores,
+each with its own callback URL, and none of them can keep a secret — the
+shop owner can read every file. For that shape Manfaa registers a **public
+client**, and the flow above changes in exactly three places:
+
+- **No `client_secret`.** Omit it from step 3; PKCE is the only proof. A
+  public client that *sends* a secret is refused `401 invalid_client` — a
+  plugin that thinks it has one is misconfigured.
+- **No registered callbacks.** Send whatever callback URL your install has
+  (`https://shop.example.mv/wp-admin/admin.php?page=manfaa-cashback`). It
+  must be `https` on a public host — private ranges, localhost and bare IPs
+  are refused before the merchant sees anything — and it must not carry a
+  fragment. The consent screen shows its host: *"This will connect
+  shop.example.mv. If that is not your website, press Deny."* The owner's
+  approval binds that **exact** URL into the code, so step 3 must present
+  the same string.
+- **Re-authorising replaces per store, not per merchant.** The grant
+  remembers the origin it came from (`connected_from`, visible in the panel
+  and in `GET /v1/me`). The same store connecting again replaces its own
+  grant; a second store of the same merchant gets its own, up to the
+  store's credential cap.
+
+After step 4 a plugin typically calls `GET /v1/me` to confirm which
+abilities it holds, then registers its webhook with `POST /v1/webhooks`
+(§6.2) — a complete setup with no key ever copied by hand.
 
 ---
 
@@ -242,7 +371,7 @@ MVR 23.60 once the merchant confirms — nothing is promised before then.
 sale for business reasons; the two no-cashback outcomes come back as `200`
 with a distinct `status` so the cashier always sees something truthful:
 
-*Below the merchant's minimum* (sandbox: `eligible_amount` under `5000`):
+*Below the merchant's minimum* (fixture store: `eligible_amount` under `5000`):
 
 ```sh
 curl -s -X POST $MANFAA_API/v1/transactions \
@@ -274,8 +403,8 @@ curl -s -X POST $MANFAA_API/v1/transactions \
 Not an error — do not retry. Show "no cashback on this sale" at the till.
 
 *Merchant suspended* (settlement overdue past day 16 — you will have
-received the `merchant.suspended` webhook first). The sandbox merchant is
-active, so this one is not reproducible against `sandbox-store`; the shape
+received the `merchant.suspended` webhook first). The fixture merchant is
+active, so this one is not reproducible against it; the shape
 is:
 
 ```json
@@ -333,7 +462,7 @@ curl -s -X POST $MANFAA_API/v1/transactions \
   }'
 ```
 
-With the sandbox merchant's standing 2.00%, that sale is credited at 5.00%:
+With the fixture merchant's standing 2.00%, that sale is credited at 5.00%:
 
 | | Rate | Worked integer | Result |
 |---|---|---|---:|
@@ -391,7 +520,7 @@ Two rules, and both are refusals rather than silent adjustments:
 
 - **The platform must be able to price the fee for it.** A rate above the
   ceiling of the active fee schedule is `422 rate_not_priced`, with the
-  ceiling in `error.meta.ceiling_percent` (sandbox: `"10.00"`). Nothing you
+  ceiling in `error.meta.ceiling_percent` (fixture schedule: `"10.00"`). Nothing you
   can fix at the till — the merchant's plan has to be widened by Manfaa
   first.
 
@@ -426,7 +555,8 @@ cannot succeed until the account is reinstated.
 #### Online stores
 
 Web checkouts use the **same endpoint, same contract** — nothing above
-changes. Two ways to key the customer:
+changes. Send `origin: "online_link"` so the sale is reported as a web sale
+(a till omits it or sends `pos`). Two ways to key the customer:
 
 - **Customer code at checkout** — ask for the 6-digit code in your checkout
   flow and send it as `customer_ref`, exactly like a till.
@@ -445,6 +575,40 @@ account records over free-typed entry, or confirm the masked name via
 customers reject transactions they don't recognise — until then, send a
 reversal if a customer reports a credit that isn't theirs.
 
+#### The WooCommerce plugin
+
+If the store runs WooCommerce you do not need any of the above: install
+**Manfaa Cashback** from [manfaa.app/app](https://manfaa.app/app/) (a zip,
+under *Plugins › Add New › Upload*), press **Connect with Manfaa** on its
+settings screen, approve the connection on Manfaa, and you are back in
+WordPress connected — no key is ever copied. The plugin:
+
+- adds a **Manfaa code** field to the cart and the checkout (Blocks and
+  classic), confirms the code live and shows the **estimated cashback** in
+  the totals;
+- prices with the store's **general rate**, or **per category** by mapping
+  WooCommerce product categories to the store's Manfaa categories — mapped
+  categories are priced as mapped, everything else earns the standing rate;
+- applies the merchant's **awarding policy** — items after discounts,
+  excluding shipping, with or without GST;
+- posts the sale through `POST /v1/transactions` when the order reaches the
+  status the merchant chooses (*Completed* by default, or *Processing*),
+  with a deterministic `Idempotency-Key` and a frozen body, so a retry can
+  never be a second sale;
+- reverses on cancellation, full refund and trash — one reverse per order,
+  ever — and records the in-place vs credit-memo outcome on the order;
+- on a **partial refund**, reduces the sale to what the buyer kept through
+  `PATCH /v1/transactions/{id}` while the sale is still pending (the
+  recommended policy), or does nothing, or reverses the whole sale — the
+  merchant chooses;
+- registers its own webhook (`POST /v1/webhooks`), so a rate change or a
+  reversal made in the merchant panel reaches the store without anyone
+  configuring anything.
+
+Requirements: WordPress 6.9+, WooCommerce 9.0+, PHP 8.1+, store currency
+**MVR**, and an `https://` site for Connect with Manfaa (a non-https site
+can paste an API token instead).
+
 #### Line-item pricing — optional `lines` for stores with category rates
 
 Some stores price cashback **per product category**: certain categories are
@@ -454,7 +618,21 @@ split the eligible total into `lines`; if not — or if you simply don't send
 `lines` — the whole `eligible_amount` earns the standing rate exactly as
 before. **Sending `lines` is never required.**
 
-Each line is `{category, amount_laari}`. `category` is one of the
+Each line names a category and an amount. Name it **either way**:
+
+```jsonc
+{ "category": "fruits", "amount_laari": 30000 }   // by slug
+{ "category_id": 42,    "amount_laari": 30000 }   // by id — same thing
+{ "category": null,     "amount_laari": 45000 }   // everything else
+```
+
+Slugs are immutable once created, so either identifier is safe to store
+long-term; pick whichever your system holds more naturally. Sending both is
+fine when they agree and `422 conflicting_category` when they do not — we
+refuse rather than quietly pick one, because a disagreement is a bug in the
+caller and hiding it costs somebody money later.
+
+`category` is one of the
 merchant's active slugs from `GET /v1/merchants/me/product-categories`
 (§4.5); `category: null` is the default "everything else" bucket. Rules:
 
@@ -462,12 +640,34 @@ merchant's active slugs from `GET /v1/merchants/me/product-categories`
   `eligible_amount` → otherwise `422 lines_sum_mismatch`;
 - each category (and the null default) at most once →
   `422 duplicate_category_line`;
-- unknown slug → `422 unknown_category`; deactivated →
-  `422 inactive_category`.
+- unknown slug **or id** → `422 unknown_category`; deactivated →
+  `422 inactive_category`. Another merchant's identifier answers exactly as
+  a made-up one does — it must never confirm that someone else's category
+  exists;
+- the same category sent once by slug and once by id is still
+  `422 duplicate_category_line`.
 
 **Worked example.** Merchant standing rate `"5.00"`, category `veggies`
 overridden to `"2.00"`, category `fruits` excluded. A MVR 1,000.00 basket
 split 300.00 fruits + 250.00 veggies + 450.00 other:
+
+First, get the categories you may use. They are the merchant's own, and a
+category you did not get from here is refused:
+
+```sh
+curl -s $MANFAA_API/v1/merchants/me/product-categories \
+  -H "Authorization: Bearer $MANFAA_TOKEN"
+```
+
+```json
+{ "data": [
+  { "category_id": 41, "category": "fruits",  "mode": "excluded", "cashback_rate_percent": null },
+  { "category_id": 42, "category": "veggies", "mode": "rate",     "cashback_rate_percent": "2.00" }
+] }
+```
+
+Then send the sale. Name each category by `category_id` **or** by
+`category` — whichever your system already stores:
 
 ```sh
 curl -s -X POST $MANFAA_API/v1/transactions \
@@ -480,11 +680,21 @@ curl -s -X POST $MANFAA_API/v1/transactions \
     "eligible_amount": 100000,
     "occurred_at": "2026-08-15T10:30:00+05:00",
     "lines": [
-      { "category": "fruits",  "amount_laari": 30000 },
-      { "category": "veggies", "amount_laari": 25000 },
-      { "category": null,      "amount_laari": 45000 }
+      { "category_id": 41, "amount_laari": 30000 },
+      { "category_id": 42, "amount_laari": 25000 },
+      { "category": null,  "amount_laari": 45000 }
     ]
   }'
+```
+
+The same basket by slug, if that suits you better — identical result:
+
+```jsonc
+"lines": [
+  { "category": "fruits",  "amount_laari": 30000 },
+  { "category": "veggies", "amount_laari": 25000 },
+  { "category": null,      "amount_laari": 45000 }   // everything else
+]
 ```
 
 Every line rounds **up** independently (§4 ceiling), then the transaction
@@ -540,6 +750,29 @@ Notes:
   the promotion-priced lines, in submitted order.
 - Reversals work unchanged — reverse the transaction by id; the stored
   totals reverse as one.
+
+#### Partial refunds — `PATCH /v1/transactions/{id}`
+
+A buyer returns one item of three: the sale was not voided, it shrank.
+While the sale is still pending (inside its validation window) send the
+new figures and the cashback is re-priced at the terms frozen on the
+sale — never at today's rate:
+
+```bash
+curl -X PATCH $MANFAA_API/v1/transactions/9001 \
+  -H "Authorization: Bearer $MANFAA_TOKEN" -H "Content-Type: application/json" \
+  -H "Idempotency-Key: woo:order:1042:amend:77" \
+  -d '{"eligible_amount": 20000, "sale_amount": 20000}'
+```
+
+`200 {"status": "amended", "transaction": {…}}` with the new
+`cashback_laari`. Send `lines[]` too if the sale had them — a complete
+replacement split. Once the window has closed the sale is `confirmed` and
+the amend answers `409 not_amendable_state`: a confirmed sale is either
+reversed in full (§4.2) or left alone; nothing takes part of it back. The
+buyer is told when cashback is reversed (`cashback_reversed` push), but
+not when it is merely reduced — the pending amount in their app simply
+updates.
 
 ### 4.2 Reverse a sale — `POST /v1/transactions/{id}/reverse`
 
@@ -645,7 +878,7 @@ curl -s $MANFAA_API/v1/merchants/me/rate \
   -H "Authorization: Bearer $MANFAA_TOKEN"
 ```
 
-Sandbox answer (the scheduled decrease is part of the fixtures):
+Fixture answer (the scheduled decrease is part of the fixture set):
 
 ```json
 {
@@ -707,7 +940,7 @@ The mask keeps the first three characters of each name part — enough to
 confirm, nothing more. No balance, phone number, or other customer data ever
 crosses this API.
 
-A known code that cannot currently earn (sandbox: `333333`) still answers
+A known code that cannot currently earn (fixture customer `333333`) still answers
 `200`, with `valid: false` — show the cashier "code exists but is blocked".
 An unknown code answers `404 customer_not_found`; re-read it with the
 customer (this is almost always a mistyped digit).
@@ -791,10 +1024,84 @@ retryable with the same `Idempotency-Key`.**
 
 ## 6. Webhooks
 
-We POST signed events to the HTTPS endpoint you register with us (one
-endpoint per POS vendor, subscribed to the events you choose). At
-registration you receive a signing secret (`whsec_…`) exactly once — store it
-like a password.
+We POST signed events to HTTPS endpoints. There are two kinds of endpoint,
+and the difference is **who owns it and whose events it hears**:
+
+| | Webhooks — POS vendors (§6.1) | Webhooks — Merchants (§6.2) |
+|---|---|---|
+| Owned by | A POS platform we registered (IsleBooks, a till vendor) | One store |
+| Hears | Every merchant that platform integrates | That store's events only |
+| Registered by | Manfaa, at integrations@manfaa.app | The store owner in the panel, **or** the store's own credential over `/v1/webhooks` |
+| Secret | One per endpoint, shown once | Same |
+| Signature, retries, envelope | Identical | Identical |
+
+Everything under "Delivery" (§6.3) applies to both. If you are building a
+plugin or a custom shop for **one** store, you want §6.2.
+
+### 6.1 Webhooks — POS vendors
+
+One endpoint per POS vendor, subscribed to the events you choose, registered
+by us when we onboard your platform. Every event carries `merchant_id` in
+`data` — you route it to the right merchant on your side. You hear about a
+merchant for as long as that merchant holds a live credential for your
+platform; revoke it and the events stop.
+
+### 6.2 Webhooks — Merchants
+
+A store's own endpoint. It hears **only that store's** events, so there is
+nothing to route.
+
+Two ways to register one:
+
+- **In the panel** — *Settings › API access › Webhooks*: URL, events, an
+  optional name. The store owner sees the signing secret once, and can press
+  **Send test** to receive a `webhook.test` delivery signed exactly like a
+  real event. Up to **5** active endpoints per store.
+- **Over the API** — a credential with the `webhooks:manage` ability
+  registers its own endpoint. This is how a plugin sets itself up with no
+  manual step. The endpoint is tied to that credential: **revoking the
+  credential switches the endpoint off**, and a credential only sees and
+  removes endpoints it registered itself — never the ones typed into the
+  panel.
+
+```sh
+curl -X POST $MANFAA_API/v1/webhooks \
+  -H "Authorization: Bearer $MANFAA_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"url":"https://shop.example.mv/wp-json/manfaa/v1/webhook",
+       "label":"WooCommerce — shop.example.mv",
+       "events":["merchant.rate_changed","transaction.reversed"]}'
+```
+
+```json
+{
+  "secret": "whsec_…",
+  "endpoint": {
+    "id": 41,
+    "url": "https://shop.example.mv/wp-json/manfaa/v1/webhook",
+    "label": "WooCommerce — shop.example.mv",
+    "events": ["merchant.rate_changed", "transaction.reversed"],
+    "active": true,
+    "registered_by": "credential",
+    "api_credential_id": 17,
+    "last_delivery": null,
+    "created_at": "2026-08-22T10:12:00+05:00"
+  }
+}
+```
+
+`secret` is in this response and nowhere else. Re-registering the **same
+URL** from the same credential replaces the earlier endpoint rather than
+adding a second (so a plugin re-activated or re-installed ends up with
+exactly one). `GET /v1/webhooks` lists what this credential registered;
+`DELETE /v1/webhooks/{id}` removes one. Refusals: `422 endpoint_cap_reached`
+(5 active already — `meta.max_active`), `404 webhook_not_found` (not yours),
+and a `422 validation_failed` for a non-`https://` or private-network URL.
+
+### 6.3 Delivery — common to both
+
+At registration you receive a signing secret (`whsec_…`) exactly once —
+store it like a password.
 
 | Event | When | Do |
 |---|---|---|
@@ -802,6 +1109,7 @@ like a password.
 | `merchant.suspended` | Automatic day-16 suspension | Stop advertising cashback; keep POSTing sales |
 | `merchant.reinstated` | Merchant settled and was reinstated | Resume advertising |
 | `transaction.reversed` | Any transaction reversed — including by Manfaa admins | Sync your local record; dedupe by `transaction_id` (your own reversals echo here too) |
+| `webhook.test` | A store owner pressed **Send test** (merchant endpoints only) | Verify the signature, answer `2xx`, do nothing else. Cannot be subscribed to. |
 
 Every delivery carries:
 
@@ -904,5 +1212,39 @@ that: monitor your endpoint's availability.
 - [ ] Customer name confirmed at the till before crediting
 - [ ] Webhook signature verified over raw bytes, events deduped by `id`
 - [ ] Rate cache refreshed on `merchant.rate_changed`, advertising stopped on `merchant.suspended`
+
+### WooCommerce plugin — go-live
+
+For a store running the Manfaa Cashback plugin the list above is the
+plugin's job; the merchant's own checklist is shorter:
+
+- [ ] Store currency is **MVR** (WooCommerce › Settings › General) — the
+  plugin posts nothing and shows no estimate otherwise, and says so
+- [ ] Site served over **https://** — *Connect with Manfaa* needs it (a
+  non-https site can paste an API token instead)
+- [ ] **Connected** as the store owner: Manfaa Cashback › Connection shows
+  the store name and all five permissions (`transactions:write`,
+  `transactions:reverse`, `rates:read`, `customers:lookup`,
+  `webhooks:manage`); *Test connection* passes; the webhook is registered
+- [ ] `MANFAA_CASHBACK_KEY` defined in `wp-config.php` (a random 32+
+  character string) so the connection secrets are not encrypted with a
+  key that lives in the database — the settings screen says which it is
+  using
+- [ ] Pricing mode chosen — *Per category* mapped and synced if the Manfaa
+  store has category rates or exclusions; *General rate* otherwise
+- [ ] **Posting status** chosen (Completed by default; Processing if the
+  store wants cashback pending from payment) and the partial-refund policy
+  set
+- [ ] One end-to-end test order: a real Manfaa customer's code at checkout
+  → move the order to the posting status → the order's *Manfaa* column
+  shows the amount and the customer sees it **pending** in their app →
+  cancel the order → the column shows *Reversed* and the customer is told
+- [ ] Where pending money shows for the buyer: the Manfaa app's Activity
+  tab — pending until the store's validation window closes, then
+  confirmed, then paid out on the next payout run
+
+Updates arrive through WordPress's own plugin updater from
+`manfaa.app/app/woocommerce/manifest.json`; **Check for updates** on the
+Plugins screen asks immediately.
 
 Questions: **integrations@manfaa.app**.
