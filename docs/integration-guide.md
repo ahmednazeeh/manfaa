@@ -1032,11 +1032,24 @@ and the difference is **who owns it and whose events it hears**:
 | Owned by | A POS platform we registered (IsleBooks, a till vendor) | One store |
 | Hears | Every merchant that platform integrates | That store's events only |
 | Registered by | Manfaa, at integrations@manfaa.app | The store owner in the panel, **or** the store's own credential over `/v1/webhooks` |
+| How many | One URL, one secret, for the whole platform | One endpoint **per store** (and per credential that registered it), up to 5 active per store |
+| Lifetime | Until Manfaa removes it; merchants connecting or leaving do not touch it | Switched off when the store revokes the credential that registered it; removable by the store or by `DELETE /v1/webhooks/{id}` |
+| Visible to the store | No — platform plumbing | Yes — *Settings › API access › Webhooks* shows it as "registered by credential"; the owner can remove it or send a test |
 | Secret | One per endpoint, shown once | Same |
 | Signature, retries, envelope | Identical | Identical |
 
 Everything under "Delivery" (§6.3) applies to both. If you are building a
 plugin or a custom shop for **one** store, you want §6.2.
+
+**If you are a platform serving many stores**, you want §6.1. The API route
+(§6.2) is open to you too — with `webhooks:manage` in your registration's
+ceiling and in the scope you ask each merchant for — but it registers a
+separate endpoint, with its own secret, for **every merchant connection**,
+even when the URL is the same each time; you would hold one secret per
+merchant and choose it by the event's `merchant_id` before verifying. And
+never run both kinds at once: an event reaches **each** endpoint entitled
+to it, so a platform with a §6.1 endpoint and a §6.2 endpoint per store
+receives every event twice.
 
 ### 6.1 Webhooks — POS vendors
 
