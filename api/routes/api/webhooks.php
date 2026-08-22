@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Admin\WebhookEndpointController;
 use App\Http\Controllers\Merchant\RateController;
+use App\Http\Controllers\Merchant\WebhookEndpointController as MerchantWebhookEndpointController;
 use App\Http\Middleware\EnsureMerchantApproved;
 use Illuminate\Support\Facades\Route;
 
@@ -26,6 +27,22 @@ Route::prefix('admin')->middleware('auth:admin')->group(function () {
 // merchant.rate_changed and move the till's quoted rate to a number that
 // accrues nothing).
 Route::prefix('merchant')->middleware('auth:merchant')->group(function () {
+    // A merchant's OWN webhook endpoints (owner, 2026-08-22) — Settings ›
+    // API access. Same permissions as the credentials they sit beside:
+    // view to list, create to add (owner by preset, approved store only),
+    // revoke to remove. "Send test" is a read-level action: it proves a
+    // URL the merchant already owns and changes nothing.
+    Route::get('webhook-endpoints', [MerchantWebhookEndpointController::class, 'index'])
+        ->middleware('merchant.can:api_credentials.view');
+    Route::post('webhook-endpoints', [MerchantWebhookEndpointController::class, 'store'])
+        ->middleware(['merchant.can:api_credentials.create', EnsureMerchantApproved::class, 'throttle:30,1']);
+    Route::delete('webhook-endpoints/{endpoint}', [MerchantWebhookEndpointController::class, 'destroy'])
+        ->middleware('merchant.can:api_credentials.revoke')
+        ->whereNumber('endpoint');
+    Route::post('webhook-endpoints/{endpoint}/test', [MerchantWebhookEndpointController::class, 'test'])
+        ->middleware(['merchant.can:api_credentials.view', 'throttle:30,1'])
+        ->whereNumber('endpoint');
+
     Route::get('rate', [RateController::class, 'show'])
         ->middleware('merchant.can:rate.view');
 

@@ -20,6 +20,14 @@ final class WebhookEvents
     public const string TRANSACTION_REVERSED = 'transaction.reversed';
 
     /**
+     * Sent only by "Send test" on a merchant endpoint (owner, 2026-08-22).
+     * Deliberately NOT in {@see all()}: nobody can subscribe to it and the
+     * dispatcher never emits it — it proves a URL and a signature, nothing
+     * else. Receivers should acknowledge it with a 2xx and do no work.
+     */
+    public const string TEST = 'webhook.test';
+
+    /**
      * @return list<string>
      */
     public static function all(): array

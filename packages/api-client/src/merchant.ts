@@ -1,5 +1,5 @@
-import { z } from 'zod';
-import { ApiError, apiFetch } from './client';
+import { z } from "zod";
+import { ApiError, apiFetch } from "./client";
 import {
   BankSlugSchema,
   CashbackPercentInputSchema,
@@ -24,7 +24,7 @@ import {
   TransactionSchema,
   type PromotionStatus,
   WalletSchema,
-} from './resources';
+} from "./resources";
 
 /**
  * Typed contracts for the merchant surface: outstanding by age bucket, the
@@ -98,9 +98,9 @@ export const OutstandingSummarySchema = z.object({
   as_of: z.string(),
   total: OutstandingTotalSchema,
   buckets: z.object({
-    '0_5': OutstandingBucketSchema,
-    '6_10': OutstandingBucketSchema,
-    '11_15': OutstandingBucketSchema,
+    "0_5": OutstandingBucketSchema,
+    "6_10": OutstandingBucketSchema,
+    "11_15": OutstandingBucketSchema,
     overdue: OutstandingBucketSchema,
   }),
   pending_adjustments: PendingAdjustmentsSchema,
@@ -113,7 +113,7 @@ export type OutstandingResponse = z.infer<typeof OutstandingResponseSchema>;
 export function getMerchantOutstanding(
   options: RequestOptions = {},
 ): Promise<OutstandingResponse> {
-  return apiFetch('/api/merchant/outstanding', OutstandingResponseSchema, {
+  return apiFetch("/api/merchant/outstanding", OutstandingResponseSchema, {
     signal: options.signal,
   });
 }
@@ -138,7 +138,7 @@ export function listMerchantSettlements(
   options: RequestOptions = {},
 ): Promise<MerchantSettlementListResponse> {
   const query =
-    params.page !== undefined ? `?page=${encodeURIComponent(params.page)}` : '';
+    params.page !== undefined ? `?page=${encodeURIComponent(params.page)}` : "";
   return apiFetch(
     `/api/merchant/settlements${query}`,
     MerchantSettlementListResponseSchema,
@@ -175,11 +175,11 @@ export const SettlementSelectionSchema = z.union([
 /** `?settle_all=1` or repeated `?transaction_ids[]=` — Laravel array syntax. */
 function selectionQuery(selection: SettlementSelection): string {
   const search = new URLSearchParams();
-  if ('settle_all' in selection) {
-    search.set('settle_all', '1');
+  if ("settle_all" in selection) {
+    search.set("settle_all", "1");
   } else {
     for (const id of selection.transaction_ids) {
-      search.append('transaction_ids[]', String(id));
+      search.append("transaction_ids[]", String(id));
     }
   }
   return `?${search.toString()}`;
@@ -187,11 +187,11 @@ function selectionQuery(selection: SettlementSelection): string {
 
 /** The same selection, as multipart fields on a receipt submission. */
 function appendSelection(form: FormData, selection: SettlementSelection): void {
-  if ('settle_all' in selection) {
-    form.append('settle_all', '1');
+  if ("settle_all" in selection) {
+    form.append("settle_all", "1");
   } else {
     for (const id of selection.transaction_ids) {
-      form.append('transaction_ids[]', String(id));
+      form.append("transaction_ids[]", String(id));
     }
   }
 }
@@ -405,7 +405,7 @@ export const SETTLEMENT_SLIP_MAX_BYTES = 5 * 1024 * 1024;
 
 /** What the server accepts as a slip, by content — SVG is deliberately absent. */
 export const SETTLEMENT_SLIP_ACCEPT =
-  'image/jpeg,image/png,image/webp,application/pdf';
+  "image/jpeg,image/png,image/webp,application/pdf";
 
 /**
  * Refusal codes carried on ApiError bodies as `code` for the receipt-first
@@ -426,24 +426,24 @@ export const SETTLEMENT_SLIP_ACCEPT =
  * conflict — the batch moved on, so reload it.
  */
 export const SettlementErrorCodeSchema = z.enum([
-  'slip_too_large',
-  'slip_unsupported_type',
-  'duplicate_bank_ref',
-  'permission_required',
-  'store_not_approved',
+  "slip_too_large",
+  "slip_unsupported_type",
+  "duplicate_bank_ref",
+  "permission_required",
+  "store_not_approved",
 ]);
 export type SettlementErrorCode = z.infer<typeof SettlementErrorCodeSchema>;
 
 function receiptForm(receipt: SettlementReceiptInput): FormData {
   const form = new FormData();
-  form.append('amount', String(receipt.amount));
-  if (receipt.bank_ref !== undefined && receipt.bank_ref !== '') {
-    form.append('bank_ref', receipt.bank_ref);
+  form.append("amount", String(receipt.amount));
+  if (receipt.bank_ref !== undefined && receipt.bank_ref !== "") {
+    form.append("bank_ref", receipt.bank_ref);
   }
-  form.append('slip', receipt.slip);
+  form.append("slip", receipt.slip);
   if (receipt.platform_bank_account_id !== undefined) {
     form.append(
-      'platform_bank_account_id',
+      "platform_bank_account_id",
       String(receipt.platform_bank_account_id),
     );
   }
@@ -469,9 +469,9 @@ export function createMerchantSettlement(
   appendSelection(form, selection);
 
   return apiFetch(
-    '/api/merchant/settlements',
+    "/api/merchant/settlements",
     MerchantSettlementResponseSchema,
-    { method: 'POST', body: form, signal: options.signal },
+    { method: "POST", body: form, signal: options.signal },
   );
 }
 
@@ -490,7 +490,7 @@ export function addMerchantSettlementReceipt(
   return apiFetch(
     `/api/merchant/settlements/${id}/receipts`,
     MerchantSettlementResponseSchema,
-    { method: 'POST', body: receiptForm(receipt), signal: options.signal },
+    { method: "POST", body: receiptForm(receipt), signal: options.signal },
   );
 }
 
@@ -507,9 +507,9 @@ export function createMerchantWalletSettlement(
   options: RequestOptions = {},
 ): Promise<MerchantSettlementResponse> {
   return apiFetch(
-    '/api/merchant/settlements/wallet',
+    "/api/merchant/settlements/wallet",
     MerchantSettlementResponseSchema,
-    { method: 'POST', body: selection, signal: options.signal },
+    { method: "POST", body: selection, signal: options.signal },
   );
 }
 
@@ -525,7 +525,7 @@ export type MerchantWalletResponse = z.infer<
 export function getMerchantWallet(
   options: RequestOptions = {},
 ): Promise<MerchantWalletResponse> {
-  return apiFetch('/api/merchant/wallet', MerchantWalletResponseSchema, {
+  return apiFetch("/api/merchant/wallet", MerchantWalletResponseSchema, {
     signal: options.signal,
   });
 }
@@ -613,12 +613,12 @@ export type CreateCreditResponse = z.infer<typeof CreateCreditResponseSchema>;
  *    `duplicate_category_line` — the line-split rules (Task #25).
  */
 export const CREDIT_REFUSAL_CODES = [
-  'rate_below_advertised',
-  'rate_not_priced',
-  'lines_sum_mismatch',
-  'unknown_category',
-  'inactive_category',
-  'duplicate_category_line',
+  "rate_below_advertised",
+  "rate_not_priced",
+  "lines_sum_mismatch",
+  "unknown_category",
+  "inactive_category",
+  "duplicate_category_line",
 ] as const;
 export const CreditRefusalCodeSchema = z.enum(CREDIT_REFUSAL_CODES);
 export type CreditRefusalCode = (typeof CREDIT_REFUSAL_CODES)[number];
@@ -630,13 +630,13 @@ export type CreditRefusalCode = (typeof CREDIT_REFUSAL_CODES)[number];
  * other failure.
  */
 export function advertisedRatePercent(error: unknown): string | null {
-  if (!(error instanceof ApiError) || typeof error.body !== 'object') {
+  if (!(error instanceof ApiError) || typeof error.body !== "object") {
     return null;
   }
   const advertised = (
     error.body as { advertised_cashback_rate_percent?: unknown } | null
   )?.advertised_cashback_rate_percent;
-  return typeof advertised === 'string' ? advertised : null;
+  return typeof advertised === "string" ? advertised : null;
 }
 
 /**
@@ -658,8 +658,8 @@ export function createMerchantCredit(
   body: CreateCreditRequest,
   options: RequestOptions = {},
 ): Promise<CreateCreditResponse> {
-  return apiFetch('/api/merchant/credits', CreateCreditResponseSchema, {
-    method: 'POST',
+  return apiFetch("/api/merchant/credits", CreateCreditResponseSchema, {
+    method: "POST",
     body,
     signal: options.signal,
   });
@@ -718,10 +718,10 @@ const productCategoryRequestBase = z.object({
  * `code: rate_not_priced`. The rate travels as a 2-decimal percent ("2.5"
  * or the JSON number 2.5), never as basis points.
  */
-export const CreateProductCategoryRequestSchema = z.discriminatedUnion('mode', [
-  productCategoryRequestBase.extend({ mode: z.literal('excluded') }),
+export const CreateProductCategoryRequestSchema = z.discriminatedUnion("mode", [
+  productCategoryRequestBase.extend({ mode: z.literal("excluded") }),
   productCategoryRequestBase.extend({
-    mode: z.literal('rate'),
+    mode: z.literal("rate"),
     cashback_rate_percent: CashbackPercentInputSchema,
   }),
 ]);
@@ -758,7 +758,7 @@ export function listMerchantProductCategories(
   options: RequestOptions = {},
 ): Promise<ProductCategoryListResponse> {
   return apiFetch(
-    '/api/merchant/product-categories',
+    "/api/merchant/product-categories",
     ProductCategoryListResponseSchema,
     { signal: options.signal },
   );
@@ -773,9 +773,9 @@ export function createMerchantProductCategory(
   options: RequestOptions = {},
 ): Promise<ProductCategoryResponse> {
   return apiFetch(
-    '/api/merchant/product-categories',
+    "/api/merchant/product-categories",
     ProductCategoryResponseSchema,
-    { method: 'POST', body, signal: options.signal },
+    { method: "POST", body, signal: options.signal },
   );
 }
 
@@ -792,7 +792,7 @@ export function updateMerchantProductCategory(
   return apiFetch(
     `/api/merchant/product-categories/${id}`,
     ProductCategoryResponseSchema,
-    { method: 'PATCH', body, signal: options.signal },
+    { method: "PATCH", body, signal: options.signal },
   );
 }
 
@@ -847,7 +847,7 @@ export function listMerchantPromotions(
   const query =
     params.status !== undefined
       ? `?status=${encodeURIComponent(params.status)}`
-      : '';
+      : "";
   return apiFetch(
     `/api/merchant/promotions${query}`,
     MerchantPromotionListResponseSchema,
@@ -888,9 +888,9 @@ export function createMerchantPromotion(
   options: RequestOptions = {},
 ): Promise<MerchantPromotionWithPreviewResponse> {
   return apiFetch(
-    '/api/merchant/promotions',
+    "/api/merchant/promotions",
     MerchantPromotionWithPreviewResponseSchema,
-    { method: 'POST', body, signal: options.signal },
+    { method: "POST", body, signal: options.signal },
   );
 }
 
@@ -911,7 +911,7 @@ export function publishMerchantPromotion(
   return apiFetch(
     `/api/merchant/promotions/${id}/publish`,
     MerchantPromotionWithPreviewResponseSchema,
-    { method: 'POST', signal: options.signal },
+    { method: "POST", signal: options.signal },
   );
 }
 
@@ -927,7 +927,7 @@ export function cancelMerchantPromotion(
   return apiFetch(
     `/api/merchant/promotions/${id}/cancel`,
     MerchantPromotionResponseSchema,
-    { method: 'POST', signal: options.signal },
+    { method: "POST", signal: options.signal },
   );
 }
 
@@ -958,8 +958,8 @@ export function cancelMerchantPromotion(
  *    treat this as "the panel is locked".
  */
 export const MerchantWriteGateCodeSchema = z.enum([
-  'store_not_approved',
-  'store_not_trading',
+  "store_not_approved",
+  "store_not_trading",
 ]);
 export type MerchantWriteGateCode = z.infer<typeof MerchantWriteGateCodeSchema>;
 
@@ -1059,7 +1059,7 @@ export type UpdateMerchantProfileRequest = z.infer<
 export function getMerchantProfile(
   options: RequestOptions = {},
 ): Promise<MerchantProfileResponse> {
-  return apiFetch('/api/merchant/profile', MerchantProfileResponseSchema, {
+  return apiFetch("/api/merchant/profile", MerchantProfileResponseSchema, {
     signal: options.signal,
   });
 }
@@ -1107,12 +1107,12 @@ export async function updateMerchantProfile(
   options: RequestOptions = {},
 ): Promise<MerchantProfileSaveResult> {
   const response = await apiFetch(
-    '/api/merchant/profile',
+    "/api/merchant/profile",
     UpdateMerchantProfileResponseSchema,
-    { method: 'PATCH', body, signal: options.signal },
+    { method: "PATCH", body, signal: options.signal },
   );
 
-  return 'change_request' in response.data
+  return "change_request" in response.data
     ? { queued: response.data.change_request, profile: response.data.profile }
     : { queued: null, profile: response.data };
 }
@@ -1167,7 +1167,7 @@ export function getMerchantBankAccount(
   options: RequestOptions = {},
 ): Promise<MerchantBankAccountResponse> {
   return apiFetch(
-    '/api/merchant/bank-account',
+    "/api/merchant/bank-account",
     MerchantBankAccountResponseSchema,
     { signal: options.signal },
   );
@@ -1182,9 +1182,9 @@ export function updateMerchantBankAccount(
   options: RequestOptions = {},
 ): Promise<MerchantBankAccountResponse> {
   return apiFetch(
-    '/api/merchant/bank-account',
+    "/api/merchant/bank-account",
     MerchantBankAccountResponseSchema,
-    { method: 'PATCH', body, signal: options.signal },
+    { method: "PATCH", body, signal: options.signal },
   );
 }
 
@@ -1289,7 +1289,7 @@ export type UpdateMerchantBranchRequest = z.infer<
 export function listMerchantBranches(
   options: RequestOptions = {},
 ): Promise<MerchantBranchListResponse> {
-  return apiFetch('/api/merchant/branches', MerchantBranchListResponseSchema, {
+  return apiFetch("/api/merchant/branches", MerchantBranchListResponseSchema, {
     signal: options.signal,
   });
 }
@@ -1316,7 +1316,7 @@ export interface MerchantBranchSaveResult {
 function branchSaveResult(
   response: z.infer<typeof BranchWriteResponseSchema>,
 ): MerchantBranchSaveResult {
-  return 'change_request' in response.data
+  return "change_request" in response.data
     ? { queued: response.data.change_request, branch: null }
     : { queued: null, branch: response.data };
 }
@@ -1329,11 +1329,11 @@ function branchSaveResult(
 export async function setMerchantPublication(
   published: boolean,
   options: RequestOptions = {},
-): Promise<MerchantPublicationResponse['data']> {
+): Promise<MerchantPublicationResponse["data"]> {
   const response = await apiFetch(
-    '/api/merchant/publication',
+    "/api/merchant/publication",
     MerchantPublicationResponseSchema,
-    { method: 'POST', body: { published }, signal: options.signal },
+    { method: "POST", body: { published }, signal: options.signal },
   );
 
   return response.data;
@@ -1364,8 +1364,8 @@ export async function createMerchantBranch(
   options: RequestOptions = {},
 ): Promise<MerchantBranchSaveResult> {
   return branchSaveResult(
-    await apiFetch('/api/merchant/branches', BranchWriteResponseSchema, {
-      method: 'POST',
+    await apiFetch("/api/merchant/branches", BranchWriteResponseSchema, {
+      method: "POST",
       body,
       signal: options.signal,
     }),
@@ -1385,7 +1385,7 @@ export async function updateMerchantBranch(
 ): Promise<MerchantBranchSaveResult> {
   return branchSaveResult(
     await apiFetch(`/api/merchant/branches/${id}`, BranchWriteResponseSchema, {
-      method: 'PATCH',
+      method: "PATCH",
       body,
       signal: options.signal,
     }),
@@ -1407,7 +1407,7 @@ export async function deleteMerchantBranch(
   const response = await apiFetch(
     `/api/merchant/branches/${id}`,
     z.object({ data: QueuedChangeSchema }).optional(),
-    { method: 'DELETE', signal: options.signal },
+    { method: "DELETE", signal: options.signal },
   );
 
   return response?.data.change_request ?? null;
@@ -1431,54 +1431,54 @@ export async function deleteMerchantBranch(
  * other.
  */
 export const MERCHANT_PERMISSIONS = [
-  'credits.create',
-  'credits.custom_rate',
-  'customers.lookup',
-  'transactions.view',
-  'transactions.amend',
-  'transactions.cancel',
-  'rate.view',
-  'rate.update',
-  'promotions.view',
-  'promotions.create',
-  'promotions.publish',
-  'promotions.cancel',
-  'product_categories.view',
-  'product_categories.create',
-  'product_categories.edit',
-  'settlements.view',
-  'settlements.preview',
-  'settlements.create',
-  'settlements.receipt_add',
-  'wallet.view',
-  'wallet.settle',
-  'profile.view',
-  'profile.edit',
-  'branding.update',
-  'branches.view',
-  'branches.create',
-  'branches.edit',
-  'branches.delete',
-  'bank_account.view',
-  'bank_account.update',
-  'preferences.update',
-  'staff.view',
-  'staff.invite',
-  'staff.edit',
-  'roles.view',
-  'roles.manage',
-  'api_credentials.view',
-  'api_credentials.create',
-  'api_credentials.revoke',
-  'setup.view',
-  'setup.edit',
-  'setup.submit',
+  "credits.create",
+  "credits.custom_rate",
+  "customers.lookup",
+  "transactions.view",
+  "transactions.amend",
+  "transactions.cancel",
+  "rate.view",
+  "rate.update",
+  "promotions.view",
+  "promotions.create",
+  "promotions.publish",
+  "promotions.cancel",
+  "product_categories.view",
+  "product_categories.create",
+  "product_categories.edit",
+  "settlements.view",
+  "settlements.preview",
+  "settlements.create",
+  "settlements.receipt_add",
+  "wallet.view",
+  "wallet.settle",
+  "profile.view",
+  "profile.edit",
+  "branding.update",
+  "branches.view",
+  "branches.create",
+  "branches.edit",
+  "branches.delete",
+  "bank_account.view",
+  "bank_account.update",
+  "preferences.update",
+  "staff.view",
+  "staff.invite",
+  "staff.edit",
+  "roles.view",
+  "roles.manage",
+  "api_credentials.view",
+  "api_credentials.create",
+  "api_credentials.revoke",
+  "setup.view",
+  "setup.edit",
+  "setup.submit",
   // Pausing the store on the app, and running the marketplace shop. Both
   // separated from profile.edit on purpose: going dark to every customer,
   // and committing the business to selling online, are not the same
   // authority as editing a phone number.
-  'store.publication',
-  'marketplace.manage',
+  "store.publication",
+  "marketplace.manage",
 ] as const;
 export const MerchantPermissionSchema = z.enum(MERCHANT_PERMISSIONS);
 export type MerchantPermission = (typeof MERCHANT_PERMISSIONS)[number];
@@ -1539,7 +1539,7 @@ export function listMerchantPermissions(
   options: RequestOptions = {},
 ): Promise<MerchantPermissionCatalogueResponse> {
   return apiFetch(
-    '/api/merchant/permissions',
+    "/api/merchant/permissions",
     MerchantPermissionCatalogueResponseSchema,
     { signal: options.signal },
   );
@@ -1630,13 +1630,13 @@ export type MerchantRoleResponse = z.infer<typeof MerchantRoleResponseSchema>;
  *  - `role_cap_reached` (422) — 20 roles per store.
  */
 export const MERCHANT_ROLE_ERROR_CODES = [
-  'permission_not_held',
-  'owner_role_not_delegable',
-  'cannot_edit_own_role',
-  'owner_role_frozen',
-  'owner_role_undeletable',
-  'role_in_use',
-  'role_cap_reached',
+  "permission_not_held",
+  "owner_role_not_delegable",
+  "cannot_edit_own_role",
+  "owner_role_frozen",
+  "owner_role_undeletable",
+  "role_in_use",
+  "role_cap_reached",
 ] as const;
 export const MerchantRoleErrorCodeSchema = z.enum(MERCHANT_ROLE_ERROR_CODES);
 export type MerchantRoleErrorCode = (typeof MERCHANT_ROLE_ERROR_CODES)[number];
@@ -1679,7 +1679,7 @@ export type UpdateMerchantRoleRequest = z.infer<
 export function listMerchantRoles(
   options: RequestOptions = {},
 ): Promise<MerchantRoleListResponse> {
-  return apiFetch('/api/merchant/roles', MerchantRoleListResponseSchema, {
+  return apiFetch("/api/merchant/roles", MerchantRoleListResponseSchema, {
     signal: options.signal,
   });
 }
@@ -1689,8 +1689,8 @@ export function createMerchantRole(
   body: CreateMerchantRoleRequest,
   options: RequestOptions = {},
 ): Promise<MerchantRoleResponse> {
-  return apiFetch('/api/merchant/roles', MerchantRoleResponseSchema, {
-    method: 'POST',
+  return apiFetch("/api/merchant/roles", MerchantRoleResponseSchema, {
+    method: "POST",
     body,
     signal: options.signal,
   });
@@ -1703,7 +1703,7 @@ export function updateMerchantRole(
   options: RequestOptions = {},
 ): Promise<MerchantRoleResponse> {
   return apiFetch(`/api/merchant/roles/${id}`, MerchantRoleResponseSchema, {
-    method: 'PATCH',
+    method: "PATCH",
     body,
     signal: options.signal,
   });
@@ -1719,7 +1719,7 @@ export async function deleteMerchantRole(
   options: RequestOptions = {},
 ): Promise<void> {
   await apiFetch(`/api/merchant/roles/${id}`, z.undefined(), {
-    method: 'DELETE',
+    method: "DELETE",
     signal: options.signal,
   });
 }
@@ -1795,7 +1795,7 @@ export type UpdateMerchantStaffRequest = z.infer<
 export function listMerchantStaff(
   options: RequestOptions = {},
 ): Promise<MerchantStaffListResponse> {
-  return apiFetch('/api/merchant/staff', MerchantStaffListResponseSchema, {
+  return apiFetch("/api/merchant/staff", MerchantStaffListResponseSchema, {
     signal: options.signal,
   });
 }
@@ -1810,8 +1810,8 @@ export function createMerchantStaff(
   body: CreateMerchantStaffRequest,
   options: RequestOptions = {},
 ): Promise<CreateMerchantStaffResponse> {
-  return apiFetch('/api/merchant/staff', CreateMerchantStaffResponseSchema, {
-    method: 'POST',
+  return apiFetch("/api/merchant/staff", CreateMerchantStaffResponseSchema, {
+    method: "POST",
     body,
     signal: options.signal,
   });
@@ -1831,7 +1831,7 @@ export function updateMerchantStaff(
   options: RequestOptions = {},
 ): Promise<MerchantStaffResponse> {
   return apiFetch(`/api/merchant/staff/${id}`, MerchantStaffResponseSchema, {
-    method: 'PATCH',
+    method: "PATCH",
     body,
     signal: options.signal,
   });
@@ -1888,9 +1888,9 @@ export function updateMerchantPreferences(
   options: RequestOptions = {},
 ): Promise<MerchantPreferencesResponse> {
   return apiFetch(
-    '/api/merchant/preferences',
+    "/api/merchant/preferences",
     MerchantPreferencesResponseSchema,
-    { method: 'PATCH', body, signal: options.signal },
+    { method: "PATCH", body, signal: options.signal },
   );
 }
 
@@ -1909,7 +1909,7 @@ export function updateMerchantPreferences(
  * a plain 200 `{valid: false}` — so the endpoint is no existence oracle.
  * Throttled 30/min per user, matching the credit POST.
  */
-export const CustomerLookupResponseSchema = z.discriminatedUnion('valid', [
+export const CustomerLookupResponseSchema = z.discriminatedUnion("valid", [
   z.object({ valid: z.literal(true), name: z.string() }),
   z.object({ valid: z.literal(false) }),
 ]);
@@ -1939,10 +1939,11 @@ export function lookupMerchantCustomer(
  * outside this list with a 422 on `abilities.*`.
  */
 export const VENDOR_ABILITIES = [
-  'transactions:write',
-  'transactions:reverse',
-  'rates:read',
-  'customers:lookup',
+  "transactions:write",
+  "transactions:reverse",
+  "rates:read",
+  "customers:lookup",
+  "webhooks:manage",
 ] as const;
 export const VendorAbilitySchema = z.enum(VENDOR_ABILITIES);
 export type VendorAbility = (typeof VENDOR_ABILITIES)[number];
@@ -1968,6 +1969,12 @@ export const MerchantCredentialSchema = z.object({
   pos_vendor: z.object({ id: z.number().int(), name: z.string() }).nullable(),
   /** The partner name the merchant typed on the self-serve path. */
   label: z.string().nullable(),
+  /**
+   * `https://shop.example.mv` for a grant a plugin made through
+   * "Connect with Manfaa"; null otherwise. Lets two stores of one
+   * merchant be told apart before one is revoked.
+   */
+  connected_from: z.string().nullable().optional().default(null),
   /** `pos_vendor.name ?? label`, resolved server-side so panels agree. */
   display_name: z.string(),
   abilities: z.array(z.string()),
@@ -1978,10 +1985,10 @@ export const MerchantCredentialSchema = z.object({
    * to the merchant panel).
    */
   issuer: z.object({
-    type: z.enum(['merchant_user', 'admin', 'unknown']),
+    type: z.enum(["merchant_user", "admin", "unknown"]),
     name: z.string().nullable(),
   }),
-  revoked_by_type: z.enum(['merchant_user', 'admin', 'unknown']).nullable(),
+  revoked_by_type: z.enum(["merchant_user", "admin", "unknown"]).nullable(),
   /** Last time this token authenticated against /v1 — the "in use" signal. */
   last_used_at: z.string().nullable(),
   revoked_at: z.string().nullable(),
@@ -2027,12 +2034,142 @@ export type CreateMerchantCredentialResponse = z.infer<
   typeof CreateMerchantCredentialResponseSchema
 >;
 
+// ---------------------------------------------------------------------------
+// Merchant-owned webhook endpoints (owner, 2026-08-22)
+// ---------------------------------------------------------------------------
+
+/**
+ * The events a merchant endpoint may subscribe to. `webhook.test` is NOT
+ * here on purpose: it is what "Send test" delivers, and nothing else.
+ */
+export const WEBHOOK_EVENTS = [
+  "merchant.rate_changed",
+  "merchant.suspended",
+  "merchant.reinstated",
+  "transaction.reversed",
+] as const;
+export type WebhookEvent = (typeof WEBHOOK_EVENTS)[number];
+
+export const MerchantWebhookEndpointSchema = z.object({
+  id: z.number().int(),
+  url: z.string(),
+  label: z.string().nullable(),
+  events: z.array(z.string()),
+  active: z.boolean(),
+  /**
+   * Which door registered it. `credential` endpoints were set up by a token
+   * over /v1 (a plugin) and are switched off when that token is revoked;
+   * `panel` endpoints were typed in here and outlive every token.
+   */
+  registered_by: z.enum(["panel", "credential"]),
+  api_credential_id: z.number().int().nullable(),
+  /** The newest delivery of any event, for "last heard from". */
+  last_delivery: z
+    .object({
+      event: z.string(),
+      status: z.string(),
+      response_status: z.number().int().nullable(),
+      attempted_at: z.string().nullable(),
+    })
+    .nullable(),
+  created_at: z.string().nullable(),
+});
+export type MerchantWebhookEndpoint = z.infer<typeof MerchantWebhookEndpointSchema>;
+
+export const MerchantWebhookEndpointListResponseSchema = z.object({
+  data: z.array(MerchantWebhookEndpointSchema),
+});
+
+export const CreateMerchantWebhookEndpointRequestSchema = z.object({
+  url: z.string().url().max(2048),
+  label: z.string().max(80).optional(),
+  events: z.array(z.enum(WEBHOOK_EVENTS)).min(1),
+});
+export type CreateMerchantWebhookEndpointRequest = z.infer<
+  typeof CreateMerchantWebhookEndpointRequestSchema
+>;
+
+export const CreateMerchantWebhookEndpointResponseSchema = z.object({
+  /** Shown exactly once. The receiver verifies X-Manfaa-Signature with it. */
+  secret: z.string(),
+  endpoint: MerchantWebhookEndpointSchema,
+});
+export type CreateMerchantWebhookEndpointResponse = z.infer<
+  typeof CreateMerchantWebhookEndpointResponseSchema
+>;
+
+/** GET /api/merchant/webhook-endpoints — newest first. `api_credentials.view`. */
+export function listMerchantWebhookEndpoints(
+  options: RequestOptions = {},
+): Promise<z.infer<typeof MerchantWebhookEndpointListResponseSchema>> {
+  return apiFetch(
+    "/api/merchant/webhook-endpoints",
+    MerchantWebhookEndpointListResponseSchema,
+    { signal: options.signal },
+  );
+}
+
+/**
+ * POST /api/merchant/webhook-endpoints — registers one (201) and returns the
+ * signing secret ONCE. `api_credentials.create`. Refusals by code:
+ *
+ *  - `store_not_approved` / `store_not_trading` (409) — as for credentials;
+ *  - `endpoint_cap_reached` (422) — 5 active already; remove one;
+ *  - a 422 validation error for a non-https or private-network URL.
+ */
+export function createMerchantWebhookEndpoint(
+  body: CreateMerchantWebhookEndpointRequest,
+  options: RequestOptions = {},
+): Promise<CreateMerchantWebhookEndpointResponse> {
+  return apiFetch(
+    "/api/merchant/webhook-endpoints",
+    CreateMerchantWebhookEndpointResponseSchema,
+    { method: "POST", body, signal: options.signal },
+  );
+}
+
+/** DELETE /api/merchant/webhook-endpoints/{id} — 204. `api_credentials.revoke`. */
+export async function deleteMerchantWebhookEndpoint(
+  id: number,
+  options: RequestOptions = {},
+): Promise<void> {
+  await apiFetch(
+    `/api/merchant/webhook-endpoints/${id}`,
+    z.undefined(),
+    { method: "DELETE", signal: options.signal },
+  );
+}
+
+export const WebhookTestResponseSchema = z.object({
+  delivery: z.object({
+    id: z.number().int(),
+    event: z.string(),
+    status: z.string(),
+  }),
+});
+
+/**
+ * POST /api/merchant/webhook-endpoints/{id}/test — queues one `webhook.test`
+ * delivery, signed exactly like a real event (202). `test_rate_limited`
+ * (429) after 6 in a minute.
+ */
+export function testMerchantWebhookEndpoint(
+  id: number,
+  options: RequestOptions = {},
+): Promise<z.infer<typeof WebhookTestResponseSchema>> {
+  return apiFetch(
+    `/api/merchant/webhook-endpoints/${id}/test`,
+    WebhookTestResponseSchema,
+    { method: "POST", signal: options.signal },
+  );
+}
+
 /** GET /api/merchant/credentials — newest first, revoked rows included. */
 export function listMerchantCredentials(
   options: RequestOptions = {},
 ): Promise<MerchantCredentialListResponse> {
   return apiFetch(
-    '/api/merchant/credentials',
+    "/api/merchant/credentials",
     MerchantCredentialListResponseSchema,
     { signal: options.signal },
   );
@@ -2053,9 +2190,9 @@ export function createMerchantCredential(
   options: RequestOptions = {},
 ): Promise<CreateMerchantCredentialResponse> {
   return apiFetch(
-    '/api/merchant/credentials',
+    "/api/merchant/credentials",
     CreateMerchantCredentialResponseSchema,
-    { method: 'POST', body, signal: options.signal },
+    { method: "POST", body, signal: options.signal },
   );
 }
 
@@ -2071,7 +2208,7 @@ export function revokeMerchantCredential(
   return apiFetch(
     `/api/merchant/credentials/${id}`,
     MerchantCredentialResponseSchema,
-    { method: 'DELETE', signal: options.signal },
+    { method: "DELETE", signal: options.signal },
   );
 }
 
@@ -2080,7 +2217,13 @@ export function revokeMerchantCredential(
 // ---------------------------------------------------------------------------
 
 export const MarketplaceEnrolmentSchema = z.object({
-  state: z.enum(['not_enrolled', 'pending_kyb', 'active', 'rejected', 'suspended']),
+  state: z.enum([
+    "not_enrolled",
+    "pending_kyb",
+    "active",
+    "rejected",
+    "suspended",
+  ]),
   business_type: z.string().nullable(),
   fulfilment: z.string().nullable(),
   prep_time_min: z.number().int().nullable(),
@@ -2108,7 +2251,7 @@ export type MarketplaceEnrolment = z.infer<typeof MarketplaceEnrolmentSchema>;
 
 export function getMarketplaceEnrolment(options: RequestOptions = {}) {
   return apiFetch(
-    '/api/merchant/marketplace/enrolment',
+    "/api/merchant/marketplace/enrolment",
     dataWrapped(MarketplaceEnrolmentSchema),
     { signal: options.signal },
   );
@@ -2121,17 +2264,17 @@ export function enrolInMarketplace(body: {
   prep_time_max?: number | null;
 }) {
   return apiFetch(
-    '/api/merchant/marketplace/enrolment',
+    "/api/merchant/marketplace/enrolment",
     dataWrapped(z.object({ state: z.string() })),
-    { method: 'POST', body },
+    { method: "POST", body },
   );
 }
 
 export function submitMarketplaceApplication() {
   return apiFetch(
-    '/api/merchant/marketplace/submit',
+    "/api/merchant/marketplace/submit",
     dataWrapped(z.object({ state: z.string() })),
-    { method: 'POST', body: {} },
+    { method: "POST", body: {} },
   );
 }
 
@@ -2166,7 +2309,7 @@ export const MarketplaceProductSchema = z.object({
       slug: z.string(),
       name_en: z.string(),
       name_dv: z.string().nullable(),
-      mode: z.enum(['excluded', 'rate']),
+      mode: z.enum(["excluded", "rate"]),
       rate_percent: z.string().nullable(),
     })
     .nullable(),
@@ -2195,7 +2338,7 @@ export type MarketplaceProduct = z.infer<typeof MarketplaceProductSchema>;
 
 export function listMarketplaceProducts(options: RequestOptions = {}) {
   return apiFetch(
-    '/api/merchant/marketplace/products',
+    "/api/merchant/marketplace/products",
     z.object({
       data: z.array(MarketplaceProductSchema),
       meta: z.object({ pending_changes: z.array(z.unknown()).catch([]) }),
@@ -2220,10 +2363,12 @@ export const CashbackCategoryOptionSchema = z.object({
   slug: z.string(),
   name_en: z.string(),
   name_dv: z.string().nullable(),
-  mode: z.enum(['excluded', 'rate']),
+  mode: z.enum(["excluded", "rate"]),
   rate_percent: z.string().nullable(),
 });
-export type CashbackCategoryOption = z.infer<typeof CashbackCategoryOptionSchema>;
+export type CashbackCategoryOption = z.infer<
+  typeof CashbackCategoryOptionSchema
+>;
 
 /**
  * BOTH lists a product form needs, in one call.
@@ -2235,7 +2380,7 @@ export type CashbackCategoryOption = z.infer<typeof CashbackCategoryOptionSchema
  */
 export function listMarketplaceCategories(options: RequestOptions = {}) {
   return apiFetch(
-    '/api/merchant/marketplace/categories',
+    "/api/merchant/marketplace/categories",
     dataWrapped(
       z.object({
         marketplace: z.array(MarketplaceAisleSchema),
@@ -2253,24 +2398,31 @@ const ProductWriteSchema = z.union([
 ]);
 
 export function createMarketplaceProduct(body: Record<string, unknown>) {
-  return apiFetch('/api/merchant/marketplace/products', ProductWriteSchema, {
-    method: 'POST',
+  return apiFetch("/api/merchant/marketplace/products", ProductWriteSchema, {
+    method: "POST",
     body,
   });
 }
 
-export function updateMarketplaceProduct(id: number, body: Record<string, unknown>) {
-  return apiFetch(`/api/merchant/marketplace/products/${id}`, ProductWriteSchema, {
-    method: 'PATCH',
-    body,
-  });
+export function updateMarketplaceProduct(
+  id: number,
+  body: Record<string, unknown>,
+) {
+  return apiFetch(
+    `/api/merchant/marketplace/products/${id}`,
+    ProductWriteSchema,
+    {
+      method: "PATCH",
+      body,
+    },
+  );
 }
 
 export function archiveMarketplaceProduct(id: number) {
   return apiFetch(
     `/api/merchant/marketplace/products/${id}`,
     dataWrapped(MarketplaceProductSchema),
-    { method: 'DELETE' },
+    { method: "DELETE" },
   );
 }
 
@@ -2289,7 +2441,7 @@ export function setProductListing(
   return apiFetch(
     `/api/merchant/marketplace/products/${productId}/listing`,
     dataWrapped(z.object({ id: z.number().int(), state: z.string() })),
-    { method: 'PUT', body },
+    { method: "PUT", body },
   );
 }
 
@@ -2350,24 +2502,36 @@ export function listMerchantOrders(tab: string, options: RequestOptions = {}) {
 const OrderActionSchema = dataWrapped(MerchantOrderSchema);
 
 export function acceptMerchantOrder(id: number) {
-  return apiFetch(`/api/merchant/marketplace/orders/${id}/accept`, OrderActionSchema, {
-    method: 'POST',
-    body: {},
-  });
+  return apiFetch(
+    `/api/merchant/marketplace/orders/${id}/accept`,
+    OrderActionSchema,
+    {
+      method: "POST",
+      body: {},
+    },
+  );
 }
 
 export function rejectMerchantOrder(id: number, reason: string) {
-  return apiFetch(`/api/merchant/marketplace/orders/${id}/reject`, OrderActionSchema, {
-    method: 'POST',
-    body: { reason },
-  });
+  return apiFetch(
+    `/api/merchant/marketplace/orders/${id}/reject`,
+    OrderActionSchema,
+    {
+      method: "POST",
+      body: { reason },
+    },
+  );
 }
 
 export function advanceMerchantOrder(id: number, state: string) {
-  return apiFetch(`/api/merchant/marketplace/orders/${id}/advance`, OrderActionSchema, {
-    method: 'POST',
-    body: { state },
-  });
+  return apiFetch(
+    `/api/merchant/marketplace/orders/${id}/advance`,
+    OrderActionSchema,
+    {
+      method: "POST",
+      body: { state },
+    },
+  );
 }
 
 /** Reduce what will be supplied. Only ever DOWN — see PLAN §2.7. */
@@ -2377,10 +2541,14 @@ export function amendMerchantOrder(
   reason: string,
   note?: string,
 ) {
-  return apiFetch(`/api/merchant/marketplace/orders/${id}/amend`, OrderActionSchema, {
-    method: 'POST',
-    body: { lines, reason, note },
-  });
+  return apiFetch(
+    `/api/merchant/marketplace/orders/${id}/amend`,
+    OrderActionSchema,
+    {
+      method: "POST",
+      body: { lines, reason, note },
+    },
+  );
 }
 
 // ------------------------------------------------------------- delivery
@@ -2399,7 +2567,10 @@ export const BranchDeliveryRowSchema = z.object({
 });
 export type BranchDeliveryRow = z.infer<typeof BranchDeliveryRowSchema>;
 
-export function getBranchDelivery(branchId: number, options: RequestOptions = {}) {
+export function getBranchDelivery(
+  branchId: number,
+  options: RequestOptions = {},
+) {
   return apiFetch(
     `/api/merchant/marketplace/branches/${branchId}/delivery`,
     z.object({ data: z.array(BranchDeliveryRowSchema) }),
@@ -2421,7 +2592,7 @@ export function setBranchDelivery(
   return apiFetch(
     `/api/merchant/marketplace/branches/${branchId}/delivery`,
     dataWrapped(z.unknown()),
-    { method: 'PUT', body },
+    { method: "PUT", body },
   );
 }
 
@@ -2429,6 +2600,131 @@ export function removeBranchDelivery(branchId: number, zoneId: number) {
   return apiFetch(
     `/api/merchant/marketplace/branches/${branchId}/delivery/${zoneId}`,
     z.unknown(),
-    { method: 'DELETE' },
+    { method: "DELETE" },
   );
+}
+
+// ---------------------------------------------------------------------------
+// Connect — "IsleBooks would like to … Authorise / Deny"
+// ---------------------------------------------------------------------------
+
+/**
+ * The consent screen a platform sends the shopkeeper to. The panel reads
+ * the query string the platform put in the URL, asks the server what it
+ * means, and draws the question. Reading writes nothing: opening the screen
+ * and closing it again grants nothing.
+ */
+export const ConnectConsentQuerySchema = z.object({
+  client_id: z.string(),
+  redirect_uri: z.string(),
+  /** Space- or comma-separated abilities. */
+  scope: z.string(),
+});
+export type ConnectConsentQuery = z.infer<typeof ConnectConsentQuerySchema>;
+
+export const ConnectPermissionSchema = z.object({
+  ability: z.string(),
+  /** The sentence the shopkeeper reads, in the order asked. */
+  line: z.string(),
+  caution: z.string().nullable(),
+});
+export type ConnectPermission = z.infer<typeof ConnectPermissionSchema>;
+
+export const ConnectConsentSchema = z.object({
+  application: z.object({
+    name: z.string(),
+    description: z.string().nullable(),
+    website: z.string().nullable(),
+    /** A plugin on the merchant's own server (the WooCommerce plugin). */
+    public_client: z.boolean().optional().default(false),
+  }),
+  /**
+   * For a public client, the host of the callback the plugin sent —
+   * "This will connect shop.example.mv". Null for a confidential platform,
+   * whose callbacks a superadmin registered.
+   */
+  callback_host: z.string().nullable().optional().default(null),
+  store: z.object({ name: z.string() }),
+  permissions: z.array(ConnectPermissionSchema),
+  /** Authorising again REPLACES the existing grant — worth saying before. */
+  already_connected: z.boolean(),
+  /**
+   * Non-null when Authorise cannot succeed — today, only a store already
+   * holding its maximum live credentials. The string says what to do about
+   * it. Asked here rather than discovered at exchange time, when the
+   * merchant would already believe they had connected.
+   */
+  blocked_reason: z.string().nullable(),
+});
+export type ConnectConsent = z.infer<typeof ConnectConsentSchema>;
+
+export const ConnectConsentResponseSchema = dataWrapped(ConnectConsentSchema);
+export type ConnectConsentResponse = z.infer<
+  typeof ConnectConsentResponseSchema
+>;
+
+/** Both answers hand back where to send the browser next. */
+export const ConnectRedirectResponseSchema = dataWrapped(
+  z.object({ redirect_to: z.string() }),
+);
+export type ConnectRedirectResponse = z.infer<
+  typeof ConnectRedirectResponseSchema
+>;
+
+/**
+ * GET /api/merchant/connect/authorize — what the consent screen shows.
+ * 422 (with a `code`) when the platform is unknown, not enabled, asking for
+ * more than a superadmin allowed it, or naming an unregistered callback.
+ */
+export function readConnectConsent(
+  query: ConnectConsentQuery,
+  options: { signal?: AbortSignal } = {},
+): Promise<ConnectConsentResponse> {
+  const params = new URLSearchParams(query as Record<string, string>);
+
+  return apiFetch(
+    `/api/merchant/connect/authorize?${params.toString()}`,
+    ConnectConsentResponseSchema,
+    { signal: options.signal },
+  );
+}
+
+export const ApproveConnectRequestSchema = ConnectConsentQuerySchema.extend({
+  /** Echoed back untouched so the platform can match its own request. */
+  state: z.string().nullish(),
+  /** PKCE: the platform's challenge, minted by the platform, not by us. */
+  code_challenge: z.string().min(43).max(128),
+  code_challenge_method: z.literal("S256"),
+});
+export type ApproveConnectRequest = z.infer<typeof ApproveConnectRequestSchema>;
+
+/**
+ * POST /api/merchant/connect/authorize — mints the one-time code the
+ * platform will exchange, server to server. Needs `api_credentials.create`:
+ * pressing Authorise IS issuing a key, just without anybody seeing it.
+ */
+export function approveConnect(
+  body: ApproveConnectRequest,
+): Promise<ConnectRedirectResponse> {
+  return apiFetch(
+    "/api/merchant/connect/authorize",
+    ConnectRedirectResponseSchema,
+    { method: "POST", body },
+  );
+}
+
+/**
+ * POST /api/merchant/connect/deny — no code is minted; the platform is told
+ * plainly, because one left waiting cannot tell refusal from a shopkeeper
+ * who wandered off, and will keep asking.
+ */
+export function denyConnect(body: {
+  client_id: string;
+  redirect_uri: string;
+  state?: string | null;
+}): Promise<ConnectRedirectResponse> {
+  return apiFetch("/api/merchant/connect/deny", ConnectRedirectResponseSchema, {
+    method: "POST",
+    body,
+  });
 }

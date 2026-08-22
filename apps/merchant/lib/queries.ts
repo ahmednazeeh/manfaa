@@ -2,9 +2,12 @@
 
 import {
   ApiError,
+  approveConnect,
+  archiveMarketplaceProduct,
   bootstrapCsrf,
   bpToPercentString,
   cancelMerchantPromotion,
+  createMarketplaceProduct,
   createMerchantBranch,
   createMerchantCredential,
   createMerchantCredit,
@@ -14,12 +17,24 @@ import {
   createMerchantStaff,
   deleteMerchantBranch,
   deleteMerchantRole,
+  denyConnect,
+  enrolInMarketplace,
+  getBranchDelivery,
+  getMarketplaceEnrolment,
   getMerchantOutstanding,
   getMerchantProfile,
   getMerchantSetup,
   getMerchantWallet,
+  listMarketplaceCategories,
+  listMarketplaceProducts,
   listMerchantBranches,
   listMerchantCredentials,
+  listMerchantWebhookEndpoints,
+  createMerchantWebhookEndpoint,
+  deleteMerchantWebhookEndpoint,
+  testMerchantWebhookEndpoint,
+  type CreateMerchantWebhookEndpointRequest,
+  listMerchantOrders,
   listMerchantPermissions,
   listMerchantProductCategories,
   listMerchantPromotions,
@@ -27,26 +42,19 @@ import {
   listMerchantStaff,
   lookupMerchantCustomer,
   publishMerchantPromotion,
+  readConnectConsent,
   registerMerchantSignup,
-  requestMerchantSignupOtp,
-  revokeMerchantCredential,
-  submitMerchantSetup,
-  updateMerchantBankAccount,
-  archiveMarketplaceProduct,
-  createMarketplaceProduct,
-  enrolInMarketplace,
-  getBranchDelivery,
-  getMarketplaceEnrolment,
-  listMarketplaceCategories,
-  listMarketplaceProducts,
-  listMerchantOrders,
   removeBranchDelivery,
+  requestMerchantSignupOtp,
   reverseGeocodeBranchPin,
+  revokeMerchantCredential,
   setBranchDelivery,
+  setMerchantPublication,
   setProductListing,
   submitMarketplaceApplication,
+  submitMerchantSetup,
   updateMarketplaceProduct,
-  setMerchantPublication,
+  updateMerchantBankAccount,
   updateMerchantBranch,
   updateMerchantPreferences,
   updateMerchantProductCategory,
@@ -58,6 +66,8 @@ import {
   uploadMerchantSettingsLogo,
   uploadMerchantSetupLogo,
   verifyMerchantSignupOtp,
+  type ApproveConnectRequest,
+  type ConnectConsentQuery,
   type CreateCreditRequest,
   type CreateMerchantBranchRequest,
   type CreateMerchantCredentialRequest,
@@ -143,6 +153,7 @@ export const queryKeys = {
   roles: ['merchant', 'roles'] as const,
   permissionCatalogue: ['merchant', 'permissions'] as const,
   credentials: ['merchant', 'credentials'] as const,
+  webhookEndpoints: ['merchant', 'webhook-endpoints'] as const,
   preferences: ['merchant', 'preferences'] as const,
   promotions: ['merchant', 'promotions'] as const,
   productCategories: ['merchant', 'product-categories'] as const,
@@ -709,7 +720,9 @@ export function useEnrolInMarketplace() {
   return useMutation({
     mutationFn: enrolInMarketplace,
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.marketplaceEnrolment });
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.marketplaceEnrolment,
+      });
     },
   });
 }
@@ -719,7 +732,9 @@ export function useSubmitMarketplaceApplication() {
   return useMutation({
     mutationFn: submitMarketplaceApplication,
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.marketplaceEnrolment });
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.marketplaceEnrolment,
+      });
     },
   });
 }
@@ -742,12 +757,20 @@ export function useMarketplaceCategories() {
 export function useSaveProduct() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, body }: { id?: number; body: Record<string, unknown> }) =>
+    mutationFn: ({
+      id,
+      body,
+    }: {
+      id?: number;
+      body: Record<string, unknown>;
+    }) =>
       id === undefined
         ? createMarketplaceProduct(body)
         : updateMarketplaceProduct(id, body),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.marketplaceProducts });
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.marketplaceProducts,
+      });
     },
   });
 }
@@ -757,7 +780,9 @@ export function useArchiveProduct() {
   return useMutation({
     mutationFn: archiveMarketplaceProduct,
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.marketplaceProducts });
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.marketplaceProducts,
+      });
     },
   });
 }
@@ -773,7 +798,9 @@ export function useSetListing() {
       body: Parameters<typeof setProductListing>[1];
     }) => setProductListing(productId, body),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.marketplaceProducts });
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.marketplaceProducts,
+      });
     },
   });
 }
@@ -792,7 +819,9 @@ export function useOrderAction() {
   return useMutation({
     mutationFn: (action: () => Promise<unknown>) => action(),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.marketplaceOrders });
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.marketplaceOrders,
+      });
     },
   });
 }
@@ -1048,6 +1077,92 @@ export function useCreateCredential() {
       createMerchantCredential(body),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.credentials });
+    },
+  });
+}
+
+/**
+ * The connect consent question, read from the query string a platform put
+ * in the URL. Reading writes nothing server-side: a shopkeeper who opens
+ * the screen and closes it again has granted nothing.
+ */
+export function useConnectConsent(query: ConnectConsentQuery | null) {
+  return useQuery({
+    queryKey: ['connect-consent', query],
+    queryFn: ({ signal }) => readConnectConsent(query!, { signal }),
+    select: (response) => response.data,
+    enabled: query !== null,
+    retry: false,
+    // A one-time question, answered once — never served from a stale cache.
+    staleTime: 0,
+    gcTime: 0,
+  });
+}
+
+/**
+ * Authorise. The reply is a url to send the browser to; the code in it is
+ * good for sixty seconds and once only.
+ */
+export function useApproveConnect() {
+  return useMutation({
+    mutationFn: (body: ApproveConnectRequest) => approveConnect(body),
+  });
+}
+
+export function useDenyConnect() {
+  return useMutation({
+    mutationFn: (body: {
+      client_id: string;
+      redirect_uri: string;
+      state?: string | null;
+    }) => denyConnect(body),
+  });
+}
+
+// Merchant-owned webhook endpoints (owner, 2026-08-22), beside the
+// credentials they share permissions with.
+
+export function useWebhookEndpoints() {
+  return useQuery({
+    queryKey: queryKeys.webhookEndpoints,
+    queryFn: ({ signal }) => listMerchantWebhookEndpoints({ signal }),
+    select: (response) => response.data,
+    retry: false,
+  });
+}
+
+/** The signing secret is in the response once and never cached — as for tokens. */
+export function useCreateWebhookEndpoint() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: CreateMerchantWebhookEndpointRequest) =>
+      createMerchantWebhookEndpoint(body),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.webhookEndpoints });
+    },
+  });
+}
+
+export function useDeleteWebhookEndpoint() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => deleteMerchantWebhookEndpoint(id),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.webhookEndpoints });
+    },
+  });
+}
+
+export function useTestWebhookEndpoint() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => testMerchantWebhookEndpoint(id),
+    onSuccess: () => {
+      // The delivery lands a moment later; refetch so "last heard from"
+      // catches it on the next render.
+      setTimeout(() => {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.webhookEndpoints });
+      }, 2500);
     },
   });
 }

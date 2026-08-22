@@ -178,6 +178,7 @@ const VENDOR_ABILITY_KEYS: Record<VendorAbility, string> = {
   'transactions:reverse': 'apiAccess.abilities.transactionsReverse.label',
   'rates:read': 'apiAccess.abilities.ratesRead.label',
   'customers:lookup': 'apiAccess.abilities.customersLookup.label',
+  'webhooks:manage': 'apiAccess.abilities.webhooksManage.label',
 };
 
 const VENDOR_ABILITY_HINT_KEYS: Record<VendorAbility, string> = {
@@ -185,6 +186,7 @@ const VENDOR_ABILITY_HINT_KEYS: Record<VendorAbility, string> = {
   'transactions:reverse': 'apiAccess.abilities.transactionsReverse.hint',
   'rates:read': 'apiAccess.abilities.ratesRead.hint',
   'customers:lookup': 'apiAccess.abilities.customersLookup.hint',
+  'webhooks:manage': 'apiAccess.abilities.webhooksManage.hint',
 };
 
 /** What moved the store's wallet balance. */

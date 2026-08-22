@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Domain\Credentials;
 
+use App\Domain\Webhooks\MerchantEndpointService;
 use App\Models\AdminUser;
 use App\Models\ApiCredential;
 use App\Models\Merchant;
@@ -97,6 +98,51 @@ class CredentialService
     }
 
     /**
+     * The CONNECT path: a shopkeeper approved a registered platform on a
+     * Manfaa consent screen.
+     *
+     * Neither path above fits it. `issue()` is an admin acting for a
+     * merchant; `issueForMerchantUser()` is a merchant naming an
+     * integration by hand with no vendor behind it. Here the MERCHANT
+     * decides and a REGISTERED PLATFORM is on the other end, so both links
+     * are recorded: who approved, and what they approved.
+     *
+     * @param  list<string>  $abilities
+     */
+    public function issueForConnect(
+        Merchant $merchant,
+        PosVendor $vendor,
+        array $abilities,
+        MerchantUser $approvedBy,
+        ?string $connectedFrom = null,
+    ): IssuedCredential {
+        if ((int) $approvedBy->merchant_id !== (int) $merchant->getKey()) {
+            throw new InvalidArgumentException('A merchant user may only approve access for their own merchant.');
+        }
+
+        return DB::transaction(function () use ($merchant, $vendor, $abilities, $approvedBy, $connectedFrom) {
+            Merchant::query()->whereKey($merchant->getKey())->lockForUpdate()->first();
+
+            $active = ApiCredential::query()
+                ->where('merchant_id', $merchant->getKey())
+                ->whereNull('revoked_at')
+                ->count();
+
+            if ($active >= self::MAX_ACTIVE_PER_MERCHANT) {
+                throw CredentialCapReachedException::atCap(self::MAX_ACTIVE_PER_MERCHANT);
+            }
+
+            return $this->mint($merchant, $abilities, $vendor->name, [
+                'pos_vendor_id' => $vendor->getKey(),
+                'label' => $vendor->display_name ?: $vendor->name,
+                'issued_by_merchant_user' => $approvedBy->getKey(),
+                // Which store a public-client grant came from; null otherwise.
+                'connected_from' => $connectedFrom,
+            ]);
+        });
+    }
+
+    /**
      * Deletes the Sanctum token (auth dies immediately) and stamps the
      * credential row instead of deleting it — the issuance and revocation
      * audit trail is append-only history.
@@ -126,6 +172,11 @@ class CredentialService
                 'revoked_at' => CarbonImmutable::now('UTC'),
                 $revokedBy instanceof AdminUser ? 'revoked_by' : 'revoked_by_merchant_user' => $revokedBy->getKey(),
             ])->save();
+
+            // Endpoints this credential registered over /v1 die with it: a
+            // plugin whose token is gone must not keep receiving events.
+            // Panel-made endpoints carry no credential and are untouched.
+            app(MerchantEndpointService::class)->deactivateForCredential($credential);
 
             return $credential;
         });
