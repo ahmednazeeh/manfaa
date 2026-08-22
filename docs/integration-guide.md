@@ -1053,11 +1053,84 @@ receives every event twice.
 
 ### 6.1 Webhooks — POS vendors
 
-One endpoint per POS vendor, subscribed to the events you choose, registered
-by us when we onboard your platform. Every event carries `merchant_id` in
-`data` — you route it to the right merchant on your side. You hear about a
-merchant for as long as that merchant holds a live credential for your
-platform; revoke it and the events stop.
+One endpoint for your whole platform. It receives the events of **every
+merchant** that holds a live credential for your platform, each stamped
+with `merchant_id`; you route on your side. Here is the whole thing, start
+to finish.
+
+**Step 1 — Build the receiver.** An HTTPS URL on a public host (private
+ranges, localhost and bare IPs are refused) that accepts `POST` with a JSON
+body and:
+
+1. reads the **raw** body bytes before any parsing;
+2. verifies `X-Manfaa-Signature` — `HMAC-SHA256(secret, raw_body)`, constant-time compare (§6.3 has the worked example and code);
+3. answers `200` **within 10 seconds**, then does the work — queue it; a slow handler looks like a failure and is retried;
+4. ignores an event `id` it has already processed (delivery is at-least-once and may be out of order).
+
+```php
+// The shape of a receiver, any framework.
+$raw = file_get_contents('php://input');
+if (! hash_equals(hash_hmac('sha256', $raw, $secret), $_SERVER['HTTP_X_MANFAA_SIGNATURE'] ?? '')) {
+    http_response_code(401); exit;                // not ours — say nothing else
+}
+$event = json_decode($raw, true);
+if (already_seen($event['id'])) { http_response_code(200); exit; }
+queue_for_processing($event);                     // your job runner
+http_response_code(200);                          // acknowledge FIRST, process after
+```
+
+**Step 2 — Get it registered.** Email **integrations@manfaa.app** with the
+URL and the events you want (the four below; most platforms take all four).
+A Manfaa superadmin registers it against your platform in *Connected
+platforms* and sends you the signing secret — `whsec_…`, shown to them once
+and never again, so store it like a password. One secret for the whole
+platform.
+
+**Step 3 — Prove it.** Ask us to press **Send test** (or we will, as part of
+registering). You receive a `webhook.test` delivery signed exactly like a
+real event; your receiver should verify it and answer `200`. The registry
+shows us your answer (`delivered · 200`, or the failure), so we can see the
+wiring works before any money-moving event goes out.
+
+**Step 4 — Use the events.** Every body is the envelope in §6.3 — `id`,
+`type`, `created_at`, `data` — and `data.merchant_id` is the merchant the
+event is about. Look the merchant up by the `merchant.id` you stored at
+connect time (or from `GET /v1/me`), then:
+
+| `type` | What happened | What your platform should do for that merchant |
+|---|---|---|
+| `merchant.rate_changed` | Their cashback rate changed. `data.cashback_rate_percent` is the new rate, `data.effective_at` when it applies (a decrease starts at the next midnight UTC+5; an increase at once) | Replace the rate you cache for the till display. The server prices every sale authoritatively anyway — this only stops you quoting a stale number |
+| `merchant.suspended` | Day-16 suspension for an unpaid settlement. Sales still record, but earn nothing | Stop advertising cashback at that merchant's tills; **keep POSTing sales** (§7 — they are answered `recorded_ineligible`) |
+| `merchant.reinstated` | They settled and were reinstated | Resume advertising |
+| `transaction.reversed` | A sale was reversed — by you over the API, by the merchant in their panel, or by Manfaa. `data.transaction_id`, `data.invoice_no`, `data.reason` | Mark the invoice reversed in your system. Your own reversals echo here too — dedupe by `transaction_id` |
+
+A rate-change delivery, as received:
+
+```json
+{
+  "id": "evt_01J5A8Z0T2N9GQK4WMB3XVRD6H",
+  "type": "merchant.rate_changed",
+  "created_at": "2026-08-15T16:05:11+05:00",
+  "data": {
+    "merchant_id": 12,
+    "cashback_rate_percent": "1.50",
+    "platform_fee_percent": "0.50",
+    "previous_cashback_rate_percent": "2.00",
+    "previous_platform_fee_percent": "0.75",
+    "effective_at": "2026-08-16T00:00:00+05:00"
+  }
+}
+```
+
+**What you will not get.** Nothing fires when a merchant **connects** to
+your platform (your server learns that when it collects the token, §2.1)
+or **revokes** you (your next request answers `401` — treat it as
+disconnected and stop). Events for a merchant stop the moment their last
+live credential for your platform is gone.
+
+**Changing the URL or the events**, or rotating the secret: email us; the
+registry replaces the endpoint and you receive a new secret. Retire the old
+one only after the new one has answered a test.
 
 ### 6.2 Webhooks — Merchants
 

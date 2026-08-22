@@ -511,7 +511,43 @@ export MANFAA_API=&quot;https://api.manfaa.app/api&quot;</code></pre>
 <p>Everything under &quot;Delivery&quot; (§6.3) applies to both. If you are building a plugin or a custom shop for <strong>one</strong> store, you want §6.2.</p>
 <p><strong>If you are a platform serving many stores</strong>, you want §6.1. The API route (§6.2) is open to you too — with <code>webhooks:manage</code> in your registration's ceiling and in the scope you ask each merchant for — but it registers a separate endpoint, with its own secret, for <strong>every merchant connection</strong>, even when the URL is the same each time; you would hold one secret per merchant and choose it by the event's <code>merchant_id</code> before verifying. And never run both kinds at once: an event reaches <strong>each</strong> endpoint entitled to it, so a platform with a §6.1 endpoint and a §6.2 endpoint per store receives every event twice.</p>
 <h3 id="61-webhooks-pos-vendors">6.1 Webhooks — POS vendors</h3>
-<p>One endpoint per POS vendor, subscribed to the events you choose, registered by us when we onboard your platform. Every event carries <code>merchant_id</code> in <code>data</code> — you route it to the right merchant on your side. You hear about a merchant for as long as that merchant holds a live credential for your platform; revoke it and the events stop.</p>
+<p>One endpoint for your whole platform. It receives the events of <strong>every merchant</strong> that holds a live credential for your platform, each stamped with <code>merchant_id</code>; you route on your side. Here is the whole thing, start to finish.</p>
+<p><strong>Step 1 — Build the receiver.</strong> An HTTPS URL on a public host (private ranges, localhost and bare IPs are refused) that accepts <code>POST</code> with a JSON body and:</p>
+<ol>
+<li>reads the <strong>raw</strong> body bytes before any parsing;</li>
+<li>verifies <code>X-Manfaa-Signature</code> — <code>HMAC-SHA256(secret, raw_body)</code>, constant-time compare (§6.3 has the worked example and code);</li>
+<li>answers <code>200</code> <strong>within 10 seconds</strong>, then does the work — queue it; a slow handler looks like a failure and is retried;</li>
+<li>ignores an event <code>id</code> it has already processed (delivery is at-least-once and may be out of order).</li>
+</ol>
+<pre><code>// The shape of a receiver, any framework.
+$raw = file_get_contents('php://input');
+if (! hash_equals(hash_hmac('sha256', $raw, $secret), $_SERVER['HTTP_X_MANFAA_SIGNATURE'] ?? '')) {
+    http_response_code(401); exit;                // not ours — say nothing else
+}
+$event = json_decode($raw, true);
+if (already_seen($event['id'])) { http_response_code(200); exit; }
+queue_for_processing($event);                     // your job runner
+http_response_code(200);                          // acknowledge FIRST, process after</code></pre>
+<p><strong>Step 2 — Get it registered.</strong> Email <strong>integrations@manfaa.app</strong> with the URL and the events you want (the four below; most platforms take all four). A Manfaa superadmin registers it against your platform in <em>Connected platforms</em> and sends you the signing secret — <code>whsec_…</code>, shown to them once and never again, so store it like a password. One secret for the whole platform.</p>
+<p><strong>Step 3 — Prove it.</strong> Ask us to press <strong>Send test</strong> (or we will, as part of registering). You receive a <code>webhook.test</code> delivery signed exactly like a real event; your receiver should verify it and answer <code>200</code>. The registry shows us your answer (<code>delivered · 200</code>, or the failure), so we can see the wiring works before any money-moving event goes out.</p>
+<p><strong>Step 4 — Use the events.</strong> Every body is the envelope in §6.3 — <code>id</code>, <code>type</code>, <code>created_at</code>, <code>data</code> — and <code>data.merchant_id</code> is the merchant the event is about. Look the merchant up by the <code>merchant.id</code> you stored at connect time (or from <code>GET /v1/me</code>), then:</p>
+<div class="table-scroll"><table><thead><tr><th><code>type</code></th><th>What happened</th><th>What your platform should do for that merchant</th></tr></thead><tbody><tr><td><code>merchant.rate_changed</code></td><td>Their cashback rate changed. <code>data.cashback_rate_percent</code> is the new rate, <code>data.effective_at</code> when it applies (a decrease starts at the next midnight UTC+5; an increase at once)</td><td>Replace the rate you cache for the till display. The server prices every sale authoritatively anyway — this only stops you quoting a stale number</td></tr><tr><td><code>merchant.suspended</code></td><td>Day-16 suspension for an unpaid settlement. Sales still record, but earn nothing</td><td>Stop advertising cashback at that merchant's tills; <strong>keep POSTing sales</strong> (§7 — they are answered <code>recorded_ineligible</code>)</td></tr><tr><td><code>merchant.reinstated</code></td><td>They settled and were reinstated</td><td>Resume advertising</td></tr><tr><td><code>transaction.reversed</code></td><td>A sale was reversed — by you over the API, by the merchant in their panel, or by Manfaa. <code>data.transaction_id</code>, <code>data.invoice_no</code>, <code>data.reason</code></td><td>Mark the invoice reversed in your system. Your own reversals echo here too — dedupe by <code>transaction_id</code></td></tr></tbody></table></div>
+<p>A rate-change delivery, as received:</p>
+<pre><code>{
+  &quot;id&quot;: &quot;evt_01J5A8Z0T2N9GQK4WMB3XVRD6H&quot;,
+  &quot;type&quot;: &quot;merchant.rate_changed&quot;,
+  &quot;created_at&quot;: &quot;2026-08-15T16:05:11+05:00&quot;,
+  &quot;data&quot;: {
+    &quot;merchant_id&quot;: 12,
+    &quot;cashback_rate_percent&quot;: &quot;1.50&quot;,
+    &quot;platform_fee_percent&quot;: &quot;0.50&quot;,
+    &quot;previous_cashback_rate_percent&quot;: &quot;2.00&quot;,
+    &quot;previous_platform_fee_percent&quot;: &quot;0.75&quot;,
+    &quot;effective_at&quot;: &quot;2026-08-16T00:00:00+05:00&quot;
+  }
+}</code></pre>
+<p><strong>What you will not get.</strong> Nothing fires when a merchant <strong>connects</strong> to your platform (your server learns that when it collects the token, §2.1) or <strong>revokes</strong> you (your next request answers <code>401</code> — treat it as disconnected and stop). Events for a merchant stop the moment their last live credential for your platform is gone.</p>
+<p><strong>Changing the URL or the events</strong>, or rotating the secret: email us; the registry replaces the endpoint and you receive a new secret. Retire the old one only after the new one has answered a test.</p>
 <h3 id="62-webhooks-merchants">6.2 Webhooks — Merchants</h3>
 <p>A store's own endpoint. It hears <strong>only that store's</strong> events, so there is nothing to route.</p>
 <p>Two ways to register one:</p>
