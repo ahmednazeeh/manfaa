@@ -73,4 +73,35 @@ final class UpdaterTest extends TestCase
         self::assertStringContainsString('manfaa-cashback-9.9.9.zip', $info->download_link);
         self::assertFalse(Updater::details(false, 'plugin_information', (object) ['slug' => 'other']));
     }
+
+    public function test_the_settings_button_checks_now_and_offers_update_now(): void
+    {
+        $user = self::factory()->user->create(['role' => 'administrator']);
+        wp_set_current_user($user);
+        $_REQUEST['_wpnonce'] = wp_create_nonce('manfaa_check_updates');
+        add_filter('wp_redirect_status', static fn (): int => throw new \RuntimeException('redirected'));
+
+        // Stale cache says nothing; the button must ask again.
+        set_site_transient('manfaa_cashback_manifest', ['manifest' => null, 'checked' => time()], HOUR_IN_SECONDS);
+        $this->answer(200, $this->manifest('9.9.9'));
+
+        try {
+            \Manfaa\Cashback\Admin\Settings::actionCheckUpdates();
+        } catch (\RuntimeException) {
+        }
+
+        $notice = get_transient('manfaa_cashback_notice_'.$user);
+        self::assertSame('update', $notice['kind']);
+        self::assertStringContainsString('9.9.9', $notice['message']);
+        self::assertCount(1, $this->requests);
+
+        // And the screen renders the Update now link against WordPress's upgrader.
+        set_current_screen('toplevel_page_manfaa-cashback');
+        ob_start();
+        \Manfaa\Cashback\Admin\Settings::render();
+        $html = ob_get_clean();
+        self::assertStringContainsString('9.9.9 available', $html);
+        self::assertStringContainsString('action=upgrade-plugin&#038;plugin=', $html); // the basename is the full path in this harness only
+        self::assertStringContainsString('Check for updates', $html);
+    }
 }

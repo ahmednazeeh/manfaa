@@ -14,6 +14,7 @@ use Manfaa\Cashback\Orders\State;
 use Manfaa\Cashback\Pricing\CategoryMap;
 use Manfaa\Cashback\Support\Crypto;
 use Manfaa\Cashback\Support\Options;
+use Manfaa\Cashback\Support\Updater;
 use Manfaa\Cashback\Webhooks\Receiver;
 
 /**
@@ -39,6 +40,7 @@ final class Settings
         add_action('admin_post_manfaa_sync', [self::class, 'actionSync']);
         add_action('admin_post_manfaa_test', [self::class, 'actionTest']);
         add_action('admin_post_manfaa_webhook', [self::class, 'actionWebhook']);
+        add_action('admin_post_manfaa_check_updates', [self::class, 'actionCheckUpdates']);
         add_action('admin_enqueue_scripts', [self::class, 'assets']);
         add_filter('plugin_action_links_'.plugin_basename(MANFAA_CASHBACK_FILE), static function (array $links): array {
             array_unshift($links, '<a href="'.esc_url(self::url()).'">'.esc_html__('Settings', 'manfaa-cashback').'</a>');
@@ -302,6 +304,35 @@ final class Settings
         self::redirectWith('webhook', __('Webhook registered. Manfaa will tell this site when your rate changes or a sale is reversed.', 'manfaa-cashback'));
     }
 
+    /** Ask manfaa.app now, and tell WordPress to forget what it thought it knew. */
+    public static function actionCheckUpdates(): void
+    {
+        self::guard('manfaa_check_updates');
+
+        Updater::forget();
+        $manifest = Updater::manifest(fresh: true);
+        delete_site_transient('update_plugins');
+
+        if ($manifest === null) {
+            self::redirectWith('error', __('Could not reach manfaa.app to check for updates. Try again in a minute.', 'manfaa-cashback'));
+        }
+
+        if (Updater::update() === null) {
+            self::redirectWith('uptodate', sprintf(
+                /* translators: %s: version */
+                __('You have the latest version (%s).', 'manfaa-cashback'),
+                MANFAA_CASHBACK_VERSION,
+            ));
+        }
+
+        self::redirectWith('update', sprintf(
+            /* translators: 1: new version, 2: current version */
+            __('Version %1$s is available (you have %2$s).', 'manfaa-cashback'),
+            (string) $manifest['version'],
+            MANFAA_CASHBACK_VERSION,
+        ));
+    }
+
     private static function guard(string $action): void
     {
         if (! current_user_can(self::CAP)) {
@@ -342,6 +373,11 @@ final class Settings
         $keyMismatch = Client::tokenKeyMismatch();
         $attention = self::countState(State::NEEDS_ATTENTION) + self::countState(State::DISCONNECTED);
         $isHttps = str_starts_with(home_url(), 'https://');
+        $available = Updater::update();
+        $updateUrl = $available === null ? null : wp_nonce_url(
+            self_admin_url('update.php?action=upgrade-plugin&plugin='.rawurlencode(Updater::basename())),
+            'upgrade-plugin_'.Updater::basename(),
+        );
 
         include MANFAA_CASHBACK_DIR.'/src/Admin/views/settings.php';
     }

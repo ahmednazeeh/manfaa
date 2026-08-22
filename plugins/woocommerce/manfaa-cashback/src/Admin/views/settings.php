@@ -14,6 +14,8 @@
  * @var bool $keyMismatch
  * @var int $attention
  * @var bool $isHttps
+ * @var object|null $available
+ * @var string|null $updateUrl
  */
 
 use Manfaa\Cashback\Admin\Settings;
@@ -33,7 +35,9 @@ $terms = is_array($terms) ? $terms : [];
     <h1><?php esc_html_e('Manfaa Cashback', 'manfaa-cashback'); ?></h1>
 
     <?php if (is_array($notice)) : ?>
-        <div class="notice notice-<?php echo $notice['kind'] === 'error' || $notice['kind'] === 'denied' ? 'error' : 'success'; ?> is-dismissible"><p><?php echo esc_html($notice['message']); ?></p></div>
+        <div class="notice notice-<?php echo $notice['kind'] === 'error' || $notice['kind'] === 'denied' ? 'error' : ($notice['kind'] === 'update' ? 'warning' : 'success'); ?> is-dismissible"><p><?php echo esc_html($notice['message']); ?>
+            <?php if ($notice['kind'] === 'update' && $updateUrl !== null) : ?> <a class="button button-primary button-small" href="<?php echo esc_url($updateUrl); ?>"><?php esc_html_e('Update now', 'manfaa-cashback'); ?></a><?php endif; ?>
+        </p></div>
     <?php endif; ?>
 
     <?php if (! $currencyOk) : ?>
@@ -245,6 +249,17 @@ $terms = is_array($terms) ? $terms : [];
     <div class="manfaa-card">
         <h2><?php esc_html_e('Status', 'manfaa-cashback'); ?></h2>
         <table class="manfaa-kv">
+            <tr><th><?php esc_html_e('Plugin version', 'manfaa-cashback'); ?></th><td>
+                <?php echo esc_html(MANFAA_CASHBACK_VERSION); ?>
+                <?php if ($available !== null && $updateUrl !== null) : ?>
+                    <span class="manfaa-badge manfaa-badge--warn"><?php
+                        /* translators: %s: version */
+                        printf(esc_html__('%s available', 'manfaa-cashback'), esc_html((string) $available->new_version));
+                    ?></span>
+                    <a class="button button-primary button-small" href="<?php echo esc_url($updateUrl); ?>"><?php esc_html_e('Update now', 'manfaa-cashback'); ?></a>
+                <?php endif; ?>
+                &nbsp;<a class="button button-small" href="<?php echo esc_url($action('manfaa_check_updates')); ?>"><?php esc_html_e('Check for updates', 'manfaa-cashback'); ?></a>
+            </td></tr>
             <tr><th><?php esc_html_e('Needs attention', 'manfaa-cashback'); ?></th><td><?php echo $attention > 0 ? '<a href="'.esc_url(admin_url('admin.php?page=wc-orders&manfaa_state=needs_attention')).'">'.esc_html((string) $attention).'</a>' : '0'; ?></td></tr>
             <tr><th><?php esc_html_e('Log', 'manfaa-cashback'); ?></th><td><a href="<?php echo esc_url(admin_url('admin.php?page=wc-status&tab=logs&source=manfaa-cashback')); ?>"><?php esc_html_e('WooCommerce › Status › Logs › manfaa-cashback', 'manfaa-cashback'); ?></a></td></tr>
             <tr><th><?php esc_html_e('Callback URL', 'manfaa-cashback'); ?></th><td><code><?php echo esc_html(Connect::callbackUrl()); ?></code></td></tr>
