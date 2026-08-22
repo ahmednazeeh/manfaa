@@ -264,7 +264,8 @@ it('registers a public client from the admin registry with no secret, and refuse
         ->patchJson("/api/admin/platform-clients/{$id}", ['public_client' => false])
         ->assertStatus(422);
 
-    // A confidential client still needs its callbacks.
+    // A confidential client still needs its callbacks — at registration
+    // and on every update afterwards.
     $this->actingAs($admin, 'admin')
         ->postJson('/api/admin/platform-clients', [
             'name' => 'IsleBooks',
@@ -272,6 +273,25 @@ it('registers a public client from the admin registry with no secret, and refuse
         ])
         ->assertStatus(422)
         ->assertJsonValidationErrors(['redirect_uris']);
+
+    $confidential = $this->actingAs($admin, 'admin')
+        ->postJson('/api/admin/platform-clients', [
+            'name' => 'IsleBooks',
+            'allowed_abilities' => ['transactions:write'],
+            'redirect_uris' => ['https://islebooks.mv/manfaa/callback'],
+        ])
+        ->assertCreated()
+        ->json('data.id');
+
+    $this->actingAs($admin, 'admin')
+        ->patchJson("/api/admin/platform-clients/{$confidential}", ['redirect_uris' => []])
+        ->assertStatus(422)
+        ->assertJsonValidationErrors(['redirect_uris']);
+
+    // Whereas a public client may be saved with none at all.
+    $this->actingAs($admin, 'admin')
+        ->patchJson("/api/admin/platform-clients/{$id}", ['redirect_uris' => []])
+        ->assertOk();
 });
 
 it('seeds the WooCommerce client idempotently', function () {

@@ -100,7 +100,7 @@ final class PlatformClientController extends Controller
 
     public function update(Request $request, PosVendor $vendor): JsonResponse
     {
-        $validated = $request->validate($this->rules(creating: false));
+        $validated = $request->validate($this->rules(creating: false, vendor: $vendor));
 
         $vendor->fill($validated)->save();
 
@@ -149,9 +149,12 @@ final class PlatformClientController extends Controller
     }
 
     /** @return array<string, mixed> */
-    private function rules(bool $creating = true): array
+    private function rules(bool $creating = true, ?PosVendor $vendor = null): array
     {
         $required = $creating ? 'required' : 'sometimes';
+        // Creating: public-ness comes with the request. Updating: it is
+        // fixed on the row (and prohibited in the payload).
+        $public = $creating ? request()->boolean('public_client') : ($vendor?->isPublicClient() ?? false);
 
         return [
             'name' => [$required, 'string', 'max:120'],
@@ -170,6 +173,10 @@ final class PlatformClientController extends Controller
             'redirect_uris' => [
                 $creating ? Rule::requiredIf(fn () => ! request()->boolean('public_client')) : 'sometimes',
                 'nullable', 'array', 'max:10',
+                // A confidential client must always keep at least one
+                // callback — an update that emptied the list would leave a
+                // platform that cannot connect anyone until someone noticed.
+                Rule::when(! $public, ['min:1']),
             ],
             'redirect_uris.*' => ['required', 'url', 'starts_with:https://', 'max:255'],
 
