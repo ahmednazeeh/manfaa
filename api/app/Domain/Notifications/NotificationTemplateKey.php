@@ -23,11 +23,17 @@ enum NotificationTemplateKey: string
     case CashbackConfirmed = 'cashback_confirmed';
     case PayoutPaid = 'payout_paid';
 
+    // The other end of `cashback_earned` (owner decision 2026-08-22): a
+    // sale the customer was told about was reversed — a refund, a void, a
+    // duplicate. Until this existed the pending amount simply vanished from
+    // the app. Sent whether the reversal was in place or became a credit
+    // memo against the store; the customer's experience is the same.
+    case CashbackReversed = 'cashback_reversed';
+
     // Merchant-facing (M4). These reach the till app rather than a phone
     // number: a store's staff have no SMS relationship with the platform,
     // and settlement is the one thing a merchant genuinely wants
     // interrupting them — the prompt-payment discount is money.
-    case SettlementDue = 'settlement_due';
     case SettlementAccepted = 'settlement_accepted';
     case SettlementRejected = 'settlement_rejected';
 
@@ -36,7 +42,6 @@ enum NotificationTemplateKey: string
     // the live platform settings (prompt_discount_max_age_days,
     // settlement_due_days), never hardcoded here or there.
     case PromptDiscountExpiring = 'prompt_discount_expiring';
-    case SettlementDueSoon = 'settlement_due_soon';
 
     // The §7 escalation ladder's rungs (MR4: the ladder now reaches phones).
     // The KEYS are the merchant_notices type names, verbatim — one moment,
@@ -69,6 +74,16 @@ enum NotificationTemplateKey: string
     // not have the app open — or installed — when it lands.
     case StoreApproved = 'store_approved';
 
+    // A payout run has reached the customers who earned cashback at THIS
+    // store (owner request 2026-08-20). The merchant has already settled
+    // that money to the platform; this is the other half of the story, and
+    // without it the only party who never learns the customer was paid is
+    // the shop that funded it.
+    //
+    // Batch-level, not per customer: a run pays many people at once and one
+    // line about the run is news, where forty are a nuisance.
+    case CustomersPaid = 'customers_paid';
+
     // Marketplace enrolment outcomes (PLAN-marketplace.md §9). The merchant
     // handed us identity documents and waited on a human; silence after
     // that is the one thing this must not be.
@@ -91,12 +106,11 @@ enum NotificationTemplateKey: string
         return match ($this) {
             self::CashbackEarned => 'Cashback earned',
             self::CashbackConfirmed => 'Cashback confirmed',
+            self::CashbackReversed => 'Cashback reversed',
             self::PayoutPaid => 'Payout paid',
-            self::SettlementDue => 'Settlement due',
             self::SettlementAccepted => 'Settlement accepted',
             self::SettlementRejected => 'Settlement rejected',
             self::PromptDiscountExpiring => 'Prompt discount expiring',
-            self::SettlementDueSoon => 'Settlement due soon',
             self::ReminderDay10 => 'Day-10 reminder',
             self::UrgentDay13 => 'Day-13 urgent reminder',
             self::DueDay15 => 'Day-15 payment due',
@@ -105,6 +119,7 @@ enum NotificationTemplateKey: string
             self::StorePaused => 'Store paused cashback',
             self::StoreResumed => 'Store resumed cashback',
             self::StoreApproved => 'Store approved',
+            self::CustomersPaid => 'Customers paid',
             self::MarketplaceApproved => 'Marketplace approved',
             self::MarketplaceRejected => 'Marketplace not approved',
             self::OrderPlaced => 'New order',
@@ -123,12 +138,11 @@ enum NotificationTemplateKey: string
         return match ($this) {
             self::CashbackEarned => 'The moment a store credits a sale. The highest-volume message on the platform — one per sale, per customer.',
             self::CashbackConfirmed => 'When a sale\'s refund window closes (or a hold is released) and the pending cashback becomes confirmed. One per sale — skipped when it confirms in the same breath it was earned.',
+            self::CashbackReversed => 'When a sale that earned cashback is reversed by the store or the platform — a refund, a void, a duplicate. One per sale; never for a sale that earned nothing.',
             self::PayoutPaid => 'When a payout item is marked paid and the money is on its way to the customer\'s bank. One per customer per payout run.',
-            self::SettlementDue => 'When a store creates a settlement and owes a transfer. Reaches staff who may see settlements.',
             self::SettlementAccepted => 'When Manfaa matches a store\'s transfer receipt and the settlement is paid off.',
             self::SettlementRejected => 'When a transfer receipt is refused, with the reason. The store has to act, so this one earns an interruption.',
             self::PromptDiscountExpiring => 'The morning of the LAST day the prompt-payment discount can still be kept. Sent only when settling everything today would actually save money.',
-            self::SettlementDueSoon => 'The two mornings before the store\'s oldest outstanding sale becomes overdue. Once per morning, per store.',
             self::ReminderDay10 => 'The §7 ladder\'s day-10 notice: the oldest unfunded sale has turned ten days old.',
             self::UrgentDay13 => 'The §7 ladder\'s day-13 urgent notice — two days before payment is due.',
             self::DueDay15 => 'The §7 ladder\'s day-15 payment-due notice. Automatic suspension follows on day 16, so this one earns an interruption.',
@@ -146,6 +160,7 @@ enum NotificationTemplateKey: string
             self::MarketplaceApproved => 'When an admin approves a store to sell on the marketplace. The shop can list products from that moment.',
             self::MarketplaceRejected => 'When an admin refuses a marketplace application, with the reason. The store has to act, so it earns an interruption.',
             self::StoreApproved => 'When an admin approves a new store and it goes live. Sent by SMS as well as push — the merchant has been waiting on a decision and may not have the app open.',
+            self::CustomersPaid => 'When a payout run reaches the customers who earned cashback at this store. One message per run, never one per customer, and only about money that actually moved.',
         };
     }
 
@@ -167,13 +182,18 @@ enum NotificationTemplateKey: string
                 'amount' => 'The cashback confirmed, formatted with its currency',
                 'store' => 'The store name',
             ],
+            self::CashbackReversed => [
+                'amount' => 'The cashback reversed, formatted with its currency',
+                'store' => 'The store name',
+                'reason' => 'Why, as a short phrase with its own leading space — " after a refund", " because the sale was voided", " because it was recorded twice" — or empty; write the template as "reversed{{reason}}."',
+            ],
             self::PayoutPaid => [
                 'amount' => 'The amount paid out, formatted with its currency',
                 'reference' => 'The bank reference for the transfer',
             ],
-            self::SettlementDue => [
-                'amount' => 'The amount to transfer, formatted with its currency',
-                'reference' => 'The settlement reference',
+            self::CustomersPaid => [
+                'customers' => 'How many of this store\'s customers the run paid',
+                'amount' => 'The cashback paid to them, formatted with its currency',
             ],
             self::SettlementAccepted => [
                 'reference' => 'The settlement reference',
@@ -185,10 +205,6 @@ enum NotificationTemplateKey: string
             self::PromptDiscountExpiring => [
                 'amount' => 'What settling everything today saves, formatted with its currency',
                 'rate' => 'The prompt-payment discount rate, e.g. "5%"',
-            ],
-            self::SettlementDueSoon => [
-                'amount' => 'The outstanding total, formatted with its currency',
-                'date' => 'The business-timezone date the oldest sale becomes overdue',
             ],
             self::ReminderDay10, self::UrgentDay13, self::DueDay15 => [
                 'amount' => 'The outstanding total, formatted with its currency',
@@ -243,9 +259,9 @@ enum NotificationTemplateKey: string
     public function isForMerchantStaff(): bool
     {
         return match ($this) {
-            self::CashbackEarned, self::CashbackConfirmed, self::PayoutPaid => false,
-            self::SettlementDue, self::SettlementAccepted, self::SettlementRejected,
-            self::PromptDiscountExpiring, self::SettlementDueSoon,
+            self::CashbackEarned, self::CashbackConfirmed, self::CashbackReversed, self::PayoutPaid => false,
+            self::SettlementAccepted, self::SettlementRejected,
+            self::PromptDiscountExpiring,
             self::ReminderDay10, self::UrgentDay13, self::DueDay15,
             self::StoreChangeApproved, self::StoreChangeRejected => true,
             self::OrderPlaced => true,
@@ -255,6 +271,7 @@ enum NotificationTemplateKey: string
             self::StorePaused, self::StoreResumed => false,
             self::StoreApproved,
             self::MarketplaceApproved, self::MarketplaceRejected => true,
+            self::CustomersPaid => true,
         };
     }
 
@@ -272,6 +289,11 @@ enum NotificationTemplateKey: string
     {
         return match ($this) {
             self::StorePaused, self::StoreResumed => false,
+            // Push only (owner, 2026-08-22): bad news the customer will see
+            // in the app anyway, and a text per reversal is a recurring
+            // bill for telling someone money they had not yet received is
+            // not coming.
+            self::CashbackReversed => false,
             // Order progress reaches a shopper who is probably holding their
             // phone anyway, and a push is free. The two that COST them money
             // — a refusal and a cut order — are the two worth a text, since
@@ -307,10 +329,11 @@ enum NotificationTemplateKey: string
             // inside sendToMerchantStaff), but answering honestly costs
             // nothing and stops a future reader concluding the platform
             // texts shops about their customers' deliveries.
-            self::CashbackEarned, self::CashbackConfirmed, self::PayoutPaid,
+            self::CashbackEarned, self::CashbackConfirmed, self::CashbackReversed, self::PayoutPaid,
             self::StorePaused, self::StoreResumed,
             self::OrderAccepted, self::OrderRejected, self::OrderAmended,
             self::OrderReady, self::OrderOutForDelivery, self::OrderDelivered => false,
+
             // Name a key here to keep a MERCHANT moment push-only.
             default => true,
         };
@@ -327,17 +350,39 @@ enum NotificationTemplateKey: string
      *
      * @return array{en: string, dv: string}
      */
+    /**
+     * Does this moment only exist when the marketplace is switched on?
+     *
+     * The order moments and the enrolment outcomes cannot fire with
+     * `marketplace_enabled` off — every route behind them refuses. Leaving
+     * nine templates on the settings screen that nothing can send is a
+     * screen that lies about what the platform does, so the admin panel
+     * hides them until the marketplace is on (owner, 2026-08-20).
+     *
+     * The ROWS stay: an admin may reasonably want the copy written before
+     * launch, and hiding is not deleting.
+     */
+    public function isMarketplace(): bool
+    {
+        return match ($this) {
+            self::MarketplaceApproved, self::MarketplaceRejected,
+            self::OrderPlaced, self::OrderAccepted, self::OrderRejected,
+            self::OrderAmended, self::OrderReady,
+            self::OrderOutForDelivery, self::OrderDelivered => true,
+            default => false,
+        };
+    }
+
     public function pushTitle(): array
     {
         return match ($this) {
             self::CashbackEarned => ['en' => 'Cashback earned', 'dv' => 'ކޭޝްބެކް ލިބިއްޖެ'],
             self::CashbackConfirmed => ['en' => 'Cashback confirmed', 'dv' => 'ކޭޝްބެކް ކަށަވަރުވެއްޖެ'],
+            self::CashbackReversed => ['en' => 'Cashback reversed', 'dv' => 'ކޭޝްބެކް އަނބުރާ ގެންދެވިއްޖެ'],
             self::PayoutPaid => ['en' => 'Payout sent', 'dv' => 'ފައިސާ ފޮނުވިއްޖެ'],
-            self::SettlementDue => ['en' => 'Settlement due', 'dv' => 'ސެޓްލްމަންޓް ދައްކަންޖެހޭ'],
             self::SettlementAccepted => ['en' => 'Settlement accepted', 'dv' => 'ސެޓްލްމަންޓް ބަލައިގަނެވިއްޖެ'],
             self::SettlementRejected => ['en' => 'Receipt refused', 'dv' => 'ރަސީދު ބަލައިނުގަނެވުނު'],
             self::PromptDiscountExpiring => ['en' => 'Discount expiring', 'dv' => 'ޑިސްކައުންޓް ގެއްލިދާނެ'],
-            self::SettlementDueSoon => ['en' => 'Payment due soon', 'dv' => 'ސުންގަޑި ކައިރިވަނީ'],
             self::ReminderDay10 => ['en' => 'Settlement reminder', 'dv' => 'ސެޓްލްމަންޓް ހަނދާންކޮށްދިނުން'],
             self::UrgentDay13 => ['en' => 'Urgent reminder', 'dv' => 'އަވަސް ހަނދާންކޮށްދިނުން'],
             self::DueDay15 => ['en' => 'Payment due', 'dv' => 'ފައިސާ ދައްކަންޖެހޭ'],
@@ -346,6 +391,7 @@ enum NotificationTemplateKey: string
             self::StorePaused => ['en' => 'Cashback paused', 'dv' => 'ކޭޝްބެކް މެދުކެނޑިއްޖެ'],
             self::StoreResumed => ['en' => 'Cashback is back', 'dv' => 'ކޭޝްބެކް އަލުން ފެށިއްޖެ'],
             self::StoreApproved => ['en' => 'Store approved', 'dv' => 'ފިހާރަ ފާސްވެއްޖެ'],
+            self::CustomersPaid => ['en' => 'Customers paid', 'dv' => 'ކަސްޓަމަރުންނަށް ފައިސާ ދެއްކިއްޖެ'],
             self::MarketplaceApproved => ['en' => 'Marketplace approved', 'dv' => 'މާކެޓްޕްލޭސް ފާސްވެއްޖެ'],
             self::MarketplaceRejected => ['en' => 'Application refused', 'dv' => 'ހުށަހެޅުން ބަލައިނުގަނެވުނު'],
             self::OrderPlaced => ['en' => 'New order', 'dv' => 'އައު އޯޑަރެއް'],

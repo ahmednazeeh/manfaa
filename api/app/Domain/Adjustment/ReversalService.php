@@ -9,6 +9,8 @@ use App\Domain\Cashback\FutureDatedTransactionException;
 use App\Domain\Cashback\TransactionState;
 use App\Domain\Cashback\TransitionService;
 use App\Domain\Ledger\Postings;
+use App\Domain\Notifications\NotificationService;
+use App\Domain\Notifications\NotificationTemplateKey;
 use App\Domain\Settlement\SettlementBuilder;
 use App\Domain\Settlement\SettlementState;
 use App\Models\Adjustment;
@@ -76,7 +78,38 @@ final readonly class ReversalService
         private TransitionService $transitions,
         private Postings $postings,
         private SettlementBuilder $builder,
+        private NotificationService $notifications,
     ) {}
+
+    /**
+     * Tell the customer their cashback is gone (owner decision 2026-08-22).
+     *
+     * Both outcomes send: in place or as a credit memo against the store,
+     * the customer's balance drops the same way. A sale that earned nothing
+     * has nothing to announce. NotificationService defers to afterCommit,
+     * so a reversal that rolls back never sends.
+     */
+    private function tellCustomer(Transaction $transaction, string $reason): void
+    {
+        $customer = $transaction->customer;
+
+        if ($customer === null || (int) $transaction->cashback_laari <= 0) {
+            return;
+        }
+
+        $this->notifications->send(NotificationTemplateKey::CashbackReversed, $customer, [
+            'amount' => NotificationService::money((int) $transaction->cashback_laari),
+            'store' => (string) $transaction->merchant?->name,
+            'reason' => match ($reason) {
+                // Leading space on purpose: the template reads
+                // "was reversed{{reason}}." so an empty reason still scans.
+                'customer_refund', 'refund' => ' after a refund',
+                'till_void', 'void' => ' because the sale was voided',
+                'duplicate' => ' because it was recorded twice',
+                default => '',
+            },
+        ]);
+    }
 
     /**
      * @param  string|null  $note  a free-text reason kept on the event and any memo;
@@ -185,6 +218,8 @@ final readonly class ReversalService
                 );
             }
 
+            $this->tellCustomer($transaction, $reason);
+
             return ReversalOutcome::reversed($transaction->refresh());
         });
     }
@@ -234,6 +269,8 @@ final readonly class ReversalService
             ),
             'state' => 'pending',
         ]);
+
+        $this->tellCustomer($transaction, $reason);
 
         return ReversalOutcome::adjustmentCreated($transaction, $adjustment, $cause);
     }

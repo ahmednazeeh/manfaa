@@ -9,6 +9,7 @@ use App\Domain\Adjustment\InvalidReversalStateException;
 use App\Domain\Adjustment\ReversalOutcome;
 use App\Domain\Adjustment\ReversalService;
 use App\Domain\Cashback\Actor;
+use App\Domain\Cashback\AmendmentService;
 use App\Domain\Cashback\ApiCreditService;
 use App\Domain\Cashback\CustomerNotFoundException;
 use App\Domain\Cashback\CustomerRef;
@@ -18,6 +19,7 @@ use App\Domain\Cashback\LinePricingException;
 use App\Domain\Cashback\LineSetParser;
 use App\Domain\Cashback\MerchantNotActiveException;
 use App\Domain\Cashback\NoEffectiveRateException;
+use App\Domain\Cashback\NotAmendableException;
 use App\Domain\Cashback\RateBelowAdvertisedException;
 use App\Domain\Money\Laari;
 use App\Domain\Money\Percent;
@@ -32,8 +34,10 @@ use App\Models\MerchantBranch;
 use App\Models\Transaction;
 use App\Rules\PercentRate;
 use Carbon\CarbonImmutable;
+use Closure;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Laravel\Sanctum\PersonalAccessToken;
 
 /**
@@ -63,6 +67,12 @@ class TransactionsController extends V1Controller
             // (+960XXXXXXX / 7-digit local starting 7 or 9). Phone-keyed
             // sales record origin api_phone; code-keyed stay pos.
             'customer_ref' => ['required', 'string', 'regex:'.CustomerRef::PATTERN],
+            // Where the sale happened (owner, 2026-08-22): `pos` (default,
+            // a till) or `online_link` (a web shop — the WooCommerce
+            // plugin). Reporting only; pricing is identical. A phone-keyed
+            // sale records `api_phone` whatever is sent, because that value
+            // marks HOW the customer was matched, which outranks where.
+            'origin' => ['sometimes', 'nullable', Rule::in(['pos', 'online_link'])],
             'eligible_amount' => ['required', 'integer', 'min:1'],
             'sale_amount' => ['nullable', 'integer', 'min:1'],
             // OPTIONAL (PLAN §1): omitted means NOW. ISO 8601 with an
@@ -79,9 +89,35 @@ class TransactionsController extends V1Controller
             // (GET /v1/merchants/me/product-categories), or null for the
             // default "everything else" bucket. Amounts must sum to
             // eligible_amount.
-            'lines' => ['sometimes', 'array', 'min:1', 'max:100'],
+            'lines' => ['sometimes', 'array', 'min:1', 'max:100',
+                // A line must NAME its category — by slug (null meaning the
+                // explicit "everything else" bucket) or by id. Enforced here
+                // rather than with required_without, whose wildcard does not
+                // resolve per item and so fired on every line.
+                function (string $attribute, mixed $value, Closure $fail): void {
+                    foreach ((array) $value as $index => $line) {
+                        if (! is_array($line)) {
+                            continue;
+                        }
+
+                        if (! array_key_exists('category', $line)
+                            && ! array_key_exists('category_id', $line)) {
+                            $fail(sprintf(
+                                'lines.%s must name a category: send "category" '
+                                .'(the slug, or null for everything else) or "category_id".',
+                                $index,
+                            ));
+                        }
+                    }
+                },
+            ],
             'lines.*' => ['array'],
-            'lines.*.category' => ['present', 'nullable', 'string', 'max:80'],
+            // A line names its category by SLUG or by ID. `category` stays
+            // `present` so an explicit null keeps meaning the default
+            // "everything else" bucket rather than a forgotten field — but a
+            // caller using ids may omit it entirely.
+            'lines.*.category' => ['sometimes', 'nullable', 'string', 'max:80'],
+            'lines.*.category_id' => ['sometimes', 'nullable', 'integer', 'min:1'],
             'lines.*.amount_laari' => ['required', 'integer', 'min:1'],
         ]);
 
@@ -122,6 +158,7 @@ class TransactionsController extends V1Controller
                 idempotencyKey: $request->header('Idempotency-Key'),
                 lines: $lines,
                 overrideRateBp: $overrideRateBp,
+                origin: $data['origin'] ?? null,
             );
         } catch (CustomerNotFoundException $exception) {
             return $this->error(422, 'customer_not_found', $exception->getMessage());
@@ -182,6 +219,94 @@ class TransactionsController extends V1Controller
             'reason' => $transaction->reason_code,
             'transaction' => (new TransactionResource($transaction))->resolve($request),
         ], $httpStatus);
+    }
+
+    /**
+     * One sale, as the till recorded it — with its pricing lines when it
+     * had any. What a plugin reads after `409 duplicate_invoice` to adopt a
+     * sale it posted before a crash, and what "Refresh status" polls.
+     * Another merchant's id is indistinguishable from none.
+     */
+    public function show(Request $request, int $id): JsonResponse
+    {
+        $merchant = $this->merchant($request);
+
+        $transaction = Transaction::query()
+            ->whereKey($id)
+            ->where('merchant_id', $merchant->id)
+            ->with('lines')
+            ->first();
+
+        if ($transaction === null) {
+            return $this->error(404, 'transaction_not_found', 'No transaction with that id belongs to this merchant.');
+        }
+
+        return new JsonResponse([
+            'transaction' => (new TransactionResource($transaction))->resolve($request),
+        ]);
+    }
+
+    /**
+     * Amend a sale still inside its validation window (owner, 2026-08-22):
+     * the partial-refund path for online stores. New `eligible_amount`,
+     * optional `sale_amount` and `lines`; the same rules as the panel's
+     * amend — `awaiting_validation` only, never a backdated sale. The
+     * cashback is re-priced at the terms frozen on the row and the ledger
+     * carries the sale off at what was recorded and back on at what is now
+     * recorded. Idempotent under the same key, like every write.
+     */
+    public function amend(Request $request, int $id, AmendmentService $amendments, LineSetParser $lineParser): JsonResponse
+    {
+        $data = $this->validateEnvelope($request, [
+            'eligible_amount' => ['required', 'integer', 'min:1'],
+            'sale_amount' => ['sometimes', 'nullable', 'integer', 'min:1'],
+            'lines' => ['sometimes', 'nullable', 'array', 'min:1', 'max:100'],
+            'lines.*' => ['array'],
+            'lines.*.category' => ['sometimes', 'nullable', 'string', 'max:80'],
+            'lines.*.category_id' => ['sometimes', 'nullable', 'integer', 'min:1'],
+            'lines.*.amount_laari' => ['required', 'integer', 'min:1'],
+        ]);
+
+        $merchant = $this->merchant($request);
+
+        $transaction = Transaction::query()
+            ->whereKey($id)
+            ->where('merchant_id', $merchant->id)
+            ->first();
+
+        if ($transaction === null) {
+            return $this->error(404, 'transaction_not_found', 'No transaction with that id belongs to this merchant.');
+        }
+
+        $eligible = Laari::of((int) $data['eligible_amount']);
+        $saleAmount = isset($data['sale_amount']) ? Laari::of((int) $data['sale_amount']) : null;
+
+        if ($saleAmount !== null && $saleAmount->value() < $eligible->value()) {
+            return $this->error(422, 'validation_failed', 'The given data was invalid.', errors: [
+                'sale_amount' => ['sale_amount cannot be less than eligible_amount.'],
+            ]);
+        }
+
+        try {
+            $amended = $amendments->amend(
+                $transaction,
+                $this->actor($merchant),
+                $eligible,
+                $saleAmount,
+                $data['lines'] ?? null,
+            );
+        } catch (NotAmendableException $exception) {
+            return $this->error(409, $exception->errorCode, $exception->getMessage(), meta: [
+                'state' => $transaction->state->value,
+            ]);
+        } catch (LinePricingException $exception) {
+            return $this->error(422, $exception->errorCode, $exception->getMessage());
+        }
+
+        return new JsonResponse([
+            'status' => 'amended',
+            'transaction' => (new TransactionResource($amended->load('lines')))->resolve($request),
+        ]);
     }
 
     public function reverse(Request $request, int $id, ReversalService $reversals, WebhookDispatcher $webhooks): JsonResponse

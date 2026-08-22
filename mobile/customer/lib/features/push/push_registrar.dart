@@ -53,12 +53,9 @@ class PushRegistrar {
 
       // Providers rotate tokens whenever they like; a stale registration is
       // a phone that silently stops hearing about its own money.
-      messaging.onTokenRefresh.listen(
-        (fresh) {
-          if (_ref.read(sessionProvider).pushEnabled) _register(fresh);
-        },
-        onError: (_) {},
-      );
+      messaging.onTokenRefresh.listen((fresh) {
+        if (_ref.read(sessionProvider).pushEnabled) _register(fresh);
+      }, onError: (_) {});
     } catch (_) {
       // Deliberate: no push ≠ no app.
     }
@@ -90,7 +87,9 @@ class PushRegistrar {
 
   Future<void> _register(String token) async {
     try {
-      await _ref.read(apiProvider).registerPushToken(
+      await _ref
+          .read(apiProvider)
+          .registerPushToken(
             token: token,
             platform: defaultTargetPlatform == TargetPlatform.iOS
                 ? 'ios'
@@ -113,6 +112,7 @@ class PushRegistrar {
       switch (message.data['template']) {
         case 'cashback_earned':
         case 'cashback_confirmed':
+        case 'cashback_reversed':
         case 'payout_paid':
           router.go('/activity');
         default:
@@ -120,9 +120,12 @@ class PushRegistrar {
       }
     }
 
-    FirebaseMessaging.instance.getInitialMessage().then((message) {
-      if (message != null) route(message);
-    }).catchError((_) {});
+    FirebaseMessaging.instance
+        .getInitialMessage()
+        .then((message) {
+          if (message != null) route(message);
+        })
+        .catchError((_) {});
 
     FirebaseMessaging.onMessageOpenedApp.listen(route, onError: (_) {});
   }
@@ -147,29 +150,26 @@ class PushRegistrar {
         )
         .catchError((_) {});
 
-    FirebaseMessaging.onMessage.listen(
-      (message) {
-        // iOS already showed its banner via the options above.
-        if (defaultTargetPlatform == TargetPlatform.iOS) return;
+    FirebaseMessaging.onMessage.listen((message) {
+      // iOS already showed its banner via the options above.
+      if (defaultTargetPlatform == TargetPlatform.iOS) return;
 
-        final notification = message.notification;
-        if (notification == null) return;
+      final notification = message.notification;
+      if (notification == null) return;
 
-        final text = [notification.title, notification.body]
-            .whereType<String>()
-            .where((part) => part.trim().isNotEmpty)
-            .join(' — ');
-        if (text.isEmpty) return;
+      final text = [
+        notification.title,
+        notification.body,
+      ].whereType<String>().where((part) => part.trim().isNotEmpty).join(' — ');
+      if (text.isEmpty) return;
 
-        messenger.currentState?.showSnackBar(
-          SnackBar(
-            content: Text(text, maxLines: 3, overflow: TextOverflow.ellipsis),
-            duration: const Duration(seconds: 4),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      },
-      onError: (_) {},
-    );
+      messenger.currentState?.showSnackBar(
+        SnackBar(
+          content: Text(text, maxLines: 3, overflow: TextOverflow.ellipsis),
+          duration: const Duration(seconds: 4),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }, onError: (_) {});
   }
 }
