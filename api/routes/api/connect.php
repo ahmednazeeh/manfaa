@@ -3,6 +3,7 @@
 use App\Http\Controllers\Admin\PlatformClientController;
 use App\Http\Controllers\Merchant\ConnectConsentController;
 use App\Http\Controllers\V1\ConnectTokenController;
+use App\Http\Controllers\V1\ConnectWebhooksController;
 use App\Http\Middleware\EnsureMerchantApproved;
 use App\Http\Middleware\EnsureSuperadmin;
 use Illuminate\Support\Facades\Route;
@@ -62,3 +63,13 @@ Route::prefix('merchant/connect')
  */
 Route::post('v1/connect/token', ConnectTokenController::class)
     ->middleware('throttle:60,1');
+
+/*
+ * A platform READS the webhook endpoint Manfaa registered for it (owner,
+ * 2026-08-22) — for when it has forgotten the URL or the events.
+ * Authenticated with its client credentials over HTTP Basic: the platform
+ * is acting for itself, not for any merchant. Registering stays with the
+ * superadmin registry; per-merchant endpoints are /v1/webhooks.
+ */
+Route::get('v1/connect/webhooks', [ConnectWebhooksController::class, 'index'])
+    ->middleware('throttle:30,1');

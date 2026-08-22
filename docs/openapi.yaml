@@ -203,9 +203,10 @@ tags:
       (see `vendorToken`) — same abilities, same revocation from the panel.
   - name: Webhooks — POS vendors
     description: |
-      The four events below, delivered to ONE endpoint for your whole
-      platform. How to get an endpoint, prove it and act on each event is
-      in **Webhooks → 6.1** in the introduction above.
+      The four events, delivered to ONE endpoint for your whole platform,
+      which Manfaa registers for you — and `GET /v1/connect/webhooks` to
+      read back what is registered. The two options a platform has, and
+      what to do on each event: **Webhooks → 6.1** in the introduction.
   - name: Webhooks — Merchants
     description: |
       Registering an endpoint for ONE store over the API — the plugin
@@ -1835,6 +1836,60 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
 
+  /v1/connect/webhooks:
+    get:
+      operationId: listPlatformWebhooks
+      tags: [Webhooks — POS vendors]
+      summary: Read back your platform's webhook endpoints
+      security:
+        - platformCredentials: []
+      description: |
+        The endpoint(s) Manfaa registered for your platform — URL, events,
+        whether live, and the last delivery — for when you have forgotten
+        what was registered. **Never the secret**, which was shown once.
+        Authenticate as the platform with HTTP Basic: `client_id` as the
+        username, `client_secret` as the password. Confidential platforms
+        only; a public client (a plugin) registers per store with
+        `POST /v1/webhooks`.
+      responses:
+        '200':
+          description: Your platform's endpoints.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: integer }
+                        pos_vendor_id: { type: integer }
+                        url: { type: string }
+                        events: { type: array, items: { type: string } }
+                        active: { type: boolean }
+                        last_delivery:
+                          type: [object, 'null']
+                          properties:
+                            event: { type: string }
+                            status: { type: string }
+                            response_status: { type: [integer, 'null'] }
+                            attempted_at: { type: [string, 'null'] }
+                        created_at: { type: [string, 'null'] }
+              example:
+                data:
+                  - id: 3
+                    pos_vendor_id: 1
+                    url: https://api.islebooks.mv/api/v1/manfaa/webhook
+                    events: [merchant.rate_changed, merchant.suspended, merchant.reinstated, transaction.reversed]
+                    active: true
+                    last_delivery: { event: webhook.test, status: delivered, response_status: 200, attempted_at: "2026-08-22T11:02:14+05:00" }
+                    created_at: "2026-08-22T10:58:31+05:00"
+        '401':
+          description: '`invalid_client` — missing or wrong credentials, a platform not enabled for connect, or a public client (OAuth error shape).'
+
   /v1/connect/token:
     post:
       operationId: exchangeConnectCode
@@ -2363,6 +2418,10 @@ webhooks:
 components:
 
   securitySchemes:
+    platformCredentials:
+      type: http
+      scheme: basic
+      description: A platform acting for itself — `client_id` as the username, `client_secret` as the password (the pair issued at platform registration). Used only by `GET /v1/connect/webhooks`.
     vendorToken:
       type: http
       scheme: bearer

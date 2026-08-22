@@ -165,3 +165,36 @@ it('is superadmin work, and can send a test to a vendor endpoint', function () {
         ->assertJsonPath('data.0.last_delivery.event', 'webhook.test')
         ->assertJsonPath('data.0.last_delivery.status', 'pending');
 });
+
+it('lets a platform read back its own endpoints with its client credentials, never the secret', function () {
+    $secret = 'platform-secret';
+    $this->vendor->forceFill([
+        'client_id' => 'mfa_testplatform',
+        'client_secret_hash' => bcrypt($secret),
+        'connect_enabled' => true,
+        'integration_status' => 'active',
+    ])->save();
+
+    $this->actingAs(AdminUser::factory()->create(['role' => 'superadmin']), 'admin')
+        ->postJson("/api/admin/pos-vendors/{$this->vendor->id}/webhook-endpoints", [
+            'url' => 'https://api.islebooks.mv/api/v1/manfaa/webhook',
+            'events' => ['merchant.rate_changed', 'transaction.reversed'],
+        ])->assertCreated();
+
+    app('auth')->forgetGuards();
+
+    $this->withHeader('Authorization', 'Basic '.base64_encode('mfa_testplatform:'.$secret))
+        ->getJson('/api/v1/connect/webhooks')
+        ->assertOk()
+        ->assertJsonPath('data.0.url', 'https://api.islebooks.mv/api/v1/manfaa/webhook')
+        ->assertJsonPath('data.0.events', ['merchant.rate_changed', 'transaction.reversed'])
+        ->assertJsonPath('data.0.active', true)
+        ->assertJsonMissingPath('data.0.secret');
+
+    $this->withHeader('Authorization', 'Basic '.base64_encode('mfa_testplatform:wrong'))
+        ->getJson('/api/v1/connect/webhooks')
+        ->assertStatus(401)
+        ->assertJsonPath('error', 'invalid_client');
+
+    $this->getJson('/api/v1/connect/webhooks')->assertStatus(401);
+});
