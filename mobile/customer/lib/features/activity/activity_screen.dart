@@ -19,14 +19,23 @@ import 'paged.dart';
 /// (validation_window, merchant_settlement_window, …) and the app renders
 /// localized sentences — a raw key on screen is a bug by project law.
 final earnedPagerProvider =
-    StateNotifierProvider.autoDispose<Pager<TransactionEntry>, PagedState<TransactionEntry>>(
-  (ref) => Pager(({cursor}) => ref.read(apiProvider).transactions(cursor: cursor)),
-);
+    StateNotifierProvider.autoDispose<
+      Pager<TransactionEntry>,
+      PagedState<TransactionEntry>
+    >(
+      (ref) => Pager(
+        ({cursor}) => ref.read(apiProvider).transactions(cursor: cursor),
+      ),
+    );
 
 final paidPagerProvider =
-    StateNotifierProvider.autoDispose<Pager<PayoutEntry>, PagedState<PayoutEntry>>(
-  (ref) => Pager(({cursor}) => ref.read(apiProvider).payouts(cursor: cursor)),
-);
+    StateNotifierProvider.autoDispose<
+      Pager<PayoutEntry>,
+      PagedState<PayoutEntry>
+    >(
+      (ref) =>
+          Pager(({cursor}) => ref.read(apiProvider).payouts(cursor: cursor)),
+    );
 
 class ActivityScreen extends ConsumerStatefulWidget {
   const ActivityScreen({super.key});
@@ -79,8 +88,9 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
 
     // A tab that vanished under the customer (marketplace switched off mid
     // session) must not leave the screen on an index nothing renders.
-    final segment =
-        _segment == 2 && !ref.watch(marketplaceEnabledProvider) ? 0 : _segment;
+    final segment = _segment == 2 && !ref.watch(marketplaceEnabledProvider)
+        ? 0
+        : _segment;
 
     return Scaffold(
       body: SafeArea(
@@ -96,7 +106,12 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
 }
 
 /// The tab screen's scroll padding — content clears the floating nav bar.
-const _pagePadding = EdgeInsets.fromLTRB(Gap.lg, Gap.md, Gap.lg, Gap.navClearance);
+const _pagePadding = EdgeInsets.fromLTRB(
+  Gap.lg,
+  Gap.md,
+  Gap.lg,
+  Gap.navClearance,
+);
 
 /// A non-paged state (skeleton, error, empty) with the header on top.
 class _StaticList extends StatelessWidget {
@@ -107,10 +122,7 @@ class _StaticList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListView(
-      padding: _pagePadding,
-      children: [...header, ...children],
-    );
+    return ListView(padding: _pagePadding, children: [...header, ...children]);
   }
 }
 
@@ -227,8 +239,9 @@ class _EarnedTile extends StatelessWidget {
     return switch (entry.statusReason) {
       null => null,
       'validation_window' => l10n.reasonValidationWindow(entry.merchantName),
-      'merchant_settlement_window' =>
-        l10n.reasonSettlementWindow(entry.merchantName),
+      'merchant_settlement_window' => l10n.reasonSettlementWindow(
+        entry.merchantName,
+      ),
       'under_review' => l10n.reasonUnderReview,
       'merchant_not_settled' => l10n.reasonNotSettled,
       'customer_refund' => l10n.reasonRefund,
@@ -299,7 +312,7 @@ class _EarnedTile extends StatelessWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      formatDayMonth(entry.occurredAt),
+                      formatDayMonth(entry.occurredAt, context),
                       style: theme.textTheme.bodySmall?.copyWith(color: muted),
                     ),
                   ],
@@ -417,14 +430,15 @@ class _PayoutTile extends StatelessWidget {
                   children: [
                     MoneyText(
                       entry.amountLaari,
-                      style: theme.textTheme.titleLarge
-                          ?.copyWith(color: theme.colorScheme.onSurface),
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        color: theme.colorScheme.onSurface,
+                      ),
                     ),
                     const SizedBox(height: 2),
                     Text(
                       l10n.payoutPeriod(
-                        formatDayMonth(entry.periodStart),
-                        formatDayMonth(entry.periodEnd),
+                        formatDayMonth(entry.periodStart, context),
+                        formatDayMonth(entry.periodEnd, context),
                       ),
                       style: theme.textTheme.bodySmall?.copyWith(color: muted),
                     ),
@@ -441,8 +455,9 @@ class _PayoutTile extends StatelessWidget {
             const SizedBox(height: Gap.md),
             Text(
               l10n.payoutFailedNote,
-              style: theme.textTheme.bodySmall
-                  ?.copyWith(color: theme.colorScheme.error),
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.error,
+              ),
             ),
           ],
         ],
@@ -488,8 +503,9 @@ class _EmptyState extends StatelessWidget {
               Text(
                 body,
                 textAlign: TextAlign.center,
-                style: theme.textTheme.bodyMedium
-                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
               ),
             ],
           ),
@@ -552,17 +568,14 @@ class _ListSkeleton extends StatelessWidget {
   }
 }
 
-/// "2026-08-25" or ISO → "25 Aug 2026". Manual, locale-stable: intl carries
-/// no Divehi date symbols, and dd/MM digits read fine in both scripts.
-/// A proper localized date pass belongs to R6.
-String formatDayMonth(String iso) {
+/// "2026-08-25" or ISO → "25 Aug 2026", with the month in the reader's own
+/// script. Month names come from [monthName] rather than intl, which ships no
+/// Divehi date symbols and silently answers in English.
+String formatDayMonth(String iso, BuildContext context) {
   final date = DateTime.tryParse(iso);
   if (date == null) return iso;
 
-  const months = [
-    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-  ];
+  final dhivehi = Localizations.localeOf(context).languageCode == 'dv';
 
-  return '${date.day} ${months[date.month - 1]} ${date.year}';
+  return '${date.day} ${monthName(date.month, dhivehi: dhivehi)} ${date.year}';
 }

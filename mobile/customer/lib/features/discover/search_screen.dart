@@ -64,10 +64,9 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     });
 
     try {
-      final page = await ref.read(apiProvider).directory(
-            q: q.length >= 2 ? q : null,
-            category: widget.category,
-          );
+      final page = await ref
+          .read(apiProvider)
+          .directory(q: q.length >= 2 ? q : null, category: widget.category);
       if (mounted) setState(() => _results = page);
     } on MobileApiException catch (e) {
       if (mounted) setState(() => _error = e.message);
@@ -122,14 +121,19 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const IconTile(Icons.search_rounded,
-                tint: ManfaaTint.violet, size: 56, iconSize: 28),
+            const IconTile(
+              Icons.search_rounded,
+              tint: ManfaaTint.violet,
+              size: 56,
+              iconSize: 28,
+            ),
             const SizedBox(height: Gap.lg),
             Text(
               message,
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant),
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
             ),
           ],
         ),

@@ -17,13 +17,13 @@ import 'market_providers.dart';
 /// confirmed until a human has seen it. No pretending money has arrived.
 final addressesProvider =
     FutureProvider.autoDispose<List<CustomerAddressEntry>>((ref) {
-  return ref.watch(apiProvider).addresses();
-});
+      return ref.watch(apiProvider).addresses();
+    });
 
 final paymentAccountsProvider =
     FutureProvider.autoDispose<List<Map<String, dynamic>>>((ref) {
-  return ref.watch(apiProvider).paymentAccounts();
-});
+      return ref.watch(apiProvider).paymentAccounts();
+    });
 
 class CheckoutScreen extends ConsumerStatefulWidget {
   const CheckoutScreen({super.key});
@@ -120,9 +120,13 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
 
       if (mounted) context.pushReplacement('/market/orders/${order.id}');
     } catch (e) {
-      messenger.showSnackBar(SnackBar(
-        content: Text(e is MobileApiException ? e.message : l10n.errorGeneric),
-      ));
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            e is MobileApiException ? e.message : l10n.errorGeneric,
+          ),
+        ),
+      );
     } finally {
       if (mounted) setState(() => _placing = false);
     }
@@ -146,7 +150,9 @@ class _Steps extends StatelessWidget {
         children: [
           for (var index = 0; index < labels.length; index++) ...[
             Icon(
-              index <= step ? Icons.check_circle_rounded : Icons.circle_outlined,
+              index <= step
+                  ? Icons.check_circle_rounded
+                  : Icons.circle_outlined,
               size: 18,
               color: index <= step
                   ? ManfaaColors.violet
@@ -190,7 +196,9 @@ class _AddressStep extends ConsumerWidget {
     return addresses.when(
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (error, _) => Center(
-        child: Text(error is MobileApiException ? error.message : l10n.errorGeneric),
+        child: Text(
+          error is MobileApiException ? error.message : l10n.errorGeneric,
+        ),
       ),
       data: (rows) => ListView(
         padding: const EdgeInsets.all(Gap.lg),
@@ -220,47 +228,55 @@ class _AddressStep extends ConsumerWidget {
             )
           else
             RadioGroup<int>(
-              groupValue: selected ??
+              groupValue:
+                  selected ??
                   rows
-                      .firstWhere((row) => row.isDefault,
-                          orElse: () => rows.first)
+                      .firstWhere(
+                        (row) => row.isDefault,
+                        orElse: () => rows.first,
+                      )
                       .id,
               onChanged: onSelected,
-              child: Column(children: [
-                for (final address in rows)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: Gap.sm),
-                    child: ManfaaCard(
-                      padding: EdgeInsets.zero,
-                      child: RadioListTile<int>(
-                        value: address.id,
-                        activeColor: ManfaaColors.violet,
-                        title: Text(address.label),
-                        subtitle: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('${address.recipientName} · ${address.phone}'),
-                            Text(address.oneLine),
-                            // A null zone is honest: no shop can quote
-                            // delivery there yet, and saying so beats a
-                            // silent surprise at the door.
-                            if (address.zoneId == null)
+              child: Column(
+                children: [
+                  for (final address in rows)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: Gap.sm),
+                      child: ManfaaCard(
+                        padding: EdgeInsets.zero,
+                        child: RadioListTile<int>(
+                          value: address.id,
+                          activeColor: ManfaaColors.violet,
+                          title: Text(address.label),
+                          subtitle: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
                               Text(
-                                l10n.addressNotServed,
-                                style: theme.textTheme.bodySmall
-                                    ?.copyWith(color: ManfaaColors.amber),
+                                '${address.recipientName} · ${address.phone}',
                               ),
-                          ],
+                              Text(address.oneLine),
+                              // A null zone is honest: no shop can quote
+                              // delivery there yet, and saying so beats a
+                              // silent surprise at the door.
+                              if (address.zoneId == null)
+                                Text(
+                                  l10n.addressNotServed,
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: ManfaaColors.amber,
+                                  ),
+                                ),
+                            ],
+                          ),
                         ),
                       ),
                     ),
+                  TextButton.icon(
+                    onPressed: () => context.push('/market/addresses/new'),
+                    icon: const Icon(Icons.add_rounded),
+                    label: Text(l10n.addAddress),
                   ),
-                TextButton.icon(
-                  onPressed: () => context.push('/market/addresses/new'),
-                  icon: const Icon(Icons.add_rounded),
-                  label: Text(l10n.addAddress),
-                ),
-              ]),
+                ],
+              ),
             ),
         ],
       ),
@@ -300,8 +316,10 @@ class _PaymentStep extends ConsumerWidget {
                   child: Row(
                     children: [
                       Expanded(child: Text(subcart.title)),
-                      MoneyText(subcart.subtotalLaari,
-                          style: theme.textTheme.bodyMedium),
+                      MoneyText(
+                        subcart.subtotalLaari,
+                        style: theme.textTheme.bodyMedium,
+                      ),
                     ],
                   ),
                 ),
@@ -309,13 +327,16 @@ class _PaymentStep extends ConsumerWidget {
               Row(
                 children: [
                   Expanded(
-                    child: Text(l10n.cartTotalPayable,
-                        style: theme.textTheme.titleSmall),
+                    child: Text(
+                      l10n.cartTotalPayable,
+                      style: theme.textTheme.titleSmall,
+                    ),
                   ),
                   MoneyText(
                     cart.totalPayableLaari,
-                    style: theme.textTheme.titleMedium
-                        ?.copyWith(fontWeight: FontWeight.w800),
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
                 ],
               ),
@@ -332,8 +353,9 @@ class _PaymentStep extends ConsumerWidget {
                   ),
                   MoneyText(
                     cart.cashbackLaari,
-                    style: theme.textTheme.bodyMedium
-                        ?.copyWith(color: ManfaaColors.green),
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: ManfaaColors.green,
+                    ),
                   ),
                 ],
               ),
@@ -350,54 +372,57 @@ class _PaymentStep extends ConsumerWidget {
             groupValue: method,
             onChanged: (value) => onMethod(value ?? 'bml'),
             child: Column(
-            children: [
-              for (final account in rows)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: Gap.sm),
-                  child: ManfaaCard(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Radio<String>(
-                              value: ((account['bank_name'] as String?) ?? '')
-                                  .toLowerCase()
-                                  .contains('mib')
-                                  ? 'mib'
-                                  : 'bml',
-                              activeColor: ManfaaColors.violet,
-                            ),
-                            Text(
-                              (account['bank_name'] as String?) ?? '',
-                              style: theme.textTheme.titleSmall,
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: Gap.sm),
-                        _Copyable(
-                          label: l10n.transferExactly,
-                          value: formatMoney(
-                            cart.totalPayableLaari,
-                            dhivehi: Localizations.localeOf(context)
-                                    .languageCode ==
-                                'dv',
+              children: [
+                for (final account in rows)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: Gap.sm),
+                    child: ManfaaCard(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Radio<String>(
+                                value:
+                                    ((account['bank_name'] as String?) ?? '')
+                                        .toLowerCase()
+                                        .contains('mib')
+                                    ? 'mib'
+                                    : 'bml',
+                                activeColor: ManfaaColors.violet,
+                              ),
+                              Text(
+                                (account['bank_name'] as String?) ?? '',
+                                style: theme.textTheme.titleSmall,
+                              ),
+                            ],
                           ),
-                        ),
-                        _Copyable(
-                          label: l10n.accountName,
-                          value: (account['account_name'] as String?) ?? '',
-                        ),
-                        _Copyable(
-                          label: l10n.accountNumber,
-                          value: (account['account_no'] as String?) ?? '',
-                        ),
-                      ],
+                          const SizedBox(height: Gap.sm),
+                          _Copyable(
+                            label: l10n.transferExactly,
+                            value: formatMoney(
+                              cart.totalPayableLaari,
+                              dhivehi:
+                                  Localizations.localeOf(
+                                    context,
+                                  ).languageCode ==
+                                  'dv',
+                            ),
+                          ),
+                          _Copyable(
+                            label: l10n.accountName,
+                            value: (account['account_name'] as String?) ?? '',
+                          ),
+                          _Copyable(
+                            label: l10n.accountNumber,
+                            value: (account['account_no'] as String?) ?? '',
+                          ),
+                        ],
+                      ),
                     ),
                   ),
-                ),
-            ],
-          ),
+              ],
+            ),
           ),
         ),
         const SizedBox(height: Gap.md),
@@ -410,7 +435,9 @@ class _PaymentStep extends ConsumerWidget {
           ),
           child: Text(
             l10n.receiptFirstNote,
-            style: theme.textTheme.bodySmall?.copyWith(color: ManfaaColors.violet),
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: ManfaaColors.violet,
+            ),
           ),
         ),
       ],
@@ -435,8 +462,9 @@ class _Copyable extends StatelessWidget {
           Expanded(
             child: Text(
               label,
-              style: theme.textTheme.bodySmall
-                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
             ),
           ),
           Text(value, style: theme.textTheme.bodyMedium),

@@ -13,8 +13,10 @@ import '../../app/providers.dart';
 /// A multi-vendor order shows its SHOPS, not one summary word: across three
 /// stores the shops are the status, and a single word would hide that two
 /// are confirmed and one is not.
-final orderProvider =
-    FutureProvider.autoDispose.family<CustomerOrder, int>((ref, id) {
+final orderProvider = FutureProvider.autoDispose.family<CustomerOrder, int>((
+  ref,
+  id,
+) {
   return ref.watch(apiProvider).order(id);
 });
 
@@ -68,7 +70,9 @@ class _OrderScreenState extends ConsumerState<OrderScreen> {
 
     setState(() => _uploading = true);
     try {
-      await ref.read(apiProvider).uploadOrderReceipt(
+      await ref
+          .read(apiProvider)
+          .uploadOrderReceipt(
             orderId,
             bytes: await picked.readAsBytes(),
             filename: picked.name,
@@ -76,9 +80,13 @@ class _OrderScreenState extends ConsumerState<OrderScreen> {
       ref.invalidate(orderProvider(orderId));
       messenger.showSnackBar(SnackBar(content: Text(l10n.receiptUploaded)));
     } catch (e) {
-      messenger.showSnackBar(SnackBar(
-        content: Text(e is MobileApiException ? e.message : l10n.errorGeneric),
-      ));
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            e is MobileApiException ? e.message : l10n.errorGeneric,
+          ),
+        ),
+      );
     } finally {
       if (mounted) setState(() => _uploading = false);
     }
@@ -112,21 +120,25 @@ class _Body extends StatelessWidget {
               Row(
                 children: [
                   Expanded(
-                    child: Text(order.reference,
-                        style: theme.textTheme.titleMedium),
+                    child: Text(
+                      order.reference,
+                      style: theme.textTheme.titleMedium,
+                    ),
                   ),
                   MoneyText(
                     order.totalPayableLaari,
-                    style: theme.textTheme.titleMedium
-                        ?.copyWith(fontWeight: FontWeight.w800),
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
                 ],
               ),
               const SizedBox(height: Gap.xs),
               Text(
                 l10n.orderStores(order.storeCount),
-                style: theme.textTheme.bodySmall
-                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
               ),
               const SizedBox(height: Gap.md),
               StatusChip(
@@ -149,8 +161,9 @@ class _Body extends StatelessWidget {
                     ),
                     MoneyText(
                       order.cashbackTotalLaari,
-                      style: theme.textTheme.titleSmall
-                          ?.copyWith(color: ManfaaColors.green),
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        color: ManfaaColors.green,
+                      ),
                     ),
                   ],
                 ),
@@ -165,8 +178,7 @@ class _Body extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(l10n.receiptFirstNote,
-                    style: theme.textTheme.bodyMedium),
+                Text(l10n.receiptFirstNote, style: theme.textTheme.bodyMedium),
                 const SizedBox(height: Gap.md),
                 SizedBox(
                   width: double.infinity,
@@ -190,9 +202,12 @@ class _Body extends StatelessWidget {
               color: ManfaaColors.violetSoft,
               borderRadius: BorderRadius.circular(Corner.tile),
             ),
-            child: Text(l10n.orderUnderReview,
-                style: theme.textTheme.bodySmall
-                    ?.copyWith(color: ManfaaColors.violet)),
+            child: Text(
+              l10n.orderUnderReview,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: ManfaaColors.violet,
+              ),
+            ),
           ),
         ],
         const SizedBox(height: Gap.lg),
@@ -241,8 +256,10 @@ class _SuborderCard extends StatelessWidget {
             const SizedBox(height: Gap.sm),
             Row(
               children: [
-                Text(l10n.pickupCode,
-                    style: theme.textTheme.bodySmall?.copyWith(color: muted)),
+                Text(
+                  l10n.pickupCode,
+                  style: theme.textTheme.bodySmall?.copyWith(color: muted),
+                ),
                 const SizedBox(width: Gap.sm),
                 Text(
                   suborder.pickupCode!,
@@ -258,7 +275,9 @@ class _SuborderCard extends StatelessWidget {
             const SizedBox(height: Gap.sm),
             Text(
               suborder.rejectReason!,
-              style: theme.textTheme.bodySmall?.copyWith(color: ManfaaColors.amber),
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: ManfaaColors.amber,
+              ),
             ),
           ],
           // The shop cut this order. Named, with the refund.
@@ -276,8 +295,9 @@ class _SuborderCard extends StatelessWidget {
                   suborder.storeName,
                   formatMoney(suborder.refundedLaari, dhivehi: dhivehi),
                 ),
-                style: theme.textTheme.bodySmall
-                    ?.copyWith(color: ManfaaColors.amber),
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: ManfaaColors.amber,
+                ),
               ),
             ),
           ],
@@ -293,8 +313,9 @@ class _SuborderCard extends StatelessWidget {
                       style: theme.textTheme.bodyMedium?.copyWith(
                         // A removed line stays on screen, struck through: it
                         // was ordered, and a row that vanishes reads as a bug.
-                        decoration:
-                            line.removed ? TextDecoration.lineThrough : null,
+                        decoration: line.removed
+                            ? TextDecoration.lineThrough
+                            : null,
                         color: line.removed ? muted : null,
                       ),
                     ),
@@ -309,18 +330,23 @@ class _SuborderCard extends StatelessWidget {
                     ),
                     const SizedBox(width: Gap.xs),
                   ],
-                  Text('×${line.fulfilledQty}',
-                      style: theme.textTheme.bodyMedium),
+                  Text(
+                    '×${line.fulfilledQty}',
+                    style: theme.textTheme.bodyMedium,
+                  ),
                   const SizedBox(width: Gap.md),
                   if (line.refundLaari > 0)
                     Text(
                       formatMoney(line.refundLaari, dhivehi: dhivehi),
-                      style: theme.textTheme.bodySmall
-                          ?.copyWith(color: ManfaaColors.amber),
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: ManfaaColors.amber,
+                      ),
                     )
                   else
-                    MoneyText(line.lineTotalLaari,
-                        style: theme.textTheme.bodyMedium),
+                    MoneyText(
+                      line.lineTotalLaari,
+                      style: theme.textTheme.bodyMedium,
+                    ),
                 ],
               ),
             ),

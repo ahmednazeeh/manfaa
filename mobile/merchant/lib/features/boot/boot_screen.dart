@@ -75,20 +75,20 @@ class _BootScreenState extends ConsumerState<BootScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    // A calm splash: the coral mark over the app name on the canvas, and a
-    // quiet spinner well below — nothing competes with the brand lockup.
+    // A calm splash: the square mark on the canvas and a quiet spinner well
+    // below — nothing competes with the brand.
     return Scaffold(
       body: Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const ManfaaMark(size: 56),
-            const SizedBox(height: Gap.lg),
-            Text(
-              context.l10n.appTitle,
-              style: theme.textTheme.headlineSmall?.copyWith(
-                color: theme.colorScheme.onSurface,
-              ),
+            // The square mark, which carries the name itself — the
+            // separate title Text below it was a second wordmark stacked
+            // under the first.
+            const BrandLogo(
+              shape: BrandLogoShape.square,
+              height: 96,
+              semanticLabel: 'Manfaa',
             ),
             const SizedBox(height: Gap.huge),
             SizedBox(

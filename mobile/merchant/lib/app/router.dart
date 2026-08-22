@@ -10,6 +10,7 @@ import '../features/more/branches_screen.dart';
 import '../features/more/cashback_screen.dart';
 import '../features/more/close_store_screen.dart';
 import '../features/more/employees_screen.dart';
+import '../features/marketplace/apply_screen.dart';
 import '../features/marketplace/order_detail_screen.dart';
 import '../features/marketplace/orders_screen.dart';
 import '../features/marketplace/products_screen.dart';
@@ -255,6 +256,10 @@ final routerProvider = Provider<GoRouter>((ref) {
                 GoRoute(
                   path: 'products',
                   builder: (_, _) => const ShopProductsScreen(),
+                ),
+                GoRoute(
+                  path: 'marketplace',
+                  builder: (_, _) => const MarketplaceApplyScreen(),
                 ),
                 GoRoute(
                   path: 'employees',

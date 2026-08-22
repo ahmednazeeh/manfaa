@@ -23,9 +23,24 @@ class ManfaaApi extends ManfaaApiBase<CustomerSession> {
 
   // ------------------------------------------------------------- reads
 
-  Future<CustomerMe> me() async => CustomerMe.fromJson(
-        await getJson('/customer/me'),
-      );
+  Future<CustomerMe> me() async =>
+      CustomerMe.fromJson(await getJson('/customer/me'));
+
+  /// Correct the Thaana name the server wrote at registration.
+  ///
+  /// `null` clears it, which is how a customer says the English name is the
+  /// one they want shown.
+  Future<CustomerMe> setDhivehiName(String? nameDv) async {
+    final res = await dio.patch<Map<String, dynamic>>(
+      '/customer/profile',
+      data: {'name_dv': nameDv},
+    );
+
+    return CustomerMe.fromJson(
+      (res.data?['data'] as Map?)?.cast<String, dynamic>() ?? const {},
+    );
+  }
+
 
   Future<HomeData> home() async {
     final data = HomeData.fromJson(await getJson('/customer/home'));
@@ -33,6 +48,9 @@ class ManfaaApi extends ManfaaApiBase<CustomerSession> {
     // Keep the offline avatar cache honest: /home is the call every launch
     // makes, so a picture changed on the website lands here first.
     await session.setAvatarUrl(data.avatarUrl);
+    // Same reason: /home is the call every launch makes, so a name written
+    // (or corrected) since last launch lands here.
+    await session.setCustomerNameDv(data.customerNameDv);
 
     return data;
   }
@@ -88,12 +106,18 @@ class ManfaaApi extends ManfaaApiBase<CustomerSession> {
     );
 
     return ((data?['data'] as List?) ?? const [])
-        .map((row) => MarketBranch.fromJson((row as Map).cast<String, dynamic>()))
+        .map(
+          (row) => MarketBranch.fromJson((row as Map).cast<String, dynamic>()),
+        )
         .toList(growable: false);
   }
 
   /// One shop's shelves, optionally narrowed to an aisle.
-  Future<MarketStore> marketStore(int branchId, {String? category, int? addressId}) async {
+  Future<MarketStore> marketStore(
+    int branchId, {
+    String? category,
+    int? addressId,
+  }) async {
     final data = await run(
       () => dio.get<Map<String, dynamic>>(
         '${ApiEnv.publicBaseUrl}/market/branches/$branchId',
@@ -110,39 +134,42 @@ class ManfaaApi extends ManfaaApiBase<CustomerSession> {
   /// diff, so the floating bar, the subcart cards and the totals can never
   /// disagree after a tap.
   Future<Cart> cart({int? addressId}) async => _cart(
-        () => dio.get<Map<String, dynamic>>(
-          '/customer/cart',
-          queryParameters: {'address_id': ?addressId},
-        ),
-      );
+    () => dio.get<Map<String, dynamic>>(
+      '/customer/cart',
+      queryParameters: {'address_id': ?addressId},
+    ),
+  );
 
   Future<Cart> addToCart(int branchProductId, {int qty = 1}) async => _cart(
-        () => dio.post<Map<String, dynamic>>(
-          '/customer/cart/items',
-          data: {'branch_product_id': branchProductId, 'qty': qty},
-        ),
-      );
+    () => dio.post<Map<String, dynamic>>(
+      '/customer/cart/items',
+      data: {'branch_product_id': branchProductId, 'qty': qty},
+    ),
+  );
 
   /// Zero removes the line, exactly as the stepper does.
   Future<Cart> setCartQty(int cartItemId, int qty) async => _cart(
-        () => dio.patch<Map<String, dynamic>>(
-          '/customer/cart/items/$cartItemId',
-          data: {'qty': qty},
-        ),
-      );
+    () => dio.patch<Map<String, dynamic>>(
+      '/customer/cart/items/$cartItemId',
+      data: {'qty': qty},
+    ),
+  );
 
   Future<Cart> removeFromCart(int cartItemId) async => _cart(
-        () => dio.delete<Map<String, dynamic>>('/customer/cart/items/$cartItemId'),
-      );
+    () => dio.delete<Map<String, dynamic>>('/customer/cart/items/$cartItemId'),
+  );
 
-  Future<Cart> clearCart() async => _cart(
-        () => dio.delete<Map<String, dynamic>>('/customer/cart'),
-      );
+  Future<Cart> clearCart() async =>
+      _cart(() => dio.delete<Map<String, dynamic>>('/customer/cart'));
 
-  Future<Cart> _cart(Future<Response<Map<String, dynamic>>> Function() call) async {
+  Future<Cart> _cart(
+    Future<Response<Map<String, dynamic>>> Function() call,
+  ) async {
     final data = await run(call);
 
-    return Cart.fromJson((data?['data'] as Map?)?.cast<String, dynamic>() ?? {});
+    return Cart.fromJson(
+      (data?['data'] as Map?)?.cast<String, dynamic>() ?? {},
+    );
   }
 
   // -------------------------------------------------- orders and the wallet
@@ -164,10 +191,10 @@ class ManfaaApi extends ManfaaApiBase<CustomerSession> {
     int? addressId,
   }) async {
     final data = await run(
-      () => dio.post<Map<String, dynamic>>('/customer/orders', data: {
-        'payment_method': paymentMethod,
-        'address_id': ?addressId,
-      }),
+      () => dio.post<Map<String, dynamic>>(
+        '/customer/orders',
+        data: {'payment_method': paymentMethod, 'address_id': ?addressId},
+      ),
     );
 
     return CustomerOrder.fromJson(
@@ -201,7 +228,9 @@ class ManfaaApi extends ManfaaApiBase<CustomerSession> {
     );
 
     return ((data?['data'] as List?) ?? const [])
-        .map((row) => CustomerOrder.fromJson((row as Map).cast<String, dynamic>()))
+        .map(
+          (row) => CustomerOrder.fromJson((row as Map).cast<String, dynamic>()),
+        )
         .toList(growable: false);
   }
 
@@ -233,6 +262,54 @@ class ManfaaApi extends ManfaaApiBase<CustomerSession> {
     return ActivityPage.fromJson(data ?? const {});
   }
 
+  /// PRODUCT search across every shop.
+  ///
+  /// Public, like browse — nobody signs in to find out whether a
+  /// marketplace is worth signing in for.
+  Future<SearchResults> searchProducts({
+    String query = '',
+    String sort = 'relevance',
+    int? addressId,
+    int? storeId,
+  }) async {
+    final data = await run(
+      () => dio.get<Map<String, dynamic>>(
+        '${ApiEnv.publicBaseUrl}/market/search',
+        queryParameters: <String, dynamic>{
+          'q': query,
+          'sort': sort,
+          'address_id': ?addressId,
+          'store': ?storeId,
+        },
+      ),
+    );
+
+    return SearchResults.fromJson(data ?? const {});
+  }
+
+  /// One product, opened on its own.
+  Future<ProductDetail> product(int branchProductId) async {
+    final data = await run(
+      () => dio.get<Map<String, dynamic>>(
+        '${ApiEnv.publicBaseUrl}/market/products/$branchProductId',
+      ),
+    );
+
+    return ProductDetail.fromJson(
+      ((data?['data'] as Map?) ?? const {}).cast<String, dynamic>(),
+    );
+  }
+
+  /// Heart a shop, or un-heart it. A toggle because the client has two
+  /// states and no third thing to say.
+  Future<bool> toggleFavourite(int branchId) async {
+    final data = await run(
+      () => dio.post<Map<String, dynamic>>('/customer/favourites/$branchId'),
+    );
+
+    return ((data?['data'] as Map?)?['favourite'] as bool?) ?? false;
+  }
+
   // ------------------------------------------------------------- addresses
 
   Future<List<CustomerAddressEntry>> addresses() async {
@@ -241,8 +318,11 @@ class ManfaaApi extends ManfaaApiBase<CustomerSession> {
     );
 
     return ((data?['data'] as List?) ?? const [])
-        .map((row) =>
-            CustomerAddressEntry.fromJson((row as Map).cast<String, dynamic>()))
+        .map(
+          (row) => CustomerAddressEntry.fromJson(
+            (row as Map).cast<String, dynamic>(),
+          ),
+        )
         .toList(growable: false);
   }
 
@@ -253,7 +333,10 @@ class ManfaaApi extends ManfaaApiBase<CustomerSession> {
     final data = await run(
       () => id == null
           ? dio.post<Map<String, dynamic>>('/customer/addresses', data: body)
-          : dio.patch<Map<String, dynamic>>('/customer/addresses/$id', data: body),
+          : dio.patch<Map<String, dynamic>>(
+              '/customer/addresses/$id',
+              data: body,
+            ),
     );
 
     return CustomerAddressEntry.fromJson(
@@ -262,7 +345,9 @@ class ManfaaApi extends ManfaaApiBase<CustomerSession> {
   }
 
   Future<void> deleteAddress(int id) async {
-    await run(() => dio.delete<Map<String, dynamic>>('/customer/addresses/$id'));
+    await run(
+      () => dio.delete<Map<String, dynamic>>('/customer/addresses/$id'),
+    );
   }
 
   // ---------------------------------------------------------------- wallet
@@ -357,11 +442,7 @@ class ManfaaApi extends ManfaaApiBase<CustomerSession> {
     final data = await run(
       () => dio.post<Map<String, dynamic>>(
         '/customer/auth/token',
-        data: {
-          'phone': phone,
-          'password': password,
-          'device_name': deviceName,
-        },
+        data: {'phone': phone, 'password': password, 'device_name': deviceName},
       ),
     );
 
@@ -373,10 +454,9 @@ class ManfaaApi extends ManfaaApiBase<CustomerSession> {
   /// Ask for a code. Enumeration-safe server-side: the answer is identical
   /// whether or not the phone has an account, so the UI never learns —
   /// or leaks — anything at this step.
-  Future<void> requestOtp(String phone) async =>
-      run(() => dio.post<void>('/customer/auth/otp/request', data: {
-            'phone': phone,
-          }));
+  Future<void> requestOtp(String phone) async => run(
+    () => dio.post<void>('/customer/auth/otp/request', data: {'phone': phone}),
+  );
 
   /// Verify the code. An existing account is signed in HERE — the session
   /// is saved and the caller routes home; an unknown number gets a signup
@@ -387,11 +467,10 @@ class ManfaaApi extends ManfaaApiBase<CustomerSession> {
     required String deviceName,
   }) async {
     final data = await run(
-      () => dio.post<Map<String, dynamic>>('/customer/auth/otp/verify', data: {
-        'phone': phone,
-        'code': code,
-        'device_name': deviceName,
-      }),
+      () => dio.post<Map<String, dynamic>>(
+        '/customer/auth/otp/verify',
+        data: {'phone': phone, 'code': code, 'device_name': deviceName},
+      ),
     );
 
     final payload = (data?['data'] as Map?)?.cast<String, dynamic>() ?? {};
@@ -414,11 +493,14 @@ class ManfaaApi extends ManfaaApiBase<CustomerSession> {
     required String deviceName,
   }) async {
     final data = await run(
-      () => dio.post<Map<String, dynamic>>('/customer/auth/register', data: {
-        'signup_token': signupToken,
-        'name': name,
-        'device_name': deviceName,
-      }),
+      () => dio.post<Map<String, dynamic>>(
+        '/customer/auth/register',
+        data: {
+          'signup_token': signupToken,
+          'name': name,
+          'device_name': deviceName,
+        },
+      ),
     );
 
     await _saveSignedIn((data?['data'] as Map?)?.cast<String, dynamic>() ?? {});
@@ -474,12 +556,15 @@ class ManfaaApi extends ManfaaApiBase<CustomerSession> {
     required String otpCode,
   }) async {
     final data = await run(
-      () => dio.put<Map<String, dynamic>>('/customer/payout-account', data: {
-        'bank_name': bankName,
-        'account_no': accountNo,
-        'account_name': accountName,
-        'otp_code': otpCode,
-      }),
+      () => dio.put<Map<String, dynamic>>(
+        '/customer/payout-account',
+        data: {
+          'bank_name': bankName,
+          'account_no': accountNo,
+          'account_name': accountName,
+          'otp_code': otpCode,
+        },
+      ),
     );
 
     return PayoutAccount.fromJson(
@@ -531,19 +616,21 @@ class ManfaaApi extends ManfaaApiBase<CustomerSession> {
     required String platform,
     int? appBuild,
     String? locale,
-  }) async =>
-      run(
-        () => dio.put<void>('/customer/push-token', data: {
-          'token': token,
-          'platform': platform,
-          'app_build': ?appBuild,
-          'locale': ?locale,
-        }),
-      );
+  }) async => run(
+    () => dio.put<void>(
+      '/customer/push-token',
+      data: {
+        'token': token,
+        'platform': platform,
+        'app_build': ?appBuild,
+        'locale': ?locale,
+      },
+    ),
+  );
 
   Future<void> deletePushToken(String token) async => run(
-        () => dio.delete<void>('/customer/push-token', data: {'token': token}),
-      );
+    () => dio.delete<void>('/customer/push-token', data: {'token': token}),
+  );
 }
 
 /// Mirrors the server's Msisdn normalisation: seven local digits become the

@@ -13,13 +13,24 @@ final shopEnrolmentProvider = FutureProvider<String>((ref) {
   return ref.watch(apiProvider).marketplaceState();
 });
 
-/// Whether to draw the marketplace at all.
+/// Whether this store is an approved vendor.
 ///
-/// TWO conditions, and neither implies the other: the platform must have a
-/// marketplace, and this store must have been approved to sell on it. A
-/// greyed-out tab for a product a merchant cannot have is worse than no tab.
+/// Reads the VALUE only. "We could not ask" is not "you are not enrolled",
+/// and conflating them told an approved vendor its store does not sell —
+/// which is what happened when the permission behind this call was granted
+/// after the app had already asked once and cached the refusal.
+/// [shopEnrolmentUnknown] carries that third state.
 final sellsOnMarketplaceProvider = Provider<bool>((ref) {
   return ref.watch(shopEnrolmentProvider).valueOrNull == 'active';
+});
+
+/// True when the question has not been answered — still loading, or the
+/// answer failed. Screens must say "could not check" here, never "not
+/// enrolled".
+final shopEnrolmentUnknownProvider = Provider<bool>((ref) {
+  final state = ref.watch(shopEnrolmentProvider);
+
+  return state.isLoading || state.hasError;
 });
 
 /// Which tab of the queue is showing: new / preparing / ready / completed.

@@ -76,14 +76,26 @@ class FloatingCartBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final short = terms != null &&
+    final short =
+        terms != null &&
         !terms!.minimumMet &&
         terms!.shortfallLaari > 0 &&
         (terms!.orderMinimumLaari ?? 0) > 0;
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(Gap.md, 0, Gap.md, Gap.md),
+      // The shell's floating nav bar overlays the bottom of the screen, so
+      // a bar sitting flush against the edge disappears underneath it. This
+      // is the clearance every tab screen's scroll view already uses.
+      padding: const EdgeInsets.fromLTRB(
+        Gap.md,
+        0,
+        Gap.md,
+        Gap.navClearance - 8,
+      ),
       child: Material(
+        // Keyed so a test can measure the SLAB rather than the slab plus its
+        // clearance from the nav bar.
+        key: const Key('floating-cart-slab'),
         color: ManfaaColors.ink,
         borderRadius: BorderRadius.circular(Corner.card),
         child: InkWell(

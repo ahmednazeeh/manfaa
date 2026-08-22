@@ -24,8 +24,9 @@ final marketplaceEnabledProvider = Provider<bool>((ref) {
 /// *branch → this address*, so it is an input to almost everything here.
 final marketAddressProvider = StateProvider<int?>((_) => null);
 
-final marketBranchesProvider =
-    FutureProvider.autoDispose<List<MarketBranch>>((ref) {
+final marketBranchesProvider = FutureProvider.autoDispose<List<MarketBranch>>((
+  ref,
+) {
   return ref
       .watch(apiProvider)
       .marketBranches(addressId: ref.watch(marketAddressProvider));
@@ -34,19 +35,23 @@ final marketBranchesProvider =
 /// One shop's shelves, narrowed to an aisle.
 final marketStoreProvider = FutureProvider.autoDispose
     .family<MarketStore, ({int branchId, String? category})>((ref, args) {
-  return ref.watch(apiProvider).marketStore(
-        args.branchId,
-        category: args.category,
-        addressId: ref.watch(marketAddressProvider),
-      );
-});
+      return ref
+          .watch(apiProvider)
+          .marketStore(
+            args.branchId,
+            category: args.category,
+            addressId: ref.watch(marketAddressProvider),
+          );
+    });
 
 /// The priced cart.
 ///
 /// Not autoDispose: the floating bar reads it on every Market surface, and
 /// re-fetching the basket each time a screen is pushed would flicker the one
 /// number a shopper is watching.
-final cartProvider = AsyncNotifierProvider<CartNotifier, Cart>(CartNotifier.new);
+final cartProvider = AsyncNotifierProvider<CartNotifier, Cart>(
+  CartNotifier.new,
+);
 
 class CartNotifier extends AsyncNotifier<Cart> {
   @override

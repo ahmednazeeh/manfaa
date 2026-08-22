@@ -28,10 +28,20 @@ String formatRufiyaa(int laari) {
   return '$sign$buffer.$cents';
 }
 
+/// The gap between the figure and its currency word is a NON-BREAKING space.
+///
+/// They are one typographic unit and must never be split across lines. With an
+/// ordinary space they were: in Dhivehi the figure sat on one line and
+/// "ރުފިޔާ" dropped to the next inside cards that had room for both (owner,
+/// 2026-08-21), and English "MVR 1,284.50" can break the same way. This holds
+/// wherever the string goes -- standalone in [MoneyText] and interpolated into
+/// a sentence alike -- which no widget-level `softWrap: false` would.
+const String moneyGap = '\u00A0';
+
 String formatMoney(int laari, {required bool dhivehi}) {
   final amount = formatRufiyaa(laari);
 
-  return dhivehi ? '$amount ރުފިޔާ' : 'MVR $amount';
+  return dhivehi ? '$amount$moneyGapރުފިޔާ' : 'MVR$moneyGap$amount';
 }
 
 /// EXACT typed-MVR → integer laari, or null. The till's amount fields parse
@@ -40,7 +50,10 @@ String formatMoney(int laari, {required bool dhivehi}) {
 /// thousands commas and at most two decimals; anything else is null, and the
 /// caller renders a validation hint rather than guessing.
 int? parseMvrToLaari(String input) {
-  final cleaned = input.trim().replaceAll(',', '');
+  // Strip the non-breaking space too: a figure copied back out of the UI
+  // carries the one formatMoney puts in, and it must still parse.
+  final cleaned =
+      input.trim().replaceAll(',', '').replaceAll(moneyGap, '').replaceAll(' ', '');
   if (!RegExp(r'^\d+(\.\d{1,2})?$').hasMatch(cleaned)) return null;
 
   final parts = cleaned.split('.');

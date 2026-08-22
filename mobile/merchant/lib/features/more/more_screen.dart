@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:manfaa_ui/manfaa_ui.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../marketplace/marketplace_providers.dart';
 import '../../app/app.dart';
 import '../../app/providers.dart';
 import '../../l10n/gen/app_localizations.dart';
@@ -79,6 +80,24 @@ class MoreScreen extends ConsumerWidget {
           l10n.menuCashback,
           '/more/cashback',
         ),
+      // The shelf. Shown wherever the platform HAS a marketplace, not only
+      // once this store sells on it — a shopkeeper who cannot find the
+      // screen cannot find out what it is for either.
+      if (session.can('marketplace.manage') &&
+          ref.watch(shopEnrolmentProvider).hasValue) ...[
+        _MenuRow(
+          Icons.storefront_outlined,
+          ManfaaTint.violet,
+          'Marketplace',
+          '/more/marketplace',
+        ),
+        _MenuRow(
+          Icons.inventory_2_outlined,
+          ManfaaTint.violet,
+          'Products',
+          '/more/products',
+        ),
+      ],
       if (session.can('promotions.view'))
         _MenuRow(
           Icons.campaign_outlined,

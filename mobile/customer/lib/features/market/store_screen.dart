@@ -79,7 +79,8 @@ class _SearchBar extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final cart = ref.watch(cartProvider).valueOrNull;
-    final count = cart?.subcarts.fold<int>(
+    final count =
+        cart?.subcarts.fold<int>(
           0,
           (sum, row) => sum + row.items.fold<int>(0, (n, i) => n + i.qty),
         ) ??
@@ -99,9 +100,7 @@ class _SearchBar extends ConsumerWidget {
               onChanged: onChanged,
               decoration: InputDecoration(
                 prefixIcon: const Icon(Icons.search_rounded),
-                hintText: storeName == null
-                    ? 'Search'
-                    : 'Search in $storeName',
+                hintText: storeName == null ? 'Search' : 'Search in $storeName',
               ),
             ),
           ),
@@ -239,14 +238,21 @@ class _StoreHeader extends StatelessWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              CircleAvatar(
-                radius: 28,
-                backgroundColor: ManfaaColors.greenSoft,
-                child: Text(
-                  store.storeName.isEmpty
-                      ? '?'
-                      : store.storeName.characters.first.toUpperCase(),
-                  style: theme.textTheme.titleLarge,
+              // The shop's real mark where it has one. The lettered circle
+              // is a fallback, not the design.
+              ClipRRect(
+                borderRadius: BorderRadius.circular(Corner.tile),
+                child: SizedBox(
+                  width: 56,
+                  height: 56,
+                  child: store.logoUrl == null
+                      ? _LetterMark(name: store.storeName)
+                      : Image.network(
+                          store.logoUrl!,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, _, _) =>
+                              _LetterMark(name: store.storeName),
+                        ),
                 ),
               ),
               const SizedBox(width: Gap.md),
@@ -257,8 +263,9 @@ class _StoreHeader extends StatelessWidget {
                     Text(store.storeName, style: theme.textTheme.titleLarge),
                     Text(
                       store.branchName,
-                      style: theme.textTheme.bodySmall
-                          ?.copyWith(color: ManfaaColors.textMuted),
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: ManfaaColors.textMuted,
+                      ),
                     ),
                     const SizedBox(height: Gap.sm),
                     Wrap(
@@ -290,8 +297,9 @@ class _StoreHeader extends StatelessWidget {
                     if (terms.orderMinimumLaari != null)
                       Text(
                         'Min ${formatRufiyaa(terms.orderMinimumLaari!)}',
-                        style: theme.textTheme.bodySmall
-                            ?.copyWith(color: ManfaaColors.textMuted),
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: ManfaaColors.textMuted,
+                        ),
                       ),
                   ],
                 ),
@@ -313,8 +321,11 @@ class _StoreHeader extends StatelessWidget {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(Icons.savings_outlined,
-                      size: 18, color: ManfaaColors.green),
+                  const Icon(
+                    Icons.savings_outlined,
+                    size: 18,
+                    color: ManfaaColors.green,
+                  ),
                   const SizedBox(width: Gap.sm),
                   Text.rich(
                     TextSpan(
@@ -411,8 +422,11 @@ class ProductCard extends ConsumerWidget {
               children: [
                 Center(
                   child: product.imageUrl == null
-                      ? const Icon(Icons.inventory_2_outlined,
-                          size: 40, color: ManfaaColors.textFaint)
+                      ? const Icon(
+                          Icons.inventory_2_outlined,
+                          size: 40,
+                          color: ManfaaColors.textFaint,
+                        )
                       : Image.network(
                           product.imageUrl!,
                           fit: BoxFit.contain,
@@ -481,8 +495,8 @@ class ProductCard extends ConsumerWidget {
                   ),
                   onPressed: product.inStock
                       ? () => ref
-                          .read(cartProvider.notifier)
-                          .add(product.branchProductId)
+                            .read(cartProvider.notifier)
+                            .add(product.branchProductId)
                       : null,
                   child: Text(product.inStock ? 'Add' : 'Out'),
                 )
@@ -524,6 +538,26 @@ class _Stepper extends ConsumerWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// What a shop shows before it has uploaded a logo.
+class _LetterMark extends StatelessWidget {
+  const _LetterMark({required this.name});
+
+  final String name;
+
+  @override
+  Widget build(BuildContext context) {
+    return ColoredBox(
+      color: ManfaaColors.greenSoft,
+      child: Center(
+        child: Text(
+          name.isEmpty ? '?' : name.characters.first.toUpperCase(),
+          style: Theme.of(context).textTheme.titleLarge,
+        ),
+      ),
     );
   }
 }

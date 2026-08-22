@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:manfaa_core/manfaa_core.dart';
 import 'package:manfaa_ui/manfaa_ui.dart';
 
 import '../features/push/push_registrar.dart';
@@ -33,29 +34,39 @@ class ManfaaApp extends ConsumerWidget {
       ..wireTapRouting(router)
       ..wireForeground(rootMessengerKey);
 
-    return MaterialApp.router(
-      title: 'Manfaa',
-      scaffoldMessengerKey: rootMessengerKey,
-      routerConfig: router,
-      theme: manfaaTheme(brightness: Brightness.light, dhivehi: dhivehi),
-      darkTheme: manfaaTheme(brightness: Brightness.dark, dhivehi: dhivehi),
-      // Light-first (owner preference), dark shipped from day one, and the
-      // choice is the USER'S — persisted, not dictated by the phone. Default
-      // is light so a dark device no longer forces the dark look on anyone.
-      themeMode: ref.watch(themeModeProvider),
-      locale: locale,
-      supportedLocales: const [Locale('en'), Locale('dv')],
-      localizationsDelegates: const [
-        AppLocalizations.delegate,
-        // Order matters: for dv these fallbacks win (Flutter ships no dv
-        // framework strings, and the widgets delegate is what turns the
-        // layout RTL); for en they refuse and the Global delegates serve.
-        ...dvFallbackDelegates,
-        GlobalMaterialLocalizations.delegate,
-        GlobalCupertinoLocalizations.delegate,
-        GlobalWidgetsLocalizations.delegate,
-      ],
-      debugShowCheckedModeBanner: false,
+    // A pocketed phone never restarts, so anything read once at launch is
+    // as old as the process. On resume: re-read the brand marks if their
+    // day is up, and re-read /config so a feature the platform switched on
+    // (the marketplace, a build gate) arrives without the app being killed.
+    return OnAppResume(
+      onResume: () {
+        BrandAssetCache.instance?.refreshIfStale();
+        ref.invalidate(configProvider);
+      },
+      child: MaterialApp.router(
+        title: 'Manfaa',
+        scaffoldMessengerKey: rootMessengerKey,
+        routerConfig: router,
+        theme: manfaaTheme(brightness: Brightness.light, dhivehi: dhivehi),
+        darkTheme: manfaaTheme(brightness: Brightness.dark, dhivehi: dhivehi),
+        // Light-first (owner preference), dark shipped from day one, and the
+        // choice is the USER'S — persisted, not dictated by the phone. Default
+        // is light so a dark device no longer forces the dark look on anyone.
+        themeMode: ref.watch(themeModeProvider),
+        locale: locale,
+        supportedLocales: const [Locale('en'), Locale('dv')],
+        localizationsDelegates: const [
+          AppLocalizations.delegate,
+          // Order matters: for dv these fallbacks win (Flutter ships no dv
+          // framework strings, and the widgets delegate is what turns the
+          // layout RTL); for en they refuse and the Global delegates serve.
+          ...dvFallbackDelegates,
+          GlobalMaterialLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+        ],
+        debugShowCheckedModeBanner: false,
+      ),
     );
   }
 }

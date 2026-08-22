@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:manfaa_ui/manfaa_ui.dart';
 import 'package:manfaa_core/manfaa_core.dart';
 import 'package:manfaa_merchant/app/app.dart';
 import 'package:manfaa_merchant/app/providers.dart';
@@ -276,8 +277,8 @@ void main() {
   // ---- MR7: hardware keyboard / barcode gun ------------------------------
 
   testWidgets(
-    'scanner-gun Enter walks the till: code Enter lands focus on the '
-    'invoice field, and Enter on the completed form submits',
+    'scanner-gun Enter walks the till from field to field, and NEVER '
+    'finalises the credit',
     (tester) async {
       final api = await pumpTill(tester);
 
@@ -302,14 +303,56 @@ void main() {
       await tester.pumpAndSettle();
       expect(api.credits, isEmpty);
 
-      // Completed (eligible filled), Enter submits — no tap anywhere.
+      // And a COMPLETE form stays quiet too. This is the reversal of MR7
+      // (owner report 2026-08-20): on a touch keyboard the return key is the
+      // tick in the corner, where a thumb goes to dismiss the keyboard, and
+      // cashiers were crediting customers by accident mid-entry.
       await tester.enterText(field(2), '250');
       await tester.pumpAndSettle();
       await tester.testTextInput.receiveAction(TextInputAction.done);
       await tester.pumpAndSettle();
+      expect(
+        api.credits,
+        isEmpty,
+        reason: 'the keyboard must never spend money',
+      );
+
+      // It takes the deliberate press.
+      await tester.tap(find.text('Credit now').last);
+      await tester.pumpAndSettle();
       expect(api.credits, hasLength(1));
       expect(api.credits.single['invoice_no'], 'INV-77');
       expect(find.text('Cashback recorded'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'the return key walks invoice -> eligible -> full sale, then just puts '
+    'the keyboard away',
+    (tester) async {
+      await pumpTill(tester);
+      await enterCode(tester, '374230');
+      await tester.pumpAndSettle();
+
+      // Enter off the code lands on invoice.
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pumpAndSettle();
+      expect(tester.widget<TextField>(field(1)).focusNode?.hasFocus, isTrue);
+
+      // invoice -> eligible
+      await tester.testTextInput.receiveAction(TextInputAction.next);
+      await tester.pumpAndSettle();
+      expect(tester.widget<TextField>(field(2)).focusNode?.hasFocus, isTrue);
+
+      // eligible -> full sale
+      await tester.testTextInput.receiveAction(TextInputAction.next);
+      await tester.pumpAndSettle();
+      expect(tester.widget<TextField>(field(3)).focusNode?.hasFocus, isTrue);
+
+      // full sale -> nothing focused, keyboard dismissed
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pumpAndSettle();
+      expect(tester.widget<TextField>(field(3)).focusNode?.hasFocus, isFalse);
     },
   );
 
@@ -390,7 +433,12 @@ void main() {
 
     // A RenderFlex overflow throws in tests — no exception IS the assertion.
     expect(tester.takeException(), isNull);
-    expect(find.text('Manfaa'), findsWidgets);
+
+    // The lockup is still drawn. "Manfaa" is the uploaded landscape mark
+    // now rather than a Text, so the image is what proves it, and
+    // "Merchant" is the one word of it that is still type.
+    expect(find.byType(BrandLogo), findsWidgets);
+    expect(find.text('Merchant'), findsWidgets);
   });
 
   testWidgets(

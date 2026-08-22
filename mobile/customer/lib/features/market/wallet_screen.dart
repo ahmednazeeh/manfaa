@@ -60,27 +60,33 @@ class _Body extends ConsumerWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(l10n.walletBalance,
-                  style: theme.textTheme.bodySmall?.copyWith(color: muted)),
+              Text(
+                l10n.walletBalance,
+                style: theme.textTheme.bodySmall?.copyWith(color: muted),
+              ),
               const SizedBox(height: Gap.xs),
               MoneyText(
                 wallet.balanceLaari,
-                style: theme.textTheme.displaySmall
-                    ?.copyWith(fontWeight: FontWeight.w800),
+                style: theme.textTheme.displaySmall?.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
               ),
               const SizedBox(height: Gap.md),
               if (!wallet.hasBankAccount)
                 Text(
                   l10n.walletNoBank,
-                  style: theme.textTheme.bodySmall
-                      ?.copyWith(color: ManfaaColors.amber),
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: ManfaaColors.amber,
+                  ),
                 )
               else if (!wallet.canWithdraw)
                 Text(
-                  l10n.walletMinimum(formatMoney(
-                    wallet.minimumWithdrawalLaari,
-                    dhivehi: dhivehi,
-                  )),
+                  l10n.walletMinimum(
+                    formatMoney(
+                      wallet.minimumWithdrawalLaari,
+                      dhivehi: dhivehi,
+                    ),
+                  ),
                   style: theme.textTheme.bodySmall?.copyWith(color: muted),
                 )
               else
@@ -119,14 +125,17 @@ class _Body extends ConsumerWidget {
                         if (withdrawal.bankReference != null)
                           Text(
                             withdrawal.bankReference!,
-                            style: theme.textTheme.bodySmall
-                                ?.copyWith(color: muted),
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: muted,
+                            ),
                           ),
                       ],
                     ),
                   ),
-                  MoneyText(withdrawal.amountLaari,
-                      style: theme.textTheme.bodyMedium),
+                  MoneyText(
+                    withdrawal.amountLaari,
+                    style: theme.textTheme.bodyMedium,
+                  ),
                 ],
               ),
             ),
@@ -213,13 +222,15 @@ class _Body extends ConsumerWidget {
     try {
       await ref.read(apiProvider).requestWithdrawal(wallet.balanceLaari);
       ref.invalidate(walletProvider);
-      messenger.showSnackBar(
-        SnackBar(content: Text(l10n.withdrawalRequested)),
-      );
+      messenger.showSnackBar(SnackBar(content: Text(l10n.withdrawalRequested)));
     } catch (e) {
-      messenger.showSnackBar(SnackBar(
-        content: Text(e is MobileApiException ? e.message : l10n.errorGeneric),
-      ));
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            e is MobileApiException ? e.message : l10n.errorGeneric,
+          ),
+        ),
+      );
     }
   }
 }

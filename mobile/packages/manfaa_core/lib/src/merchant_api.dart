@@ -1393,11 +1393,51 @@ class MerchantApi extends ManfaaApiBase<MerchantSession> {
   /// Read before the Orders tab is drawn: `not_enrolled` is a perfectly
   /// ordinary answer and means the tab has no business existing.
   Future<String> marketplaceState() async {
-    final data = await getJson('/merchant/marketplace/enrolment');
+    // getJson already unwraps `data`, so this IS the profile row.
+    final row = await getJson('/merchant/marketplace/enrolment');
 
-    final row = (data['data'] as Map?)?.cast<String, dynamic>();
+    return (row['state'] as String?) ?? 'not_enrolled';
+  }
 
-    return (row?['state'] as String?) ?? 'not_enrolled';
+  /// Apply to sell on the marketplace.
+  ///
+  /// The application itself is four answers and belongs on a phone; the KYB
+  /// papers are photographs, which a phone is BETTER at than a desktop.
+  Future<String> applyToMarketplace({
+    required String businessType,
+    required String fulfilment,
+    int? prepTimeMin,
+    int? prepTimeMax,
+  }) async {
+    final data = await run(
+      () => dio.post<Map<String, dynamic>>(
+        '/merchant/marketplace/enrolment',
+        data: <String, dynamic>{
+          'business_type': businessType,
+          'fulfilment': fulfilment,
+          'prep_time_min': ?prepTimeMin,
+          'prep_time_max': ?prepTimeMax,
+        },
+      ),
+    );
+
+    return ((data?['data'] as Map?)?['state'] as String?) ?? 'draft';
+  }
+
+  /// Hand the application in. Answers the MISSING papers rather than a bare
+  /// refusal, so a merchant knows exactly what is left.
+  Future<List<String>> submitMarketplaceApplication() async {
+    try {
+      await run(
+        () => dio.post<Map<String, dynamic>>('/merchant/marketplace/submit'),
+      );
+
+      return const [];
+    } on MobileApiException catch (e) {
+      if (e.status == 422) return e.missingRequirements;
+
+      rethrow;
+    }
   }
 
   /// One tab of the queue, plus the two tiles above it.
@@ -1417,10 +1457,9 @@ class MerchantApi extends ManfaaApiBase<MerchantSession> {
   }
 
   Future<ShopOrder> shopOrder(int suborderId) async {
-    final data = await getJson('/merchant/marketplace/orders/$suborderId');
-
+    // Already unwrapped by getJson.
     return ShopOrder.fromJson(
-      ((data['data'] as Map?) ?? const {}).cast<String, dynamic>(),
+      await getJson('/merchant/marketplace/orders/$suborderId'),
     );
   }
 
@@ -1472,9 +1511,15 @@ class MerchantApi extends ManfaaApiBase<MerchantSession> {
   /// The shelf. Reading is the whole catalogue; editing from the app is
   /// deliberately narrow (see [updateShopListing]).
   Future<List<ShopProduct>> shopProducts() async {
-    final data = await getJson('/merchant/marketplace/products');
+    // NOT getJson: that helper unwraps `data` and casts it to a MAP, which
+    // throws outright on a list payload — and this endpoint returns a list.
+    // That single wrong helper was the whole of the Products screen's
+    // failure, and it failed before any request result could explain itself.
+    final body = await run(
+      () => dio.get<Map<String, dynamic>>('/merchant/marketplace/products'),
+    );
 
-    return ((data['data'] as List?) ?? const [])
+    return (((body ?? const {})['data'] as List?) ?? const [])
         .whereType<Map>()
         .map((row) => ShopProduct.fromJson(row.cast<String, dynamic>()))
         .toList(growable: false);

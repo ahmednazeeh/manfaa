@@ -14,10 +14,10 @@ import 'package:manfaa_merchant/features/push/push_registrar.dart';
 ///    surprising mid-credit.
 /// 2. The registrar's guards: every entry point must no-op (never throw)
 ///    where Firebase does not exist — which is every test run, every desktop
-///    dev run, and conceptually the shipped PLACEHOLDER-config build whose
-///    getToken() fails the same guarded way.
-/// 3. The app boots green with the placeholders and the full wiring in
-///    app.dart — push failing must never touch the till's real work.
+///    dev run, and any device that refuses the permission or cannot reach
+///    FCM — getToken() fails the same guarded way.
+/// 3. The app boots green with the full wiring in app.dart — push failing
+///    must never touch the till's real work.
 void main() {
   group('routeForPushData', () {
     test('every deadline moment lands on the Settlements tab', () {

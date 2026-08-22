@@ -33,16 +33,15 @@ class PagedState<T> {
     bool? hasMore,
     bool? loaded,
     bool clearError = false,
-  }) =>
-      PagedState(
-        items: items ?? this.items,
-        loading: loading ?? this.loading,
-        loadingMore: loadingMore ?? this.loadingMore,
-        error: clearError ? null : (error ?? this.error),
-        nextCursor: nextCursor ?? this.nextCursor,
-        hasMore: hasMore ?? this.hasMore,
-        loaded: loaded ?? this.loaded,
-      );
+  }) => PagedState(
+    items: items ?? this.items,
+    loading: loading ?? this.loading,
+    loadingMore: loadingMore ?? this.loadingMore,
+    error: clearError ? null : (error ?? this.error),
+    nextCursor: nextCursor ?? this.nextCursor,
+    hasMore: hasMore ?? this.hasMore,
+    loaded: loaded ?? this.loaded,
+  );
 }
 
 class Pager<T> extends StateNotifier<PagedState<T>> {

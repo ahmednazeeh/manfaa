@@ -39,8 +39,9 @@ class _BootScreenState extends ConsumerState<BootScreen> {
       final config = await ref.read(configProvider.future);
       final gate = resolveGate(
         config,
-        platform:
-            defaultTargetPlatform == TargetPlatform.iOS ? 'ios' : 'android',
+        platform: defaultTargetPlatform == TargetPlatform.iOS
+            ? 'ios'
+            : 'android',
         build: appBuildNumber,
       );
 
@@ -61,20 +62,20 @@ class _BootScreenState extends ConsumerState<BootScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    // A calm splash: the coral mark over the app name on the canvas, and a
-    // quiet spinner well below — nothing competes with the brand lockup.
+    // A calm splash: the square mark on the canvas and a quiet spinner well
+    // below — nothing competes with the brand.
     return Scaffold(
       body: Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const ManfaaMark(size: 56),
-            const SizedBox(height: Gap.lg),
-            Text(
-              context.l10n.appTitle,
-              style: theme.textTheme.headlineSmall?.copyWith(
-                color: theme.colorScheme.onSurface,
-              ),
+            // The square mark, which carries the name itself — the
+            // separate title Text below it was a second wordmark stacked
+            // under the first.
+            const BrandLogo(
+              shape: BrandLogoShape.square,
+              height: 96,
+              semanticLabel: 'Manfaa',
             ),
             const SizedBox(height: Gap.huge),
             SizedBox(
@@ -113,27 +114,39 @@ class UpdateRequiredScreen extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             const Center(
-              child: IconTile(Icons.system_update_alt_rounded,
-                  tint: ManfaaTint.coral, size: 64, iconSize: 30),
+              child: IconTile(
+                Icons.system_update_alt_rounded,
+                tint: ManfaaTint.coral,
+                size: 64,
+                iconSize: 30,
+              ),
             ),
             const SizedBox(height: Gap.xxl),
-            Text(l10n.updateRequiredTitle,
-                style: theme.textTheme.headlineMedium,
-                textAlign: TextAlign.center),
+            Text(
+              l10n.updateRequiredTitle,
+              style: theme.textTheme.headlineMedium,
+              textAlign: TextAlign.center,
+            ),
             const SizedBox(height: Gap.md),
-            Text(l10n.updateRequiredBody,
-                style: theme.textTheme.bodyLarge
-                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-                textAlign: TextAlign.center),
+            Text(
+              l10n.updateRequiredBody,
+              style: theme.textTheme.bodyLarge?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+              textAlign: TextAlign.center,
+            ),
             if (storeUrl.isNotEmpty) ...[
               const SizedBox(height: Gap.xxl),
               // url_launcher lands with the release round; until then the
               // store link is at least visible and copyable. Links wear the
               // violet accent.
-              SelectableText(storeUrl,
-                  style: theme.textTheme.bodyMedium
-                      ?.copyWith(color: ManfaaColors.violet),
-                  textAlign: TextAlign.center),
+              SelectableText(
+                storeUrl,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: ManfaaColors.violet,
+                ),
+                textAlign: TextAlign.center,
+              ),
             ],
           ],
         ),

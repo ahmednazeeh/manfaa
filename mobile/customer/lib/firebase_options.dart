@@ -10,12 +10,12 @@ import 'package:flutter/foundation.dart'
 
 abstract final class DefaultFirebaseOptions {
   static FirebaseOptions get currentPlatform => switch (defaultTargetPlatform) {
-        TargetPlatform.android => android,
-        TargetPlatform.iOS => ios,
-        _ => throw UnsupportedError(
-            'Firebase is configured for Android and iOS only.',
-          ),
-      };
+    TargetPlatform.android => android,
+    TargetPlatform.iOS => ios,
+    _ => throw UnsupportedError(
+      'Firebase is configured for Android and iOS only.',
+    ),
+  };
 
   static const android = FirebaseOptions(
     apiKey: 'AIzaSyBhxd62YIEyOLUopyOst4p4EZ8Q-Ojjt1k',

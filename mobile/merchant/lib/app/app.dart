@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:manfaa_core/manfaa_core.dart';
 import 'package:manfaa_ui/manfaa_ui.dart';
 
 import '../features/push/push_registrar.dart';
@@ -32,7 +33,16 @@ class MerchantApp extends ConsumerWidget {
       ..wireTapRouting(router)
       ..wireForeground(rootMessengerKey, router);
 
-    return MaterialApp.router(
+    // A pocketed phone never restarts, so anything read once at launch is
+    // as old as the process. On resume: re-read the brand marks if their
+    // day is up, and re-read /config so a feature the platform switched on
+    // (the marketplace, a build gate) arrives without the app being killed.
+    return OnAppResume(
+      onResume: () {
+        BrandAssetCache.instance?.refreshIfStale();
+        ref.invalidate(configProvider);
+      },
+      child: MaterialApp.router(
       title: 'Manfaa Merchant',
       scaffoldMessengerKey: rootMessengerKey,
       routerConfig: router,
@@ -54,6 +64,7 @@ class MerchantApp extends ConsumerWidget {
         GlobalWidgetsLocalizations.delegate,
       ],
       debugShowCheckedModeBanner: false,
+      ),
     );
   }
 }

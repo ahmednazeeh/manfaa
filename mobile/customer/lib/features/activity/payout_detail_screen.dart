@@ -11,10 +11,10 @@ import 'activity_screen.dart' show formatDayMonth;
 /// (reference, masked account) and the purchases it covered. The total is
 /// the sum of the lines — the lines are the evidence, the amount is the
 /// payment.
-final payoutDetailProvider =
-    FutureProvider.autoDispose.family<PayoutDetail, int>(
-  (ref, id) => ref.watch(apiProvider).payoutDetail(id),
-);
+final payoutDetailProvider = FutureProvider.autoDispose
+    .family<PayoutDetail, int>(
+      (ref, id) => ref.watch(apiProvider).payoutDetail(id),
+    );
 
 class PayoutDetailScreen extends ConsumerWidget {
   const PayoutDetailScreen({super.key, required this.payoutId});
@@ -102,40 +102,52 @@ class _Detail extends StatelessWidget {
               const SizedBox(height: Gap.lg),
               MoneyText(
                 payout.amountLaari,
-                style: theme.textTheme.displaySmall
-                    ?.copyWith(color: theme.colorScheme.onSurface),
+                style: theme.textTheme.displaySmall?.copyWith(
+                  color: theme.colorScheme.onSurface,
+                ),
               ),
               const SizedBox(height: Gap.lg),
               Divider(color: theme.colorScheme.outlineVariant),
               const SizedBox(height: Gap.lg),
-              _row(theme, l10n.payoutPeriodLabel,
-                  '${formatDayMonth(payout.periodStart)} – ${formatDayMonth(payout.periodEnd)}'),
+              _row(
+                theme,
+                l10n.payoutPeriodLabel,
+                '${formatDayMonth(payout.periodStart, context)} – ${formatDayMonth(payout.periodEnd, context)}',
+              ),
               if (payout.reference != null)
                 _row(theme, l10n.payoutReferenceLabel, payout.reference!),
               if (payout.accountMasked != null)
-                _row(theme, l10n.payoutAccountLabel,
-                    '${payout.bank} ${payout.accountMasked}'),
+                _row(
+                  theme,
+                  l10n.payoutAccountLabel,
+                  '${payout.bank} ${payout.accountMasked}',
+                ),
               if (payout.paidAt != null)
-                _row(theme, l10n.payoutPaidAtLabel,
-                    formatDayMonth(payout.paidAt!)),
+                _row(
+                  theme,
+                  l10n.payoutPaidAtLabel,
+                  formatDayMonth(payout.paidAt!, context),
+                ),
             ],
           ),
         ),
         if (payout.status == 'failed') ...[
           const SizedBox(height: Gap.lg),
-          Builder(builder: (context) {
-            final tone =
-                toneSurface(ToneSurface.attention, theme.brightness);
-            return ManfaaCard(
-              color: tone.background,
-              padding: const EdgeInsets.all(Gap.lg),
-              child: Text(
-                l10n.payoutFailedDetail,
-                style: theme.textTheme.bodyMedium
-                    ?.copyWith(color: tone.foreground),
-              ),
-            );
-          }),
+          Builder(
+            builder: (context) {
+              final tone = toneSurface(ToneSurface.attention, theme.brightness);
+              return ManfaaCard(
+                color: tone.background,
+                padding: const EdgeInsets.all(Gap.lg),
+                child: Text(
+                  l10n.payoutFailedDetail,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: tone.foreground,
+                  ),
+                ),
+              );
+            },
+          ),
         ],
         const SizedBox(height: Gap.xl),
         SectionHeader(l10n.payoutCovered(detail.covered.length)),
@@ -146,15 +158,20 @@ class _Detail extends StatelessWidget {
             children: [
               for (final (index, purchase) in detail.covered.indexed) ...[
                 if (index > 0)
-                  Divider(
-                      height: 1, color: theme.colorScheme.outlineVariant),
+                  Divider(height: 1, color: theme.colorScheme.outlineVariant),
                 Padding(
                   padding: const EdgeInsets.symmetric(
-                      horizontal: Gap.lg, vertical: Gap.md),
+                    horizontal: Gap.lg,
+                    vertical: Gap.md,
+                  ),
                   child: Row(
                     children: [
-                      const IconTile(Icons.storefront_rounded,
-                          tint: ManfaaTint.green, size: 40, iconSize: 20),
+                      const IconTile(
+                        Icons.storefront_rounded,
+                        tint: ManfaaTint.green,
+                        size: 40,
+                        iconSize: 20,
+                      ),
                       const SizedBox(width: Gap.md),
                       Expanded(
                         child: Column(
@@ -167,9 +184,10 @@ class _Detail extends StatelessWidget {
                             ),
                             const SizedBox(height: 2),
                             Text(
-                              formatDayMonth(purchase.occurredAt),
+                              formatDayMonth(purchase.occurredAt, context),
                               style: theme.textTheme.bodySmall?.copyWith(
-                                  color: theme.colorScheme.onSurfaceVariant),
+                                color: theme.colorScheme.onSurfaceVariant,
+                              ),
                             ),
                           ],
                         ),
@@ -177,8 +195,9 @@ class _Detail extends StatelessWidget {
                       const SizedBox(width: Gap.sm),
                       MoneyText(
                         purchase.cashbackLaari,
-                        style: theme.textTheme.titleSmall
-                            ?.copyWith(color: ManfaaColors.confirmedGreen),
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          color: ManfaaColors.confirmedGreen,
+                        ),
                       ),
                     ],
                   ),
@@ -192,27 +211,27 @@ class _Detail extends StatelessWidget {
   }
 
   Widget _row(ThemeData theme, String label, String value) => Padding(
-        padding: const EdgeInsets.only(bottom: Gap.sm),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            SizedBox(
-              width: 120,
-              child: Text(
-                label,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
-              ),
+    padding: const EdgeInsets.only(bottom: Gap.sm),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: 120,
+          child: Text(
+            label,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
             ),
-            Expanded(
-              child: Text(
-                value,
-                textDirection: TextDirection.ltr,
-                style: theme.textTheme.bodyMedium,
-              ),
-            ),
-          ],
+          ),
         ),
-      );
+        Expanded(
+          child: Text(
+            value,
+            textDirection: TextDirection.ltr,
+            style: theme.textTheme.bodyMedium,
+          ),
+        ),
+      ],
+    ),
+  );
 }

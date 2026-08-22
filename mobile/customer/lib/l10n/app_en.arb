@@ -32,17 +32,11 @@
   "discoverOffersBody": "Explore nearby and featured cashback merchants.",
   "badgeNew": "New",
   "availableCashback": "Available cashback",
-  "confirmedHint": "Confirmed and ready for your next payout.",
-  "pendingLine": "{amount} pending — becomes available once the store confirms.",
-  "@pendingLine": {
-    "placeholders": {
-      "amount": {
-        "type": "String"
-      }
-    }
-  },
+  "confirmedHint": "Confirmed and ready for payout",
+  "pendingLabel": "Pending",
+  "pendingHint": "Waiting for store confirmation",
   "nextPayout": "Next payout",
-  "minimumPayoutNote": "Payouts start at {amount}. Anything below carries over.",
+  "minimumPayoutNote": "Minimum payout {amount} • Smaller balances carry over",
   "@minimumPayoutNote": {
     "placeholders": {
       "amount": {
@@ -487,5 +481,13 @@
   "walletEmpty": "Nothing in your wallet yet. Refunds appear here straight away.",
   "walletHistory": "Wallet history",
   "walletWithdrawals": "Withdrawals",
-  "withdrawalRequested": "Withdrawal requested. We will transfer it to your bank."
+  "withdrawalRequested": "Withdrawal requested. We will transfer it to your bank.",
+  "dhivehiNameTitle": "Your name in Dhivehi",
+  "dhivehiNameEmpty": "Not set — tap to add",
+  "dhivehiNameHint": "This is how your name is shown when the app is in Dhivehi. We wrote it from your English name, so correct it if it is not how you spell it.",
+  "dhivehiNameLabel": "Name in Thaana",
+  "dhivehiNameInvalid": "Write the name in Thaana.",
+  "dhivehiNameSaved": "Saved",
+  "dhivehiNameClear": "Use my English name",
+  "dhivehiNameSave": "Save name"
 }

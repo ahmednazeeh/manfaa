@@ -210,23 +210,81 @@ class EmptyNote extends StatelessWidget {
   }
 }
 
+/// An error a shopkeeper — or whoever they ring — can actually act on.
+///
+/// This used to render one sentence: "Something went wrong. Try again."
+/// That is worse than useless, because it hides the one fact that would
+/// resolve the call. A refused permission, an unreachable server and a
+/// switched-off marketplace all looked identical, and the only way to tell
+/// them apart was to guess.
 class ErrorNote extends StatelessWidget {
-  const ErrorNote({super.key, required this.error});
+  const ErrorNote({super.key, required this.error, this.onRetry});
 
   final Object error;
+  final VoidCallback? onRetry;
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final api = error is MobileApiException ? error as MobileApiException : null;
+
     return ManfaaCard(
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.error_outline_rounded, color: ManfaaColors.coral),
-          const SizedBox(width: Gap.md),
-          Expanded(child: Text(messageFor(error))),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Icon(Icons.error_outline_rounded,
+                  color: ManfaaColors.coral),
+              const SizedBox(width: Gap.md),
+              Expanded(
+                child: Text(
+                  _headline(api),
+                  style: theme.textTheme.titleSmall,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: Gap.sm),
+          Text(
+            messageFor(error),
+            style: theme.textTheme.bodyMedium
+                ?.copyWith(color: ManfaaColors.textMuted),
+          ),
+          const SizedBox(height: Gap.sm),
+          // The detail line. Ugly on purpose — it is meant to be read out
+          // over a phone call, not admired.
+          SelectableText(
+            _detail(api, error),
+            style: theme.textTheme.bodySmall
+                ?.copyWith(color: ManfaaColors.textFaint),
+          ),
+          if (onRetry != null) ...[
+            const SizedBox(height: Gap.md),
+            OutlinedButton.icon(
+              onPressed: onRetry,
+              icon: const Icon(Icons.refresh_rounded, size: 18),
+              label: const Text('Try again'),
+            ),
+          ],
         ],
       ),
     );
   }
+
+  static String _headline(MobileApiException? api) => switch (api?.status) {
+        401 => 'Please sign in again',
+        403 => 'Your account may not do this',
+        404 => 'Not available on this platform',
+        422 => 'That was refused',
+        null => 'Could not reach Manfaa',
+        _ => 'Something failed',
+      };
+
+  static String _detail(MobileApiException? api, Object error) => api == null
+      ? error.runtimeType.toString()
+      : 'HTTP ${api.status ?? '—'} · ${api.code}';
 }
 
 /// The queue card from `Orders.png`.
@@ -388,14 +446,24 @@ class _Fact extends StatelessWidget {
   }
 }
 
-/// The server's own words when it has any, a plain sentence otherwise.
-/// Never a raw exception string — a shopkeeper cannot act on a stack trace.
+/// The server's own words when it has any, and a sentence naming the LIKELY
+/// cause otherwise — never a bare "something went wrong", which tells the
+/// person in front of it nothing they can do.
 String messageFor(Object error) {
-  if (error is MobileApiException && error.message.isNotEmpty) {
-    return error.message;
+  if (error is MobileApiException) {
+    if (error.message.isNotEmpty) return error.message;
+
+    return switch (error.status) {
+      401 => 'Your session has expired. Sign out and back in.',
+      403 => 'This account does not have permission for the marketplace. '
+          'An owner can grant it under Staff and roles.',
+      404 => 'The marketplace is switched off for this platform.',
+      null => 'Manfaa could not be reached. Check the connection.',
+      _ => 'The server refused the request.',
+    };
   }
 
-  return 'Something went wrong. Try again.';
+  return 'The app could not read the answer from Manfaa.';
 }
 
 String shopStateLabel(String state) => switch (state) {

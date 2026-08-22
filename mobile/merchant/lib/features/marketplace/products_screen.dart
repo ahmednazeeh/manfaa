@@ -71,7 +71,10 @@ class ShopProductsScreen extends ConsumerWidget {
                   SkeletonBox(height: 88),
                 ],
               ),
-              error: (error, _) => ErrorNote(error: error),
+              error: (error, _) => ErrorNote(
+                error: error,
+                onRetry: () => ref.invalidate(shopProductsProvider),
+              ),
               data: (rows) => _Shelf(rows: rows, tab: tab, query: query),
             ),
 

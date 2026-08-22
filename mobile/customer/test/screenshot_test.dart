@@ -184,7 +184,7 @@ void main() {
   setUpAll(_loadFonts);
 
   Future<void> shot(WidgetTester tester, String name, Brightness b,
-      {IconData? tab, bool signedOut = false}) async {
+      {IconData? tab, bool signedOut = false, String locale = 'en'}) async {
     await tester.binding.setSurfaceSize(const Size(390, 844));
     tester.view.devicePixelRatio = 3.0;
     tester.view.physicalSize = const Size(390 * 3, 844 * 3);
@@ -196,6 +196,10 @@ void main() {
     // Theme mode is now a persisted CHOICE (default light), so a dark shot
     // must select dark explicitly rather than lean on platform brightness.
     await session.setThemeMode(b == Brightness.dark ? 'dark' : 'light');
+    // The app ships in two scripts and only one was pinned, so Thaana layout
+    // bugs — text overflowing its box, an amount splitting from its currency
+    // word — reached the owner instead of a golden (2026-08-21).
+    await session.setLocale(locale);
     if (!signedOut) {
       await session.saveSession(
         token: 't',
@@ -232,6 +236,22 @@ void main() {
       }
     }
 
+    // Bundled images (the platform's brand marks) decode ASYNCHRONOUSLY.
+    // pumpAndSettle never waits for that, so without this the shot paints an
+    // empty box where the logo belongs — which is exactly what these goldens
+    // did the moment the wordmark stopped being drawn text. runAsync lets
+    // the real decode finish. (The merchant harness has carried this since
+    // its bank marks landed.)
+    final images = find.byType(Image).evaluate().toList();
+    if (images.isNotEmpty) {
+      await tester.runAsync(() async {
+        for (final element in images) {
+          await precacheImage((element.widget as Image).image, element);
+        }
+      });
+      await tester.pumpAndSettle();
+    }
+
     await expectLater(
       find.byType(ManfaaApp),
       matchesGoldenFile('shots/$name.png'),
@@ -243,6 +263,8 @@ void main() {
   testWidgets('signin dark',
       (t) => shot(t, 'signin_dark', Brightness.dark, signedOut: true));
   testWidgets('home light', (t) => shot(t, 'home_light', Brightness.light));
+  testWidgets('home dhivehi',
+      (t) => shot(t, 'home_dv', Brightness.light, locale: 'dv'));
   testWidgets('home dark', (t) => shot(t, 'home_dark', Brightness.dark));
   testWidgets('profile light',
       (t) => shot(t, 'profile_light', Brightness.light,

@@ -76,10 +76,12 @@ class _Form extends ConsumerStatefulWidget {
 
 class _FormState extends ConsumerState<_Form> {
   late String _bank = widget.account.bankName ?? 'bml';
-  late final _accountNo =
-      TextEditingController(text: widget.account.accountNo ?? '');
-  late final _accountName =
-      TextEditingController(text: widget.account.accountName ?? '');
+  late final _accountNo = TextEditingController(
+    text: widget.account.accountNo ?? '',
+  );
+  late final _accountName = TextEditingController(
+    text: widget.account.accountName ?? '',
+  );
   final _code = TextEditingController();
 
   var _busy = false;
@@ -131,7 +133,9 @@ class _FormState extends ConsumerState<_Form> {
       _error = null;
     });
     try {
-      await ref.read(apiProvider).updatePayoutAccount(
+      await ref
+          .read(apiProvider)
+          .updatePayoutAccount(
             bankName: _bank,
             accountNo: _accountNo.text.trim(),
             accountName: _accountName.text.trim(),
@@ -139,8 +143,9 @@ class _FormState extends ConsumerState<_Form> {
           );
       if (!mounted) return;
       ref.invalidate(payoutAccountProvider);
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(context.l10n.payoutAccountSaved)));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(context.l10n.payoutAccountSaved)));
       context.pop();
     } catch (e) {
       if (mounted) setState(() => _error = _describe(e));
@@ -172,8 +177,12 @@ class _FormState extends ConsumerState<_Form> {
             // The mock's floating bank tile — pure decoration.
             Transform.rotate(
               angle: 0.12,
-              child: const IconTile(Icons.account_balance_rounded,
-                  tint: ManfaaTint.green, size: 54, iconSize: 28),
+              child: const IconTile(
+                Icons.account_balance_rounded,
+                tint: ManfaaTint.green,
+                size: 54,
+                iconSize: 28,
+              ),
             ),
           ],
         ),
@@ -186,11 +195,17 @@ class _FormState extends ConsumerState<_Form> {
             children: [
               Row(
                 children: [
-                  const IconTile(Icons.account_balance_rounded,
-                      tint: ManfaaTint.green, size: 40, iconSize: 20),
+                  const IconTile(
+                    Icons.account_balance_rounded,
+                    tint: ManfaaTint.green,
+                    size: 40,
+                    iconSize: 20,
+                  ),
                   const SizedBox(width: Gap.md),
-                  Text(l10n.payoutBankLabel,
-                      style: theme.textTheme.titleMedium),
+                  Text(
+                    l10n.payoutBankLabel,
+                    style: theme.textTheme.titleMedium,
+                  ),
                 ],
               ),
               const SizedBox(height: Gap.sm),
@@ -259,12 +274,17 @@ class _FormState extends ConsumerState<_Form> {
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(Icons.sms_rounded,
-                        size: 20, color: infoTone.foreground),
+                    Icon(
+                      Icons.sms_rounded,
+                      size: 20,
+                      color: infoTone.foreground,
+                    ),
                     const SizedBox(width: Gap.md),
                     Expanded(
-                      child: Text(l10n.payoutOtpSent,
-                          style: theme.textTheme.bodyMedium),
+                      child: Text(
+                        l10n.payoutOtpSent,
+                        style: theme.textTheme.bodyMedium,
+                      ),
                     ),
                   ],
                 ),
@@ -276,10 +296,13 @@ class _FormState extends ConsumerState<_Form> {
                   autofocus: true,
                   textAlign: TextAlign.center,
                   textDirection: TextDirection.ltr,
-                  style:
-                      theme.textTheme.headlineSmall?.copyWith(letterSpacing: 6),
-                  decoration:
-                      const InputDecoration(counterText: '', hintText: '••••••'),
+                  style: theme.textTheme.headlineSmall?.copyWith(
+                    letterSpacing: 6,
+                  ),
+                  decoration: const InputDecoration(
+                    counterText: '',
+                    hintText: '••••••',
+                  ),
                   onChanged: (_) => setState(() {}),
                 ),
               ],
@@ -294,7 +317,10 @@ class _FormState extends ConsumerState<_Form> {
         ],
 
         FilledButton(
-          onPressed: _busy || !_formValid || (_codeSent && _code.text.trim().length != 6)
+          onPressed:
+              _busy ||
+                  !_formValid ||
+                  (_codeSent && _code.text.trim().length != 6)
               ? null
               : (_codeSent ? _save : _sendCode),
           child: _busy
@@ -341,7 +367,6 @@ class _FormState extends ConsumerState<_Form> {
   }
 }
 
-
 /// A bank choice as the mock draws it: radio ring, name, and the bank's real
 /// logo trailing. Selected rows fill softly and take the outline.
 class _BankRow extends StatelessWidget {
@@ -363,9 +388,7 @@ class _BankRow extends StatelessWidget {
     final scheme = theme.colorScheme;
 
     return Material(
-      color: selected
-          ? scheme.surfaceContainer
-          : scheme.surfaceContainerLowest,
+      color: selected ? scheme.surfaceContainer : scheme.surfaceContainerLowest,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(Corner.control),
         side: BorderSide(
@@ -377,8 +400,10 @@ class _BankRow extends StatelessWidget {
         borderRadius: BorderRadius.circular(Corner.control),
         onTap: onTap,
         child: Padding(
-          padding:
-              const EdgeInsets.symmetric(horizontal: Gap.md, vertical: Gap.md),
+          padding: const EdgeInsets.symmetric(
+            horizontal: Gap.md,
+            vertical: Gap.md,
+          ),
           child: Row(
             children: [
               // The radio ring, drawn to match the ink brand rather than the
@@ -407,9 +432,7 @@ class _BankRow extends StatelessWidget {
                     : null,
               ),
               const SizedBox(width: Gap.md),
-              Expanded(
-                child: Text(label, style: theme.textTheme.titleSmall),
-              ),
+              Expanded(child: Text(label, style: theme.textTheme.titleSmall)),
               const SizedBox(width: Gap.sm),
               ClipRRect(
                 borderRadius: BorderRadius.circular(6),

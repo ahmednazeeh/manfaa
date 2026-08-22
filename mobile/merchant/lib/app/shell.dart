@@ -72,10 +72,14 @@ class MerchantShell extends ConsumerWidget {
       ),
     ];
 
-    // Orders needs BOTH the staff permission and a store that actually
-    // sells online. Neither implies the other, and a tab leading to an empty
-    // queue for a shop that never enrolled is worse than no tab.
-    final sells = ref.watch(sellsOnMarketplaceProvider);
+    // Shown wherever the PLATFORM has a marketplace — the endpoint 404s
+    // behind the kill switch, so any answer at all means it is on.
+    //
+    // Deliberately NOT gated on this store having enrolled. It was, and the
+    // result was a merchant who could see no marketplace anywhere and had no
+    // way to learn why. The screen itself now explains where enrolment
+    // happens; an absent tab could not.
+    final sells = ref.watch(shopEnrolmentProvider).hasValue;
 
     final items = <_NavItem>[
       for (final item in specs)
@@ -225,7 +229,13 @@ class _NavRail extends StatelessWidget {
         child: Column(
           children: [
             const SizedBox(height: Gap.xl),
-            const ManfaaMark(size: 30),
+            // Square in a 96px rail: the landscape mark is ~2.75:1, so at
+            // any readable height it is wider than the rail itself.
+            const BrandLogo(
+              shape: BrandLogoShape.square,
+              height: 48,
+              semanticLabel: 'Manfaa',
+            ),
             const SizedBox(height: Gap.huge),
             for (final item in items) ...[
               _RailButton(

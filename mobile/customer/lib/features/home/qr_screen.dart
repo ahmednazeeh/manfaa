@@ -37,9 +37,9 @@ class _QrScreenState extends ConsumerState<QrScreen> {
 
   @override
   void dispose() {
-    ScreenBrightness.instance
-        .resetApplicationScreenBrightness()
-        .catchError((_) {});
+    ScreenBrightness.instance.resetApplicationScreenBrightness().catchError(
+      (_) {},
+    );
     super.dispose();
   }
 
@@ -49,8 +49,10 @@ class _QrScreenState extends ConsumerState<QrScreen> {
     final theme = Theme.of(context);
     final muted = theme.colorScheme.onSurfaceVariant;
     final code = ref.watch(sessionProvider).customerCode ?? '';
-    final qrSize =
-        (MediaQuery.sizeOf(context).width * 0.62).clamp(180.0, 320.0);
+    final qrSize = (MediaQuery.sizeOf(context).width * 0.62).clamp(
+      180.0,
+      320.0,
+    );
 
     return Scaffold(
       // Themed AppBar: bold title, and the fullscreen-dialog route supplies
@@ -59,8 +61,12 @@ class _QrScreenState extends ConsumerState<QrScreen> {
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
-            padding:
-                const EdgeInsets.fromLTRB(Gap.xxl, Gap.md, Gap.xxl, Gap.huge),
+            padding: const EdgeInsets.fromLTRB(
+              Gap.xxl,
+              Gap.md,
+              Gap.xxl,
+              Gap.huge,
+            ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [

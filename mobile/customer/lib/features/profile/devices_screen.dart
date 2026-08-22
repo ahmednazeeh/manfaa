@@ -155,17 +155,24 @@ class DevicesScreen extends ConsumerWidget {
             ManfaaCard(
               onTap: () => _revokeAll(context, ref),
               padding: const EdgeInsets.symmetric(
-                  horizontal: Gap.lg, vertical: Gap.lg),
+                horizontal: Gap.lg,
+                vertical: Gap.lg,
+              ),
               child: Row(
                 children: [
-                  const IconTile(Icons.logout_rounded,
-                      tint: ManfaaTint.coral, size: 40, iconSize: 20),
+                  const IconTile(
+                    Icons.logout_rounded,
+                    tint: ManfaaTint.coral,
+                    size: 40,
+                    iconSize: 20,
+                  ),
                   const SizedBox(width: Gap.md),
                   Expanded(
                     child: Text(
                       l10n.deviceRevokeAllAction,
-                      style: theme.textTheme.titleMedium
-                          ?.copyWith(color: ManfaaColors.coralDeep),
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        color: ManfaaColors.coralDeep,
+                      ),
                     ),
                   ),
                   Icon(Icons.chevron_right_rounded, color: muted),
@@ -230,8 +237,8 @@ class _DeviceCard extends StatelessWidget {
                 const SizedBox(height: 2),
                 Text(
                   device.lastUsedAt.isEmpty
-                      ? l10n.deviceSignedIn(formatDayMonth(device.signedInAt))
-                      : l10n.deviceLastUsed(formatDayMonth(device.lastUsedAt)),
+                      ? l10n.deviceSignedIn(formatDayMonth(device.signedInAt, context))
+                      : l10n.deviceLastUsed(formatDayMonth(device.lastUsedAt, context)),
                   style: theme.textTheme.bodySmall?.copyWith(color: muted),
                 ),
               ],

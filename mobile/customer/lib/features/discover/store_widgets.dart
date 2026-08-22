@@ -9,8 +9,9 @@ bool _dhivehi(BuildContext context) =>
     Localizations.localeOf(context).languageCode == 'dv';
 
 /// A category keeps its hue between sessions — same formula everywhere.
-Color categoryHue(String slug) => ManfaaColors
-    .categoryHues[slug.hashCode.abs() % ManfaaColors.categoryHues.length];
+Color categoryHue(String slug) =>
+    ManfaaColors.categoryHues[slug.hashCode.abs() %
+        ManfaaColors.categoryHues.length];
 
 /// A line icon per curated category. The server only ships a slug, so this
 /// maps by keyword and falls back to a storefront — never a blank.
@@ -84,10 +85,10 @@ class CategoryTag extends StatelessWidget {
               label ?? humanizeCategory(slug),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: Theme.of(context)
-                  .textTheme
-                  .labelSmall
-                  ?.copyWith(color: hue, fontWeight: FontWeight.w700),
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: hue,
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ),
         ],
@@ -111,10 +112,7 @@ class StoreLogo extends StatelessWidget {
     final monogram = Container(
       width: size,
       height: size,
-      decoration: BoxDecoration(
-        color: tint.bg,
-        shape: BoxShape.circle,
-      ),
+      decoration: BoxDecoration(color: tint.bg, shape: BoxShape.circle),
       alignment: Alignment.center,
       child: Text(
         store.name.isEmpty ? '•' : store.name[0].toUpperCase(),
@@ -177,16 +175,19 @@ class RateBadge extends StatelessWidget {
               Text(
                 l10n.ratePercent(store.ratePercent),
                 textDirection: TextDirection.ltr,
-                style: (compact
-                        ? theme.textTheme.titleMedium
-                        : theme.textTheme.titleLarge)
-                    ?.copyWith(color: accent, fontWeight: FontWeight.w800),
+                style:
+                    (compact
+                            ? theme.textTheme.titleMedium
+                            : theme.textTheme.titleLarge)
+                        ?.copyWith(color: accent, fontWeight: FontWeight.w800),
               ),
               const SizedBox(width: Gap.xs),
               Text(
                 l10n.cashbackWord,
-                style: theme.textTheme.labelSmall
-                    ?.copyWith(color: accent, fontWeight: FontWeight.w700),
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: accent,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
             ],
           ),
@@ -195,8 +196,9 @@ class RateBadge extends StatelessWidget {
           Text(
             l10n.usuallyRate(store.standingRatePercent),
             textDirection: TextDirection.ltr,
-            style: theme.textTheme.labelSmall
-                ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
           ),
       ],
     );
@@ -299,9 +301,8 @@ class _ImageOffer extends StatelessWidget {
                 offer.imageUrl!,
                 fit: BoxFit.cover,
                 width: double.infinity,
-                errorBuilder: (_, _, _) => Container(
-                  color: ManfaaColors.violetSoft,
-                ),
+                errorBuilder: (_, _, _) =>
+                    Container(color: ManfaaColors.violetSoft),
               ),
       ),
     );
@@ -348,8 +349,10 @@ class _TextOffer extends StatelessWidget {
           children: [
             if (badge != null)
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 5,
+                ),
                 decoration: BoxDecoration(
                   color: ManfaaColors.violet,
                   borderRadius: BorderRadius.circular(999),
@@ -357,8 +360,11 @@ class _TextOffer extends StatelessWidget {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.bolt_rounded,
-                        size: 13, color: Colors.white),
+                    const Icon(
+                      Icons.bolt_rounded,
+                      size: 13,
+                      color: Colors.white,
+                    ),
                     const SizedBox(width: Gap.xs),
                     Text(
                       badge,
@@ -390,8 +396,9 @@ class _TextOffer extends StatelessWidget {
                         title,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.titleLarge
-                            ?.copyWith(fontWeight: FontWeight.w800),
+                        style: theme.textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
                       ),
                       if (blurb != null) ...[
                         const SizedBox(height: 2),
@@ -400,7 +407,8 @@ class _TextOffer extends StatelessWidget {
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                           style: theme.textTheme.bodySmall?.copyWith(
-                              color: scheme.onSurfaceVariant),
+                            color: scheme.onSurfaceVariant,
+                          ),
                         ),
                       ],
                     ],
@@ -427,10 +435,7 @@ class _TextOffer extends StatelessWidget {
                 ),
                 if (category != null) ...[
                   const SizedBox(width: Gap.sm),
-                  CategoryTag(
-                    slug: category,
-                    label: categoryNames?[category],
-                  ),
+                  CategoryTag(slug: category, label: categoryNames?[category]),
                 ],
               ],
             ),
@@ -474,11 +479,13 @@ class CategoryRail extends StatelessWidget {
             ),
             child: InkWell(
               customBorder: const StadiumBorder(),
-              onTap: () => context
-                  .push('/discover/search?category=${category.slug}'),
+              onTap: () =>
+                  context.push('/discover/search?category=${category.slug}'),
               child: Padding(
                 padding: const EdgeInsets.symmetric(
-                    horizontal: Gap.lg, vertical: Gap.sm),
+                  horizontal: Gap.lg,
+                  vertical: Gap.sm,
+                ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -593,7 +600,9 @@ class StoreCard extends StatelessWidget {
                       if (category != null) ...[
                         const SizedBox(height: Gap.xs),
                         CategoryTag(
-                            slug: category, label: categoryNames?[category]),
+                          slug: category,
+                          label: categoryNames?[category],
+                        ),
                       ],
                     ],
                   ),
@@ -607,20 +616,26 @@ class StoreCard extends StatelessWidget {
               children: [
                 Divider(height: 1, color: theme.colorScheme.outlineVariant),
                 Padding(
-                  padding:
-                      const EdgeInsets.fromLTRB(Gap.md, Gap.sm, Gap.md, Gap.sm),
+                  padding: const EdgeInsets.fromLTRB(
+                    Gap.md,
+                    Gap.sm,
+                    Gap.md,
+                    Gap.sm,
+                  ),
                   child: Row(
                     children: [
                       Icon(Icons.place_outlined, size: 13, color: muted),
                       const SizedBox(width: 3),
                       Expanded(
                         child: Text(
-                          context.l10n
-                              .kmAway((distanceM / 1000).toStringAsFixed(1)),
+                          context.l10n.kmAway(
+                            (distanceM / 1000).toStringAsFixed(1),
+                          ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.bodySmall
-                              ?.copyWith(color: muted),
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: muted,
+                          ),
                         ),
                       ),
                     ],
@@ -658,28 +673,33 @@ class StoreGrid extends StatelessWidget {
         children: [
           SectionHeader(title),
           const SizedBox(height: Gap.sm),
-          LayoutBuilder(builder: (context, constraints) {
-            const spacing = Gap.md;
-            // 330 content-width is the seam: a 375dp phone (343 after page
-            // padding) carries two tiles of ~165, enough for logo + name +
-            // rate; a 360dp-or-narrower phone drops to one card per row so
-            // the tiles never squeeze the name out.
-            final twoUp = constraints.maxWidth >= 330;
-            final width = twoUp
-                ? (constraints.maxWidth - spacing) / 2
-                : constraints.maxWidth;
-            return Wrap(
-              spacing: spacing,
-              runSpacing: spacing,
-              children: [
-                for (final store in stores)
-                  SizedBox(
-                    width: width,
-                    child: StoreCard(store: store, categoryNames: categoryNames),
-                  ),
-              ],
-            );
-          }),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              const spacing = Gap.md;
+              // 330 content-width is the seam: a 375dp phone (343 after page
+              // padding) carries two tiles of ~165, enough for logo + name +
+              // rate; a 360dp-or-narrower phone drops to one card per row so
+              // the tiles never squeeze the name out.
+              final twoUp = constraints.maxWidth >= 330;
+              final width = twoUp
+                  ? (constraints.maxWidth - spacing) / 2
+                  : constraints.maxWidth;
+              return Wrap(
+                spacing: spacing,
+                runSpacing: spacing,
+                children: [
+                  for (final store in stores)
+                    SizedBox(
+                      width: width,
+                      child: StoreCard(
+                        store: store,
+                        categoryNames: categoryNames,
+                      ),
+                    ),
+                ],
+              );
+            },
+          ),
         ],
       ),
     );
@@ -721,8 +741,7 @@ class StoreRow extends StatelessWidget {
                 ),
                 if (category != null) ...[
                   const SizedBox(height: 6),
-                  CategoryTag(
-                      slug: category, label: categoryNames?[category]),
+                  CategoryTag(slug: category, label: categoryNames?[category]),
                 ],
               ],
             ),
@@ -740,10 +759,10 @@ class StoreRow extends StatelessWidget {
                     Icon(Icons.place_outlined, size: 13, color: muted),
                     const SizedBox(width: 3),
                     Text(
-                      context.l10n
-                          .kmAway((distanceM / 1000).toStringAsFixed(1)),
-                      style:
-                          theme.textTheme.bodySmall?.copyWith(color: muted),
+                      context.l10n.kmAway(
+                        (distanceM / 1000).toStringAsFixed(1),
+                      ),
+                      style: theme.textTheme.bodySmall?.copyWith(color: muted),
                     ),
                   ],
                 ),

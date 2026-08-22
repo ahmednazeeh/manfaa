@@ -13,34 +13,58 @@ class MerchantWordmark extends StatelessWidget {
 
   final double size;
 
+  /// How far the logo's "Manfaa" wordmark sits BELOW the middle of the image
+  /// box, as a fraction of the rendered logo height.
+  ///
+  /// A Row centres the image BOX against the text, but the box is not the
+  /// wordmark: the landscape lockup's emblem is taller than the word beside
+  /// it and hangs lower, so the word's optical centre is low in the box.
+  /// Centring on the box therefore floats "Merchant" ABOVE "Manfaa" — the
+  /// misalignment the owner reported on 2026-08-20.
+  ///
+  /// Measured off the shipped marks and the ones the API serves today, which
+  /// agree closely (light 6.6% bundled / 6.9% live, dark 3.9% / 4.1%):
+  static const _wordmarkDropLight = 0.068;
+  static const _wordmarkDropDark = 0.040;
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final dark = theme.brightness == Brightness.dark;
+    final logoHeight = size * 1.8;
+
     return Row(
       mainAxisSize: MainAxisSize.min,
       textDirection: TextDirection.ltr,
       children: [
-        ManfaaMark(size: size),
-        SizedBox(width: size * 0.42),
-        Text(
-          'Manfaa',
-          style: theme.textTheme.titleLarge?.copyWith(
-            fontSize: size * 0.92,
-            fontWeight: FontWeight.w800,
-            letterSpacing: -0.4,
-            color: theme.colorScheme.onSurface,
-          ),
-        ),
+        // The platform mark, superadmin-replaceable. "Merchant" stays as
+        // the product suffix it has always been — the same shape the web
+        // panel's lockup settled on.
+        BrandLogo(height: logoHeight, semanticLabel: 'Manfaa'),
         SizedBox(width: size * 0.36),
-        Text(
-          'Merchant',
-          style: theme.textTheme.titleLarge?.copyWith(
-            fontSize: size * 0.8,
-            fontWeight: FontWeight.w600,
-            letterSpacing: -0.2,
-            // Violet in light, the lifted violet in dark — the scheme's
-            // secondary is exactly the merchant accent in both.
-            color: theme.colorScheme.secondary,
+        // Nudged down onto the wordmark's own line. Translate, not padding:
+        // the lockup's HEIGHT should stay the logo's, so a header row does
+        // not grow by the offset.
+        //
+        // The two marks need different nudges because the light and dark
+        // exports carry different internal padding. Re-exporting them with
+        // matching padding would make this one constant — worth doing next
+        // time the logos are cut.
+        Transform.translate(
+          offset: Offset(
+            0,
+            logoHeight * (dark ? _wordmarkDropDark : _wordmarkDropLight),
+          ),
+          child: Text(
+            'Merchant',
+            style: theme.textTheme.titleLarge?.copyWith(
+              fontSize: size * 0.8,
+              fontWeight: FontWeight.w600,
+              letterSpacing: -0.2,
+              // Violet in light, the lifted violet in dark — the scheme's
+              // secondary is exactly the merchant accent in both.
+              color: theme.colorScheme.secondary,
+            ),
           ),
         ),
       ],

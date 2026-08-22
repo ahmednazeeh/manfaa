@@ -166,29 +166,30 @@ class _StoreBody extends StatelessWidget {
         ],
         if (store.boosted && store.promoEndsAt != null) ...[
           const SizedBox(height: Gap.md),
-          Builder(builder: (context) {
-            final tone =
-                toneSurface(ToneSurface.attention, theme.brightness);
-            return ManfaaCard(
-              color: tone.background,
-              padding: const EdgeInsets.all(Gap.lg),
-              child: Row(
-                children: [
-                  Icon(Icons.bolt_rounded, size: 20, color: tone.foreground),
-                  const SizedBox(width: Gap.sm),
-                  Expanded(
-                    child: Text(
-                      l10n.promoUntil(store.promoEndsAt!.substring(0, 10)),
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: tone.foreground,
-                        fontWeight: FontWeight.w600,
+          Builder(
+            builder: (context) {
+              final tone = toneSurface(ToneSurface.attention, theme.brightness);
+              return ManfaaCard(
+                color: tone.background,
+                padding: const EdgeInsets.all(Gap.lg),
+                child: Row(
+                  children: [
+                    Icon(Icons.bolt_rounded, size: 20, color: tone.foreground),
+                    const SizedBox(width: Gap.sm),
+                    Expanded(
+                      child: Text(
+                        l10n.promoUntil(store.promoEndsAt!.substring(0, 10)),
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: tone.foreground,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ),
-                  ),
-                ],
-              ),
-            );
-          }),
+                  ],
+                ),
+              );
+            },
+          ),
         ],
         if (page.eligibilityBasis?.isNotEmpty ?? false) ...[
           const SizedBox(height: Gap.md),
@@ -202,8 +203,7 @@ class _StoreBody extends StatelessWidget {
                   label: l10n.storeEligibility,
                 ),
                 const SizedBox(height: Gap.md),
-                Text(page.eligibilityBasis!,
-                    style: theme.textTheme.bodyMedium),
+                Text(page.eligibilityBasis!, style: theme.textTheme.bodyMedium),
               ],
             ),
           ),
@@ -289,21 +289,28 @@ class _StoreBody extends StatelessWidget {
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Icon(Icons.place_outlined,
-                            size: 18, color: ManfaaColors.blue),
+                        const Icon(
+                          Icons.place_outlined,
+                          size: 18,
+                          color: ManfaaColors.blue,
+                        ),
                         const SizedBox(width: Gap.md),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(branch.name,
-                                  style: theme.textTheme.bodyMedium
-                                      ?.copyWith(fontWeight: FontWeight.w600)),
+                              Text(
+                                branch.name,
+                                style: theme.textTheme.bodyMedium?.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
                               if (branch.address != null)
                                 Text(
                                   branch.address!,
-                                  style: theme.textTheme.bodySmall
-                                      ?.copyWith(color: muted),
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: muted,
+                                  ),
                                 ),
                             ],
                           ),
@@ -320,12 +327,16 @@ class _StoreBody extends StatelessWidget {
                               lng: branch.lng!,
                               label: store.displayName(dhivehi),
                             ),
-                            icon: const Icon(Icons.directions_rounded, size: 18),
+                            icon: const Icon(
+                              Icons.directions_rounded,
+                              size: 18,
+                            ),
                             label: Text(l10n.storeDirections),
                             style: TextButton.styleFrom(
                               foregroundColor: theme.colorScheme.secondary,
                               padding: const EdgeInsets.symmetric(
-                                  horizontal: Gap.sm),
+                                horizontal: Gap.sm,
+                              ),
                               visualDensity: VisualDensity.compact,
                             ),
                           ),
@@ -427,9 +438,7 @@ class _BranchMap extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final points = [
-      for (final b in branches) LatLng(b.lat!, b.lng!),
-    ];
+    final points = [for (final b in branches) LatLng(b.lat!, b.lng!)];
 
     final center = LatLng(
       points.map((p) => p.latitude).reduce((a, b) => a + b) / points.length,
@@ -441,8 +450,9 @@ class _BranchMap extends StatelessWidget {
         ? MapOptions(
             initialCenter: center,
             initialZoom: 16,
-            interactionOptions:
-                const InteractionOptions(flags: InteractiveFlag.none),
+            interactionOptions: const InteractionOptions(
+              flags: InteractiveFlag.none,
+            ),
           )
         : MapOptions(
             initialCameraFit: CameraFit.coordinates(
@@ -450,8 +460,9 @@ class _BranchMap extends StatelessWidget {
               padding: const EdgeInsets.all(40),
               maxZoom: 16,
             ),
-            interactionOptions:
-                const InteractionOptions(flags: InteractiveFlag.none),
+            interactionOptions: const InteractionOptions(
+              flags: InteractiveFlag.none,
+            ),
           );
 
     return ClipRRect(
@@ -567,10 +578,15 @@ class _ContactRow extends StatelessWidget {
     final muted = theme.colorScheme.onSurfaceVariant;
 
     return InkWell(
-      onTap: () => launchUrl(uri, mode: LaunchMode.externalApplication)
-          .catchError((_) => false),
+      onTap: () => launchUrl(
+        uri,
+        mode: LaunchMode.externalApplication,
+      ).catchError((_) => false),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: Gap.lg, vertical: Gap.sm),
+        padding: const EdgeInsets.symmetric(
+          horizontal: Gap.lg,
+          vertical: Gap.sm,
+        ),
         child: Row(
           children: [
             IconTile(icon, tint: tint, size: 36, iconSize: 18),

@@ -4,23 +4,25 @@ import 'package:manfaa_core/manfaa_core.dart';
 void main() {
   group('money', () {
     // The server writes "MVR 1,234.56" (en) and "1,234.56 ރުފިޔާ" (dv);
+    // joined by a NON-BREAKING space, so the figure and its currency word
+    // can never be split across two lines. See formatMoney.
     // these strings must match the panels and the SMS templates exactly.
     test('formats laari integers into the canonical strings', () {
-      expect(formatMoney(0, dhivehi: false), 'MVR 0.00');
-      expect(formatMoney(100, dhivehi: false), 'MVR 1.00');
-      expect(formatMoney(123456, dhivehi: false), 'MVR 1,234.56');
-      expect(formatMoney(100000000, dhivehi: false), 'MVR 1,000,000.00');
-      expect(formatMoney(5, dhivehi: false), 'MVR 0.05');
+      expect(formatMoney(0, dhivehi: false), 'MVR 0.00');
+      expect(formatMoney(100, dhivehi: false), 'MVR 1.00');
+      expect(formatMoney(123456, dhivehi: false), 'MVR 1,234.56');
+      expect(formatMoney(100000000, dhivehi: false), 'MVR 1,000,000.00');
+      expect(formatMoney(5, dhivehi: false), 'MVR 0.05');
     });
 
     test('dhivehi puts the word AFTER the figure and never says MVR', () {
       final text = formatMoney(123456, dhivehi: true);
-      expect(text, '1,234.56 ރުފިޔާ');
+      expect(text, '1,234.56 ރުފިޔާ');
       expect(text.contains('MVR'), isFalse);
     });
 
     test('a reversal-driven negative survives formatting', () {
-      expect(formatMoney(-50, dhivehi: false), 'MVR -0.50');
+      expect(formatMoney(-50, dhivehi: false), 'MVR -0.50');
     });
   });
 

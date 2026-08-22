@@ -7,6 +7,8 @@ export 'src/dv_localizations.dart';
 export 'src/theme.dart';
 export 'src/tokens.dart';
 export 'src/widgets/brand.dart';
+export 'src/widgets/brand_logo.dart';
+export 'src/widgets/brand_refresh.dart'; // OnAppResume
 export 'src/widgets/icon_tile.dart';
 export 'src/widgets/manfaa_card.dart';
 export 'src/widgets/money_text.dart';

@@ -83,7 +83,7 @@ void main() {
       home: Scaffold(body: MoneyText(123456)),
     ));
 
-    expect(find.text('MVR 1,234.56'), findsOneWidget);
+    expect(find.text('MVR 1,234.56'), findsOneWidget);
   });
 }
 
@@ -582,8 +582,37 @@ void activityTests() {
       findsOneWidget,
     );
     expect(find.textContaining('validation_window'), findsNothing);
-    expect(find.text('MVR 50.00'), findsOneWidget);
+    expect(find.text('MVR 50.00'), findsOneWidget);
   });
+
+  testWidgets(
+      'the balance hints live in tooltips, not as body text under the figures',
+      (tester) async {
+    await signInToHome(tester);
+
+    const confirmed = 'Confirmed and ready for payout';
+    const pending = 'Waiting for store confirmation';
+
+    // Owner, 2026-08-21: both sentences came out of the card and became a
+    // long-press hint on the heading instead. They must not render as body
+    // text any more...
+    expect(find.text(confirmed), findsNothing);
+    expect(find.text(pending), findsNothing);
+
+    // ...but they must stay REACHABLE, or the app no longer explains
+    // anywhere what "pending" means.
+    final messages = tester
+        .widgetList<Tooltip>(find.byType(Tooltip))
+        .map((t) => t.message)
+        .toList();
+    expect(messages, contains(confirmed));
+
+    // The pending column — and so its hint — exists only when there IS
+    // something pending, and this fixture has none. The home_light and
+    // home_dv goldens cover the two-column case.
+    expect(messages, isNot(contains(pending)));
+  });
+
 
   testWidgets('the paid segment lists payouts and opens the detail',
       (tester) async {
@@ -597,9 +626,9 @@ void activityTests() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 50));
 
-    expect(find.text('MVR 125.00'), findsOneWidget);
+    expect(find.text('MVR 125.00'), findsOneWidget);
 
-    await tester.tap(find.text('MVR 125.00'));
+    await tester.tap(find.text('MVR 125.00'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 50));
     await tester.pump(const Duration(milliseconds: 50));

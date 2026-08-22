@@ -63,10 +63,9 @@ String? routeForPushData(Map<String, Object?> data) {
 /// the moment notifications make obvious sense ("we'll remind you before
 /// the discount expires").
 ///
-/// Everything is guarded: tests and desktop dev runs have no Firebase, the
-/// SHIPPED build runs on PLACEHOLDER config until mv.manfaa.merchant is
-/// registered (firebase_options.dart), and push failing must never touch
-/// the till's real work.
+/// Everything is guarded: tests and desktop dev runs have no Firebase, a
+/// device may refuse the permission or fail to reach FCM at all, and push
+/// failing must never touch the till's real work.
 final pushRegistrarProvider = Provider<PushRegistrar>(PushRegistrar.new);
 
 class PushRegistrar {

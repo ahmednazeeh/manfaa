@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'brand_logo.dart';
+
 import '../tokens.dart';
 
 /// The Manfaa mark — the coral twin-peak "M" — painted so it needs no asset
@@ -48,30 +50,27 @@ class _MarkPainter extends CustomPainter {
   bool shouldRepaint(_MarkPainter old) => old.color != color;
 }
 
-/// The mark + "Manfaa" wordmark, as it sits in the app header.
+/// The app header's brand: the platform's landscape logo.
+///
+/// It used to be the hand-painted [ManfaaMark] beside the word "Manfaa".
+/// That was a THIRD drawing of the logo — after the web panels' SVG and the
+/// launcher icon — so replacing the brand meant a code change and a store
+/// release. The landscape mark already carries the wordmark, and it is
+/// whatever a superadmin last uploaded.
 class ManfaaWordmark extends StatelessWidget {
   const ManfaaWordmark({super.key, this.size = 22});
 
+  /// The mark's HEIGHT. Named `size` because every call site already says
+  /// size, and the marks are height-sized everywhere.
   final double size;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        ManfaaMark(size: size),
-        SizedBox(width: size * 0.42),
-        Text(
-          'Manfaa',
-          style: theme.textTheme.titleLarge?.copyWith(
-            fontSize: size * 0.92,
-            fontWeight: FontWeight.w800,
-            letterSpacing: -0.4,
-            color: theme.colorScheme.onSurface,
-          ),
-        ),
-      ],
+    // The logo is branding, not content — it says nothing a reader needs
+    // larger, and left to scale it overflows a narrow header.
+    return MediaQuery.withClampedTextScaling(
+      maxScaleFactor: 1.0,
+      child: BrandLogo(height: size * 1.8, semanticLabel: 'Manfaa'),
     );
   }
 }

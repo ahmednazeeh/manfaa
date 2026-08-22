@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:manfaa_core/manfaa_core.dart';
 import 'package:manfaa_ui/manfaa_ui.dart';
 
@@ -22,6 +23,11 @@ class ShopOrdersScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
+    // Three states, not two: enrolled, definitely not enrolled, and we
+    // could not ask. The third used to render as the second, which told an
+    // approved vendor its store does not sell.
+    final enrolled = ref.watch(sellsOnMarketplaceProvider);
+    final unknown = ref.watch(shopEnrolmentUnknownProvider);
     final page = ref.watch(shopOrdersProvider);
     final tab = ref.watch(shopOrderTabProvider);
     final query = ref.watch(shopOrderQueryProvider).trim().toLowerCase();
@@ -30,7 +36,12 @@ class ShopOrdersScreen extends ConsumerWidget {
       body: SafeArea(
         bottom: false,
         child: RefreshIndicator(
-          onRefresh: () async => ref.invalidate(shopOrdersProvider),
+          onRefresh: () async {
+            // The enrolment answer is re-asked too. A refusal cached before
+            // a permission was granted would otherwise outlive the fix.
+            ref.invalidate(shopEnrolmentProvider);
+            ref.invalidate(shopOrdersProvider);
+          },
           child: ListView(
             padding: const EdgeInsets.fromLTRB(
               Gap.lg,
@@ -50,14 +61,16 @@ class ShopOrdersScreen extends ConsumerWidget {
               ),
               const SizedBox(height: Gap.lg),
 
-              _QueueTabs(
-                value: tab,
-                onChanged: (next) =>
-                    ref.read(shopOrderTabProvider.notifier).state = next,
-              ),
-              const SizedBox(height: Gap.md),
+              if (enrolled && !unknown) ...[
+                _QueueTabs(
+                  value: tab,
+                  onChanged: (next) =>
+                      ref.read(shopOrderTabProvider.notifier).state = next,
+                ),
+                const SizedBox(height: Gap.md),
+              ],
 
-              TextField(
+              if (enrolled && !unknown) TextField(
                 onChanged: (value) =>
                     ref.read(shopOrderQueryProvider.notifier).state = value,
                 decoration: const InputDecoration(
@@ -65,13 +78,21 @@ class ShopOrdersScreen extends ConsumerWidget {
                   hintText: 'Search orders by #, customer, or store',
                 ),
               ),
-              const SizedBox(height: Gap.md),
+              if (enrolled && !unknown) const SizedBox(height: Gap.md),
 
-              page.when(
-                loading: () => const _QueueSkeleton(),
-                error: (error, _) => ErrorNote(error: error),
-                data: (data) => _Queue(page: data, query: query),
-              ),
+              if (unknown)
+                const _CouldNotCheck()
+              else if (!enrolled)
+                const _NotSelling()
+              else
+                page.when(
+                  loading: () => const _QueueSkeleton(),
+                  error: (error, _) => ErrorNote(
+                    error: error,
+                    onRetry: () => ref.invalidate(shopOrdersProvider),
+                  ),
+                  data: (data) => _Queue(page: data, query: query),
+                ),
 
               const SizedBox(height: Gap.lg),
               const DesktopHint(
@@ -186,6 +207,120 @@ class _QueueSkeleton extends StatelessWidget {
         SizedBox(height: Gap.md),
         SkeletonBox(height: 190),
       ],
+    );
+  }
+}
+
+/// Not a vendor yet. Says where to go rather than showing an empty queue
+/// that reads as "no orders today".
+class _NotSelling extends StatelessWidget {
+  const _NotSelling();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return ManfaaCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(Gap.sm),
+                decoration: BoxDecoration(
+                  color: ManfaaColors.violetSoft,
+                  borderRadius: BorderRadius.circular(Corner.tile),
+                ),
+                child: const Icon(Icons.storefront_outlined,
+                    color: ManfaaColors.violet),
+              ),
+              const SizedBox(width: Gap.md),
+              Expanded(
+                child: Text(
+                  'Your store does not sell on the marketplace yet',
+                  style: theme.textTheme.titleMedium,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: Gap.md),
+          Text(
+            'Shoppers search every Manfaa store at once — applying puts your '
+            'products in front of them. It takes a minute, and you can do it '
+            'here.',
+            style: theme.textTheme.bodyMedium
+                ?.copyWith(color: ManfaaColors.textMuted),
+          ),
+          const SizedBox(height: Gap.md),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: () => context.push('/more/marketplace'),
+              icon: const Icon(Icons.storefront_outlined, size: 18),
+              label: const Text('Apply to sell on the marketplace'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// We could not ask whether this store sells. Says exactly that, and offers
+/// the retry — an approved vendor must never be told it is not one.
+class _CouldNotCheck extends ConsumerWidget {
+  const _CouldNotCheck();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final loading = ref.watch(shopEnrolmentProvider).isLoading;
+
+    return ManfaaCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              if (loading)
+                const SizedBox(
+                  height: 20,
+                  width: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              else
+                const Icon(Icons.cloud_off_rounded,
+                    color: ManfaaColors.textMuted),
+              const SizedBox(width: Gap.md),
+              Expanded(
+                child: Text(
+                  loading
+                      ? 'Checking your store…'
+                      : 'Could not check your store just now',
+                  style: theme.textTheme.titleMedium,
+                ),
+              ),
+            ],
+          ),
+          if (!loading) ...[
+            const SizedBox(height: Gap.sm),
+            Text(
+              'This says nothing about whether you sell on the marketplace — '
+              'only that the check did not go through. Pull down to try '
+              'again.',
+              style: theme.textTheme.bodySmall
+                  ?.copyWith(color: ManfaaColors.textMuted),
+            ),
+            const SizedBox(height: Gap.md),
+            OutlinedButton.icon(
+              onPressed: () => ref.invalidate(shopEnrolmentProvider),
+              icon: const Icon(Icons.refresh_rounded, size: 18),
+              label: const Text('Try again'),
+            ),
+          ],
+        ],
+      ),
     );
   }
 }

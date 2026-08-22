@@ -139,7 +139,10 @@ void floatingCartTests() {
 
       // Two text lines, a button and a progress track. Anything approaching
       // a per-character wrap blows well past this.
-      final height = tester.getSize(find.byType(FloatingCartBar)).height;
+      // The SLAB, not the padded wrapper — the wrapper carries the
+      // clearance that keeps the bar off the floating nav.
+      final height =
+          tester.getSize(find.byKey(const Key('floating-cart-slab'))).height;
       expect(height, lessThan(160), reason: 'bar grew tall at ${width}dp');
 
       // And the figures must still be one line each.

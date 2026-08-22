@@ -16,6 +16,8 @@ class MarketBranch {
     required this.slug,
     this.address,
     this.cashbackRatePercent,
+    this.logoUrl,
+    this.favourite = false,
     this.fulfilment,
     this.rating,
     required this.ratingCount,
@@ -32,6 +34,8 @@ class MarketBranch {
         slug: (json['slug'] as String?) ?? '',
         address: json['address'] as String?,
         cashbackRatePercent: json['cashback_rate_percent'] as String?,
+        logoUrl: json['logo_url'] as String?,
+        favourite: json['favourite'] as bool? ?? false,
         fulfilment: json['fulfilment'] as String?,
         rating: (json['rating'] as num?)?.toDouble(),
         ratingCount: json['rating_count'] as int? ?? 0,
@@ -51,6 +55,13 @@ class MarketBranch {
 
   /// The store's standing rate, or null when it has none yet.
   final String? cashbackRatePercent;
+
+  /// The shop's own mark, or null when it has not uploaded one.
+  final String? logoUrl;
+
+  /// Whether THIS shopper has hearted the shop. False for a signed-out
+  /// visitor, which is right — browsing is public and has no favourites.
+  final bool favourite;
   final String? fulfilment;
 
   /// Null until somebody has rated it. NEVER 0.0 — a new shop has no
@@ -186,6 +197,7 @@ class MarketStore {
     required this.ratingCount,
     required this.delivery,
     this.cashbackRatePercent,
+    this.logoUrl,
     required this.categories,
     required this.products,
   });
@@ -201,6 +213,7 @@ class MarketStore {
           (json['delivery'] as Map?)?.cast<String, dynamic>() ?? const {},
         ),
         cashbackRatePercent: json['cashback_rate_percent'] as String?,
+        logoUrl: json['logo_url'] as String?,
         categories: ((json['categories'] as List?) ?? const [])
             .map((row) =>
                 MarketCategory.fromJson((row as Map).cast<String, dynamic>()))
@@ -219,6 +232,7 @@ class MarketStore {
   final int ratingCount;
   final DeliveryTerms delivery;
   final String? cashbackRatePercent;
+  final String? logoUrl;
 
   /// Only the aisles this shop actually stocks — an empty chip is a promise
   /// the shelf cannot keep.
@@ -241,4 +255,160 @@ class MarketCategory {
 
   String label(bool dhivehi) =>
       dhivehi && (nameDv?.isNotEmpty ?? false) ? nameDv! : nameEn;
+}
+
+
+/// A product found ACROSS stores (`AI Product Search.png`).
+///
+/// The shop is an attribute of the result, not a step before it — a shopper
+/// wants rice, and which shop has it is our problem rather than theirs.
+class SearchHit {
+  const SearchHit({
+    required this.branchProductId,
+    required this.productId,
+    required this.name,
+    required this.priceLaari,
+    required this.inStock,
+    required this.store,
+    required this.delivery,
+    this.nameDv,
+    this.imageUrl,
+    this.compareAtLaari,
+    this.cashbackRatePercent,
+  });
+
+  factory SearchHit.fromJson(Map<String, dynamic> json) => SearchHit(
+        branchProductId: json['branch_product_id'] as int? ?? 0,
+        productId: json['product_id'] as int? ?? 0,
+        name: (json['name'] as String?) ?? '',
+        nameDv: json['name_dv'] as String?,
+        imageUrl: json['image_url'] as String?,
+        priceLaari: json['price_laari'] as int? ?? 0,
+        compareAtLaari: json['compare_at_laari'] as int?,
+        inStock: json['in_stock'] as bool? ?? true,
+        cashbackRatePercent: json['cashback_rate_percent'] as String?,
+        store: SearchStore.fromJson(
+          ((json['store'] as Map?) ?? const {}).cast<String, dynamic>(),
+        ),
+        delivery: DeliveryTerms.fromJson(
+          ((json['delivery'] as Map?) ?? const {}).cast<String, dynamic>(),
+        ),
+      );
+
+  final int branchProductId;
+  final int productId;
+  final String name;
+  final String? nameDv;
+  final String? imageUrl;
+  final int priceLaari;
+  final int? compareAtLaari;
+  final bool inStock;
+  final String? cashbackRatePercent;
+  final SearchStore store;
+  final DeliveryTerms delivery;
+
+  bool get discounted =>
+      compareAtLaari != null && compareAtLaari! > priceLaari;
+}
+
+class SearchStore {
+  const SearchStore({
+    required this.branchId,
+    required this.name,
+    required this.branchName,
+    required this.ratingCount,
+    this.logoUrl,
+    this.rating,
+  });
+
+  factory SearchStore.fromJson(Map<String, dynamic> json) => SearchStore(
+        branchId: json['branch_id'] as int? ?? 0,
+        name: (json['name'] as String?) ?? '',
+        branchName: (json['branch_name'] as String?) ?? '',
+        ratingCount: json['rating_count'] as int? ?? 0,
+        logoUrl: json['logo_url'] as String?,
+        rating: (json['rating'] as num?)?.toDouble(),
+      );
+
+  final int branchId;
+  final String name;
+  final String branchName;
+  final int ratingCount;
+  final String? logoUrl;
+  final double? rating;
+}
+
+/// What the search understood, so the chips on screen are a readout of the
+/// query rather than decoration.
+class SearchFacet {
+  const SearchFacet({required this.key, required this.label});
+
+  factory SearchFacet.fromJson(Map<String, dynamic> json) => SearchFacet(
+        key: (json['key'] as String?) ?? '',
+        label: (json['label'] as String?) ?? '',
+      );
+
+  final String key;
+  final String label;
+}
+
+class SearchResults {
+  const SearchResults({
+    required this.hits,
+    required this.facets,
+    required this.summary,
+  });
+
+  factory SearchResults.fromJson(Map<String, dynamic> json) {
+    final meta = (json['meta'] as Map?)?.cast<String, dynamic>();
+
+    return SearchResults(
+      hits: ((json['data'] as List?) ?? const [])
+          .whereType<Map>()
+          .map((row) => SearchHit.fromJson(row.cast<String, dynamic>()))
+          .toList(growable: false),
+      facets: ((meta?['facets'] as List?) ?? const [])
+          .whereType<Map>()
+          .map((row) => SearchFacet.fromJson(row.cast<String, dynamic>()))
+          .toList(growable: false),
+      summary: (meta?['summary'] as String?) ?? '',
+    );
+  }
+
+  final List<SearchHit> hits;
+  final List<SearchFacet> facets;
+  final String summary;
+}
+
+
+/// One product opened on its own. Everything [SearchHit] has, plus the
+/// detail a shopper wants before committing — and the store block, because
+/// deciding to buy is also deciding who to buy from.
+class ProductDetail {
+  const ProductDetail({
+    required this.hit,
+    required this.images,
+    required this.allowSubstitutions,
+    this.description,
+    this.stockQty,
+  });
+
+  factory ProductDetail.fromJson(Map<String, dynamic> json) => ProductDetail(
+        hit: SearchHit.fromJson(json),
+        description: json['description'] as String?,
+        allowSubstitutions: json['allow_substitutions'] as bool? ?? false,
+        stockQty: json['stock_qty'] as int?,
+        images: ((json['images'] as List?) ?? const [])
+            .whereType<String>()
+            .toList(growable: false),
+      );
+
+  final SearchHit hit;
+  final String? description;
+  final bool allowSubstitutions;
+  final int? stockQty;
+  final List<String> images;
+
+  /// Worth warning about, and only when it is genuinely tight.
+  bool get lowStock => stockQty != null && stockQty! > 0 && stockQty! <= 5;
 }

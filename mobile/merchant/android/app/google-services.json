@@ -1,5 +1,4 @@
 {
-  "_PLACEHOLDER": "mv.manfaa.merchant is NOT yet registered in Firebase console project manfaa-6e1b4. project_number/project_id/storage_bucket are the REAL project values; mobilesdk_app_id and current_key are syntactically valid FAKES so the google-services gradle plugin parses and the build works today. After registering the Android app mv.manfaa.merchant in the console, download the real google-services.json over this file AND update lib/firebase_options.dart to match — zero code changes, push lights up.",
   "project_info": {
     "project_number": "932894903426",
     "project_id": "manfaa-6e1b4",
@@ -8,7 +7,26 @@
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:932894903426:android:0000000000000000c0ffee",
+        "mobilesdk_app_id": "1:932894903426:android:ac9c4b19d959a85dfcf89b",
+        "android_client_info": {
+          "package_name": "mv.manfaa.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBhxd62YIEyOLUopyOst4p4EZ8Q-Ojjt1k"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:932894903426:android:9dd4ed6541066c76fcf89b",
         "android_client_info": {
           "package_name": "mv.manfaa.merchant"
         }
@@ -16,7 +34,7 @@
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyPLACEHOLDER0000000000000000000000"
+          "current_key": "AIzaSyBhxd62YIEyOLUopyOst4p4EZ8Q-Ojjt1k"
         }
       ],
       "services": {

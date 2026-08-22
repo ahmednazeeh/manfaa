@@ -97,23 +97,23 @@ void main() {
     // MR10: the liability is told ONCE, not five times. MR11 took the
     // ageing strip out of the card too, so the amount is on screen exactly
     // once and the accounting still sits behind "View breakdown".
-    expect(find.text('MVR 27.50'), findsOneWidget);
+    expect(find.text('MVR 27.50'), findsOneWidget);
     expect(find.text('1 transaction'), findsOneWidget);
     // The ageing columns are gone from the dashboard entirely — that story
     // lives in Settlements now.
     expect(find.text('0–5 days'), findsNothing);
     expect(find.text('Aging'), findsNothing);
     // Collapsed by default: the cashback/fee rows are not on screen yet.
-    expect(find.text('MVR 20.00'), findsNothing);
+    expect(find.text('MVR 20.00'), findsNothing);
 
     await tester.tap(find.text('View breakdown'));
     await tester.pumpAndSettle();
-    expect(find.text('MVR 20.00'), findsOneWidget); // cashback row
-    expect(find.text('MVR 7.50'), findsOneWidget); // fee row
+    expect(find.text('MVR 20.00'), findsOneWidget); // cashback row
+    expect(find.text('MVR 7.50'), findsOneWidget); // fee row
 
     // The saving reads as an ACTION with its deadline, and names the fee
     // it applies to — clock_start 10 Aug + 15 days, server's own integer.
-    expect(find.textContaining('Save MVR 0.38 by settling before'), findsOneWidget);
+    expect(find.textContaining('Save MVR 0.38 by settling before'), findsOneWidget);
     expect(find.textContaining('25 Aug 2026'), findsOneWidget);
     expect(
       find.textContaining('prompt-payment discount on platform fees'),
@@ -172,7 +172,7 @@ void main() {
     // Bank transfer is still there, and it is what the CTA takes.
     expect(find.text('Bank transfer'), findsOneWidget);
 
-    await tester.tap(find.text('Pay MVR 27.12'));
+    await tester.tap(find.text('Pay MVR 27.12'));
     await tester.pumpAndSettle();
 
     expect(find.text('Transfer exactly this amount'), findsWidgets);
@@ -231,7 +231,7 @@ void main() {
       expect(find.text('INV-2108'), findsNothing);
 
       // …and the pay path carries that same selection, never settle_all.
-      await tester.tap(find.text('Pay MVR 27.12'));
+      await tester.tap(find.text('Pay MVR 27.12'));
       await tester.pumpAndSettle();
       expect(api.previews.last.settleAll, isFalse);
       expect(api.previews.last.ids, [61]);
@@ -284,7 +284,7 @@ void main() {
       await tester.tap(find.byKey(const Key('picker-apply')));
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('Pay MVR 27.12'));
+      await tester.tap(find.text('Pay MVR 27.12'));
       await tester.pumpAndSettle();
       expect(api.previews.last.settleAll, isTrue);
       expect(api.previews.last.ids, isNull);
@@ -300,11 +300,11 @@ void main() {
     expect(find.text('Insufficient'), findsNothing);
     await tester.tap(find.text('Wallet balance'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Pay MVR 27.12'));
+    await tester.tap(find.text('Pay MVR 27.12'));
     await tester.pumpAndSettle();
 
     // The confirm dialog names the exact amount to draw.
-    expect(find.textContaining('MVR 27.12 will be drawn'), findsOneWidget);
+    expect(find.textContaining('MVR 27.12 will be drawn'), findsOneWidget);
     await tester.tap(find.text('Settle from wallet'));
     await tester.pumpAndSettle();
 
@@ -330,7 +330,7 @@ void main() {
 
     await tester.tap(find.text('Wallet balance'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Pay MVR 27.12'));
+    await tester.tap(find.text('Pay MVR 27.12'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Settle from wallet'));
     await tester.pumpAndSettle();
@@ -412,8 +412,8 @@ void main() {
     await goSettlements(tester);
     expect(find.textContaining('prompt-payment discount'), findsNothing);
     // The board still prices and pays without one — at the undiscounted due.
-    expect(find.text('MVR 27.50'), findsWidgets);
-    expect(find.text('Pay MVR 27.50'), findsOneWidget);
+    expect(find.text('MVR 27.50'), findsWidgets);
+    expect(find.text('Pay MVR 27.50'), findsOneWidget);
   });
 }
 

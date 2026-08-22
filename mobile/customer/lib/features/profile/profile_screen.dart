@@ -55,13 +55,24 @@ class ProfileScreen extends ConsumerWidget {
     final muted = theme.colorScheme.onSurfaceVariant;
     final session = ref.watch(sessionProvider);
     final locale = ref.watch(localeProvider);
-    final name = session.customerName ?? '';
+    // Dhivehi readers see their Thaana name; the fallback keeps a name on
+    // screen for anyone whose was never written.
+    final name = displayName(
+      english: session.customerName ?? '',
+      dhivehi: session.customerNameDv,
+      preferDhivehi: locale.languageCode == 'dv',
+    );
 
     return Scaffold(
       body: SafeArea(
         bottom: false,
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(Gap.lg, Gap.md, Gap.lg, Gap.navClearance),
+          padding: const EdgeInsets.fromLTRB(
+            Gap.lg,
+            Gap.md,
+            Gap.lg,
+            Gap.navClearance,
+          ),
           children: [
             ManfaaTopBar(
               initials: initialsFor(name),
@@ -88,7 +99,9 @@ class ProfileScreen extends ConsumerWidget {
                         Text(
                           session.customerCode ?? '',
                           textDirection: TextDirection.ltr,
-                          style: theme.textTheme.bodyMedium?.copyWith(color: muted),
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: muted,
+                          ),
                         ),
                       ],
                     ),
@@ -98,19 +111,41 @@ class ProfileScreen extends ConsumerWidget {
             ),
             const SizedBox(height: Gap.lg),
 
+            // The Thaana name a model wrote at registration, and the place to
+            // correct it — a transliterated name is a guess until its owner
+            // says otherwise.
+            _MenuCard(
+              children: [
+                _MenuRow(
+                  tile: const IconTile(
+                    Icons.translate_rounded,
+                    tint: ManfaaTint.violet,
+                  ),
+                  title: l10n.dhivehiNameTitle,
+                  subtitle: session.customerNameDv ?? l10n.dhivehiNameEmpty,
+                  onTap: () => context.push('/profile/dhivehi-name'),
+                ),
+              ],
+            ),
+            const SizedBox(height: Gap.lg),
+
             // Payout account
             _MenuCard(
               children: [
                 _MenuRow(
-                  tile: const IconTile(Icons.account_balance_rounded,
-                      tint: ManfaaTint.green),
+                  tile: const IconTile(
+                    Icons.account_balance_rounded,
+                    tint: ManfaaTint.green,
+                  ),
                   title: l10n.payoutAccountTitle,
                   subtitle: l10n.payoutAccountTileBody,
                   onTap: () => context.push('/profile/payout-account'),
                 ),
                 _MenuRow(
-                  tile: const IconTile(Icons.devices_rounded,
-                      tint: ManfaaTint.blue),
+                  tile: const IconTile(
+                    Icons.devices_rounded,
+                    tint: ManfaaTint.blue,
+                  ),
                   title: l10n.profileDevices,
                   subtitle: l10n.profileDevicesBody,
                   onTap: () => context.push('/profile/devices'),
@@ -125,24 +160,28 @@ class ProfileScreen extends ConsumerWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   _SettingLabel(
-                      icon: Icons.brightness_6_rounded,
-                      tint: ManfaaTint.violet,
-                      label: l10n.profileTheme),
+                    icon: Icons.brightness_6_rounded,
+                    tint: ManfaaTint.violet,
+                    label: l10n.profileTheme,
+                  ),
                   const SizedBox(height: Gap.md),
                   SegmentedButton<ThemeMode>(
                     segments: [
                       ButtonSegment(
-                          value: ThemeMode.light,
-                          icon: const Icon(Icons.light_mode_rounded),
-                          label: Text(l10n.themeLight)),
+                        value: ThemeMode.light,
+                        icon: const Icon(Icons.light_mode_rounded),
+                        label: Text(l10n.themeLight),
+                      ),
                       ButtonSegment(
-                          value: ThemeMode.dark,
-                          icon: const Icon(Icons.dark_mode_rounded),
-                          label: Text(l10n.themeDark)),
+                        value: ThemeMode.dark,
+                        icon: const Icon(Icons.dark_mode_rounded),
+                        label: Text(l10n.themeDark),
+                      ),
                       ButtonSegment(
-                          value: ThemeMode.system,
-                          icon: const Icon(Icons.brightness_auto_rounded),
-                          label: Text(l10n.themeSystem)),
+                        value: ThemeMode.system,
+                        icon: const Icon(Icons.brightness_auto_rounded),
+                        label: Text(l10n.themeSystem),
+                      ),
                     ],
                     selected: {ref.watch(themeModeProvider)},
                     showSelectedIcon: false,
@@ -160,16 +199,21 @@ class ProfileScreen extends ConsumerWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   _SettingLabel(
-                      icon: Icons.language_rounded,
-                      tint: ManfaaTint.amber,
-                      label: l10n.profileLanguage),
+                    icon: Icons.language_rounded,
+                    tint: ManfaaTint.amber,
+                    label: l10n.profileLanguage,
+                  ),
                   const SizedBox(height: Gap.md),
                   SegmentedButton<String>(
                     segments: [
                       ButtonSegment(
-                          value: 'en', label: Text(l10n.languageEnglish)),
+                        value: 'en',
+                        label: Text(l10n.languageEnglish),
+                      ),
                       ButtonSegment(
-                          value: 'dv', label: Text(l10n.languageDhivehi)),
+                        value: 'dv',
+                        label: Text(l10n.languageDhivehi),
+                      ),
                     ],
                     selected: {locale.languageCode},
                     onSelectionChanged: (s) =>
@@ -182,21 +226,35 @@ class ProfileScreen extends ConsumerWidget {
 
             // Notifications
             ManfaaCard(
-              padding: const EdgeInsets.fromLTRB(Gap.lg, Gap.sm, Gap.md, Gap.sm),
+              padding: const EdgeInsets.fromLTRB(
+                Gap.lg,
+                Gap.sm,
+                Gap.md,
+                Gap.sm,
+              ),
               child: Row(
                 children: [
-                  const IconTile(Icons.notifications_rounded,
-                      tint: ManfaaTint.coral, size: 40, iconSize: 20),
+                  const IconTile(
+                    Icons.notifications_rounded,
+                    tint: ManfaaTint.coral,
+                    size: 40,
+                    iconSize: 20,
+                  ),
                   const SizedBox(width: Gap.md),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(l10n.notificationsTitle,
-                            style: theme.textTheme.titleMedium),
-                        Text(l10n.notificationsBody,
-                            style: theme.textTheme.bodySmall
-                                ?.copyWith(color: muted)),
+                        Text(
+                          l10n.notificationsTitle,
+                          style: theme.textTheme.titleMedium,
+                        ),
+                        Text(
+                          l10n.notificationsBody,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: muted,
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -216,16 +274,23 @@ class ProfileScreen extends ConsumerWidget {
             ManfaaCard(
               onTap: () => _signOut(context, ref),
               padding: const EdgeInsets.symmetric(
-                  horizontal: Gap.lg, vertical: Gap.lg),
+                horizontal: Gap.lg,
+                vertical: Gap.lg,
+              ),
               child: Row(
                 children: [
-                  const IconTile(Icons.logout_rounded,
-                      tint: ManfaaTint.coral, size: 40, iconSize: 20),
+                  const IconTile(
+                    Icons.logout_rounded,
+                    tint: ManfaaTint.coral,
+                    size: 40,
+                    iconSize: 20,
+                  ),
                   const SizedBox(width: Gap.md),
                   Text(
                     l10n.signOut,
-                    style: theme.textTheme.titleMedium
-                        ?.copyWith(color: ManfaaColors.coralDeep),
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      color: ManfaaColors.coralDeep,
+                    ),
                   ),
                   const Spacer(),
                   Icon(Icons.chevron_right_rounded, color: muted),
@@ -272,22 +337,39 @@ class _EditableAvatarState extends ConsumerState<_EditableAvatar> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(Gap.xl, Gap.xl, Gap.xl, Gap.sm),
-              child: Text(l10n.profilePhotoTitle,
-                  style: theme.textTheme.titleMedium),
+              padding: const EdgeInsets.fromLTRB(
+                Gap.xl,
+                Gap.xl,
+                Gap.xl,
+                Gap.sm,
+              ),
+              child: Text(
+                l10n.profilePhotoTitle,
+                style: theme.textTheme.titleMedium,
+              ),
             ),
             ListTile(
-              leading: const IconTile(Icons.photo_library_rounded,
-                  tint: ManfaaTint.violet, size: 40, iconSize: 20),
+              leading: const IconTile(
+                Icons.photo_library_rounded,
+                tint: ManfaaTint.violet,
+                size: 40,
+                iconSize: 20,
+              ),
               title: Text(l10n.choosePhoto),
               onTap: () => Navigator.pop(context, _PhotoAction.choose),
             ),
             if (hasPhoto)
               ListTile(
-                leading: const IconTile(Icons.delete_outline_rounded,
-                    tint: ManfaaTint.coral, size: 40, iconSize: 20),
-                title: Text(l10n.removePhoto,
-                    style: TextStyle(color: ManfaaColors.coralDeep)),
+                leading: const IconTile(
+                  Icons.delete_outline_rounded,
+                  tint: ManfaaTint.coral,
+                  size: 40,
+                  iconSize: 20,
+                ),
+                title: Text(
+                  l10n.removePhoto,
+                  style: TextStyle(color: ManfaaColors.coralDeep),
+                ),
                 onTap: () => Navigator.pop(context, _PhotoAction.remove),
               ),
             const SizedBox(height: Gap.md),
@@ -342,17 +424,20 @@ class _EditableAvatarState extends ConsumerState<_EditableAvatar> {
       // it rather than let a cached copy disagree.
       ref.invalidate(homeProvider);
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(done)));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(done)));
       }
     } catch (e) {
       if (mounted) {
         // The contract's error rule: the server's prose is safe to show;
         // anything else gets the generic sentence.
-        final message =
-            e is MobileApiException ? e.message : context.l10n.errorGeneric;
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(message)));
+        final message = e is MobileApiException
+            ? e.message
+            : context.l10n.errorGeneric;
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(message)));
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -436,8 +521,12 @@ class _MenuCard extends StatelessWidget {
     final divided = <Widget>[];
     for (var i = 0; i < children.length; i++) {
       if (i > 0) {
-        divided.add(Divider(
-            height: 1, color: Theme.of(context).colorScheme.outlineVariant));
+        divided.add(
+          Divider(
+            height: 1,
+            color: Theme.of(context).colorScheme.outlineVariant,
+          ),
+        );
       }
       divided.add(children[i]);
     }
@@ -468,7 +557,10 @@ class _MenuRow extends StatelessWidget {
     return InkWell(
       onTap: onTap,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: Gap.lg, vertical: Gap.lg),
+        padding: const EdgeInsets.symmetric(
+          horizontal: Gap.lg,
+          vertical: Gap.lg,
+        ),
         child: Row(
           children: [
             tile,
@@ -479,8 +571,10 @@ class _MenuRow extends StatelessWidget {
                 children: [
                   Text(title, style: theme.textTheme.titleMedium),
                   const SizedBox(height: 2),
-                  Text(subtitle,
-                      style: theme.textTheme.bodySmall?.copyWith(color: muted)),
+                  Text(
+                    subtitle,
+                    style: theme.textTheme.bodySmall?.copyWith(color: muted),
+                  ),
                 ],
               ),
             ),
@@ -493,8 +587,11 @@ class _MenuRow extends StatelessWidget {
 }
 
 class _SettingLabel extends StatelessWidget {
-  const _SettingLabel(
-      {required this.icon, required this.tint, required this.label});
+  const _SettingLabel({
+    required this.icon,
+    required this.tint,
+    required this.label,
+  });
   final IconData icon;
   final ManfaaTint tint;
   final String label;

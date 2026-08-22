@@ -121,8 +121,9 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
       await action();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(_describe(e))));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(_describe(e))));
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -130,66 +131,70 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
   }
 
   Future<void> _requestCode() => _run(() async {
-        try {
-          await ref.read(apiProvider).requestOtp(_normalizedPhone);
-        } on MobileApiException catch (e) {
-          // The SMS budget is spent — but a code delivered earlier is still
-          // redeemable for its 10-minute life (verify has its own throttle).
-          // Move to the code field anyway rather than trapping a user who is
-          // holding a valid code on the phone step. _run still shows the
-          // wait via the snackbar.
-          if (e.code == ApiCode.rateLimited && _step == _Step.phone) {
-            _code.clear();
-            if (mounted) setState(() => _step = _Step.code);
-          }
-          rethrow;
-        }
-        if (!mounted) return;
+    try {
+      await ref.read(apiProvider).requestOtp(_normalizedPhone);
+    } on MobileApiException catch (e) {
+      // The SMS budget is spent — but a code delivered earlier is still
+      // redeemable for its 10-minute life (verify has its own throttle).
+      // Move to the code field anyway rather than trapping a user who is
+      // holding a valid code on the phone step. _run still shows the
+      // wait via the snackbar.
+      if (e.code == ApiCode.rateLimited && _step == _Step.phone) {
         _code.clear();
-        setState(() => _step = _Step.code);
-        _startResendCooldown();
-      });
+        if (mounted) setState(() => _step = _Step.code);
+      }
+      rethrow;
+    }
+    if (!mounted) return;
+    _code.clear();
+    setState(() => _step = _Step.code);
+    _startResendCooldown();
+  });
 
   Future<void> _verify() => _run(() async {
-        final outcome = await ref.read(apiProvider).verifyOtp(
-              phone: _normalizedPhone,
-              code: _code.text.trim(),
-              deviceName: await _deviceName(),
-            );
+    final outcome = await ref
+        .read(apiProvider)
+        .verifyOtp(
+          phone: _normalizedPhone,
+          code: _code.text.trim(),
+          deviceName: await _deviceName(),
+        );
 
-        if (!mounted) return;
+    if (!mounted) return;
 
-        if (outcome.signedIn) {
-          context.go('/home');
-          return;
-        }
+    if (outcome.signedIn) {
+      context.go('/home');
+      return;
+    }
 
-        _signupToken = outcome.signupToken;
-        setState(() => _step = _Step.name);
-      });
+    _signupToken = outcome.signupToken;
+    setState(() => _step = _Step.name);
+  });
 
   Future<void> _register() => _run(() async {
-        try {
-          await ref.read(apiProvider).registerWithOtp(
-                signupToken: _signupToken ?? '',
-                name: _name.text.trim(),
-                deviceName: await _deviceName(),
-              );
-        } on MobileApiException catch (e) {
-          // Both of these mean the signup token is DEAD and re-tapping Finish
-          // can only earn the same 422/429 forever — the name step has no
-          // other exit. Send the user back to the phone step to start clean;
-          // _run still surfaces the reason.
-          if (e.code == 'signup_token_invalid' ||
-              e.code == 'phone_already_registered') {
-            _signupToken = null;
-            if (mounted) setState(() => _step = _Step.phone);
-          }
-          rethrow;
-        }
+    try {
+      await ref
+          .read(apiProvider)
+          .registerWithOtp(
+            signupToken: _signupToken ?? '',
+            name: _name.text.trim(),
+            deviceName: await _deviceName(),
+          );
+    } on MobileApiException catch (e) {
+      // Both of these mean the signup token is DEAD and re-tapping Finish
+      // can only earn the same 422/429 forever — the name step has no
+      // other exit. Send the user back to the phone step to start clean;
+      // _run still surfaces the reason.
+      if (e.code == 'signup_token_invalid' ||
+          e.code == 'phone_already_registered') {
+        _signupToken = null;
+        if (mounted) setState(() => _step = _Step.phone);
+      }
+      rethrow;
+    }
 
-        if (mounted) context.go('/home');
-      });
+    if (mounted) context.go('/home');
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -226,8 +231,9 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
             Text(
               sub,
               textDirection: _step == _Step.code ? TextDirection.ltr : null,
-              style: theme.textTheme.bodyLarge
-                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+              style: theme.textTheme.bodyLarge?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
             ),
             const SizedBox(height: Gap.xl),
             ManfaaCard(
@@ -251,131 +257,141 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
   }
 
   Widget _primary(String label, VoidCallback? onPressed) => FilledButton(
-        onPressed: onPressed,
-        child: _busy
-            ? _spinner()
-            : Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Flexible(
-                    child: Text(label,
-                        maxLines: 1, overflow: TextOverflow.ellipsis),
-                  ),
-                  const SizedBox(width: Gap.sm),
-                  const Icon(Icons.arrow_forward_rounded, size: 20),
-                ],
+    onPressed: onPressed,
+    child: _busy
+        ? _spinner()
+        : Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Flexible(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
-      );
+              const SizedBox(width: Gap.sm),
+              const Icon(Icons.arrow_forward_rounded, size: 20),
+            ],
+          ),
+  );
 
   List<Widget> _phoneStep(dynamic l10n, ThemeData theme) => [
-        Text(l10n.phoneLabel, style: theme.textTheme.labelLarge),
-        const SizedBox(height: Gap.sm),
-        TextField(
-          controller: _phone,
-          keyboardType: TextInputType.phone,
-          textDirection: TextDirection.ltr,
-          style: theme.textTheme.titleMedium,
-          decoration: InputDecoration(
-            hintText: l10n.phoneHint,
-            prefixIcon: Padding(
-              padding: const EdgeInsets.only(left: 16, right: 12),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text('🇲🇻', style: TextStyle(fontSize: 20)),
-                  const SizedBox(width: 8),
-                  Text('+960',
-                      textDirection: TextDirection.ltr,
-                      style: theme.textTheme.titleMedium),
-                  const SizedBox(width: 10),
-                  Container(
-                      width: 1,
-                      height: 24,
-                      color: theme.colorScheme.outlineVariant),
-                ],
+    Text(l10n.phoneLabel, style: theme.textTheme.labelLarge),
+    const SizedBox(height: Gap.sm),
+    TextField(
+      controller: _phone,
+      keyboardType: TextInputType.phone,
+      textDirection: TextDirection.ltr,
+      style: theme.textTheme.titleMedium,
+      decoration: InputDecoration(
+        hintText: l10n.phoneHint,
+        prefixIcon: Padding(
+          padding: const EdgeInsets.only(left: 16, right: 12),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('🇲🇻', style: TextStyle(fontSize: 20)),
+              const SizedBox(width: 8),
+              Text(
+                '+960',
+                textDirection: TextDirection.ltr,
+                style: theme.textTheme.titleMedium,
               ),
-            ),
-            prefixIconConstraints:
-                const BoxConstraints(minWidth: 0, minHeight: 0),
+              const SizedBox(width: 10),
+              Container(
+                width: 1,
+                height: 24,
+                color: theme.colorScheme.outlineVariant,
+              ),
+            ],
           ),
         ),
-        const SizedBox(height: Gap.sm),
-        Text(l10n.otpDeliveryNote,
-            style: theme.textTheme.bodySmall
-                ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
-        const SizedBox(height: Gap.lg),
-        _primary(l10n.continueLabel, _busy ? null : _requestCode),
-      ];
+        prefixIconConstraints: const BoxConstraints(minWidth: 0, minHeight: 0),
+      ),
+    ),
+    const SizedBox(height: Gap.sm),
+    Text(
+      l10n.otpDeliveryNote,
+      style: theme.textTheme.bodySmall?.copyWith(
+        color: theme.colorScheme.onSurfaceVariant,
+      ),
+    ),
+    const SizedBox(height: Gap.lg),
+    _primary(l10n.continueLabel, _busy ? null : _requestCode),
+  ];
 
   List<Widget> _codeStep(dynamic l10n, ThemeData theme) => [
-        TextField(
-          controller: _code,
-          keyboardType: TextInputType.number,
-          maxLength: 6,
-          autofocus: true,
-          textDirection: TextDirection.ltr,
-          textAlign: TextAlign.center,
-          style: theme.textTheme.headlineMedium
-              ?.copyWith(letterSpacing: 8, fontWeight: FontWeight.w700),
-          decoration: const InputDecoration(counterText: '', hintText: '••••••'),
-        ),
-        const SizedBox(height: Gap.lg),
-        _primary(l10n.verifyLabel, _busy ? null : _verify),
-        const SizedBox(height: Gap.xs),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            TextButton(
-              onPressed: _busy
-                  ? null
-                  : () {
-                      _resendTimer?.cancel();
-                      setState(() {
-                        _resendIn = 0;
-                        _step = _Step.phone;
-                      });
-                    },
-              child: Text(l10n.back),
-            ),
-            TextButton(
-              onPressed: _busy || _resendIn > 0 ? null : _requestCode,
-              child: Text(
-                _resendIn > 0 ? l10n.resendCountdown(_resendIn) : l10n.resendCode,
-              ),
-            ),
-          ],
-        ),
-      ];
-
-  List<Widget> _nameStep(dynamic l10n, ThemeData theme) => [
-        Text(l10n.nameLabel, style: theme.textTheme.labelLarge),
-        const SizedBox(height: Gap.sm),
-        TextField(
-          controller: _name,
-          autofocus: true,
-          textCapitalization: TextCapitalization.words,
-          decoration: InputDecoration(hintText: l10n.nameLabel),
-        ),
-        const SizedBox(height: Gap.lg),
-        _primary(l10n.finishLabel, _busy ? null : _register),
-        const SizedBox(height: Gap.xs),
+    TextField(
+      controller: _code,
+      keyboardType: TextInputType.number,
+      maxLength: 6,
+      autofocus: true,
+      textDirection: TextDirection.ltr,
+      textAlign: TextAlign.center,
+      style: theme.textTheme.headlineMedium?.copyWith(
+        letterSpacing: 8,
+        fontWeight: FontWeight.w700,
+      ),
+      decoration: const InputDecoration(counterText: '', hintText: '••••••'),
+    ),
+    const SizedBox(height: Gap.lg),
+    _primary(l10n.verifyLabel, _busy ? null : _verify),
+    const SizedBox(height: Gap.xs),
+    Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
         TextButton(
           onPressed: _busy
               ? null
-              : () => setState(() {
-                    _signupToken = null;
+              : () {
+                  _resendTimer?.cancel();
+                  setState(() {
+                    _resendIn = 0;
                     _step = _Step.phone;
-                  }),
+                  });
+                },
           child: Text(l10n.back),
         ),
-      ];
+        TextButton(
+          onPressed: _busy || _resendIn > 0 ? null : _requestCode,
+          child: Text(
+            _resendIn > 0 ? l10n.resendCountdown(_resendIn) : l10n.resendCode,
+          ),
+        ),
+      ],
+    ),
+  ];
+
+  List<Widget> _nameStep(dynamic l10n, ThemeData theme) => [
+    Text(l10n.nameLabel, style: theme.textTheme.labelLarge),
+    const SizedBox(height: Gap.sm),
+    TextField(
+      controller: _name,
+      autofocus: true,
+      textCapitalization: TextCapitalization.words,
+      decoration: InputDecoration(hintText: l10n.nameLabel),
+    ),
+    const SizedBox(height: Gap.lg),
+    _primary(l10n.finishLabel, _busy ? null : _register),
+    const SizedBox(height: Gap.xs),
+    TextButton(
+      onPressed: _busy
+          ? null
+          : () => setState(() {
+              _signupToken = null;
+              _step = _Step.phone;
+            }),
+      child: Text(l10n.back),
+    ),
+  ];
 
   Widget _spinner() => const SizedBox(
-        width: 20,
-        height: 20,
-        child: CircularProgressIndicator(strokeWidth: 2),
-      );
+    width: 20,
+    height: 20,
+    child: CircularProgressIndicator(strokeWidth: 2),
+  );
 }
 
 /// A light, playful hero standing in for the mockup's 3D wallet — a soft
@@ -403,7 +419,11 @@ class _AuthHero extends StatelessWidget {
           Positioned(
             left: 24,
             top: 34,
-            child: ManfaaMark(size: 64, color: ManfaaColors.coral),
+            child: BrandLogo(
+              shape: BrandLogoShape.square,
+              height: 88,
+              semanticLabel: 'Manfaa',
+            ),
           ),
           const Positioned(top: 26, right: 40, child: _Coin(size: 46)),
           const Positioned(bottom: 24, right: 96, child: _Coin(size: 30)),
@@ -414,11 +434,16 @@ class _AuthHero extends StatelessWidget {
               width: 54,
               height: 54,
               decoration: BoxDecoration(
-                color: ManfaaColors.violet.withValues(alpha: dark ? 0.35 : 0.16),
+                color: ManfaaColors.violet.withValues(
+                  alpha: dark ? 0.35 : 0.16,
+                ),
                 borderRadius: BorderRadius.circular(16),
               ),
-              child: const Icon(Icons.percent_rounded,
-                  color: ManfaaColors.violet, size: 26),
+              child: const Icon(
+                Icons.percent_rounded,
+                color: ManfaaColors.violet,
+                size: 26,
+              ),
             ),
           ),
         ],
@@ -440,7 +465,11 @@ class _Coin extends StatelessWidget {
         color: ManfaaColors.amber,
         shape: BoxShape.circle,
         boxShadow: const [
-          BoxShadow(color: Color(0x33000000), blurRadius: 8, offset: Offset(0, 3)),
+          BoxShadow(
+            color: Color(0x33000000),
+            blurRadius: 8,
+            offset: Offset(0, 3),
+          ),
         ],
       ),
       child: Icon(Icons.percent_rounded, color: Colors.white, size: size * 0.5),
@@ -458,8 +487,12 @@ class _SecurityNote extends StatelessWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const IconTile(Icons.verified_user_rounded,
-            tint: ManfaaTint.green, size: 40, iconSize: 20),
+        const IconTile(
+          Icons.verified_user_rounded,
+          tint: ManfaaTint.green,
+          size: 40,
+          iconSize: 20,
+        ),
         const SizedBox(width: Gap.md),
         Expanded(
           child: Column(
@@ -467,9 +500,12 @@ class _SecurityNote extends StatelessWidget {
             children: [
               Text(l10n.securityTitle, style: theme.textTheme.titleMedium),
               const SizedBox(height: 2),
-              Text(l10n.securityBody,
-                  style: theme.textTheme.bodySmall
-                      ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+              Text(
+                l10n.securityBody,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
             ],
           ),
         ),

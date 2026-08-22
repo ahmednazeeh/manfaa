@@ -18,8 +18,9 @@ final activityQueryProvider = StateProvider<String>((_) => '');
 /// asks at three different moments, and one stream answered none of them
 /// well (owner decision 2026-08-19). Activity has three tabs now, so this
 /// list has one subject.
-final customerOrdersProvider =
-    FutureProvider.autoDispose<List<CustomerOrder>>((ref) {
+final customerOrdersProvider = FutureProvider.autoDispose<List<CustomerOrder>>((
+  ref,
+) {
   return ref.watch(apiProvider).orders();
 });
 
@@ -108,24 +109,28 @@ class _OrderList extends StatelessWidget {
   /// Which tab an order belongs to. Decided here rather than by asking the
   /// server three times — this is a customer's own orders, not a feed.
   static bool _inTab(CustomerOrder order, String tab) => switch (tab) {
-        'completed' => order.state == 'completed',
-        'cancelled' =>
-          order.state == 'cancelled' || order.paymentState == 'refused',
-        _ => order.state != 'completed' &&
-            order.state != 'cancelled' &&
-            order.paymentState != 'refused',
-      };
+    'completed' => order.state == 'completed',
+    'cancelled' =>
+      order.state == 'cancelled' || order.paymentState == 'refused',
+    _ =>
+      order.state != 'completed' &&
+          order.state != 'cancelled' &&
+          order.paymentState != 'refused',
+  };
 
   @override
   Widget build(BuildContext context) {
-    final shown = orders.where((order) {
-      if (!_inTab(order, tab)) return false;
-      if (query.isEmpty) return true;
+    final shown = orders
+        .where((order) {
+          if (!_inTab(order, tab)) return false;
+          if (query.isEmpty) return true;
 
-      return order.reference.toLowerCase().contains(query) ||
-          order.suborders
-              .any((sub) => sub.storeName.toLowerCase().contains(query));
-    }).toList(growable: false);
+          return order.reference.toLowerCase().contains(query) ||
+              order.suborders.any(
+                (sub) => sub.storeName.toLowerCase().contains(query),
+              );
+        })
+        .toList(growable: false);
 
     if (shown.isEmpty) {
       return Padding(
@@ -219,10 +224,12 @@ class _OrderCard extends StatelessWidget {
     final theme = Theme.of(context);
 
     final pickup = order.suborders
-        .where((sub) =>
-            sub.fulfilment == 'pickup' &&
-            sub.state == 'ready' &&
-            (sub.pickupCode ?? '').isNotEmpty)
+        .where(
+          (sub) =>
+              sub.fulfilment == 'pickup' &&
+              sub.state == 'ready' &&
+              (sub.pickupCode ?? '').isNotEmpty,
+        )
         .firstOrNull;
 
     return ManfaaCard(
@@ -238,8 +245,10 @@ class _OrderCard extends StatelessWidget {
                   color: ManfaaColors.greenSoft,
                   borderRadius: BorderRadius.circular(Corner.tile),
                 ),
-                child: const Icon(Icons.shopping_basket_outlined,
-                    color: ManfaaColors.green),
+                child: const Icon(
+                  Icons.shopping_basket_outlined,
+                  color: ManfaaColors.green,
+                ),
               ),
               const SizedBox(width: Gap.md),
               Expanded(
@@ -255,8 +264,9 @@ class _OrderCard extends StatelessWidget {
                     if (_placed(order) != null)
                       Text(
                         _when(_placed(order)!),
-                        style: theme.textTheme.bodySmall
-                            ?.copyWith(color: ManfaaColors.textMuted),
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: ManfaaColors.textMuted,
+                        ),
                       ),
                   ],
                 ),
@@ -318,20 +328,26 @@ class _OrderCard extends StatelessWidget {
             ),
             child: Row(
               children: [
-                const Icon(Icons.savings_outlined,
-                    size: 18, color: ManfaaColors.green),
+                const Icon(
+                  Icons.savings_outlined,
+                  size: 18,
+                  color: ManfaaColors.green,
+                ),
                 const SizedBox(width: Gap.sm),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Cashback after validation',
-                          style: theme.textTheme.bodySmall),
+                      Text(
+                        'Cashback after validation',
+                        style: theme.textTheme.bodySmall,
+                      ),
                       Text(
                         formatRufiyaa(order.cashbackTotalLaari),
                         maxLines: 1,
-                        style: theme.textTheme.titleMedium
-                            ?.copyWith(color: ManfaaColors.green),
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          color: ManfaaColors.green,
+                        ),
                       ),
                     ],
                   ),
@@ -342,8 +358,10 @@ class _OrderCard extends StatelessWidget {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text('Pickup code', style: theme.textTheme.bodySmall),
-                      Text(pickup.pickupCode!,
-                          style: theme.textTheme.titleMedium),
+                      Text(
+                        pickup.pickupCode!,
+                        style: theme.textTheme.titleMedium,
+                      ),
                     ],
                   ),
               ],
@@ -372,7 +390,8 @@ class _OrderCard extends StatelessWidget {
     final now = DateTime.now();
     final sameDay =
         at.year == now.year && at.month == now.month && at.day == now.day;
-    final time = '${at.hour.toString().padLeft(2, '0')}:'
+    final time =
+        '${at.hour.toString().padLeft(2, '0')}:'
         '${at.minute.toString().padLeft(2, '0')}';
 
     return sameDay ? 'Today, $time' : '${at.day}/${at.month}/${at.year}';
@@ -400,13 +419,16 @@ class _HowItWorks extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('How order cashback works',
-                    style: theme.textTheme.titleSmall),
+                Text(
+                  'How order cashback works',
+                  style: theme.textTheme.titleSmall,
+                ),
                 Text(
                   'Marketplace cashback is credited after the store '
                   'validates your order.',
-                  style: theme.textTheme.bodySmall
-                      ?.copyWith(color: ManfaaColors.textMuted),
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: ManfaaColors.textMuted,
+                  ),
                 ),
               ],
             ),
@@ -440,19 +462,19 @@ StatusTone orderStateTone(CustomerOrder order) {
 }
 
 String storeStateLabel(String state) => switch (state) {
-      'new' => 'Under review',
-      'accepted' || 'preparing' => 'Confirmed',
-      'ready' => 'Ready for pickup',
-      'out_for_delivery' => 'On the way',
-      'delivered' => 'Delivered',
-      'rejected' => 'Rejected',
-      'cancelled' => 'Cancelled',
-      _ => state,
-    };
+  'new' => 'Under review',
+  'accepted' || 'preparing' => 'Confirmed',
+  'ready' => 'Ready for pickup',
+  'out_for_delivery' => 'On the way',
+  'delivered' => 'Delivered',
+  'rejected' => 'Rejected',
+  'cancelled' => 'Cancelled',
+  _ => state,
+};
 
 StatusTone storeStateTone(String state) => switch (state) {
-      'delivered' => StatusTone.confirmed,
-      'rejected' || 'cancelled' => StatusTone.closed,
-      'new' => StatusTone.pending,
-      _ => StatusTone.paid,
-    };
+  'delivered' => StatusTone.confirmed,
+  'rejected' || 'cancelled' => StatusTone.closed,
+  'new' => StatusTone.pending,
+  _ => StatusTone.paid,
+};

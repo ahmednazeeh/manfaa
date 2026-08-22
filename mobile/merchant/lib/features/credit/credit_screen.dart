@@ -89,7 +89,9 @@ class _CreditScreenState extends ConsumerState<CreditScreen> {
   final _invoice = TextEditingController();
   final _invoiceFocus = FocusNode();
   final _eligible = TextEditingController();
+  final _eligibleFocus = FocusNode();
   final _sale = TextEditingController();
+  final _saleFocus = FocusNode();
 
   /// Business wall time (+05:00 on the wire). Only SENT when edited —
   /// untouched means "record as now", the key simply absent.
@@ -139,7 +141,9 @@ class _CreditScreenState extends ConsumerState<CreditScreen> {
     _invoice.dispose();
     _invoiceFocus.dispose();
     _eligible.dispose();
+    _eligibleFocus.dispose();
     _sale.dispose();
+    _saleFocus.dispose();
     _override.dispose();
     super.dispose();
   }
@@ -198,8 +202,23 @@ class _CreditScreenState extends ConsumerState<CreditScreen> {
   /// Enter on any of the form's text fields: submit when the form is
   /// complete, stay quiet when it is not — the [_submittable] gate is the
   /// same one the CTA button stands on.
-  void _submitFromKeyboard() {
-    if (_submittable) _submit();
+  /// The keyboard's return key WALKS the form; it never finalises.
+  ///
+  /// It used to submit a complete form (MR7, for a barcode gun's Enter). On a
+  /// touch keyboard the return key is the tick in the corner — exactly where a
+  /// thumb goes to dismiss the keyboard — and cashiers were crediting
+  /// customers by accident, mid-entry, before the amounts were right (owner
+  /// report 2026-08-20). Crediting is money leaving; it now takes the
+  /// deliberate "Credit now" press and nothing else.
+  ///
+  /// The gun still walks the till hands-free: code -> invoice -> eligible ->
+  /// full sale. Only the last step changed, and it is the step that spends.
+  void _advance(FocusNode? next) {
+    if (next == null) {
+      FocusManager.instance.primaryFocus?.unfocus();
+      return;
+    }
+    next.requestFocus();
   }
 
   // ------------------------------------------------------------ compose
@@ -873,9 +892,10 @@ class _CreditScreenState extends ConsumerState<CreditScreen> {
               controller: _invoice,
               focusNode: _invoiceFocus,
               maxLength: 64,
-              textInputAction: TextInputAction.done,
+              textInputAction: TextInputAction.next,
               onChanged: (_) => setState(() => _error = null),
-              onSubmitted: (_) => _submitFromKeyboard(),
+              onSubmitted: (_) =>
+                  _advance(_splitEnabled ? _saleFocus : _eligibleFocus),
               decoration: const InputDecoration(
                 hintText: 'INV-1001',
                 counterText: '',
@@ -909,9 +929,11 @@ class _CreditScreenState extends ConsumerState<CreditScreen> {
               const SizedBox(height: Gap.sm),
               _MvrField(
                 controller: _eligible,
+                focusNode: _eligibleFocus,
                 invalid: _eligibleInvalid,
+                textInputAction: TextInputAction.next,
                 onChanged: (_) => setState(() => _error = null),
-                onSubmitted: (_) => _submitFromKeyboard(),
+                onSubmitted: (_) => _advance(_saleFocus),
               ),
               if (_eligibleInvalid) ...[
                 const SizedBox(height: 6),
@@ -932,9 +954,10 @@ class _CreditScreenState extends ConsumerState<CreditScreen> {
             const SizedBox(height: Gap.sm),
             _MvrField(
               controller: _sale,
+              focusNode: _saleFocus,
               invalid: _saleInvalid,
               onChanged: (_) => setState(() => _error = null),
-              onSubmitted: (_) => _submitFromKeyboard(),
+              onSubmitted: (_) => _advance(null),
             ),
             if (_saleInvalid) ...[
               const SizedBox(height: 6),
@@ -1415,13 +1438,17 @@ class _MvrField extends StatelessWidget {
     required this.controller,
     required this.invalid,
     required this.onChanged,
+    this.focusNode,
     this.onSubmitted,
+    this.textInputAction = TextInputAction.done,
   });
 
   final TextEditingController controller;
   final bool invalid;
   final ValueChanged<String> onChanged;
+  final FocusNode? focusNode;
   final ValueChanged<String>? onSubmitted;
+  final TextInputAction textInputAction;
 
   @override
   Widget build(BuildContext context) {
@@ -1429,9 +1456,10 @@ class _MvrField extends StatelessWidget {
 
     return TextField(
       controller: controller,
+      focusNode: focusNode,
       keyboardType: const TextInputType.numberWithOptions(decimal: true),
       textDirection: TextDirection.ltr,
-      textInputAction: TextInputAction.done,
+      textInputAction: textInputAction,
       onChanged: onChanged,
       onSubmitted: onSubmitted,
       style: theme.textTheme.bodyLarge?.copyWith(

@@ -69,12 +69,14 @@ class CustomerMe {
     required this.customerCode,
     required this.phone,
     required this.hasPayoutAccount,
+    this.nameDv,
     this.avatarUrl,
   });
 
   factory CustomerMe.fromJson(Map<String, dynamic> json) => CustomerMe(
         id: json['id'] as int? ?? 0,
         name: _s(json['name']),
+          nameDv: json['name_dv'] as String?,
         customerCode: _s(json['customer_code']),
         phone: _s(json['phone']),
         hasPayoutAccount: json['has_payout_account'] as bool? ?? false,
@@ -83,6 +85,10 @@ class CustomerMe {
 
   final int id;
   final String name;
+
+  /// The name in Thaana. Null when the writer could not produce one, and null
+  /// after a customer clears it — both mean "show the English name".
+  final String? nameDv;
   final String customerCode;
   final String phone;
   final bool hasPayoutAccount;
@@ -95,6 +101,7 @@ class CustomerMe {
 class HomeData {
   HomeData({
     required this.customerName,
+    this.customerNameDv,
     required this.customerCode,
     required this.confirmedLaari,
     required this.pendingLaari,
@@ -114,6 +121,7 @@ class HomeData {
 
     return HomeData(
       customerName: _s(customer['name']),
+      customerNameDv: customer['name_dv'] as String?,
       customerCode: _s(customer['customer_code']),
       avatarUrl: customer['avatar_url'] as String?,
       confirmedLaari: _laari(balance['confirmed_laari']),
@@ -127,6 +135,11 @@ class HomeData {
   }
 
   final String customerName;
+
+  /// The same name written in Thaana, or null when it was never written.
+  /// The server produces it at registration and is ALLOWED to fail, so every
+  /// reader falls back to [customerName] — see `displayName` in manfaa_ui.
+  final String? customerNameDv;
   final String customerCode;
 
   /// Null until the customer sets a profile picture — the top bar's circle.

@@ -149,10 +149,12 @@ class CustomerSession extends SessionBase {
   static const _kCode = 'customer_code';
   static const _kName = 'customer_name';
   static const _kAvatar = 'avatar_url';
+  static const _kNameDv = 'customer_name_dv';
 
   String? _customerCode;
   String? _customerName;
   String? _avatarUrl;
+  String? _customerNameDv;
 
   String? get customerCode => _customerCode;
   String? get customerName => _customerName;
@@ -163,11 +165,17 @@ class CustomerSession extends SessionBase {
   /// changed picture is a changed URL.
   String? get avatarUrl => _avatarUrl;
 
+  /// The customer's name in Thaana, cached like the avatar so a Dhivehi
+  /// reader is greeted correctly before /home answers. Null is normal — the
+  /// server may never have managed to write one.
+  String? get customerNameDv => _customerNameDv;
+
   @override
   Future<void> _initProfile() async {
     _customerCode = await _store.read(_kCode);
     _customerName = await _store.read(_kName);
     _avatarUrl = await _store.read(_kAvatar);
+    _customerNameDv = await _store.read(_kNameDv);
   }
 
   Future<void> saveSession({
@@ -192,6 +200,19 @@ class CustomerSession extends SessionBase {
 
   /// Update the cached picture alone — after an upload/remove, or when a
   /// fresh /home shows the picture changed on another surface. Bumps
+  /// Kept in step from /home and from a correction in Profile.
+  Future<void> setCustomerNameDv(String? name) async {
+    final normalized = (name?.trim().isEmpty ?? true) ? null : name!.trim();
+    if (normalized == _customerNameDv) return;
+    if (normalized == null) {
+      await _store.delete(_kNameDv);
+    } else {
+      await _store.write(_kNameDv, normalized);
+    }
+    _customerNameDv = normalized;
+    revision.value++;
+  }
+
   /// [revision] so anything painting the avatar repaints.
   Future<void> setAvatarUrl(String? url) async {
     final normalized = (url?.isEmpty ?? true) ? null : url;
@@ -210,9 +231,11 @@ class CustomerSession extends SessionBase {
     await _store.delete(_kCode);
     await _store.delete(_kName);
     await _store.delete(_kAvatar);
+    await _store.delete(_kNameDv);
     _customerCode = null;
     _customerName = null;
     _avatarUrl = null;
+    _customerNameDv = null;
   }
 }
 

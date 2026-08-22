@@ -41,12 +41,21 @@ class AppShell extends ConsumerWidget {
       _NavItem(Icons.home_outlined, Icons.home_rounded, l10n.tabHome),
       _NavItem(Icons.explore_outlined, Icons.explore_rounded, l10n.tabDiscover),
       if (marketplace)
-        _NavItem(Icons.storefront_outlined, Icons.storefront_rounded,
-            l10n.tabMarket),
-      _NavItem(Icons.receipt_long_outlined, Icons.receipt_long_rounded,
-          l10n.tabActivity),
-      _NavItem(Icons.person_outline_rounded, Icons.person_rounded,
-          l10n.tabProfile),
+        _NavItem(
+          Icons.storefront_outlined,
+          Icons.storefront_rounded,
+          l10n.tabMarket,
+        ),
+      _NavItem(
+        Icons.receipt_long_outlined,
+        Icons.receipt_long_rounded,
+        l10n.tabActivity,
+      ),
+      _NavItem(
+        Icons.person_outline_rounded,
+        Icons.person_rounded,
+        l10n.tabProfile,
+      ),
     ];
 
     // A shopper deep in Market when an admin switches the marketplace off
@@ -63,10 +72,7 @@ class AppShell extends ConsumerWidget {
         onSelected: (index) {
           final branch = branches[index];
 
-          shell.goBranch(
-            branch,
-            initialLocation: branch == shell.currentIndex,
-          );
+          shell.goBranch(branch, initialLocation: branch == shell.currentIndex);
         },
       ),
     );
@@ -160,15 +166,17 @@ class _NavButton extends StatelessWidget {
           duration: const Duration(milliseconds: 160),
           padding: const EdgeInsets.symmetric(vertical: 7),
           decoration: BoxDecoration(
-            color: selected
-                ? scheme.surfaceContainerHigh
-                : Colors.transparent,
+            color: selected ? scheme.surfaceContainerHigh : Colors.transparent,
             borderRadius: BorderRadius.circular(Corner.bar),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(selected ? item.selectedIcon : item.icon, color: fg, size: 22),
+              Icon(
+                selected ? item.selectedIcon : item.icon,
+                color: fg,
+                size: 22,
+              ),
               const SizedBox(height: 3),
               Text(
                 item.label,

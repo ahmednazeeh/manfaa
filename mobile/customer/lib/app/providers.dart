@@ -71,16 +71,16 @@ final localeProvider = NotifierProvider<LocaleController, Locale>(
 );
 
 ThemeMode _themeModeFrom(String v) => switch (v) {
-      'dark' => ThemeMode.dark,
-      'system' => ThemeMode.system,
-      _ => ThemeMode.light,
-    };
+  'dark' => ThemeMode.dark,
+  'system' => ThemeMode.system,
+  _ => ThemeMode.light,
+};
 
 String _themeModeName(ThemeMode m) => switch (m) {
-      ThemeMode.dark => 'dark',
-      ThemeMode.system => 'system',
-      ThemeMode.light => 'light',
-    };
+  ThemeMode.dark => 'dark',
+  ThemeMode.system => 'system',
+  ThemeMode.light => 'light',
+};
 
 /// The theme mode the user chose. Light-first by default (see SessionStore),
 /// persisted so it survives a restart — and, like locale, a sign-out.

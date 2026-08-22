@@ -2,7 +2,7 @@ name: manfaa_merchant
 description: "The Manfaa merchant app — the till in the pocket."
 publish_to: 'none'
 
-version: 1.0.8+9
+version: 1.0.21+22
 
 environment:
   sdk: ^3.12.2
@@ -35,9 +35,9 @@ dependencies:
   # Profile screen (MR5): the website row opens in the browser — same
   # version the customer app pins.
   url_launcher: ^6.3.2
-  # Push (MR4): same versions the customer app pins. Runs against PLACEHOLDER
-  # Firebase config until mv.manfaa.merchant is registered in the console —
-  # see lib/firebase_options.dart for the swap procedure.
+  # Push (MR4): same versions the customer app pins. Live Firebase config as of
+  # 2026-08-20 — mv.manfaa.merchant (Android) and mv.manfaa.manfaaMerchant
+  # (iOS) are registered in console project manfaa-6e1b4.
   firebase_core: ^4.13.0
   firebase_messaging: ^16.5.0
 
@@ -58,6 +58,11 @@ flutter:
     # the same PNGs the customer app's payout screen ships.
     - assets/banks/
 
+    # The platform's own marks, shipped so the app has a logo before it has
+    # ever reached the network. The API's copies supersede these whenever a
+    # superadmin replaces one (see BrandAssetCache).
+    - assets/brand/
+
   fonts:
     - family: Manrope
       fonts:
@@ -75,6 +80,15 @@ flutter_launcher_icons:
   android: true
   ios: true
   image_path: "branding/icon-1024.png"
+  # The Android adaptive icon shows the FOREGROUND ONLY. Cropping it to the
+  # emblem -- as the customer app does -- made the two icons indistinguishable
+  # on any modern phone, because both apps share that wallet mark (owner,
+  # 2026-08-21): the "Merchant" bar and the wordmark only exist in the
+  # full-bleed art that iOS and pre-Oreo Android draw.
+  #
+  # So this app's foreground is the WHOLE lockup, bar included, on white.
+  # Tinting the background the bar's blue was tried first and rejected: the
+  # emblem is navy and was drawn for a white field, so it went muddy.
   adaptive_icon_background: "#FFFFFF"
   adaptive_icon_foreground: "branding/adaptive-foreground.png"
   remove_alpha_ios: true
