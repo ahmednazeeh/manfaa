@@ -227,6 +227,17 @@ function SubcartCard({ subcart }: { subcart: Subcart }) {
           </div>
         ) : null}
 
+        {/* Under the store's minimum for cashback: checkout still works,
+            but the shopper should know why this shop shows no reward. */}
+        {subcart.below_cashback_minimum ? (
+          <div className="px-4 py-2.5 text-sm text-muted-foreground">
+            {t('cart.cashbackMinimum', {
+              amount: formatMoney(subcart.cashback_shortfall_laari),
+              minimum: formatMoney(subcart.cashback_min_laari),
+            })}
+          </div>
+        ) : null}
+
         {open ? (
           <>
             <Separator />

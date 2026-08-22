@@ -42,6 +42,12 @@ export const CustomerSchema = z.object({
   /** The 6-digit code quoted at the till. */
   customer_code: z.string(),
   name: z.string(),
+  /**
+   * The same name in Thaana, written at registration by transliterating
+   * `name`. Nullable forever: the writer is allowed to fail, and a customer
+   * may clear it — both mean "show `name`".
+   */
+  name_dv: z.string().nullish().default(null),
   /** Masked by the API: dialling prefix and last three digits only. */
   phone: z.string(),
   status: z.string(),
@@ -777,6 +783,14 @@ export const SubcartSchema = z.object({
   items_laari: z.number().int(),
   cashback_laari: z.number().int(),
   cashback_rate_percent: z.string().nullable(),
+  /**
+   * The store's minimum eligible sale — the same rule its till is held to.
+   * Under it the shop's cashback is 0 and `cashback_shortfall_laari` says
+   * how much more would earn it. Older servers omit these.
+   */
+  cashback_min_laari: z.number().int().optional().default(0),
+  below_cashback_minimum: z.boolean().optional().default(false),
+  cashback_shortfall_laari: z.number().int().optional().default(0),
   delivery: WebDeliveryTermsSchema,
   all_available: z.boolean(),
 });

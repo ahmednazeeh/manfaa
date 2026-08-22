@@ -154,6 +154,8 @@ final readonly class CheckoutService
             'delivery_laari' => $delivery,
             'subtotal_laari' => $items + $delivery,
             'cashback_rate_bp' => Percent::toBasisPoints($subcart['cashback_rate_percent']),
+            // Frozen with the rates: the minimum this order was judged by.
+            'cashback_min_laari' => (int) ($subcart['cashback_min_laari'] ?? 0),
             'cashback_laari' => $cashback,
             'order_fee_bp' => $feeBp,
             'order_fee_laari' => $fee,
@@ -174,6 +176,7 @@ final readonly class CheckoutService
                 'fulfilled_qty' => $line['qty'],
                 'line_total_laari' => $line['line_total_laari'],
                 'cashback_laari' => $line['cashback_laari'],
+                'cashback_rate_bp' => $line['cashback_rate_bp'] ?? null,
             ]);
         }
     }

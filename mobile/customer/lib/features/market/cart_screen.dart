@@ -38,7 +38,7 @@ class _CartScreenState extends ConsumerState<CartScreen> {
           cart.valueOrNull == null
               ? 'My Cart'
               : 'My Cart (${cart.value!.storeCount} '
-                  '${cart.value!.storeCount == 1 ? 'store' : 'stores'})',
+                    '${cart.value!.storeCount == 1 ? 'store' : 'stores'})',
         ),
         actions: [
           if ((cart.valueOrNull?.subcarts.isNotEmpty ?? false))
@@ -80,8 +80,8 @@ class _CartScreenState extends ConsumerState<CartScreen> {
                 ],
               ),
       ),
-      bottomNavigationBar: cart.valueOrNull == null ||
-              cart.value!.subcarts.isEmpty
+      bottomNavigationBar:
+          cart.valueOrNull == null || cart.value!.subcarts.isEmpty
           ? null
           : CheckoutBar(cart: cart.value!),
     );
@@ -99,11 +99,16 @@ class _Empty extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.shopping_cart_outlined,
-                size: 48, color: ManfaaColors.textFaint),
+            const Icon(
+              Icons.shopping_cart_outlined,
+              size: 48,
+              color: ManfaaColors.textFaint,
+            ),
             const SizedBox(height: Gap.md),
-            Text('Your basket is empty',
-                style: Theme.of(context).textTheme.titleMedium),
+            Text(
+              'Your basket is empty',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
             const SizedBox(height: Gap.sm),
             FilledButton(
               onPressed: () => context.go('/market'),
@@ -137,8 +142,10 @@ class _EarnHero extends StatelessWidget {
         children: [
           const CircleAvatar(
             backgroundColor: Colors.white,
-            child: Icon(Icons.account_balance_wallet_outlined,
-                color: ManfaaColors.green),
+            child: Icon(
+              Icons.account_balance_wallet_outlined,
+              color: ManfaaColors.green,
+            ),
           ),
           const SizedBox(width: Gap.md),
           Expanded(
@@ -151,8 +158,9 @@ class _EarnHero extends StatelessWidget {
                     children: [
                       TextSpan(
                         text: formatRufiyaa(laari),
-                        style: theme.textTheme.titleLarge
-                            ?.copyWith(color: ManfaaColors.green),
+                        style: theme.textTheme.titleLarge?.copyWith(
+                          color: ManfaaColors.green,
+                        ),
                       ),
                       const TextSpan(text: '  cashback'),
                     ],
@@ -205,16 +213,20 @@ class _StoreSection extends ConsumerWidget {
                       color: ManfaaColors.greenSoft,
                       borderRadius: BorderRadius.circular(Corner.tile),
                     ),
-                    child: const Icon(Icons.storefront_rounded,
-                        color: ManfaaColors.green),
+                    child: const Icon(
+                      Icons.storefront_rounded,
+                      color: ManfaaColors.green,
+                    ),
                   ),
                   const SizedBox(width: Gap.md),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(subcart.storeName,
-                            style: theme.textTheme.titleMedium),
+                        Text(
+                          subcart.storeName,
+                          style: theme.textTheme.titleMedium,
+                        ),
                         const SizedBox(height: 4),
                         Wrap(
                           spacing: Gap.sm,
@@ -238,12 +250,18 @@ class _StoreSection extends ConsumerWidget {
                         Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Icon(Icons.check_circle_rounded,
-                                size: 14, color: ManfaaColors.green),
+                            const Icon(
+                              Icons.check_circle_rounded,
+                              size: 14,
+                              color: ManfaaColors.green,
+                            ),
                             const SizedBox(width: 4),
-                            Text('Minimum met',
-                                style: theme.textTheme.bodySmall
-                                    ?.copyWith(color: ManfaaColors.green)),
+                            Text(
+                              'Minimum met',
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: ManfaaColors.green,
+                              ),
+                            ),
                           ],
                         ),
                       Text(
@@ -255,8 +273,9 @@ class _StoreSection extends ConsumerWidget {
                       Text(
                         'Earn ${formatRufiyaa(subcart.cashbackLaari)}'
                         '${subcart.cashbackRatePercent == null ? '' : ' (${subcart.cashbackRatePercent}%)'}',
-                        style: theme.textTheme.bodySmall
-                            ?.copyWith(color: ManfaaColors.green),
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: ManfaaColors.green,
+                        ),
                       ),
                     ],
                   ),
@@ -285,7 +304,8 @@ class _StoreSection extends ConsumerWidget {
                       value: formatRufiyaa(terms.feeLaari),
                     ),
                   _Row(
-                    label: 'Cashback from ${subcart.storeName}'
+                    label:
+                        'Cashback from ${subcart.storeName}'
                         '${subcart.cashbackRatePercent == null ? '' : ' (${subcart.cashbackRatePercent}%)'}',
                     value: '- ${formatRufiyaa(subcart.cashbackLaari)}',
                     tone: ManfaaColors.green,
@@ -297,6 +317,21 @@ class _StoreSection extends ConsumerWidget {
 
           if (terms.delivers && terms.orderMinimumLaari != null)
             _MinimumBar(subcart: subcart),
+
+          // Under the store's minimum for cashback: checkout still works,
+          // but the shopper should know why this shop shows no reward.
+          if (subcart.belowCashbackMinimum)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(Gap.md, 0, Gap.md, Gap.md),
+              child: Text(
+                'Add ${formatRufiyaa(subcart.cashbackShortfallLaari)} more to '
+                'earn cashback here — ${subcart.storeName} pays cashback on '
+                'orders from ${formatRufiyaa(subcart.cashbackMinLaari)}.',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ),
         ],
       ),
     );
@@ -355,8 +390,9 @@ class _MinimumBar extends StatelessWidget {
     final terms = subcart.delivery;
     final minimum = terms.orderMinimumLaari ?? 0;
     final met = terms.minimumMet;
-    final progress =
-        minimum == 0 ? 1.0 : (subcart.itemsLaari / minimum).clamp(0.0, 1.0);
+    final progress = minimum == 0
+        ? 1.0
+        : (subcart.itemsLaari / minimum).clamp(0.0, 1.0);
 
     return Container(
       margin: const EdgeInsets.fromLTRB(Gap.md, 0, Gap.md, Gap.md),
@@ -380,7 +416,7 @@ class _MinimumBar extends StatelessWidget {
                   met
                       ? "You've met the minimum order"
                       : 'Add ${formatRufiyaa(terms.shortfallLaari)} more to '
-                          'reach the minimum order',
+                            'reach the minimum order',
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: met ? ManfaaColors.ink : ManfaaColors.amber,
                   ),
@@ -433,14 +469,16 @@ class _Line extends ConsumerWidget {
                 Text(line.name, style: theme.textTheme.bodyMedium),
                 Text(
                   formatRufiyaa(line.unitPriceLaari),
-                  style: theme.textTheme.bodySmall
-                      ?.copyWith(color: ManfaaColors.textMuted),
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: ManfaaColors.textMuted,
+                  ),
                 ),
                 if (!line.available)
                   Text(
                     'Out of stock',
-                    style: theme.textTheme.bodySmall
-                        ?.copyWith(color: ManfaaColors.coralDeep),
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: ManfaaColors.coralDeep,
+                    ),
                   ),
               ],
             ),
@@ -495,8 +533,7 @@ class _Row extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final style =
-        Theme.of(context).textTheme.bodyMedium?.copyWith(color: tone);
+    final style = Theme.of(context).textTheme.bodyMedium?.copyWith(color: tone);
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 3),
@@ -523,20 +560,25 @@ class _SeparateOrdersNote extends StatelessWidget {
         children: [
           const CircleAvatar(
             backgroundColor: ManfaaColors.greenSoft,
-            child: Icon(Icons.local_shipping_outlined,
-                color: ManfaaColors.green),
+            child: Icon(
+              Icons.local_shipping_outlined,
+              color: ManfaaColors.green,
+            ),
           ),
           const SizedBox(width: Gap.md),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Different stores, separate orders',
-                    style: theme.textTheme.titleSmall),
+                Text(
+                  'Different stores, separate orders',
+                  style: theme.textTheme.titleSmall,
+                ),
                 Text(
                   'Each store will fulfill your order separately.',
-                  style: theme.textTheme.bodySmall
-                      ?.copyWith(color: ManfaaColors.textMuted),
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: ManfaaColors.textMuted,
+                  ),
                 ),
               ],
             ),
@@ -590,8 +632,9 @@ class CheckoutBar extends StatelessWidget {
                   child: _Figure(
                     label: "You'll earn",
                     value: formatRufiyaa(cart.cashbackLaari),
-                    style: theme.textTheme.titleMedium
-                        ?.copyWith(color: ManfaaColors.green),
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      color: ManfaaColors.green,
+                    ),
                     end: true,
                   ),
                 ),
@@ -617,7 +660,7 @@ class CheckoutBar extends StatelessWidget {
                       child: Text(
                         cart.canCheckout
                             ? 'Checkout · ${cart.storeCount} separate '
-                                '${cart.storeCount == 1 ? 'order' : 'orders'}'
+                                  '${cart.storeCount == 1 ? 'order' : 'orders'}'
                             : 'Add more to meet a shop minimum',
                       ),
                     ),
@@ -645,8 +688,9 @@ class _Figure extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Column(
-      crossAxisAlignment:
-          end ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+      crossAxisAlignment: end
+          ? CrossAxisAlignment.end
+          : CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
         Text(label, style: Theme.of(context).textTheme.bodySmall),

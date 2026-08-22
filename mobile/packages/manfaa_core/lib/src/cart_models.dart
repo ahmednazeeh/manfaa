@@ -72,6 +72,9 @@ class Subcart {
     required this.itemsLaari,
     required this.cashbackLaari,
     this.cashbackRatePercent,
+    this.cashbackMinLaari = 0,
+    this.belowCashbackMinimum = false,
+    this.cashbackShortfallLaari = 0,
     required this.delivery,
     required this.allAvailable,
   });
@@ -87,6 +90,9 @@ class Subcart {
         itemsLaari: json['items_laari'] as int? ?? 0,
         cashbackLaari: json['cashback_laari'] as int? ?? 0,
         cashbackRatePercent: json['cashback_rate_percent'] as String?,
+        cashbackMinLaari: json['cashback_min_laari'] as int? ?? 0,
+        belowCashbackMinimum: json['below_cashback_minimum'] as bool? ?? false,
+        cashbackShortfallLaari: json['cashback_shortfall_laari'] as int? ?? 0,
         delivery: DeliveryTerms.fromJson(
           (json['delivery'] as Map?)?.cast<String, dynamic>() ?? const {},
         ),
@@ -101,6 +107,13 @@ class Subcart {
   final int itemsLaari;
   final int cashbackLaari;
   final String? cashbackRatePercent;
+
+  /// The store's minimum eligible sale — the same rule its till is held
+  /// to. Under it this shop's cashback is 0; the shortfall says how much
+  /// more would earn it.
+  final int cashbackMinLaari;
+  final bool belowCashbackMinimum;
+  final int cashbackShortfallLaari;
   final DeliveryTerms delivery;
 
   /// False when something in this shop's basket has sold out. The line says

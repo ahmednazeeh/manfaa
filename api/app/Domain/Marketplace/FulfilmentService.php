@@ -84,6 +84,8 @@ final readonly class FulfilmentService
 
     public function accept(Suborder $suborder): Suborder
     {
+        $this->assertPaid($suborder);
+
         $this->assertCanMoveTo($suborder, 'accepted');
 
         $suborder->forceFill([
@@ -106,6 +108,8 @@ final readonly class FulfilmentService
      */
     public function reject(Suborder $suborder, string $reason): Suborder
     {
+        $this->assertPaid($suborder);
+
         $this->assertCanMoveTo($suborder, 'rejected');
 
         DB::transaction(function () use ($suborder, $reason): void {
@@ -136,6 +140,8 @@ final readonly class FulfilmentService
 
     public function advance(Suborder $suborder, string $to): Suborder
     {
+        $this->assertPaid($suborder);
+
         $this->assertCanMoveTo($suborder, $to);
 
         $stamps = [
@@ -186,6 +192,8 @@ final readonly class FulfilmentService
         string $reason,
         ?string $note = null,
     ): Suborder {
+        $this->assertPaid($suborder);
+
         if (! in_array($suborder->state, self::AMENDABLE_STATES, true)) {
             throw AmendmentException::notAmendable($suborder->state);
         }
@@ -321,13 +329,27 @@ final readonly class FulfilmentService
             $lineTotal = $item->fulfilled_qty * $item->unit_price_laari;
             $fulfilledItems += $lineTotal;
 
-            $lineCashback = intdiv($lineTotal * $suborder->cashback_rate_bp + 9999, 10000);
+            // The line's OWN frozen rate (category override, exclusion), or
+            // the suborder's standing rate for rows that predate it.
+            $rateBp = $item->cashback_rate_bp ?? $suborder->cashback_rate_bp;
+            $lineCashback = intdiv($lineTotal * (int) $rateBp + 9999, 10000);
             $cashback += $lineCashback;
 
             $item->forceFill([
                 'line_total_laari' => $lineTotal,
                 'cashback_laari' => $lineCashback,
             ])->save();
+        }
+
+        // The store's minimum, frozen at checkout: what is actually supplied
+        // may have dropped under it, and a sale under the minimum earns
+        // nothing — online exactly as at the till.
+        if ($fulfilledItems < (int) $suborder->cashback_min_laari) {
+            $cashback = 0;
+
+            foreach ($items as $item) {
+                $item->forceFill(['cashback_laari' => 0])->save();
+            }
         }
 
         $fee = intdiv($fulfilledItems * $suborder->order_fee_bp + 9999, 10000);
@@ -361,6 +383,32 @@ final readonly class FulfilmentService
     {
         if (! in_array($to, self::TRANSITIONS[$suborder->state] ?? [], true)) {
             throw FulfilmentException::cannotMove($suborder->state, $to);
+        }
+    }
+
+    /**
+     * NOTHING happens to an order until the money has arrived.
+     *
+     * This gate did not exist, and its absence was the platform's worst
+     * hole. Payment is receipt-first: an order is created `awaiting_proof`
+     * and only becomes `verified` when a human or the bank-history matcher
+     * confirms the transfer. Every other part of this class assumed that had
+     * happened, and none of it checked.
+     *
+     * The consequence was not abstract. Rejecting an unpaid order — the
+     * ordinary, correct thing for a shop to do with one — credited its full
+     * value to the customer's wallet as spendable money, which
+     * `wallet/withdrawals` then wired to their bank. The platform paid out
+     * money it had never received, and the shop's reasonable action was the
+     * trigger.
+     *
+     * Applied to ACCEPT, REJECT, ADVANCE and AMEND alike: an unpaid order is
+     * not a shop's problem to work, in either direction.
+     */
+    private function assertPaid(Suborder $suborder): void
+    {
+        if ($suborder->order?->payment_state !== 'verified') {
+            throw FulfilmentException::notPaid();
         }
     }
 }

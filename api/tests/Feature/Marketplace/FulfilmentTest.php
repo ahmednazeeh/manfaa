@@ -55,7 +55,7 @@ function placeOrder($test, int $qty = 3): Suborder
         ->postJson('/api/customer/orders', ['payment_method' => 'bml'])
         ->assertCreated();
 
-    return Suborder::query()->latest('id')->firstOrFail();
+    return payFor(Suborder::query()->latest('id')->firstOrFail());
 }
 
 it('walks an order from new to delivered, and refuses shortcuts', function () {
@@ -317,4 +317,92 @@ it('sends a refused payment back for another receipt, not to the bin', function 
     // basket somebody built.
     expect($order->fresh()->payment_state)->toBe('refused')
         ->and($order->fresh()->state)->toBe('placed');
+});
+
+/* ------------------------------------------------------------------ *
+ * The store's minimum eligible sale, and each line's own rate
+ * (owner, 2026-08-22) — online exactly as at the till.
+ * ------------------------------------------------------------------ */
+
+it('earns nothing under the store\'s minimum eligible sale, and says how much more would', function () {
+    // Minimum MVR 250; one item at MVR 100 is under it.
+    $this->vendor['merchant']->forceFill(['min_eligible_laari' => 25000])->save();
+
+    $this->actingAs($this->customer, 'customer')
+        ->postJson('/api/customer/cart/items', ['branch_product_id' => $this->vendor['listing']->id, 'qty' => 1])
+        ->assertOk();
+
+    $cart = $this->getJson('/api/customer/cart')->assertOk()->json('data');
+    $shop = $cart['subcarts'][0];
+
+    expect($shop['cashback_laari'])->toBe(0)
+        ->and($shop['below_cashback_minimum'])->toBeTrue()
+        ->and($shop['cashback_min_laari'])->toBe(25000)
+        ->and($shop['cashback_shortfall_laari'])->toBe(15000)
+        ->and($shop['items'][0]['cashback_laari'])->toBe(0)
+        ->and($cart['cashback_laari'])->toBe(0);
+
+    // Three items (MVR 300) clear it: 2 % of 30000 = 600.
+    $this->postJson('/api/customer/cart/items', ['branch_product_id' => $this->vendor['listing']->id, 'qty' => 2])->assertOk();
+    $shop = $this->getJson('/api/customer/cart')->json('data.subcarts.0');
+
+    expect($shop['cashback_laari'])->toBe(600)
+        ->and($shop['below_cashback_minimum'])->toBeFalse()
+        ->and($shop['cashback_shortfall_laari'])->toBe(0);
+
+    // Checkout freezes the minimum on the suborder and the cashback stands.
+    $this->postJson('/api/customer/orders', ['payment_method' => 'bml'])->assertCreated();
+    $sub = Suborder::query()->latest('id')->firstOrFail();
+
+    expect($sub->cashback_min_laari)->toBe(25000)
+        ->and($sub->cashback_laari)->toBe(600);
+});
+
+it('drops the cashback to nothing when a shortage takes the order under the minimum', function () {
+    $this->vendor['merchant']->forceFill(['min_eligible_laari' => 25000])->save();
+
+    $sub = placeOrder($this, qty: 3); // MVR 300, cashback 600
+    $this->actingAs($this->shopkeeper, 'merchant');
+    $this->postJson("/api/merchant/marketplace/orders/{$sub->id}/accept")->assertOk();
+
+    $item = $sub->items()->sole();
+
+    $this->postJson("/api/merchant/marketplace/orders/{$sub->id}/amend", [
+        'lines' => [['suborder_item_id' => $item->id, 'fulfilled_qty' => 2]],
+        'reason' => 'out_of_stock',
+    ])->assertOk();
+
+    $fresh = $sub->fresh();
+
+    // 2 × 10000 = 20000 supplied, under the frozen 25000 minimum.
+    expect($fresh->items_laari)->toBe(20000)
+        ->and($fresh->cashback_laari)->toBe(0)
+        ->and($fresh->items()->sole()->cashback_laari)->toBe(0)
+        ->and($fresh->payable_to_merchant_laari)->toBe(20000 + 2500 - 0 - 400);
+});
+
+it('re-prices a shortened line at its own frozen rate, not the standing one', function () {
+    // An EXCLUDED category on the product: earns nothing at checkout…
+    $category = $this->vendor['merchant']->productCategories()->create([
+        'slug' => 'tobacco', 'name_en' => 'Tobacco', 'mode' => 'excluded', 'rate_bp' => null, 'active' => true, 'sort' => 1,
+    ]);
+    $this->vendor['product']->forceFill(['cashback_category_id' => $category->id])->save();
+
+    $sub = placeOrder($this, qty: 3);
+    expect($sub->cashback_laari)->toBe(0)
+        ->and($sub->items()->sole()->cashback_rate_bp)->toBe(0)
+        // the STANDING rate is still the suborder's headline rate
+        ->and($sub->cashback_rate_bp)->toBe(200);
+
+    $this->actingAs($this->shopkeeper, 'merchant');
+    $this->postJson("/api/merchant/marketplace/orders/{$sub->id}/accept")->assertOk();
+
+    // …and STILL nothing after the shop drops a unit. Before the line rate
+    // was frozen, this re-priced at the standing 2 % and paid 400.
+    $this->postJson("/api/merchant/marketplace/orders/{$sub->id}/amend", [
+        'lines' => [['suborder_item_id' => $sub->items()->sole()->id, 'fulfilled_qty' => 2]],
+        'reason' => 'out_of_stock',
+    ])->assertOk();
+
+    expect($sub->fresh()->cashback_laari)->toBe(0);
 });

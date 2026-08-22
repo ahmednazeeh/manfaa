@@ -479,7 +479,8 @@
     "addMore": "Add {{amount}} more to reach the minimum order",
     "unavailable": "Something here is no longer available. Remove it to continue.",
     "separateOrders": "Different stores fulfil your order separately.",
-    "addAddress": "Add delivery address"
+    "addAddress": "Add delivery address",
+    "cashbackMinimum": "Add {{amount}} more to earn cashback here — this store pays cashback on orders from {{minimum}}."
   },
   "checkout": {
     "title": "Checkout",

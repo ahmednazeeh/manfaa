@@ -27,6 +27,7 @@ class SuborderItem extends Model
     protected function casts(): array
     {
         return [
+            'cashback_rate_bp' => 'integer',
             'qty' => 'integer',
             'fulfilled_qty' => 'integer',
             'unit_price_laari' => 'integer',

@@ -44,6 +44,10 @@ final readonly class CartPricer
                 // marketplace category is a shelf label and prices nothing.
                 'listing.product.cashbackCategory',
                 'listing.branch.deliveryRules',
+                // isBuyable() now asks whether the SHOP may sell, not only
+                // whether the shelf has one — so its relations must be
+                // loaded here rather than fetched per line.
+                'listing.branch.merchant.marketplace',
             ])
             ->get();
 
@@ -159,6 +163,9 @@ final readonly class CartPricer
             $cashbackLaari += $lineCashback;
 
             $rows[] = [
+                // Frozen per line so a later re-pricing (partial fulfilment)
+                // keeps the category's rate instead of the standing one.
+                'cashback_rate_bp' => $rateBp,
                 'cart_item_id' => $line->id,
                 'branch_product_id' => $listing->id,
                 'product_id' => $product->id,
@@ -176,9 +183,28 @@ final readonly class CartPricer
                 // Still buyable? An unavailable line stays ON the screen and
                 // is flagged — a row that vanishes reads as a bug, and the
                 // shopper cannot act on what they cannot see.
-                'available' => $listing->isBuyable(),
+                // Against the quantity in the basket. "Is there any" let a
+                // basket hold a thousand of a shelf that held three, and the
+                // order — and therefore its refund — had no ceiling.
+                'available' => $listing->canSupply((int) $line->qty),
                 'stock_qty' => $listing->stock_qty,
             ];
+        }
+
+        // The store's minimum eligible sale — the SAME rule the till is held
+        // to (CreditRecorder `below_minimum`): a basket under it earns
+        // nothing at this shop, said out loud so the shopper can top up.
+        $minimum = (int) $merchant->min_eligible_laari;
+        $belowMinimum = $itemsLaari > 0 && $itemsLaari < $minimum;
+
+        if ($belowMinimum) {
+            $cashbackLaari = 0;
+
+            foreach ($rows as &$row) {
+                $row['cashback_laari'] = 0;
+            }
+
+            unset($row);
         }
 
         $rule = $address?->zone_id === null
@@ -197,6 +223,11 @@ final readonly class CartPricer
             'items_laari' => $itemsLaari,
             'cashback_laari' => $cashbackLaari,
             'cashback_rate_percent' => Percent::format($standingRateBp),
+            'cashback_min_laari' => $minimum,
+            // True when the items at this shop are under its minimum for
+            // cashback; `cashback_shortfall_laari` is what to add.
+            'below_cashback_minimum' => $belowMinimum,
+            'cashback_shortfall_laari' => $belowMinimum ? $minimum - $itemsLaari : 0,
             'delivery' => $quote->toArray(),
             // Every line has to be buyable before this shop can be checked
             // out — see the per-item `available` flag for which one is not.

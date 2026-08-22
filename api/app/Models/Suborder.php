@@ -31,6 +31,7 @@ class Suborder extends Model
             'delivery_laari' => 'integer',
             'subtotal_laari' => 'integer',
             'cashback_rate_bp' => 'integer',
+            'cashback_min_laari' => 'integer',
             'cashback_laari' => 'integer',
             'order_fee_bp' => 'integer',
             'order_fee_laari' => 'integer',

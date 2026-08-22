@@ -45,9 +45,9 @@ const SETTING_META: Record<PlatformSettingKey, SettingMeta> = {
     unit: 'days',
   },
   default_validation_window_days: {
-    label: 'Default validation window',
+    label: 'Maximum validation window',
     description:
-      'Refund window applied to newly onboarded merchants; the settlement clock starts only when it closes. Adjustable per merchant afterwards.',
+      'The longest refund window a store may set for itself (Merchant panel › Settings › Preferences). Stores start on the new-merchant window below and may raise it up to this ceiling. The settlement clock starts only when a sale\u2019s window closes.',
     unit: 'days',
   },
   default_min_eligible_laari: {
@@ -65,7 +65,7 @@ const SETTING_META: Record<PlatformSettingKey, SettingMeta> = {
   new_merchant_validation_window_days: {
     label: 'New merchant validation window',
     description:
-      'What a store starts on, as distinct from the ceiling above that it may raise itself to. Changing this never touches a store that already exists.',
+      'The refund window a newly approved store starts on (never above the maximum above). Each store can change its own afterwards; changing this never touches a store that already exists.',
     unit: 'days',
   },
   marketplace_enabled: {
