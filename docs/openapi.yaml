@@ -203,33 +203,68 @@ tags:
       (see `vendorToken`) — same abilities, same revocation from the panel.
   - name: Webhooks — POS vendors
     description: |
-      Signed events delivered to an endpoint owned by a **POS platform** that
-      serves many merchants (a till vendor, IsleBooks). One endpoint per
-      platform, registered by Manfaa when we onboard you — email
-      integrations@manfaa.app. Every event carries `merchant_id`; you route
-      it on your side. You hear about a merchant for as long as it holds a
-      live credential issued for your platform.
+      Signed events for a **POS platform** that serves many merchants (a
+      till vendor, IsleBooks): **one endpoint for the whole platform**, which
+      receives the events of every merchant holding a live credential for
+      it. Each event carries `data.merchant_id`; you route on your side.
 
-      Envelope, signature and retries are identical to merchant webhooks —
-      see `WebhookEvent`.
+      **How to get one — four steps.**
+
+      1. **Build the receiver.** An HTTPS `POST` URL on a public host. Read
+         the *raw* body, verify `X-Manfaa-Signature` (lowercase hex
+         `HMAC-SHA256(secret, raw_body)`, constant-time compare — worked
+         example under `WebhookEvent`), answer `200` within 10 seconds,
+         *then* process; ignore an event `id` you have already handled.
+      2. **Register it.** Email **integrations@manfaa.app** with the URL
+         and the events you want (usually all four below). A Manfaa
+         superadmin registers it against your platform and sends you the
+         signing secret (`whsec_…`) — one secret for the platform, shown
+         once. There is no API for this: a platform endpoint hears every
+         merchant, so it is a registry privilege, like the platform
+         registration itself.
+      3. **Prove it.** We press *Send test*; you receive a `webhook.test`
+         signed exactly like a real event. Verify it and answer `200` — we
+         see your answer in the registry.
+      4. **Act on each event** for the merchant named by `merchant_id`:
+         `merchant.rate_changed` → replace the rate you cache for the till
+         display · `merchant.suspended` → stop advertising cashback there but
+         **keep POSTing sales** · `merchant.reinstated` → resume ·
+         `transaction.reversed` → mark the invoice reversed (your own
+         reversals echo here too — dedupe on `transaction_id`).
+
+      Nothing fires when a merchant connects to you (you learn that when
+      you collect the token) or revokes you (your next request answers
+      `401`). To change the URL or rotate the secret, email us; you get a
+      new secret. Full walkthrough with code: the
+      [integration guide §6.1](/docs/integration-guide.html#61-webhooks-pos-vendors).
   - name: Webhooks — Merchants
     description: |
-      Signed events delivered to an endpoint owned by **one store**, which
-      hears only that store's events. Two ways to register one:
+      Signed events for **one store** — a plugin, a custom shop, an ERP.
+      The endpoint hears that store's events only, so there is nothing to
+      route. The events themselves are the four listed under *Webhooks —
+      POS vendors* (same bodies, same signature, same retries); this
+      section is about **registering** such an endpoint, which the store
+      does itself, two ways:
 
-      - the store owner types the URL into the merchant panel
-        (*Settings › API access › Webhooks*), or
-      - the store's own credential calls `POST /v1/webhooks` — the
-        no-manual-setup path for a plugin: the owner pastes one token, the
-        plugin registers its callback URL itself.
+      - **In the merchant panel** — *Settings › API access › Webhooks*:
+        URL, events, optional name. The owner sees the signing secret once
+        and can press *Send test*.
+      - **Over this API** — a credential holding the `webhooks:manage`
+        ability calls `POST /v1/webhooks` below. This is the
+        no-manual-setup path for a plugin: the owner installs it, connects,
+        and the plugin registers its own URL. The endpoint is tied to that
+        credential — revoking the credential switches it off — and a
+        credential only sees and removes the endpoints it registered.
 
-      An endpoint registered by a credential is switched off when that
-      credential is revoked; panel-made endpoints outlive every token. Up to
-      5 active endpoints per store. The signing secret is shown exactly once
-      at registration.
+      Up to 5 active endpoints per store. Re-registering the same URL from
+      the same credential replaces the earlier endpoint rather than adding
+      one. `webhook.test` (below) is delivered to one endpoint when its
+      owner presses *Send test*; it is not subscribable.
 
-      Envelope, signature and retries are identical to POS-vendor webhooks —
-      see `WebhookEvent`.
+      **If you are a platform serving many stores**, use *Webhooks — POS
+      vendors* instead. This route would give you one endpoint and one
+      secret per merchant connection, and running both kinds at once
+      delivers every event twice.
 
 paths:
 
@@ -2157,7 +2192,7 @@ webhooks:
   merchant.rate_changed:
     post:
       operationId: webhookMerchantRateChanged
-      tags: [Webhooks — POS vendors, Webhooks — Merchants]
+      tags: [Webhooks — POS vendors]
       summary: The merchant's standing rate changed
       description: |
         Emitted whenever the merchant's rate changes. For decreases,
@@ -2205,7 +2240,7 @@ webhooks:
   merchant.suspended:
     post:
       operationId: webhookMerchantSuspended
-      tags: [Webhooks — POS vendors, Webhooks — Merchants]
+      tags: [Webhooks — POS vendors]
       summary: The merchant was suspended
       description: |
         Emitted when the merchant is automatically suspended (settlement
@@ -2247,7 +2282,7 @@ webhooks:
   merchant.reinstated:
     post:
       operationId: webhookMerchantReinstated
-      tags: [Webhooks — POS vendors, Webhooks — Merchants]
+      tags: [Webhooks — POS vendors]
       summary: The merchant was reinstated
       description: |
         Emitted when a suspended merchant settles and is reinstated.
@@ -2286,7 +2321,7 @@ webhooks:
   transaction.reversed:
     post:
       operationId: webhookTransactionReversed
-      tags: [Webhooks — POS vendors, Webhooks — Merchants]
+      tags: [Webhooks — POS vendors]
       summary: A transaction was reversed
       description: |
         Emitted whenever one of the merchant's transactions transitions to
