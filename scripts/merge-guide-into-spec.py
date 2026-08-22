@@ -50,6 +50,13 @@ MERGE_ONLY = {
     "idempotency",
     "errors",
     "sandbox",
+    # Webhooks joined on 2026-08-22: Scalar renders a tag section only for
+    # tags that own path operations, so "Webhooks — POS vendors" (which owns
+    # none — the event callbacks are filed under Scalar's own Webhooks
+    # group) never showed its description, and a vendor reading the
+    # reference found no instructions at all. The guide's chapter is the one
+    # source; it renders here with its own sidebar entries.
+    "webhooks",
 }
 
 GUIDE_LINK = (

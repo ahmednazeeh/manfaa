@@ -1024,8 +1024,19 @@ retryable with the same `Idempotency-Key`.**
 
 ## 6. Webhooks
 
-We POST signed events to HTTPS endpoints. There are two kinds of endpoint,
-and the difference is **who owns it and whose events it hears**:
+We POST signed events to an HTTPS endpoint you own, so you learn about a
+rate change, a suspension or a reversal without polling. **Pick your
+kind first:**
+
+- **You are a POS or SaaS platform with many merchants on it** (a till
+  vendor, IsleBooks) → **§6.1**. One endpoint for your whole platform,
+  registered by Manfaa, every merchant's events with `merchant_id` on each.
+- **You are one store, or software installed in one store** (a plugin, a
+  custom shop, an ERP) → **§6.2**. An endpoint the store registers itself,
+  in its panel or over the API, hearing only that store.
+
+Both receive the same events, signed and retried the same way (**§6.3**).
+Side by side:
 
 | | Webhooks — POS vendors (§6.1) | Webhooks — Merchants (§6.2) |
 |---|---|---|
@@ -1037,9 +1048,6 @@ and the difference is **who owns it and whose events it hears**:
 | Visible to the store | No — platform plumbing | Yes — *Settings › API access › Webhooks* shows it as "registered by credential"; the owner can remove it or send a test |
 | Secret | One per endpoint, shown once | Same |
 | Signature, retries, envelope | Identical | Identical |
-
-Everything under "Delivery" (§6.3) applies to both. If you are building a
-plugin or a custom shop for **one** store, you want §6.2.
 
 **If you are a platform serving many stores**, you want §6.1. The API route
 (§6.2) is open to you too — with `webhooks:manage` in your registration's

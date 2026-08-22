@@ -203,68 +203,15 @@ tags:
       (see `vendorToken`) — same abilities, same revocation from the panel.
   - name: Webhooks — POS vendors
     description: |
-      Signed events for a **POS platform** that serves many merchants (a
-      till vendor, IsleBooks): **one endpoint for the whole platform**, which
-      receives the events of every merchant holding a live credential for
-      it. Each event carries `data.merchant_id`; you route on your side.
-
-      **How to get one — four steps.**
-
-      1. **Build the receiver.** An HTTPS `POST` URL on a public host. Read
-         the *raw* body, verify `X-Manfaa-Signature` (lowercase hex
-         `HMAC-SHA256(secret, raw_body)`, constant-time compare — worked
-         example under `WebhookEvent`), answer `200` within 10 seconds,
-         *then* process; ignore an event `id` you have already handled.
-      2. **Register it.** Email **integrations@manfaa.app** with the URL
-         and the events you want (usually all four below). A Manfaa
-         superadmin registers it against your platform and sends you the
-         signing secret (`whsec_…`) — one secret for the platform, shown
-         once. There is no API for this: a platform endpoint hears every
-         merchant, so it is a registry privilege, like the platform
-         registration itself.
-      3. **Prove it.** We press *Send test*; you receive a `webhook.test`
-         signed exactly like a real event. Verify it and answer `200` — we
-         see your answer in the registry.
-      4. **Act on each event** for the merchant named by `merchant_id`:
-         `merchant.rate_changed` → replace the rate you cache for the till
-         display · `merchant.suspended` → stop advertising cashback there but
-         **keep POSTing sales** · `merchant.reinstated` → resume ·
-         `transaction.reversed` → mark the invoice reversed (your own
-         reversals echo here too — dedupe on `transaction_id`).
-
-      Nothing fires when a merchant connects to you (you learn that when
-      you collect the token) or revokes you (your next request answers
-      `401`). To change the URL or rotate the secret, email us; you get a
-      new secret. Full walkthrough with code: the
-      [integration guide §6.1](/docs/integration-guide.html#61-webhooks-pos-vendors).
+      The four events below, delivered to ONE endpoint for your whole
+      platform. How to get an endpoint, prove it and act on each event is
+      in **Webhooks → 6.1** in the introduction above.
   - name: Webhooks — Merchants
     description: |
-      Signed events for **one store** — a plugin, a custom shop, an ERP.
-      The endpoint hears that store's events only, so there is nothing to
-      route. The events themselves are the four listed under *Webhooks —
-      POS vendors* (same bodies, same signature, same retries); this
-      section is about **registering** such an endpoint, which the store
-      does itself, two ways:
-
-      - **In the merchant panel** — *Settings › API access › Webhooks*:
-        URL, events, optional name. The owner sees the signing secret once
-        and can press *Send test*.
-      - **Over this API** — a credential holding the `webhooks:manage`
-        ability calls `POST /v1/webhooks` below. This is the
-        no-manual-setup path for a plugin: the owner installs it, connects,
-        and the plugin registers its own URL. The endpoint is tied to that
-        credential — revoking the credential switches it off — and a
-        credential only sees and removes the endpoints it registered.
-
-      Up to 5 active endpoints per store. Re-registering the same URL from
-      the same credential replaces the earlier endpoint rather than adding
-      one. `webhook.test` (below) is delivered to one endpoint when its
-      owner presses *Send test*; it is not subscribable.
-
-      **If you are a platform serving many stores**, use *Webhooks — POS
-      vendors* instead. This route would give you one endpoint and one
-      secret per merchant connection, and running both kinds at once
-      delivers every event twice.
+      Registering an endpoint for ONE store over the API — the plugin
+      path (`webhooks:manage`). When to use this and when not to is in
+      **Webhooks → 6.2** in the introduction above; the events it receives
+      are the same four listed under *Webhooks — POS vendors*.
 
 paths:
 

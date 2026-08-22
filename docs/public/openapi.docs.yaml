@@ -155,11 +155,134 @@ info:
     \ again replaces its own\n  grant; a second store of the same merchant gets its own, up to the\n \
     \ store's credential cap.\n\nAfter step 4 a plugin typically calls `GET /v1/me` to confirm which\n\
     abilities it holds, then registers its webhook with `POST /v1/webhooks`\n(§6.2) — a complete setup\
-    \ with no key ever copied by hand.\n\n---\n\n\n## The full integration guide\n\nEverything above is\
-    \ what you need to make a call. The rest — how money and rounding work, how rates and promotions interact,\
-    \ the settlement clock, webhooks and their signatures, retry expectations and the go-live checklist\
-    \ — is in the [integration guide](/docs/integration-guide).\n\nThe endpoint reference below is authoritative:\
-    \ where the guide and this page ever disagree, believe this page.\n\n"
+    \ with no key ever copied by hand.\n\n---\n\n## Webhooks\n\n\nWe POST signed events to an HTTPS endpoint\
+    \ you own, so you learn about a\nrate change, a suspension or a reversal without polling. **Pick your\n\
+    kind first:**\n\n- **You are a POS or SaaS platform with many merchants on it** (a till\n  vendor,\
+    \ IsleBooks) → **§6.1**. One endpoint for your whole platform,\n  registered by Manfaa, every merchant's\
+    \ events with `merchant_id` on each.\n- **You are one store, or software installed in one store**\
+    \ (a plugin, a\n  custom shop, an ERP) → **§6.2**. An endpoint the store registers itself,\n  in its\
+    \ panel or over the API, hearing only that store.\n\nBoth receive the same events, signed and retried\
+    \ the same way (**§6.3**).\nSide by side:\n\n| | Webhooks — POS vendors (§6.1) | Webhooks — Merchants\
+    \ (§6.2) |\n|---|---|---|\n| Owned by | A POS platform we registered (IsleBooks, a till vendor) |\
+    \ One store |\n| Hears | Every merchant that platform integrates | That store's events only |\n| Registered\
+    \ by | Manfaa, at integrations@manfaa.app | The store owner in the panel, **or** the store's own credential\
+    \ over `/v1/webhooks` |\n| How many | One URL, one secret, for the whole platform | One endpoint **per\
+    \ store** (and per credential that registered it), up to 5 active per store |\n| Lifetime | Until\
+    \ Manfaa removes it; merchants connecting or leaving do not touch it | Switched off when the store\
+    \ revokes the credential that registered it; removable by the store or by `DELETE /v1/webhooks/{id}`\
+    \ |\n| Visible to the store | No — platform plumbing | Yes — *Settings › API access › Webhooks* shows\
+    \ it as \"registered by credential\"; the owner can remove it or send a test |\n| Secret | One per\
+    \ endpoint, shown once | Same |\n| Signature, retries, envelope | Identical | Identical |\n\n**If\
+    \ you are a platform serving many stores**, you want §6.1. The API route\n(§6.2) is open to you too\
+    \ — with `webhooks:manage` in your registration's\nceiling and in the scope you ask each merchant\
+    \ for — but it registers a\nseparate endpoint, with its own secret, for **every merchant connection**,\n\
+    even when the URL is the same each time; you would hold one secret per\nmerchant and choose it by\
+    \ the event's `merchant_id` before verifying. And\nnever run both kinds at once: an event reaches\
+    \ **each** endpoint entitled\nto it, so a platform with a §6.1 endpoint and a §6.2 endpoint per store\n\
+    receives every event twice.\n\n### 6.1 Webhooks — POS vendors\n\nOne endpoint for your whole platform.\
+    \ It receives the events of **every\nmerchant** that holds a live credential for your platform, each\
+    \ stamped\nwith `merchant_id`; you route on your side. Here is the whole thing, start\nto finish.\n\
+    \n**Step 1 — Build the receiver.** An HTTPS URL on a public host (private\nranges, localhost and bare\
+    \ IPs are refused) that accepts `POST` with a JSON\nbody and:\n\n1. reads the **raw** body bytes before\
+    \ any parsing;\n2. verifies `X-Manfaa-Signature` — `HMAC-SHA256(secret, raw_body)`, constant-time\
+    \ compare (§6.3 has the worked example and code);\n3. answers `200` **within 10 seconds**, then does\
+    \ the work — queue it; a slow handler looks like a failure and is retried;\n4. ignores an event `id`\
+    \ it has already processed (delivery is at-least-once and may be out of order).\n\n```php\n// The\
+    \ shape of a receiver, any framework.\n$raw = file_get_contents('php://input');\nif (! hash_equals(hash_hmac('sha256',\
+    \ $raw, $secret), $_SERVER['HTTP_X_MANFAA_SIGNATURE'] ?? '')) {\n    http_response_code(401); exit;\
+    \                // not ours — say nothing else\n}\n$event = json_decode($raw, true);\nif (already_seen($event['id']))\
+    \ { http_response_code(200); exit; }\nqueue_for_processing($event);                     // your job\
+    \ runner\nhttp_response_code(200);                          // acknowledge FIRST, process after\n\
+    ```\n\n**Step 2 — Get it registered.** Email **integrations@manfaa.app** with the\nURL and the events\
+    \ you want (the four below; most platforms take all four).\nA Manfaa superadmin registers it against\
+    \ your platform in *Connected\nplatforms* and sends you the signing secret — `whsec_…`, shown to them\
+    \ once\nand never again, so store it like a password. One secret for the whole\nplatform.\n\n**Step\
+    \ 3 — Prove it.** Ask us to press **Send test** (or we will, as part of\nregistering). You receive\
+    \ a `webhook.test` delivery signed exactly like a\nreal event; your receiver should verify it and\
+    \ answer `200`. The registry\nshows us your answer (`delivered · 200`, or the failure), so we can\
+    \ see the\nwiring works before any money-moving event goes out.\n\n**Step 4 — Use the events.** Every\
+    \ body is the envelope in §6.3 — `id`,\n`type`, `created_at`, `data` — and `data.merchant_id` is the\
+    \ merchant the\nevent is about. Look the merchant up by the `merchant.id` you stored at\nconnect time\
+    \ (or from `GET /v1/me`), then:\n\n| `type` | What happened | What your platform should do for that\
+    \ merchant |\n|---|---|---|\n| `merchant.rate_changed` | Their cashback rate changed. `data.cashback_rate_percent`\
+    \ is the new rate, `data.effective_at` when it applies (a decrease starts at the next midnight UTC+5;\
+    \ an increase at once) | Replace the rate you cache for the till display. The server prices every\
+    \ sale authoritatively anyway — this only stops you quoting a stale number |\n| `merchant.suspended`\
+    \ | Day-16 suspension for an unpaid settlement. Sales still record, but earn nothing | Stop advertising\
+    \ cashback at that merchant's tills; **keep POSTing sales** (§7 — they are answered `recorded_ineligible`)\
+    \ |\n| `merchant.reinstated` | They settled and were reinstated | Resume advertising |\n| `transaction.reversed`\
+    \ | A sale was reversed — by you over the API, by the merchant in their panel, or by Manfaa. `data.transaction_id`,\
+    \ `data.invoice_no`, `data.reason` | Mark the invoice reversed in your system. Your own reversals\
+    \ echo here too — dedupe by `transaction_id` |\n\nA rate-change delivery, as received:\n\n```json\n\
+    {\n  \"id\": \"evt_01J5A8Z0T2N9GQK4WMB3XVRD6H\",\n  \"type\": \"merchant.rate_changed\",\n  \"created_at\"\
+    : \"2026-08-15T16:05:11+05:00\",\n  \"data\": {\n    \"merchant_id\": 12,\n    \"cashback_rate_percent\"\
+    : \"1.50\",\n    \"platform_fee_percent\": \"0.50\",\n    \"previous_cashback_rate_percent\": \"2.00\"\
+    ,\n    \"previous_platform_fee_percent\": \"0.75\",\n    \"effective_at\": \"2026-08-16T00:00:00+05:00\"\
+    \n  }\n}\n```\n\n**What you will not get.** Nothing fires when a merchant **connects** to\nyour platform\
+    \ (your server learns that when it collects the token, §2.1)\nor **revokes** you (your next request\
+    \ answers `401` — treat it as\ndisconnected and stop). Events for a merchant stop the moment their\
+    \ last\nlive credential for your platform is gone.\n\n**Changing the URL or the events**, or rotating\
+    \ the secret: email us; the\nregistry replaces the endpoint and you receive a new secret. Retire the\
+    \ old\none only after the new one has answered a test.\n\n### 6.2 Webhooks — Merchants\n\nA store's\
+    \ own endpoint. It hears **only that store's** events, so there is\nnothing to route.\n\nTwo ways\
+    \ to register one:\n\n- **In the panel** — *Settings › API access › Webhooks*: URL, events, an\n \
+    \ optional name. The store owner sees the signing secret once, and can press\n  **Send test** to receive\
+    \ a `webhook.test` delivery signed exactly like a\n  real event. Up to **5** active endpoints per\
+    \ store.\n- **Over the API** — a credential with the `webhooks:manage` ability\n  registers its own\
+    \ endpoint. This is how a plugin sets itself up with no\n  manual step. The endpoint is tied to that\
+    \ credential: **revoking the\n  credential switches the endpoint off**, and a credential only sees\
+    \ and\n  removes endpoints it registered itself — never the ones typed into the\n  panel.\n\n```sh\n\
+    curl -X POST $MANFAA_API/v1/webhooks \\\n  -H \"Authorization: Bearer $MANFAA_TOKEN\" \\\n  -H \"\
+    Content-Type: application/json\" \\\n  -d '{\"url\":\"https://shop.example.mv/wp-json/manfaa/v1/webhook\"\
+    ,\n       \"label\":\"WooCommerce — shop.example.mv\",\n       \"events\":[\"merchant.rate_changed\"\
+    ,\"transaction.reversed\"]}'\n```\n\n```json\n{\n  \"secret\": \"whsec_…\",\n  \"endpoint\": {\n \
+    \   \"id\": 41,\n    \"url\": \"https://shop.example.mv/wp-json/manfaa/v1/webhook\",\n    \"label\"\
+    : \"WooCommerce — shop.example.mv\",\n    \"events\": [\"merchant.rate_changed\", \"transaction.reversed\"\
+    ],\n    \"active\": true,\n    \"registered_by\": \"credential\",\n    \"api_credential_id\": 17,\n\
+    \    \"last_delivery\": null,\n    \"created_at\": \"2026-08-22T10:12:00+05:00\"\n  }\n}\n```\n\n\
+    `secret` is in this response and nowhere else. Re-registering the **same\nURL** from the same credential\
+    \ replaces the earlier endpoint rather than\nadding a second (so a plugin re-activated or re-installed\
+    \ ends up with\nexactly one). `GET /v1/webhooks` lists what this credential registered;\n`DELETE /v1/webhooks/{id}`\
+    \ removes one. Refusals: `422 endpoint_cap_reached`\n(5 active already — `meta.max_active`), `404\
+    \ webhook_not_found` (not yours),\nand a `422 validation_failed` for a non-`https://` or private-network\
+    \ URL.\n\n### 6.3 Delivery — common to both\n\nAt registration you receive a signing secret (`whsec_…`)\
+    \ exactly once —\nstore it like a password.\n\n| Event | When | Do |\n|---|---|---|\n| `merchant.rate_changed`\
+    \ | Rate changed (decreases announce the next-midnight boundary) | Refresh the till's cached rate\
+    \ |\n| `merchant.suspended` | Automatic day-16 suspension | Stop advertising cashback; keep POSTing\
+    \ sales |\n| `merchant.reinstated` | Merchant settled and was reinstated | Resume advertising |\n\
+    | `transaction.reversed` | Any transaction reversed — including by Manfaa admins | Sync your local\
+    \ record; dedupe by `transaction_id` (your own reversals echo here too) |\n| `webhook.test` | A store\
+    \ owner pressed **Send test** (merchant endpoints only) | Verify the signature, answer `2xx`, do nothing\
+    \ else. Cannot be subscribed to. |\n\nEvery delivery carries:\n\n| Header | Meaning |\n|---|---|\n\
+    | `X-Manfaa-Signature` | Lowercase hex `HMAC-SHA256(secret, raw_body)` |\n| `X-Manfaa-Timestamp` |\
+    \ Unix seconds of this delivery **attempt** (fresh per retry, not signed) |\n| `X-Manfaa-Event` |\
+    \ The event name, for routing before you parse |\n\n### Verifying the signature\n\nCompute the HMAC\
+    \ over the **raw request body bytes exactly as received** —\nbefore parsing, never over a re-serialisation\
+    \ (your JSON library will not\nreproduce our key order) — and compare in constant time.\n\n**Worked\
+    \ example.** Endpoint secret:\n\n```\nwhsec_sandboxSECRETsandboxSECRETsandboxSECRET000000000\n```\n\
+    \nRaw body (one line, 250 bytes, no trailing newline):\n\n```\n{\"id\":\"evt_01J5A8Z0T2N9GQK4WMB3XVRD6H\"\
+    ,\"data\":{\"merchant_id\":12,\"effective_at\":\"2026-08-16T00:00:00+05:00\",\"platform_fee_percent\"\
+    :\"0.50\",\"cashback_rate_percent\":\"1.50\",\"previous_platform_fee_percent\":\"0.75\",\"previous_cashback_rate_percent\"\
+    :\"2.00\"},\"type\":\"merchant.rate_changed\",\"created_at\":\"2026-08-15T16:05:11+05:00\"}\n```\n\
+    \nExpected `X-Manfaa-Signature`:\n\n```\nbe5a5fe344884c02a4e0cc21fe169052d0305dac2fdaf95c25dd397c2d7f6636\n\
+    ```\n\nReproduce it on your machine:\n\n```sh\nprintf '%s' '{\"id\":\"evt_01J5A8Z0T2N9GQK4WMB3XVRD6H\"\
+    ,\"data\":{\"merchant_id\":12,\"effective_at\":\"2026-08-16T00:00:00+05:00\",\"platform_fee_percent\"\
+    :\"0.50\",\"cashback_rate_percent\":\"1.50\",\"previous_platform_fee_percent\":\"0.75\",\"previous_cashback_rate_percent\"\
+    :\"2.00\"},\"type\":\"merchant.rate_changed\",\"created_at\":\"2026-08-15T16:05:11+05:00\"}' \\\n\
+    \  | openssl dgst -sha256 -hmac 'whsec_sandboxSECRETsandboxSECRETsandboxSECRET000000000'\n```\n\n\
+    PHP:\n\n```php\n$computed = hash_hmac('sha256', $rawBody, $secret);          // $rawBody = file_get_contents('php://input')\n\
+    $valid    = hash_equals($computed, $signatureHeader);\n```\n\nNode.js:\n\n```js\nconst crypto = require('crypto');\n\
+    const computed = crypto.createHmac('sha256', secret).update(rawBody).digest('hex'); // rawBody: Buffer,\
+    \ pre-parse\nconst valid = crypto.timingSafeEqual(Buffer.from(computed), Buffer.from(signatureHeader));\n\
+    ```\n\nIf verification passes, parse the JSON and **deduplicate by the event `id`**\n(`evt_` + ULID)\
+    \ — delivery is at-least-once and may arrive out of order.\n`created_at` inside the signed body is\
+    \ the event's authoritative time; the\ntimestamp header is delivery telemetry only.\n\nAcknowledge\
+    \ with any `2xx` within **10 seconds**. Do the work after\nacknowledging, not before — a slow handler\
+    \ looks like a failure and triggers\na retry.\n\n---\n\n\n## The full integration guide\n\nEverything\
+    \ above is what you need to make a call. The rest — how money and rounding work, how rates and promotions\
+    \ interact, the settlement clock, webhooks and their signatures, retry expectations and the go-live\
+    \ checklist — is in the [integration guide](/docs/integration-guide).\n\nThe endpoint reference below\
+    \ is authoritative: where the guide and this page ever disagree, believe this page.\n\n"
   contact:
     name: Manfaa integrations
     email: integrations@manfaa.app
@@ -189,42 +312,23 @@ tags:
     \ the same merchant gets\n  its own.\n\nEither way the token that comes out is an ordinary merchant\
     \ credential\n(see `vendorToken`) — same abilities, same revocation from the panel.\n"
 - name: Webhooks — POS vendors
-  description: "Signed events for a **POS platform** that serves many merchants (a\ntill vendor, IsleBooks):\
-    \ **one endpoint for the whole platform**, which\nreceives the events of every merchant holding a\
-    \ live credential for\nit. Each event carries `data.merchant_id`; you route on your side.\n\n**How\
-    \ to get one — four steps.**\n\n1. **Build the receiver.** An HTTPS `POST` URL on a public host. Read\n\
-    \   the *raw* body, verify `X-Manfaa-Signature` (lowercase hex\n   `HMAC-SHA256(secret, raw_body)`,\
-    \ constant-time compare — worked\n   example under `WebhookEvent`), answer `200` within 10 seconds,\n\
-    \   *then* process; ignore an event `id` you have already handled.\n2. **Register it.** Email **integrations@manfaa.app**\
-    \ with the URL\n   and the events you want (usually all four below). A Manfaa\n   superadmin registers\
-    \ it against your platform and sends you the\n   signing secret (`whsec_…`) — one secret for the platform,\
-    \ shown\n   once. There is no API for this: a platform endpoint hears every\n   merchant, so it is\
-    \ a registry privilege, like the platform\n   registration itself.\n3. **Prove it.** We press *Send\
-    \ test*; you receive a `webhook.test`\n   signed exactly like a real event. Verify it and answer `200`\
-    \ — we\n   see your answer in the registry.\n4. **Act on each event** for the merchant named by `merchant_id`:\n\
-    \   `merchant.rate_changed` → replace the rate you cache for the till\n   display · `merchant.suspended`\
-    \ → stop advertising cashback there but\n   **keep POSTing sales** · `merchant.reinstated` → resume\
-    \ ·\n   `transaction.reversed` → mark the invoice reversed (your own\n   reversals echo here too —\
-    \ dedupe on `transaction_id`).\n\nNothing fires when a merchant connects to you (you learn that when\n\
-    you collect the token) or revokes you (your next request answers\n`401`). To change the URL or rotate\
-    \ the secret, email us; you get a\nnew secret. Full walkthrough with code: the\n[integration guide\
-    \ §6.1](/docs/integration-guide.html#61-webhooks-pos-vendors).\n"
+  description: 'The four events below, delivered to ONE endpoint for your whole
+
+    platform. How to get an endpoint, prove it and act on each event is
+
+    in **Webhooks → 6.1** in the introduction above.
+
+    '
 - name: Webhooks — Merchants
-  description: "Signed events for **one store** — a plugin, a custom shop, an ERP.\nThe endpoint hears\
-    \ that store's events only, so there is nothing to\nroute. The events themselves are the four listed\
-    \ under *Webhooks —\nPOS vendors* (same bodies, same signature, same retries); this\nsection is about\
-    \ **registering** such an endpoint, which the store\ndoes itself, two ways:\n\n- **In the merchant\
-    \ panel** — *Settings › API access › Webhooks*:\n  URL, events, optional name. The owner sees the\
-    \ signing secret once\n  and can press *Send test*.\n- **Over this API** — a credential holding the\
-    \ `webhooks:manage`\n  ability calls `POST /v1/webhooks` below. This is the\n  no-manual-setup path\
-    \ for a plugin: the owner installs it, connects,\n  and the plugin registers its own URL. The endpoint\
-    \ is tied to that\n  credential — revoking the credential switches it off — and a\n  credential only\
-    \ sees and removes the endpoints it registered.\n\nUp to 5 active endpoints per store. Re-registering\
-    \ the same URL from\nthe same credential replaces the earlier endpoint rather than adding\none. `webhook.test`\
-    \ (below) is delivered to one endpoint when its\nowner presses *Send test*; it is not subscribable.\n\
-    \n**If you are a platform serving many stores**, use *Webhooks — POS\nvendors* instead. This route\
-    \ would give you one endpoint and one\nsecret per merchant connection, and running both kinds at once\n\
-    delivers every event twice.\n"
+  description: 'Registering an endpoint for ONE store over the API — the plugin
+
+    path (`webhooks:manage`). When to use this and when not to is in
+
+    **Webhooks → 6.2** in the introduction above; the events it receives
+
+    are the same four listed under *Webhooks — POS vendors*.
+
+    '
 paths:
   /v1/transactions:
     post:
