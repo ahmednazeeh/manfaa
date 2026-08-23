@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers\V1;
 
 use App\Domain\Cashback\CustomerRef;
+use App\Domain\Customers\MaskedName;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -109,12 +110,7 @@ class CustomerLookupController extends V1Controller
      */
     private function maskName(string $name): string
     {
-        $parts = preg_split('/\s+/', trim($name)) ?: [];
-
-        return implode(' ', array_map(
-            fn (string $part): string => mb_substr($part, 0, 3).'***',
-            $parts,
-        ));
+        return MaskedName::of($name);
     }
 
     /**

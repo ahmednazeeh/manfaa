@@ -142,6 +142,11 @@ class OtpAuthController extends Controller
         $validated = $request->validate([
             'signup_token' => ['required', 'string'],
             'name' => ['required', 'string', 'max:120'],
+            // A friend's 6-digit customer code (referral programme). Only
+            // the SHAPE is validated here; a well-formed code nobody holds
+            // is silently ignored downstream — a mistyped referral must
+            // never cost anyone their signup.
+            'referral_code' => ['nullable', 'string', 'digits:6'],
         ]);
 
         try {
@@ -153,6 +158,7 @@ class OtpAuthController extends Controller
                 // gets an unusable random secret — exactly what the
                 // customer app has always done. Sign-in is the OTP.
                 Str::password(40),
+                $validated['referral_code'] ?? null,
             );
         } catch (InvalidSignupTokenException) {
             throw ValidationException::withMessages(['signup_token' => 'signup_token_invalid']);

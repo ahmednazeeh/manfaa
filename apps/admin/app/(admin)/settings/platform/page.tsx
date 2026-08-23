@@ -86,6 +86,24 @@ const SETTING_META: Record<PlatformSettingKey, SettingMeta> = {
       'How young every transaction in the batch must be, counted from the day its settlement clock started, for the discount to be granted. Keep it shorter than the settlement window — at or past it, every merchant would qualify and the incentive would reward nothing.',
     unit: 'days',
   },
+  referral_enabled: {
+    label: 'Referral programme',
+    description:
+      'The referral programme, on or off. Off pauses bonus payouts — nothing is credited while it is off, and nothing already paid is touched. A referred customer who reaches the threshold meanwhile is still owed: switching back on pays the bonus. Codes typed at signup keep recording either way, so attribution is never lost. Changed only by a superadmin.',
+    unit: 'toggle',
+  },
+  referral_reward_laari: {
+    label: 'Referral reward',
+    description:
+      'Paid to the referrer — credited instantly to their wallet — when a referred customer’s validated spend reaches the threshold below. Once per referred customer, ever, with no time limit and no clawback. MVR 0.00 pauses payouts without forfeiting them, exactly like switching the programme off. Changed only by a superadmin.',
+    unit: 'mvr',
+  },
+  referral_spend_threshold_laari: {
+    label: 'Referral spend threshold',
+    description:
+      'The cumulative validated spend — purchases that survived their refund window — a referred customer must reach before the referrer’s bonus above is paid. Lowering it can make referrals already past the new bar qualify; the daily check picks them up. Changed only by a superadmin.',
+    unit: 'mvr',
+  },
 };
 
 const KEY_ORDER = PlatformSettingKeySchema.options;

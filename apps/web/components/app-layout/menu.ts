@@ -1,6 +1,7 @@
 import {
   Banknote,
   Compass,
+  Gift,
   House,
   Landmark,
   LayoutGrid,
@@ -28,6 +29,8 @@ export const APP_MENU: AppMenuItem[] = [
   // Payouts (money that LANDED) sits beside transactions (money EARNED) and
   // above the payout account (where it lands) — earn, receive, configure.
   { titleKey: 'nav.payouts', path: '/payouts', icon: Banknote },
+  // Refer friends sits with the money pages — it is another way to earn.
+  { titleKey: 'nav.referrals', path: '/referrals', icon: Gift },
   { titleKey: 'nav.discover', path: '/discover', icon: Compass },
   { titleKey: 'nav.payoutAccount', path: '/payout-account', icon: Landmark },
 ];

@@ -1435,6 +1435,18 @@ export const PlatformSettingKeySchema = z.enum([
    */
   "marketplace_enabled",
   "marketplace_fee_percent",
+  /**
+   * REFERRALS (owner, 2026-08-23). `referral_enabled` is a BOOLEAN carried
+   * as 0/1, same convention as `marketplace_enabled` — render it as a
+   * switch. The other two are integer laari: the bonus credited to the
+   * referrer's wallet, and the cumulative validated spend a referred
+   * customer must reach to trigger it. All three PATCH as SUPERADMIN-only
+   * (403 otherwise) — they direct platform money into customer wallets and
+   * a paid bonus has no clawback.
+   */
+  "referral_enabled",
+  "referral_reward_laari",
+  "referral_spend_threshold_laari",
 ]);
 export type PlatformSettingKey = z.infer<typeof PlatformSettingKeySchema>;
 

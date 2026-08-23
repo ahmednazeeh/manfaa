@@ -37,10 +37,16 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
   final _phone = TextEditingController();
   final _code = TextEditingController();
   final _name = TextEditingController();
+  final _referral = TextEditingController();
 
   var _step = _Step.phone;
   var _busy = false;
   String? _signupToken;
+
+  /// Set only when the typed referral code fails the ONE local rule (six
+  /// digits). Empty is always fine — the field is optional, and the server
+  /// silently ignores a code that matches nobody.
+  String? _referralError;
 
   /// Client-side resend cooldown. The REAL budget is server-side (3/hour a
   /// phone, shared with the web); this just keeps an impatient thumb from
@@ -79,6 +85,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
     _phone.dispose();
     _code.dispose();
     _name.dispose();
+    _referral.dispose();
     super.dispose();
   }
 
@@ -172,6 +179,16 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
   });
 
   Future<void> _register() => _run(() async {
+    // Soft validation, client-side only: empty is fine (the code is
+    // optional and immutable after signup); anything typed must be the
+    // six digits a customer code is, or the server would 422 in prose.
+    final referral = _referral.text.trim();
+    if (referral.isNotEmpty && !RegExp(r'^\d{6}$').hasMatch(referral)) {
+      setState(() => _referralError = context.l10n.referralCodeInvalid);
+      return;
+    }
+    if (_referralError != null) setState(() => _referralError = null);
+
     try {
       await ref
           .read(apiProvider)
@@ -179,6 +196,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
             signupToken: _signupToken ?? '',
             name: _name.text.trim(),
             deviceName: await _deviceName(),
+            referralCode: referral.isEmpty ? null : referral,
           );
     } on MobileApiException catch (e) {
       // Both of these mean the signup token is DEAD and re-tapping Finish
@@ -372,6 +390,22 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
       autofocus: true,
       textCapitalization: TextCapitalization.words,
       decoration: InputDecoration(hintText: l10n.nameLabel),
+    ),
+    const SizedBox(height: Gap.lg),
+    // A friend's code — optional, and this signup step is the ONLY moment
+    // it can ever be entered (immutable after, per the programme's rules).
+    Text(l10n.referralCodeLabel, style: theme.textTheme.labelLarge),
+    const SizedBox(height: Gap.sm),
+    TextField(
+      controller: _referral,
+      keyboardType: TextInputType.number,
+      maxLength: 6,
+      textDirection: TextDirection.ltr,
+      decoration: InputDecoration(
+        counterText: '',
+        hintText: l10n.referralCodeHint,
+        errorText: _referralError,
+      ),
     ),
     const SizedBox(height: Gap.lg),
     _primary(l10n.finishLabel, _busy ? null : _register),

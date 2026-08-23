@@ -30,6 +30,13 @@ enum NotificationTemplateKey: string
     // memo against the store; the customer's experience is the same.
     case CashbackReversed = 'cashback_reversed';
 
+    // The referral bonus landed (owner, 2026-08-23): a friend who joined
+    // with this customer's code crossed their spend milestone, and the
+    // bonus is already in the referrer's wallet. Good news about the
+    // customer's own money — but push-only: it is visible in the wallet the
+    // moment they look, and per-channel SMS switches do not exist yet.
+    case ReferralBonusEarned = 'referral_bonus_earned';
+
     // Merchant-facing (M4). These reach the till app rather than a phone
     // number: a store's staff have no SMS relationship with the platform,
     // and settlement is the one thing a merchant genuinely wants
@@ -112,6 +119,7 @@ enum NotificationTemplateKey: string
             self::CashbackEarned => 'Cashback earned',
             self::CashbackConfirmed => 'Cashback confirmed',
             self::CashbackReversed => 'Cashback reversed',
+            self::ReferralBonusEarned => 'Referral bonus earned',
             self::PayoutPaid => 'Payout paid',
             self::SettlementAccepted => 'Settlement accepted',
             self::SettlementRejected => 'Settlement rejected',
@@ -145,6 +153,7 @@ enum NotificationTemplateKey: string
             self::CashbackEarned => 'The moment a store credits a sale. The highest-volume message on the platform — one per sale, per customer.',
             self::CashbackConfirmed => 'When a sale\'s refund window closes (or a hold is released) and the pending cashback becomes confirmed. One per sale — skipped when it confirms in the same breath it was earned.',
             self::CashbackReversed => 'When a sale that earned cashback is reversed by the store or the platform — a refund, a void, a duplicate. One per sale; never for a sale that earned nothing.',
+            self::ReferralBonusEarned => 'When a friend who joined with this customer\'s code reaches the referral spend milestone and the bonus lands in the referrer\'s wallet. At most once per friend, ever.',
             self::PayoutPaid => 'When a payout item is marked paid and the money is on its way to the customer\'s bank. One per customer per payout run.',
             self::SettlementAccepted => 'When Manfaa matches a store\'s transfer receipt and the settlement is paid off.',
             self::SettlementRejected => 'When a transfer receipt is refused, with the reason. The store has to act, so this one earns an interruption.',
@@ -193,6 +202,10 @@ enum NotificationTemplateKey: string
                 'amount' => 'The cashback reversed, formatted with its currency',
                 'store' => 'The store name',
                 'reason' => 'Why, as a short phrase with its own leading space — " after a refund", " because the sale was voided", " because it was recorded twice" — or empty; write the template as "reversed{{reason}}."',
+            ],
+            self::ReferralBonusEarned => [
+                'amount' => 'The referral bonus earned, formatted with its currency',
+                'friend' => 'The referred customer\'s first name, MASKED the referral-list way ("Ais***") — the push must not reveal more than the friends list does',
             ],
             self::PayoutPaid => [
                 'amount' => 'The amount paid out, formatted with its currency',
@@ -271,7 +284,8 @@ enum NotificationTemplateKey: string
     public function isForMerchantStaff(): bool
     {
         return match ($this) {
-            self::CashbackEarned, self::CashbackConfirmed, self::CashbackReversed, self::PayoutPaid => false,
+            self::CashbackEarned, self::CashbackConfirmed, self::CashbackReversed,
+            self::ReferralBonusEarned, self::PayoutPaid => false,
             self::SettlementAccepted, self::SettlementRejected,
             self::PromptDiscountExpiring,
             self::ReminderDay10, self::UrgentDay13, self::DueDay15,
@@ -306,6 +320,10 @@ enum NotificationTemplateKey: string
             // bill for telling someone money they had not yet received is
             // not coming.
             self::CashbackReversed => false,
+            // Push only: good news already sitting visibly in the wallet.
+            // Per-channel SMS switches do not exist yet; if they ever do,
+            // this is a key an admin might reasonably want to text.
+            self::ReferralBonusEarned => false,
             // Order progress reaches a shopper who is probably holding their
             // phone anyway, and a push is free. The two that COST them money
             // — a refusal and a cut order — are the two worth a text, since
@@ -341,7 +359,8 @@ enum NotificationTemplateKey: string
             // inside sendToMerchantStaff), but answering honestly costs
             // nothing and stops a future reader concluding the platform
             // texts shops about their customers' deliveries.
-            self::CashbackEarned, self::CashbackConfirmed, self::CashbackReversed, self::PayoutPaid,
+            self::CashbackEarned, self::CashbackConfirmed, self::CashbackReversed,
+            self::ReferralBonusEarned, self::PayoutPaid,
             self::StorePaused, self::StoreResumed,
             self::OrderAccepted, self::OrderRejected, self::OrderAmended,
             self::OrderReady, self::OrderOutForDelivery, self::OrderDelivered => false,
@@ -394,6 +413,7 @@ enum NotificationTemplateKey: string
             self::CashbackEarned => ['en' => 'Cashback earned', 'dv' => 'ކޭޝްބެކް ލިބިއްޖެ'],
             self::CashbackConfirmed => ['en' => 'Cashback confirmed', 'dv' => 'ކޭޝްބެކް ކަށަވަރުވެއްޖެ'],
             self::CashbackReversed => ['en' => 'Cashback reversed', 'dv' => 'ކޭޝްބެކް އަނބުރާ ގެންދެވިއްޖެ'],
+            self::ReferralBonusEarned => ['en' => 'Referral bonus earned', 'dv' => 'ރެފަރަލް ބޯނަސް ލިބިއްޖެ'],
             self::PayoutPaid => ['en' => 'Payout sent', 'dv' => 'ފައިސާ ފޮނުވިއްޖެ'],
             self::SettlementAccepted => ['en' => 'Settlement accepted', 'dv' => 'ސެޓްލްމަންޓް ބަލައިގަނެވިއްޖެ'],
             self::SettlementRejected => ['en' => 'Receipt refused', 'dv' => 'ރަސީދު ބަލައިނުގަނެވުނު'],

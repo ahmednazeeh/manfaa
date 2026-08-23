@@ -6,10 +6,13 @@ namespace App\Domain\Cashback;
 
 use App\Domain\Money\MerchantMoneyCache;
 use App\Domain\Platform\PlatformConfig;
+use App\Domain\Referrals\ReferralService;
 use App\Models\Transaction;
 use App\Models\TransactionEvent;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Throwable;
 
 /**
  * The §6 transaction state machine. Every state change happens inside one DB
@@ -88,6 +91,31 @@ final class TransitionService
             // Every state change moves what a money read would answer; the
             // bump defers itself to after this transaction commits.
             MerchantMoneyCache::bump((int) $transaction->merchant_id);
+
+            // Referral programme (owner, 2026-08-23): entering either
+            // validated-spend state may have carried this customer past the
+            // threshold. AFTER COMMIT — the award opens its own transaction
+            // and must judge committed spend, never a state a rollback could
+            // take away. O(1) for the never-referred: the check starts with
+            // one primary-key lookup, and no SUM runs unless it hits.
+            // Swallowed on failure like a notification would be — the safety
+            // net command re-runs the same check daily, and a referral hiccup
+            // is never a reason to fail a money transition.
+            if ($transaction->customer_id !== null
+                && in_array($to, [TransactionState::PayableUnfunded, TransactionState::Confirmed], true)) {
+                $customerId = (int) $transaction->customer_id;
+
+                DB::afterCommit(function () use ($customerId): void {
+                    try {
+                        app(ReferralService::class)->checkCustomer($customerId);
+                    } catch (Throwable $exception) {
+                        Log::warning('Referral award check failed.', [
+                            'customer_id' => $customerId,
+                            'exception' => $exception->getMessage(),
+                        ]);
+                    }
+                });
+            }
 
             return $this->writeEvent($transaction, $from, $to, $actor, $reasonCode, $meta);
         });

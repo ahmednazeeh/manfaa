@@ -61,6 +61,18 @@ final class PlatformConfig
         // never on delivery (§5.1). 2.00% by owner decision. A store may be
         // given its own rate; null there means "follow this".
         'marketplace_fee_bp' => ['default' => 200, 'min' => 0, 'max' => 2000],
+        // REFERRALS (owner, 2026-08-23). ON by default — the programme
+        // launches live. Off stops AWARDS only: attribution keeps being
+        // recorded at signup, so switching back on later still knows who
+        // brought whom.
+        'referral_enabled' => ['default' => 1, 'min' => 0, 'max' => 1],
+        // What the REFERRER earns per referred customer, once ever.
+        // MVR 50 by owner decision; capped at MVR 1,000.
+        'referral_reward_laari' => ['default' => 5000, 'min' => 0, 'max' => 100000],
+        // The referred customer's cumulative VALIDATED spend that releases
+        // the bonus. MVR 10,000 by owner decision; floor MVR 100 keeps a
+        // typo from making every signup instantly bonus-worthy.
+        'referral_spend_threshold_laari' => ['default' => 1000000, 'min' => 10000, 'max' => 100000000],
     ];
 
     /**
@@ -107,6 +119,33 @@ final class PlatformConfig
     public function marketplaceFeeBp(): int
     {
         return $this->get('marketplace_fee_bp');
+    }
+
+    /**
+     * Is the referral programme awarding bonuses?
+     *
+     * Off is a pause, not an amnesia: signup attribution continues, and a
+     * referred customer who crosses the threshold while it is off is awarded
+     * by the next check that runs while it is on — there is no time limit.
+     */
+    public function referralEnabled(): bool
+    {
+        return $this->get('referral_enabled') === 1;
+    }
+
+    /** What the referrer earns per referred customer, in laari. */
+    public function referralRewardLaari(): int
+    {
+        return $this->get('referral_reward_laari');
+    }
+
+    /**
+     * The referred customer's cumulative validated spend, in laari, that
+     * releases the referrer's bonus.
+     */
+    public function referralSpendThresholdLaari(): int
+    {
+        return $this->get('referral_spend_threshold_laari');
     }
 
     public function settlementDueDays(): int

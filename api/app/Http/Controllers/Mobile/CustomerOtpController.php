@@ -136,6 +136,11 @@ final class CustomerOtpController extends Controller
             'signup_token' => ['required', 'string'],
             'name' => ['required', 'string', 'max:120'],
             'device_name' => ['required', 'string', 'max:120'],
+            // A friend's 6-digit customer code (referral programme). Only
+            // the SHAPE is validated here; a well-formed code nobody holds
+            // is silently ignored downstream — a mistyped referral must
+            // never cost anyone their signup.
+            'referral_code' => ['nullable', 'string', 'digits:6'],
         ]);
 
         try {
@@ -145,6 +150,7 @@ final class CustomerOtpController extends Controller
                 // Passwordless account: random, unknown to everyone — see
                 // the class docblock for the recorded web-login consequence.
                 Str::password(40),
+                $validated['referral_code'] ?? null,
             );
         } catch (InvalidSignupTokenException) {
             return self::refusal(

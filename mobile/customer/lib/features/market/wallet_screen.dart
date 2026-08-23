@@ -167,7 +167,13 @@ class _Body extends ConsumerWidget {
                   const SizedBox(width: Gap.md),
                   Expanded(
                     child: Text(
-                      entry.description ?? entry.type.replaceAll('_', ' '),
+                      // Referral bonuses get their localized label — the
+                      // server's description is English prose, and the
+                      // Dhivehi surface must not show it.
+                      entry.type == 'referral'
+                          ? l10n.walletEntryReferral
+                          : entry.description ??
+                                entry.type.replaceAll('_', ' '),
                       style: theme.textTheme.bodyMedium,
                     ),
                   ),

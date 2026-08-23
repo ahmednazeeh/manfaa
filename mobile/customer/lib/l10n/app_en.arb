@@ -482,6 +482,63 @@
   "walletHistory": "Wallet history",
   "walletWithdrawals": "Withdrawals",
   "withdrawalRequested": "Withdrawal requested. We will transfer it to your bank.",
+  "walletEntryReferral": "Referral bonus",
+  "referralTileTitle": "Refer & earn",
+  "referralTileBody": "Give friends your code and earn a bonus when they shop.",
+  "referralYourCode": "Your referral code",
+  "referralExplainer": "Share your code. When a friend signs up with it and their spending reaches {threshold}, you earn {reward} — paid straight to your wallet.",
+  "@referralExplainer": {
+    "placeholders": {
+      "threshold": {
+        "type": "String"
+      },
+      "reward": {
+        "type": "String"
+      }
+    }
+  },
+  "referralShare": "Share",
+  "referralCopy": "Copy",
+  "referralShareMessage": "Join me on Manfaa and earn cashback! Use my code {code} when you sign up. {url}",
+  "@referralShareMessage": {
+    "placeholders": {
+      "code": {
+        "type": "String"
+      },
+      "url": {
+        "type": "String"
+      }
+    }
+  },
+  "referralStatInvited": "Friends joined",
+  "referralStatRewarded": "Bonuses earned",
+  "referralStatEarned": "Total earned",
+  "referralFriendsTitle": "Your friends",
+  "referralFriendsEmpty": "No one has used your code yet. Share it to start earning.",
+  "referralRewardedBadge": "Bonus earned",
+  "referralProgress": "{spent} of {threshold}",
+  "@referralProgress": {
+    "placeholders": {
+      "spent": {
+        "type": "String"
+      },
+      "threshold": {
+        "type": "String"
+      }
+    }
+  },
+  "referralJoinedOn": "Joined {date}",
+  "@referralJoinedOn": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "referralPaused": "Referrals are paused right now — your code will work again as soon as the programme is back.",
+  "referralCodeLabel": "Referral code (optional)",
+  "referralCodeHint": "Friend's 6-digit code",
+  "referralCodeInvalid": "A referral code is 6 digits — or leave it empty.",
   "dhivehiNameTitle": "Your name in Dhivehi",
   "dhivehiNameEmpty": "Not set — tap to add",
   "dhivehiNameHint": "This is how your name is shown when the app is in Dhivehi. We wrote it from your English name, so correct it if it is not how you spell it.",

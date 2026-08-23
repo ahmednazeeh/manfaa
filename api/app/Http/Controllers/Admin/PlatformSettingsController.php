@@ -22,9 +22,22 @@ use Illuminate\Http\Request;
  * by exact integer math, never a float. Its `_bp` name is off the wire
  * entirely and 404s like any other unknown key. Keys in laari or days keep
  * their plain integer, which is what they are.
+ *
+ * The referral_* keys are SUPERADMIN-only (owner spec, 2026-08-23), the
+ * same precedent as the platform bank accounts: they direct platform money
+ * into customer wallets, the daily sweep pays retroactively against the
+ * CURRENT figures, and a paid bonus has no clawback. Every other key stays
+ * any-admin — raising a minimum or a window is an operational lever.
  */
 class PlatformSettingsController extends Controller
 {
+    /** Keys only a superadmin may write; see the class doc. */
+    private const SUPERADMIN_KEYS = [
+        'referral_enabled',
+        'referral_reward_laari',
+        'referral_spend_threshold_laari',
+    ];
+
     public function index(PlatformConfig $config): JsonResponse
     {
         return response()->json(['data' => $config->all()]);
@@ -37,6 +50,11 @@ class PlatformSettingsController extends Controller
 
         if ($storageKey === null) {
             abort(404, sprintf('Unknown platform setting "%s".', $key));
+        }
+
+        if (in_array($storageKey, self::SUPERADMIN_KEYS, true)
+            && $request->user('admin')?->role !== 'superadmin') {
+            abort(403, 'Superadmin access required.');
         }
 
         $spec = PlatformConfig::KEYS[$storageKey];

@@ -1010,3 +1010,53 @@ export function requestWithdrawal(amountLaari: number) {
     { method: 'POST', body: { amount_laari: amountLaari } },
   );
 }
+
+// -------------------------------------------------------------- referrals
+
+/**
+ * One invited friend on the referral page. PRIVACY: the API masks the name
+ * and CAPS `spent_laari` at the programme threshold — it is progress toward
+ * the bonus, never the friend's real spending.
+ */
+export const ReferralFriendSchema = z.object({
+  /** Masked by the API (e.g. "Ah***ed") — never the full name. */
+  name: z.string(),
+  /** ISO-8601; null only for legacy rows with no timestamp at all. */
+  joined_at: z.string().nullable(),
+  /** Capped at `threshold_laari`; equals it once `rewarded` is true. */
+  spent_laari: z.number().int(),
+  /** True once this friend has earned the referrer their one-time bonus. */
+  rewarded: z.boolean(),
+});
+export type ReferralFriend = z.infer<typeof ReferralFriendSchema>;
+
+/**
+ * GET /api/customer/referrals — the customer's referral code (their own
+ * 6-digit `customer_code`), the programme's live figures, and every friend
+ * they have brought in.
+ */
+export const ReferralsSummarySchema = z.object({
+  /** Is the programme currently awarding bonuses? (Superadmin switch.) */
+  enabled: z.boolean(),
+  /** The bonus the referrer earns per qualified friend, integer laari. */
+  reward_laari: z.number().int(),
+  /** Validated spend a friend must reach to qualify, integer laari. */
+  threshold_laari: z.number().int(),
+  /** The referral code IS the customer's own 6-digit till code. */
+  code: z.string(),
+  share_url: z.string(),
+  stats: z.object({
+    invited: z.number().int(),
+    rewarded: z.number().int(),
+    /** Read from the wallet ledger — honest across reward-figure changes. */
+    earned_total_laari: z.number().int(),
+  }),
+  friends: z.array(ReferralFriendSchema),
+});
+export type ReferralsSummary = z.infer<typeof ReferralsSummarySchema>;
+
+export function getReferrals(options: RequestOptions = {}) {
+  return apiFetch('/api/customer/referrals', dataWrapped(ReferralsSummarySchema), {
+    signal: options.signal,
+  });
+}

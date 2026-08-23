@@ -9,6 +9,7 @@ import {
   Wallet,
   Banknote,
   Compass,
+  Gift,
   House,
   Landmark,
   LayoutGrid,
@@ -62,6 +63,7 @@ const MORE_ITEMS: BarItem[] = [
   { titleKey: 'nav.wallet', path: '/wallet', icon: Wallet },
   { titleKey: 'nav.payoutAccountShort', path: '/payout-account', icon: Landmark },
   { titleKey: 'nav.payouts', path: '/payouts', icon: Banknote },
+  { titleKey: 'nav.referrals', path: '/referrals', icon: Gift },
   { titleKey: 'nav.discover', path: '/discover', icon: Compass },
 ];
 

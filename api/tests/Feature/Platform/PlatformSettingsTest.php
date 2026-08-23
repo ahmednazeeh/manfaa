@@ -61,6 +61,30 @@ it('lists every key typed, defaulted, ranged, and PATCHes with per-key validatio
     $this->patchJson('/api/admin/platform/settings/no_such_key', ['value' => 1])->assertStatus(404);
 });
 
+it('lets only a superadmin move the referral levers', function () {
+    // The referral keys direct platform money into customer wallets, the
+    // daily sweep pays retroactively against the CURRENT figures, and a
+    // paid bonus has no clawback — superadmin only, like bank accounts.
+    $ordinary = AdminUser::factory()->create(['role' => 'admin']);
+    $this->actingAs($ordinary, 'admin');
+
+    $this->patchJson('/api/admin/platform/settings/referral_enabled', ['value' => 0])->assertForbidden();
+    $this->patchJson('/api/admin/platform/settings/referral_reward_laari', ['value' => 100000])->assertForbidden();
+    $this->patchJson('/api/admin/platform/settings/referral_spend_threshold_laari', ['value' => 10000])->assertForbidden();
+
+    // Nothing moved, and an ordinary operational key still works.
+    expect(app(PlatformConfig::class)->referralEnabled())->toBeTrue()
+        ->and(app(PlatformConfig::class)->referralRewardLaari())->toBe(5000)
+        ->and(app(PlatformConfig::class)->referralSpendThresholdLaari())->toBe(1000000);
+    $this->patchJson('/api/admin/platform/settings/settlement_due_days', ['value' => 12])->assertOk();
+
+    // The superadmin from beforeEach can.
+    $this->actingAs($this->admin, 'admin');
+    $this->patchJson('/api/admin/platform/settings/referral_reward_laari', ['value' => 7500])
+        ->assertOk()
+        ->assertJsonPath('data.referral_reward_laari.value', 7500);
+});
+
 it('excludes a customer below a raised min_payout_laari from the next batch', function () {
     Carbon::setTestNow(CarbonImmutable::parse('2026-08-26T12:00:00+05:00'));
     $this->seed(LedgerAccountSeeder::class);

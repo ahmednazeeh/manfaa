@@ -5,11 +5,11 @@ declare(strict_types=1);
 use App\Http\Controllers\Customer\ActivityController;
 use App\Http\Controllers\Customer\AddressController;
 use App\Http\Controllers\Customer\AvatarController;
-use App\Http\Controllers\Mobile\CustomerProfileController;
 use App\Http\Controllers\Customer\CartController;
 use App\Http\Controllers\Customer\FavouriteController;
 use App\Http\Controllers\Customer\MarketSearchController;
 use App\Http\Controllers\Customer\OrderController as MarketOrderController;
+use App\Http\Controllers\Customer\ReferralsController;
 use App\Http\Controllers\Customer\WalletController;
 use App\Http\Controllers\Devices\CustomerDevicesController;
 use App\Http\Controllers\Devices\CustomerPushTokenController;
@@ -35,6 +35,7 @@ use App\Http\Controllers\Merchant\TransactionCorrectionController;
 use App\Http\Controllers\Mobile\ConfigController;
 use App\Http\Controllers\Mobile\CreditController;
 use App\Http\Controllers\Mobile\CustomerOtpController;
+use App\Http\Controllers\Mobile\CustomerProfileController;
 use App\Http\Controllers\Mobile\CustomerTokenController;
 use App\Http\Controllers\Mobile\HomeController;
 use App\Http\Controllers\Mobile\MerchantSignupController;
@@ -218,6 +219,11 @@ Route::prefix('mobile/v1')
                 Route::get('wallet', [WalletController::class, 'show']);
                 Route::post('wallet/withdrawals', [WalletController::class, 'withdraw'])
                     ->middleware('throttle:10,1');
+
+                // Referrals (owner, 2026-08-23): the customer's code, the
+                // programme's figures and each invited friend's progress.
+                // The SAME controller the web mounts (routes/api/referrals.php).
+                Route::get('referrals', [ReferralsController::class, 'show']);
 
                 // Payout history (R3): the money that reached the bank, and
                 // what each transfer covered. Same rules as the web —

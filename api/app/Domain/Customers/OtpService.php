@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Domain\Customers;
 
+use App\Domain\Referrals\ReferralService;
 use App\Jobs\WriteCustomerDhivehiName;
 use App\Models\Customer;
 use App\Models\OtpCode;
@@ -262,13 +263,21 @@ final readonly class OtpService
      * would otherwise have both requests read one live token and try to mint
      * two accounts from a single phone verification. The loser now finds the
      * token already cleared and gets the ordinary invalid-token answer.
+     *
+     * $referralCode is a friend's 6-digit customer_code, typed at signup
+     * (referral programme, owner 2026-08-23). Attribution is best-effort BY
+     * DESIGN: an unknown or inactive code records nothing and the signup
+     * proceeds — a mistyped referral must never cost anyone an account. Set
+     * here, at creation, and immutable after: no later write path exists,
+     * and the columns are deliberately not fillable.
      */
-    public function register(string $signupToken, string $name, string $password): Customer
+    public function register(string $signupToken, string $name, string $password, ?string $referralCode = null): Customer
     {
         $now = CarbonImmutable::now('UTC');
         $tokenHash = hash('sha256', $signupToken);
+        $referrer = app(ReferralService::class)->resolveReferrer($referralCode);
 
-        return DB::transaction(function () use ($tokenHash, $name, $password, $now): Customer {
+        return DB::transaction(function () use ($tokenHash, $name, $password, $now, $referrer): Customer {
             $otp = OtpCode::query()
                 ->where('signup_token_hash', $tokenHash)
                 ->lockForUpdate()
@@ -288,6 +297,15 @@ final readonly class OtpService
             ])->save();
 
             $customer = $this->createCustomer((string) $otp->phone, $name, $password, $now);
+
+            if ($referrer !== null) {
+                // forceFill: not fillable on purpose — creation is the ONLY
+                // moment attribution may be written, ever.
+                $customer->forceFill([
+                    'referred_by_customer_id' => $referrer->getKey(),
+                    'referred_at' => $now,
+                ])->save();
+            }
 
             // Write their name in Thaana (owner, 2026-08-21). AFTER the
             // commit, not inside it: the queue must not see a customer id

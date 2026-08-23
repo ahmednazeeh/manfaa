@@ -7,6 +7,7 @@ use Database\Factories\CustomerFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
@@ -46,6 +47,9 @@ class Customer extends Authenticatable implements MobileTokenSubject
         return [
             'phone_verified_at' => 'immutable_datetime',
             'password' => 'hashed',
+            'referred_by_customer_id' => 'integer',
+            'referred_at' => 'immutable_datetime',
+            'referral_rewarded_at' => 'immutable_datetime',
         ];
     }
 
@@ -115,6 +119,22 @@ class Customer extends Authenticatable implements MobileTokenSubject
     public function transactions(): HasMany
     {
         return $this->hasMany(Transaction::class);
+    }
+
+    /**
+     * Who brought this customer in (referral programme, owner 2026-08-23).
+     * Set once at signup from a typed customer_code and never after —
+     * deliberately NOT fillable, so no mass assignment can rewrite it.
+     */
+    public function referredBy(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'referred_by_customer_id');
+    }
+
+    /** The customers this one brought in. */
+    public function referrals(): HasMany
+    {
+        return $this->hasMany(self::class, 'referred_by_customer_id');
     }
 
     public function claims(): HasMany

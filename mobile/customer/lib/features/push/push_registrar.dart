@@ -115,6 +115,10 @@ class PushRegistrar {
         case 'cashback_reversed':
         case 'payout_paid':
           router.go('/activity');
+        case 'referral_bonus_earned':
+          // The bonus lands in the WALLET (a real, withdrawable balance),
+          // not the cashback ledger — land the tap where the money is.
+          router.go('/market/wallet');
         default:
           router.go('/home');
       }

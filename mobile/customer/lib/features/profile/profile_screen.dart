@@ -143,6 +143,15 @@ class ProfileScreen extends ConsumerWidget {
                 ),
                 _MenuRow(
                   tile: const IconTile(
+                    Icons.card_giftcard_rounded,
+                    tint: ManfaaTint.amber,
+                  ),
+                  title: l10n.referralTileTitle,
+                  subtitle: l10n.referralTileBody,
+                  onTap: () => context.push('/profile/referrals'),
+                ),
+                _MenuRow(
+                  tile: const IconTile(
                     Icons.devices_rounded,
                     tint: ManfaaTint.blue,
                   ),

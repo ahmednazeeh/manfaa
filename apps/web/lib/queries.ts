@@ -215,8 +215,12 @@ export function useVerifyOtp() {
 export function useRegister() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (body: RegisterCustomerRequest): Promise<Customer> =>
-      (await registerCustomer(body)).data,
+    // referral_code (optional, immutable after) rides beyond the api-client
+    // request type: the endpoint accepts it (nullable|digits:6) and
+    // attribution is written once at creation.
+    mutationFn: async (
+      body: RegisterCustomerRequest & { referral_code?: string },
+    ): Promise<Customer> => (await registerCustomer(body)).data,
     onSuccess: (me) => {
       queryClient.setQueryData(queryKeys.me, me);
     },

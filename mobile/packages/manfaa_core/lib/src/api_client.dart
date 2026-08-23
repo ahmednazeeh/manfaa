@@ -8,6 +8,7 @@ import 'cart_models.dart';
 import 'market_models.dart';
 import 'models.dart';
 import 'order_models.dart';
+import 'referral_models.dart';
 import 'session.dart';
 
 /// The customer app's client for /api/mobile/v1.
@@ -373,6 +374,20 @@ class ManfaaApi extends ManfaaApiBase<CustomerSession> {
     );
   }
 
+  // ------------------------------------------------------------- referrals
+
+  /// The referral page in one call: the customer's code, the programme's
+  /// live figures, and every invited friend's (masked, capped) progress.
+  Future<ReferralsSummary> referrals() async {
+    final data = await run(
+      () => dio.get<Map<String, dynamic>>('/customer/referrals'),
+    );
+
+    return ReferralsSummary.fromJson(
+      (data?['data'] as Map?)?.cast<String, dynamic>() ?? {},
+    );
+  }
+
   /// The islands the location picker offers (admin-drawn zones).
   Future<List<ZoneEntry>> zones() async {
     final data = await run(
@@ -487,10 +502,16 @@ class ManfaaApi extends ManfaaApiBase<CustomerSession> {
   }
 
   /// Finish signup: redeem the signup token, get signed in.
+  ///
+  /// [referralCode] is a friend's 6-digit customer code, optional and
+  /// IMMUTABLE after signup — this is the only moment it can ever be given.
+  /// The server ignores an unknown or inactive code silently, so passing
+  /// one can never fail a registration.
   Future<void> registerWithOtp({
     required String signupToken,
     required String name,
     required String deviceName,
+    String? referralCode,
   }) async {
     final data = await run(
       () => dio.post<Map<String, dynamic>>(
@@ -499,6 +520,7 @@ class ManfaaApi extends ManfaaApiBase<CustomerSession> {
           'signup_token': signupToken,
           'name': name,
           'device_name': deviceName,
+          'referral_code': ?referralCode,
         },
       ),
     );

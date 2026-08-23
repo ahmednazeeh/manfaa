@@ -23,6 +23,7 @@ import '../features/profile/devices_screen.dart';
 import '../features/profile/dhivehi_name_screen.dart';
 import '../features/profile/payout_account_screen.dart';
 import '../features/profile/profile_screen.dart';
+import '../features/profile/referrals_screen.dart';
 import 'providers.dart';
 import 'shell.dart';
 
@@ -193,6 +194,10 @@ final routerProvider = Provider<GoRouter>((ref) {
                   GoRoute(
                     path: 'dhivehi-name',
                     builder: (_, _) => const DhivehiNameScreen(),
+                  ),
+                  GoRoute(
+                    path: 'referrals',
+                    builder: (_, _) => const ReferralsScreen(),
                   ),
                 ],
               ),

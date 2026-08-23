@@ -1374,6 +1374,50 @@ before credit; fails open to full price; annuals never waived — commit
 `ea77a273` in their repo, MANFAA_TASKS.md §M8). Deferred: the app-side
 card (Dart, rides the next APK).
 
+### The referral round — DONE (2026-08-23)
+
+Customer referrals (owner spec, §12 Phase 4 pulled forward): the
+referrer's own `customer_code` IS the referral code, typed once at
+signup (optional, immutable, unknown/inactive codes silently ignored —
+signup never fails over a referral). When the referred customer's
+validated spend — SUM(eligible_laari) over payable_unfunded/confirmed/
+paid, reversals never — reaches the threshold, the REFERRER is paid
+instantly to their wallet (`WalletService::credit type 'referral'`,
+idempotent per referred customer, ever; no time limit, no clawback).
+Trigger: afterCommit hook in `TransitionService` on entry to
+payable_unfunded/confirmed, O(1) for never-referred customers; daily
+06:30 `manfaa:award-referral-bonuses` safety net (also picks up a
+lowered threshold). Push `referral_bonus_earned` (push-only — per-
+channel SMS switches still don't exist; friend's name MASKED in push
+and wallet ledger, same as the friends list). Superadmin-only settings
+(403 for plain admins — `SUPERADMIN_KEYS` in PlatformSettingsController):
+`referral_enabled` 1, `referral_reward_laari` 5000, `referral_spend_
+threshold_laari` 1000000.
+
+Surfaces: `GET /api/customer/referrals` on both doors (web cookie +
+mobile sanctum) — config, code, share_url, stats, friends list with
+masked names and spend CAPPED at the threshold (a referrer never learns
+more than the milestone). apps/web `/referrals` + nav, signup `?ref=`
+prefill, `/r/{code}` short link (RELATIVE Location — nginx doesn't
+rewrite Host, an absolute redirect stranded users on localhost:3300).
+Admin: three rows on Settings → Platform. Flutter: Refer & earn screen
+under Profile, signup field, push tap-route to wallet, 'Referral bonus'
+wallet label, en+dv throughout — shipped as customer v1.0.32+33.
+
+Review round (3 lenses, 9 findings, 1 blocker): the ledger posting
+(`Postings::platformFundedReward`) CR'd liability 2100 which nothing
+relieves — first bonus would have broken the 02:00 Reconciler forever;
+the bonus is now fully off-ledger like every other wallet credit
+(posting kept, unreferenced, for a future deliberate design). Masking
+leaks fixed, any-admin config gated to superadmin, web badge no longer
+shows today's config as historical fact. Suite 1807 green.
+
+OWNER DECISION OPEN: bonuses pay on `payable_unfunded` spend (per spec
+"independent of merchant settling") — a never-settling merchant's
+credits can mint qualifying spend at zero cash cost and write-off does
+not claw back. Alternatives if unwanted: count only confirmed/paid, or
+report bonuses whose qualifying spend later writes off.
+
 ### Queue (updated 2026-08-17) — the mobile programme
 
 The mobile API round is DONE and reviewed (PLAN-mobile-api.md: M1–M5, two

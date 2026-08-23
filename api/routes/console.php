@@ -58,3 +58,9 @@ Schedule::command('manfaa:prune-otp-codes')->dailyAt('03:50')->withoutOverlappin
 // The POS-waiver month closes on the 3rd (owner, 2026-08-23): refunds from
 // the month's last days have landed, and IsleBooks bills after that.
 Schedule::command('manfaa:evaluate-pos-waivers')->monthlyOn(3, '06:00')->timezone(config('app.business_timezone'))->withoutOverlapping()->onOneServer();
+
+// The referral safety net (owner, 2026-08-23). The transition hook pays the
+// moment a friend's validated spend crosses the bar; this sweep catches what
+// the hook cannot see — an admin lowering the threshold, or a hook a crash
+// swallowed. Idempotent: once per referred customer, ever.
+Schedule::command('manfaa:award-referral-bonuses')->dailyAt('06:30')->timezone(config('app.business_timezone'))->withoutOverlapping()->onOneServer();

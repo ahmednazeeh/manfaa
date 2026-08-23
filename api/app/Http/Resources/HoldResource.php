@@ -4,6 +4,7 @@ namespace App\Http\Resources;
 
 use App\Domain\Cashback\HoldReviewService;
 use App\Domain\Cashback\TransactionState;
+use App\Domain\Customers\MaskedName;
 use App\Models\Transaction;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
@@ -110,11 +111,6 @@ class HoldResource extends JsonResource
      */
     private static function maskName(string $name): string
     {
-        $parts = preg_split('/\s+/', trim($name)) ?: [];
-
-        return implode(' ', array_map(
-            fn (string $part): string => mb_substr($part, 0, 3).'***',
-            $parts,
-        ));
+        return MaskedName::of($name);
     }
 }

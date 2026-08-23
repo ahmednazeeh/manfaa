@@ -1,12 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { Suspense, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { ApiError } from '@manfaa/api-client';
 import { BrandMark } from '@manfaa/ui';
-import { LoaderCircle, TriangleAlert } from 'lucide-react';
+import { LoaderCircle, TriangleAlert, UserRoundPlus, X } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { z } from 'zod';
@@ -44,15 +44,27 @@ type Step = 'phone' | 'code' | 'details' | 'bank';
  * 2026-08-18 (owner decision) — the code the member just proved IS the
  * credential, exactly as the customer app has always worked. The register
  * call logs the session in, so success lands straight on the dashboard.
+ *
+ * A referral link (/r/{code} or ?ref={code}) pre-fills the referrer's
+ * 6-digit code; it rides along silently and goes out with the register
+ * call. Attribution is optional and removable right up to that moment —
+ * after registration it is immutable, so the chip disappears with it.
  */
-export default function SignupPage() {
+function SignupForm() {
   const { t } = useTranslation();
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   const [step, setStep] = useState<Step>('phone');
   const [phone, setPhone] = useState('');
   const [signupToken, setSignupToken] = useState('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Only a well-formed code survives the URL; anything else is dropped.
+  const [referralCode, setReferralCode] = useState<string | null>(() => {
+    const ref = searchParams.get('ref');
+    return ref !== null && /^\d{6}$/.test(ref) ? ref : null;
+  });
 
   const requestOtpMutation = useRequestOtp();
   const verifyOtpMutation = useVerifyOtp();
@@ -144,7 +156,11 @@ export default function SignupPage() {
   const finishSignup = (values: z.infer<typeof DetailsSchema>) => {
     setErrorMessage(null);
     registerMutation.mutate(
-      { signup_token: signupToken, ...values },
+      {
+        signup_token: signupToken,
+        ...(referralCode !== null ? { referral_code: referralCode } : {}),
+        ...values,
+      },
       {
         onSuccess: () => {
           // The account exists and the session is live — the dashboard is
@@ -224,6 +240,24 @@ export default function SignupPage() {
               );
             })}
           </ol>
+
+          {/* Attribution already happened by the bank step — no chip there. */}
+          {referralCode !== null && step !== 'bank' && (
+            <div className="flex justify-center">
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted px-3 py-1 text-xs font-medium text-muted-foreground">
+                <UserRoundPlus className="size-3.5 shrink-0" />
+                {t('auth.referredByFriendCode', { code: referralCode })}
+                <button
+                  type="button"
+                  aria-label={t('auth.removeReferral')}
+                  onClick={() => setReferralCode(null)}
+                  className="-me-1 rounded-full p-0.5 transition-colors hover:bg-border hover:text-foreground"
+                >
+                  <X className="size-3" />
+                </button>
+              </span>
+            </div>
+          )}
 
           {errorMessage && (
             <Alert variant="destructive" appearance="light" size="sm">
@@ -377,5 +411,18 @@ export default function SignupPage() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+/**
+ * useSearchParams() (the ?ref= referral pre-fill) needs a Suspense
+ * boundary above it for the static prerender; the fallback never shows
+ * for longer than hydration takes.
+ */
+export default function SignupPage() {
+  return (
+    <Suspense fallback={null}>
+      <SignupForm />
+    </Suspense>
   );
 }

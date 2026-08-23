@@ -116,7 +116,11 @@ export default function WalletPage() {
                   <ArrowUpRight className="size-4 text-muted-foreground" />
                 )}
                 <span className="min-w-0 flex-1 truncate text-sm">
-                  {entry.description ?? entry.type.replace(/_/g, ' ')}
+                  {/* Referral bonuses get their translated label — the
+                      ledger description is English-only prose. */}
+                  {entry.type === 'referral'
+                    ? t('wallet.typeReferral')
+                    : (entry.description ?? entry.type.replace(/_/g, ' '))}
                 </span>
                 <span
                   className={

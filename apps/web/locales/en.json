@@ -47,7 +47,8 @@
     "market": "Market",
     "orders": "Orders",
     "cart": "Cart",
-    "wallet": "Wallet"
+    "wallet": "Wallet",
+    "referrals": "Refer friends"
   },
   "auth": {
     "loginTitle": "Welcome back",
@@ -84,7 +85,10 @@
     "finishSignup": "Create account",
     "alreadyHaveAccount": "Already have an account?",
     "sessionCheckFailed": "Could not reach the server. Refresh to try again.",
-    "stepBank": "Payout account"
+    "stepBank": "Payout account",
+    "referredByFriend": "Referred by a friend",
+    "referredByFriendCode": "Referred by a friend · {{code}}",
+    "removeReferral": "Remove referral code"
   },
   "dashboard": {
     "title": "Dashboard",
@@ -514,6 +518,30 @@
     "empty": "Nothing in your wallet yet. Refunds appear here straight away.",
     "noBank": "Add your bank account before withdrawing.",
     "minimum": "The smallest withdrawal is {{amount}}.",
-    "requested": "Withdrawal requested. We will transfer it to your bank."
+    "requested": "Withdrawal requested. We will transfer it to your bank.",
+    "typeReferral": "Referral bonus"
+  },
+  "referrals": {
+    "title": "Refer friends",
+    "subtitle": "Share your code and earn a bonus when friends shop at Manfaa partners.",
+    "explainer": "Earn {{reward}} when a friend signs up with your code and spends {{threshold}} at Manfaa partners.",
+    "paused": "The referral programme is paused right now — new bonuses are not being awarded.",
+    "yourCode": "Your referral code",
+    "codeHint": "Friends enter this code when they create their account.",
+    "copyCode": "Copy code",
+    "codeCopied": "Copied",
+    "copyLink": "Copy link",
+    "linkCopied": "Link copied",
+    "share": "Share",
+    "shareText": "Join Manfaa with my referral code {{code}}: {{url}}",
+    "statInvited": "Friends joined",
+    "statRewarded": "Bonuses earned",
+    "statEarned": "Total earned",
+    "friendsTitle": "Your friends",
+    "joined": "Joined {{date}}",
+    "progress": "{{spent}} of {{threshold}} spent",
+    "rewardedBadge": "Bonus earned",
+    "emptyTitle": "Invite your first friend",
+    "emptyBody": "Share your code — when a friend signs up with it and spends {{threshold}} at Manfaa partners, {{reward}} lands straight in your wallet. Every friend counts, forever."
   }
 }

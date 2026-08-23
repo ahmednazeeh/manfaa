@@ -129,12 +129,19 @@ class _FakeApi extends ManfaaApi {
     );
   }
 
+  /// What the last register call carried as its referral code — the test's
+  /// window onto whether the optional field was threaded through (or
+  /// correctly left off when empty).
+  String? lastReferralCode;
+
   @override
   Future<void> registerWithOtp({
     required String signupToken,
     required String name,
     required String deviceName,
+    String? referralCode,
   }) async {
+    lastReferralCode = referralCode;
     if (nextRegisterError != null) {
       final e = nextRegisterError!;
       nextRegisterError = null;
@@ -518,12 +525,56 @@ void onboardingTests() {
     expect(find.text('What should we call you?'), findsOneWidget);
 
     await tester.enterText(find.byType(TextField).first, 'Aishath');
+    await tester.ensureVisible(find.text('Create my account'));
     await tester.tap(find.text('Create my account'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 50));
     await tester.pump(const Duration(milliseconds: 50));
 
     expect(find.text('Hi Aishath'), findsOneWidget);
+  });
+
+  testWidgets(
+      'a referral code is optional, validated softly, and threaded through',
+      (tester) async {
+    late _FakeApi api;
+    await tester.pumpWidget(onboardingApp((s) => api = _FakeApi(session: s)));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byType(TextField).first, '7799999');
+    await tester.tap(find.text('Continue'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+
+    await tester.enterText(find.byType(TextField).first, '222222');
+    await tester.tap(find.text('Verify'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+
+    // Name step: name first, then the OPTIONAL referral field.
+    await tester.enterText(find.byType(TextField).at(0), 'Hassan');
+
+    // Malformed (not 6 digits) → the ONE soft rule blocks locally; the
+    // register call never fires.
+    await tester.enterText(find.byType(TextField).at(1), '12');
+    await tester.ensureVisible(find.text('Create my account'));
+    await tester.tap(find.text('Create my account'));
+    await tester.pump();
+    expect(
+      find.text('A referral code is 6 digits — or leave it empty.'),
+      findsOneWidget,
+    );
+    expect(find.text('What should we call you?'), findsOneWidget);
+
+    // Corrected → registration proceeds and the code travels with it.
+    await tester.enterText(find.byType(TextField).at(1), '374230');
+    await tester.tap(find.text('Create my account'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+    await tester.pump(const Duration(milliseconds: 50));
+
+    expect(find.text('Hi Hassan'), findsOneWidget);
+    expect(api.lastReferralCode, '374230');
   });
 
   testWidgets('a wrong code shows the LOCALIZED sentence, not the raw code',
