@@ -861,6 +861,9 @@ class StoreShelf extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Compact cards top out around 150dp; scale the bound with the reader's
+    // text size so a larger system font never pushes content past the card.
+    final scale = MediaQuery.textScalerOf(context).scale(1).clamp(1.0, 1.6);
     return Padding(
       padding: const EdgeInsets.only(bottom: Gap.md),
       child: Column(
@@ -869,10 +872,7 @@ class StoreShelf extends StatelessWidget {
           SectionHeader(title),
           const SizedBox(height: Gap.sm),
           SizedBox(
-            // An upper BOUND for the tallest card (boosted rate + badges +
-            // km footer), not a size cards stretch to: each card top-aligns
-            // at its own content height, so nothing pads out with white.
-            height: 182,
+            height: 150 * scale,
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
               padding: EdgeInsets.zero,
@@ -886,6 +886,7 @@ class StoreShelf extends StatelessWidget {
                     store: stores[index],
                     categoryNames: categoryNames,
                     isNew: isNew,
+                    compact: true,
                   ),
                 ),
               ),
@@ -907,11 +908,19 @@ class StoreCard extends StatelessWidget {
     required this.store,
     this.categoryNames,
     this.isNew = false,
+    this.compact = false,
   });
 
   final StoreEntry store;
   final Map<String, String>? categoryNames;
   final bool isNew;
+
+  /// Horizontal shelves are height-bounded, so their cards drop the category
+  /// chip and the distance/Islandwide footer — both of which live on in the
+  /// vertical grids — and keep just the channel/New badges. Without this the
+  /// tallest card (rate + usually + badges + category + footer) is ~207dp
+  /// and spills past a fixed-height shelf (owner report, 2026-08-23).
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
@@ -952,7 +961,7 @@ class StoreCard extends StatelessWidget {
                       RateBadge(store: store, compact: true),
                       const SizedBox(height: 6),
                       MetaBadges(store: store, isNew: isNew),
-                      if (category != null) ...[
+                      if (!compact && category != null) ...[
                         const SizedBox(height: Gap.xs),
                         CategoryTag(
                           slug: category,
@@ -965,7 +974,7 @@ class StoreCard extends StatelessWidget {
               ],
             ),
           ),
-          if (distanceM != null || (online && distanceM == null))
+          if (!compact && (distanceM != null || (online && distanceM == null)))
             Column(
               mainAxisSize: MainAxisSize.min,
               children: [
