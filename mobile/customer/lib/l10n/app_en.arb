@@ -489,5 +489,9 @@
   "dhivehiNameInvalid": "Write the name in Thaana.",
   "dhivehiNameSaved": "Saved",
   "dhivehiNameClear": "Use my English name",
-  "dhivehiNameSave": "Save name"
+  "dhivehiNameSave": "Save name",
+  "categoryAll": "All",
+  "islandwide": "Islandwide",
+  "discoverNoneInCategory": "No stores in this category yet.",
+  "viewStore": "View store"
 }

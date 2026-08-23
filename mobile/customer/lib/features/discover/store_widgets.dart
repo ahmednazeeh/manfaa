@@ -449,55 +449,384 @@ class _TextOffer extends StatelessWidget {
 /// The pill category chips under the search field — a white pill with the
 /// category's line icon in its hue, as in the mockup.
 class CategoryRail extends StatelessWidget {
-  const CategoryRail({super.key, required this.categories});
+  const CategoryRail({
+    super.key,
+    required this.categories,
+    required this.selected,
+    required this.onSelect,
+  });
 
   final List<CategoryEntry> categories;
+
+  /// The chosen category slug, or null for "All".
+  final String? selected;
+  final ValueChanged<String?> onSelect;
 
   @override
   Widget build(BuildContext context) {
     final dhivehi = _dhivehi(context);
-    final theme = Theme.of(context);
+    final l10n = context.l10n;
 
     return SizedBox(
-      height: 44,
+      height: 42,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         padding: EdgeInsets.zero,
-        itemCount: categories.length,
+        // +1 for the leading "All" chip.
+        itemCount: categories.length + 1,
         separatorBuilder: (_, _) => const SizedBox(width: Gap.sm),
         itemBuilder: (context, index) {
-          final category = categories[index];
-          final hue = categoryHue(category.slug);
+          if (index == 0) {
+            return _CategoryChip(
+              label: l10n.categoryAll,
+              icon: Icons.apps_rounded,
+              hue: ManfaaColors.violet,
+              selected: selected == null,
+              onTap: () => onSelect(null),
+            );
+          }
+          final category = categories[index - 1];
           final label = dhivehi && (category.nameDv?.isNotEmpty ?? false)
               ? category.nameDv!
               : category.nameEn;
+          return _CategoryChip(
+            label: label,
+            icon: categoryIcon(category.slug),
+            hue: categoryHue(category.slug),
+            selected: selected == category.slug,
+            onTap: () => onSelect(category.slug),
+          );
+        },
+      ),
+    );
+  }
+}
 
-          return Material(
-            color: theme.colorScheme.surfaceContainerLowest,
-            shape: StadiumBorder(
-              side: BorderSide(color: theme.colorScheme.outlineVariant),
+/// One category chip. Selected = a filled violet pill (its icon and label
+/// go white); unselected = a white pill with a hairline and the category's
+/// own hue on the icon. The filled state is what makes the current filter
+/// unmistakable (owner feedback, 2026-08-23).
+class _CategoryChip extends StatelessWidget {
+  const _CategoryChip({
+    required this.label,
+    required this.icon,
+    required this.hue,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final IconData icon;
+  final Color hue;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final fg = selected ? Colors.white : theme.colorScheme.onSurface;
+
+    return Material(
+      color: selected
+          ? ManfaaColors.violet
+          : theme.colorScheme.surfaceContainerLowest,
+      shape: StadiumBorder(
+        side: selected
+            ? BorderSide.none
+            : BorderSide(color: theme.colorScheme.outlineVariant),
+      ),
+      child: InkWell(
+        customBorder: const StadiumBorder(),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: Gap.lg,
+            vertical: Gap.sm,
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 18, color: selected ? Colors.white : hue),
+              const SizedBox(width: Gap.sm),
+              Text(
+                label,
+                style: theme.textTheme.labelLarge?.copyWith(
+                  color: fg,
+                  fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The small pills that explain WHY a merchant is on a shelf: its channel
+/// (In store / Online), a New flag on the recently-added shelf, and
+/// "Islandwide" for an online store (owner feedback, 2026-08-23). Kept to
+/// at most two so a card never turns into a wall of tags.
+class MetaBadges extends StatelessWidget {
+  const MetaBadges({super.key, required this.store, this.isNew = false});
+
+  final StoreEntry store;
+  final bool isNew;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    final channel = store.channel;
+    final badges = <Widget>[];
+
+    if (isNew) {
+      badges.add(_MetaBadge(
+        label: l10n.badgeNew,
+        icon: Icons.auto_awesome_rounded,
+        color: ManfaaColors.violet,
+      ));
+    }
+    if (channel == 'in_store' || channel == 'both') {
+      badges.add(_MetaBadge(
+        label: l10n.channelInStore,
+        icon: Icons.storefront_outlined,
+        color: ManfaaColors.green,
+      ));
+    }
+    if (channel == 'online' || channel == 'both') {
+      badges.add(_MetaBadge(
+        label: l10n.channelOnline,
+        icon: Icons.public_rounded,
+        color: ManfaaColors.blue,
+      ));
+    }
+
+    if (badges.isEmpty) return const SizedBox.shrink();
+
+    return Wrap(
+      spacing: Gap.xs,
+      runSpacing: Gap.xs,
+      children: badges.take(2).toList(),
+    );
+  }
+}
+
+class _MetaBadge extends StatelessWidget {
+  const _MetaBadge({
+    required this.label,
+    required this.icon,
+    required this.color,
+  });
+
+  final String label;
+  final IconData icon;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: dark ? 0.22 : 0.12),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 11, color: color),
+          const SizedBox(width: 3),
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: color,
+                fontWeight: FontWeight.w700,
+              ),
             ),
-            child: InkWell(
-              customBorder: const StadiumBorder(),
-              onTap: () =>
-                  context.push('/discover/search?category=${category.slug}'),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: Gap.lg,
-                  vertical: Gap.sm,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The Featured hero (owner mockup, 2026-08-23): a featured STORE presented
+/// as a soft lavender banner — the store's own name as the headline, its
+/// live rate large, a category chip and a View-store CTA — swiped as a
+/// carousel with page dots. Distinct on purpose from Boosted (coral) so the
+/// two never read as the same thing.
+class FeaturedStoreCarousel extends StatefulWidget {
+  const FeaturedStoreCarousel({
+    super.key,
+    required this.stores,
+    this.categoryNames,
+  });
+
+  final List<StoreEntry> stores;
+  final Map<String, String>? categoryNames;
+
+  @override
+  State<FeaturedStoreCarousel> createState() => _FeaturedStoreCarouselState();
+}
+
+class _FeaturedStoreCarouselState extends State<FeaturedStoreCarousel> {
+  final _controller = PageController();
+  int _page = 0;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final stores = widget.stores;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          height: 184,
+          child: PageView.builder(
+            controller: _controller,
+            itemCount: stores.length,
+            onPageChanged: (i) => setState(() => _page = i),
+            itemBuilder: (context, i) => Padding(
+              padding: EdgeInsets.only(right: i == stores.length - 1 ? 0 : Gap.sm),
+              child: _FeaturedBanner(
+                store: stores[i],
+                categoryNames: widget.categoryNames,
+              ),
+            ),
+          ),
+        ),
+        if (stores.length > 1) ...[
+          const SizedBox(height: Gap.sm),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              for (var i = 0; i < stores.length; i++)
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  margin: const EdgeInsets.symmetric(horizontal: 3),
+                  width: i == _page ? 18 : 6,
+                  height: 6,
+                  decoration: BoxDecoration(
+                    color: i == _page
+                        ? ManfaaColors.violet
+                        : Theme.of(context).colorScheme.outlineVariant,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+            ],
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _FeaturedBanner extends StatelessWidget {
+  const _FeaturedBanner({required this.store, this.categoryNames});
+
+  final StoreEntry store;
+  final Map<String, String>? categoryNames;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final l10n = context.l10n;
+    final dark = theme.brightness == Brightness.dark;
+    final category = store.category;
+
+    return Material(
+      color: dark
+          ? ManfaaColors.violet.withValues(alpha: 0.18)
+          : ManfaaColors.violetSoft,
+      borderRadius: BorderRadius.circular(Corner.card),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(Corner.card),
+        onTap: () => context.push('/discover/store/${store.slug}'),
+        child: Padding(
+          padding: const EdgeInsets.all(Gap.lg),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: ManfaaColors.violet,
+                  borderRadius: BorderRadius.circular(999),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(categoryIcon(category.slug), size: 18, color: hue),
-                    const SizedBox(width: Gap.sm),
-                    Text(label, style: theme.textTheme.labelLarge),
+                    const Icon(Icons.star_rounded, size: 14, color: Colors.white),
+                    const SizedBox(width: 4),
+                    Text(
+                      l10n.shelfFeatured,
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
                   ],
                 ),
               ),
-            ),
-          );
-        },
+              const SizedBox(height: Gap.md),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  StoreLogo(store: store, size: 52),
+                  const SizedBox(width: Gap.md),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          store.displayName(_dhivehi(context)),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.titleLarge?.copyWith(
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        RateBadge(store: store),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const Spacer(),
+              Row(
+                children: [
+                  if (category != null)
+                    CategoryTag(slug: category, label: categoryNames?[category]),
+                  const Spacer(),
+                  FilledButton(
+                    onPressed: () =>
+                        context.push('/discover/store/${store.slug}'),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: ManfaaColors.violet,
+                      foregroundColor: Colors.white,
+                      minimumSize: const Size(0, 40),
+                      padding: const EdgeInsets.symmetric(horizontal: Gap.lg),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                    ),
+                    child: Text(l10n.viewStore),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -509,26 +838,30 @@ class StoreShelf extends StatelessWidget {
     required this.title,
     required this.stores,
     this.categoryNames,
+    this.isNew = false,
   });
 
   final String title;
   final List<StoreEntry> stores;
   final Map<String, String>? categoryNames;
 
+  /// Marks these cards New (the recently-added shelf).
+  final bool isNew;
+
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: Gap.xl),
+      padding: const EdgeInsets.only(bottom: Gap.md),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SectionHeader(title),
-          const SizedBox(height: Gap.md),
+          const SizedBox(height: Gap.sm),
           SizedBox(
-            // An upper BOUND for the tallest card (boosted rate + km
-            // footer), not a size cards stretch to: each card top-aligns at
-            // its own content height, so nothing pads out with white.
-            height: 148,
+            // An upper BOUND for the tallest card (boosted rate + badges +
+            // km footer), not a size cards stretch to: each card top-aligns
+            // at its own content height, so nothing pads out with white.
+            height: 182,
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
               padding: EdgeInsets.zero,
@@ -541,6 +874,7 @@ class StoreShelf extends StatelessWidget {
                   child: StoreCard(
                     store: stores[index],
                     categoryNames: categoryNames,
+                    isNew: isNew,
                   ),
                 ),
               ),
@@ -557,10 +891,16 @@ class StoreShelf extends StatelessWidget {
 /// chip — with a hairline divider and the distance footer underneath (only
 /// when the feed carries a distance — data honesty).
 class StoreCard extends StatelessWidget {
-  const StoreCard({super.key, required this.store, this.categoryNames});
+  const StoreCard({
+    super.key,
+    required this.store,
+    this.categoryNames,
+    this.isNew = false,
+  });
 
   final StoreEntry store;
   final Map<String, String>? categoryNames;
+  final bool isNew;
 
   @override
   Widget build(BuildContext context) {
@@ -568,8 +908,10 @@ class StoreCard extends StatelessWidget {
     final muted = theme.colorScheme.onSurfaceVariant;
     final category = store.category;
     final distanceM = store.distanceM;
+    final online = store.channel == 'online' || store.channel == 'both';
 
     return ManfaaCard(
+      soft: true,
       padding: EdgeInsets.zero,
       onTap: () => context.push('/discover/store/${store.slug}'),
       child: Column(
@@ -597,6 +939,8 @@ class StoreCard extends StatelessWidget {
                       ),
                       const SizedBox(height: Gap.xs),
                       RateBadge(store: store, compact: true),
+                      const SizedBox(height: 6),
+                      MetaBadges(store: store, isNew: isNew),
                       if (category != null) ...[
                         const SizedBox(height: Gap.xs),
                         CategoryTag(
@@ -610,7 +954,7 @@ class StoreCard extends StatelessWidget {
               ],
             ),
           ),
-          if (distanceM != null)
+          if (distanceM != null || (online && distanceM == null))
             Column(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -624,13 +968,21 @@ class StoreCard extends StatelessWidget {
                   ),
                   child: Row(
                     children: [
-                      Icon(Icons.place_outlined, size: 13, color: muted),
+                      Icon(
+                        distanceM != null
+                            ? Icons.place_outlined
+                            : Icons.local_shipping_outlined,
+                        size: 13,
+                        color: muted,
+                      ),
                       const SizedBox(width: 3),
                       Expanded(
                         child: Text(
-                          context.l10n.kmAway(
-                            (distanceM / 1000).toStringAsFixed(1),
-                          ),
+                          distanceM != null
+                              ? context.l10n.kmAway(
+                                  (distanceM / 1000).toStringAsFixed(1),
+                                )
+                              : context.l10n.islandwide,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: theme.textTheme.bodySmall?.copyWith(
@@ -658,16 +1010,18 @@ class StoreGrid extends StatelessWidget {
     required this.title,
     required this.stores,
     this.categoryNames,
+    this.isNew = false,
   });
 
   final String title;
   final List<StoreEntry> stores;
   final Map<String, String>? categoryNames;
+  final bool isNew;
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: Gap.lg),
+      padding: const EdgeInsets.only(bottom: Gap.md),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -694,6 +1048,7 @@ class StoreGrid extends StatelessWidget {
                       child: StoreCard(
                         store: store,
                         categoryNames: categoryNames,
+                        isNew: isNew,
                       ),
                     ),
                 ],
@@ -710,10 +1065,16 @@ class StoreGrid extends StatelessWidget {
 /// logo, name + category tag, right-aligned rate (+ distance when the feed
 /// carries one; omitted when it doesn't).
 class StoreRow extends StatelessWidget {
-  const StoreRow({super.key, required this.store, this.categoryNames});
+  const StoreRow({
+    super.key,
+    required this.store,
+    this.categoryNames,
+    this.isNew = false,
+  });
 
   final StoreEntry store;
   final Map<String, String>? categoryNames;
+  final bool isNew;
 
   @override
   Widget build(BuildContext context) {
@@ -723,6 +1084,7 @@ class StoreRow extends StatelessWidget {
     final distanceM = store.distanceM;
 
     return ManfaaCard(
+      soft: true,
       padding: const EdgeInsets.all(Gap.lg),
       onTap: () => context.push('/discover/store/${store.slug}'),
       child: Row(
@@ -739,6 +1101,8 @@ class StoreRow extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: theme.textTheme.titleMedium,
                 ),
+                const SizedBox(height: 6),
+                MetaBadges(store: store, isNew: isNew),
                 if (category != null) ...[
                   const SizedBox(height: 6),
                   CategoryTag(slug: category, label: categoryNames?[category]),

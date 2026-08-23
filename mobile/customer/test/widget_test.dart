@@ -672,8 +672,11 @@ void discoverTests() {
     // The boost only lands when the old rate stands beside the new one.
     expect(find.text('8.00%'), findsOneWidget);
     expect(find.text('usually 5.00%'), findsOneWidget);
-    // The TEXT offer composes the LIVE rate — never baked into artwork.
-    expect(find.text('10.00% cashback'), findsOneWidget);
+    // The Featured hero leads with the store itself — its name, and a CTA
+    // straight through to the store (owner mockup, 2026-08-23).
+    expect(find.text('Featured'), findsWidgets);
+    expect(find.text('Island Mart'), findsWidgets);
+    expect(find.text('View store'), findsOneWidget);
   });
 
   testWidgets('the store page shows the eligibility terms — the §11 guard',

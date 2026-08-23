@@ -378,5 +378,9 @@
   "dhivehiNameInvalid": "ނަން ތާނައިން ލިޔުއްވާ.",
   "dhivehiNameSaved": "ރައްކާކުރެވިއްޖެ",
   "dhivehiNameClear": "އިނގިރޭސި ނަން ބޭނުންކުރައްވާ",
-  "dhivehiNameSave": "ނަން ރައްކާކުރައްވާ"
+  "dhivehiNameSave": "ނަން ރައްކާކުރައްވާ",
+  "categoryAll": "ހުރިހާ",
+  "islandwide": "ރަށްވަށައިގެން",
+  "discoverNoneInCategory": "މި ބައިގައި އަދި ފިހާރައެއް ނެތް.",
+  "viewStore": "ފިހާރަ ބައްލަވާ"
 }

@@ -157,13 +157,22 @@ class DiscoverScreen extends ConsumerWidget {
   }
 }
 
-class _Feed extends ConsumerWidget {
+class _Feed extends ConsumerStatefulWidget {
   const _Feed({required this.feed});
 
   final DiscoverFeed feed;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_Feed> createState() => _FeedState();
+}
+
+class _FeedState extends ConsumerState<_Feed> {
+  /// The chosen category slug, or null for "All".
+  String? _category;
+
+  @override
+  Widget build(BuildContext context) {
+    final feed = widget.feed;
     final l10n = context.l10n;
     final theme = Theme.of(context);
     final session = ref.watch(sessionProvider);
@@ -195,14 +204,40 @@ class _Feed extends ConsumerWidget {
 
     final shelves = {...feed.shelves, 'nearby': nearMe};
 
-    final sections = <({String key, String title})>[
-      (key: 'increased', title: l10n.shelfBoosted),
-      (key: 'featured', title: l10n.shelfFeatured),
-      (key: 'nearby', title: l10n.shelfNearby),
-      (key: 'recently_added', title: l10n.shelfNew),
-      (key: 'in_store', title: l10n.shelfInStore),
-      (key: 'online', title: l10n.shelfOnline),
+    // The featured hero and the curated banners come first; every store
+    // they show is CLAIMED so it cannot also fill a shelf below — the fix
+    // for "Featured + New + In store + Online" making two merchants look
+    // like a directory (owner feedback, 2026-08-23).
+    final featured = [
+      for (final s in shelves['featured'] ?? const <StoreEntry>[])
+        if (_category == null || s.category == _category) s,
     ];
+    final filtered = <String, List<StoreEntry>>{};
+    final claimed = <String>{
+      ...featured.map((s) => s.slug),
+      ...feed.offers.map((o) => o.merchant.slug),
+    };
+    for (final key in const [
+      'increased',
+      'recently_added',
+      'nearby',
+      'in_store',
+      'online',
+    ]) {
+      final list = <StoreEntry>[];
+      for (final store in shelves[key] ?? const <StoreEntry>[]) {
+        if (_category != null && store.category != _category) continue;
+        if (claimed.contains(store.slug)) continue;
+        claimed.add(store.slug);
+        list.add(store);
+      }
+      filtered[key] = list;
+    }
+
+    // The curated banner hero stays "Featured"; a specific category filter
+    // hides it (the banners are cross-store, not per-category).
+    final showOffers =
+        _category == null && featured.isEmpty && feed.offers.isNotEmpty;
 
     return RefreshIndicator(
       onRefresh: () => ref.refresh(discoverProvider.future),
@@ -220,92 +255,103 @@ class _Feed extends ConsumerWidget {
             onAvatarTap: () => context.go('/profile'),
           ),
           const SizedBox(height: Gap.md),
-          // ONE compact row: title, then the area pill and the search icon.
+          // The title dominates; the area pill sits quietly beside it.
           Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Expanded(
                 child: Text(
                   l10n.tabDiscover,
-                  style: theme.textTheme.headlineSmall,
+                  style: theme.textTheme.headlineMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
               ),
               const _AreaPill(),
-              const SizedBox(width: Gap.sm),
+              const SizedBox(width: Gap.xs),
               const _SearchButton(),
             ],
           ),
           if (feed.categories.isNotEmpty) ...[
-            const SizedBox(height: Gap.md),
-            CategoryRail(categories: feed.categories),
+            const SizedBox(height: Gap.sm),
+            CategoryRail(
+              categories: feed.categories,
+              selected: _category,
+              onSelect: (slug) => setState(() => _category = slug),
+            ),
           ],
-          if (feed.offers.isNotEmpty) ...[
+          if (featured.isNotEmpty) ...[
+            const SizedBox(height: Gap.md),
+            SectionHeader(l10n.shelfFeatured),
+            const SizedBox(height: Gap.sm),
+            FeaturedStoreCarousel(
+              stores: featured,
+              categoryNames: categoryNames,
+            ),
+          ] else if (showOffers) ...[
             const SizedBox(height: Gap.md),
             SectionHeader(l10n.featuredOffers),
             const SizedBox(height: Gap.sm),
             OfferCarousel(offers: feed.offers, categoryNames: categoryNames),
           ],
           const SizedBox(height: Gap.md),
-          for (final section in sections)
-            if ((shelves[section.key] ?? const []).isNotEmpty)
-              switch (section.key) {
-                // The mockup's 2-column merchant grid sits where featured
-                // stores land; nearby renders as rows with the distance.
-                'featured' => StoreGrid(
-                  title: section.title,
-                  stores: shelves[section.key]!,
-                  categoryNames: categoryNames,
+
+          // Boosted — a rate lifted above the store's usual, given its own
+          // coral voice so it reads as a different thing from Featured.
+          if (filtered['increased']!.isNotEmpty)
+            StoreShelf(
+              title: l10n.shelfBoosted,
+              stores: filtered['increased']!,
+              categoryNames: categoryNames,
+            ),
+          // New on Manfaa — horizontal, each card flagged New.
+          if (filtered['recently_added']!.isNotEmpty)
+            StoreShelf(
+              title: l10n.shelfNew,
+              stores: filtered['recently_added']!,
+              categoryNames: categoryNames,
+              isNew: true,
+            ),
+          // In store near you — a two-up grid; the cards carry the distance.
+          if (filtered['nearby']!.isNotEmpty)
+            StoreGrid(
+              title: l10n.shelfNearby,
+              stores: filtered['nearby']!,
+              categoryNames: categoryNames,
+            ),
+          if (filtered['in_store']!.isNotEmpty)
+            StoreGrid(
+              title: l10n.shelfInStore,
+              stores: filtered['in_store']!,
+              categoryNames: categoryNames,
+            ),
+          // Shop online — the cards carry the "Islandwide" footer.
+          if (filtered['online']!.isNotEmpty)
+            StoreGrid(
+              title: l10n.shelfOnline,
+              stores: filtered['online']!,
+              categoryNames: categoryNames,
+            ),
+
+          if (_category != null && filtered.values.every((l) => l.isEmpty))
+            Padding(
+              padding: const EdgeInsets.only(top: Gap.huge),
+              child: Center(
+                child: Text(
+                  l10n.discoverNoneInCategory,
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
                 ),
-                'nearby' => _NearbyList(
-                  title: section.title,
-                  stores: shelves[section.key]!,
-                  categoryNames: categoryNames,
-                ),
-                _ => StoreShelf(
-                  title: section.title,
-                  stores: shelves[section.key]!,
-                  categoryNames: categoryNames,
-                ),
-              },
+              ),
+            ),
         ],
       ),
     );
   }
 }
 
-/// The mockup's "nearby stores" section — vertical rows with the distance
-/// on the right, driven by the same shelf data as everything else.
-class _NearbyList extends StatelessWidget {
-  const _NearbyList({
-    required this.title,
-    required this.stores,
-    required this.categoryNames,
-  });
-
-  final String title;
-  final List<StoreEntry> stores;
-  final Map<String, String> categoryNames;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: Gap.lg),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SectionHeader(title),
-          const SizedBox(height: Gap.sm),
-          for (var i = 0; i < stores.length; i++) ...[
-            if (i > 0) const SizedBox(height: Gap.sm),
-            StoreRow(store: stores[i], categoryNames: categoryNames),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-/// The area pill: shows where the feed is scoped (island name, "Near me" or
-/// the whole country) and opens the picker sheet.
 class _AreaPill extends ConsumerWidget {
   const _AreaPill();
 
@@ -322,6 +368,10 @@ class _AreaPill extends ConsumerWidget {
       AreaEverywhere() => (Icons.place_outlined, l10n.areaEverywhere),
     };
 
+    // Quiet by design: a muted, hairline pill that sits UNDER the big
+    // Discover title rather than competing with it (owner feedback,
+    // 2026-08-23).
+    final muted = theme.colorScheme.onSurfaceVariant;
     return Material(
       color: theme.colorScheme.surfaceContainerLowest,
       shape: StadiumBorder(
@@ -332,30 +382,27 @@ class _AreaPill extends ConsumerWidget {
         onTap: () => _AreaSheet.show(context),
         child: Padding(
           padding: const EdgeInsets.symmetric(
-            horizontal: Gap.md,
-            vertical: Gap.sm,
+            horizontal: Gap.sm,
+            vertical: 6,
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, size: 15, color: theme.colorScheme.onSurface),
+              Icon(icon, size: 14, color: muted),
               const SizedBox(width: Gap.xs),
               ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 110),
+                constraints: const BoxConstraints(maxWidth: 92),
                 child: Text(
                   label,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.labelMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: muted,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
-              Icon(
-                Icons.expand_more_rounded,
-                size: 15,
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
+              Icon(Icons.expand_more_rounded, size: 14, color: muted),
             ],
           ),
         ),
