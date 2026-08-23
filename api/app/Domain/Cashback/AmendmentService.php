@@ -7,6 +7,7 @@ namespace App\Domain\Cashback;
 use App\Domain\Ledger\Postings;
 use App\Domain\Money\CashbackCalculator;
 use App\Domain\Money\Laari;
+use App\Domain\Money\MerchantMoneyCache;
 use App\Domain\Money\Rate;
 use App\Models\Transaction;
 use App\Models\TransactionLine;
@@ -81,6 +82,8 @@ final readonly class AmendmentService
                 ->firstOrFail();
 
             $this->assertAmendable($locked);
+
+            MerchantMoneyCache::bump((int) $locked->merchant_id);
 
             $merchant = $locked->merchant;
 

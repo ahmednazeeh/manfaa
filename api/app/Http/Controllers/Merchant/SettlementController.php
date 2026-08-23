@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Merchant;
 
 use App\Domain\Money\Laari;
+use App\Domain\Money\MerchantMoneyCache;
 use App\Domain\Settlement\DuplicateBankRefException;
 use App\Domain\Settlement\InsufficientWalletBalanceException;
 use App\Domain\Settlement\InvalidSettlementStateException;
@@ -76,11 +77,23 @@ class SettlementController extends Controller
             'transaction_ids.*' => ['integer'],
         ]);
 
+        $merchant = $this->merchantUser($request)->merchant;
+        $selection = $this->selection($validated);
+
         try {
-            $data = $preview->for(
-                $this->merchantUser($request)->merchant,
-                $this->selection($validated),
-            );
+            // The settle-ALL catalogue is what both dashboards poll, and it
+            // re-prices the whole board — so it is served from the
+            // version-keyed money cache (event-fresh; TTL bounds the
+            // clock-driven discount drift). An explicit id selection is a
+            // one-off quote and is always priced live. A 422 (nothing to
+            // settle) is never cached: the closure throws before a write.
+            $data = $selection === null
+                ? app(MerchantMoneyCache::class)->remember(
+                    (int) $merchant->getKey(),
+                    'preview-all',
+                    fn (): array => $preview->for($merchant, null),
+                )
+                : $preview->for($merchant, $selection);
         } catch (NotEligibleForSettlementException $e) {
             abort(422, $e->getMessage());
         }

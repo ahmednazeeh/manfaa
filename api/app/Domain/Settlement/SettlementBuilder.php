@@ -10,6 +10,7 @@ use App\Domain\Cashback\TransitionService;
 use App\Domain\Ledger\Postings;
 use App\Domain\MerchantAccess\Permission;
 use App\Domain\Money\Laari;
+use App\Domain\Money\MerchantMoneyCache;
 use App\Domain\Notifications\NotificationService;
 use App\Domain\Notifications\NotificationTemplateKey;
 use App\Models\Adjustment;
@@ -194,7 +195,12 @@ final class SettlementBuilder
      */
     public function createAndSettleFromWallet(Merchant $merchant, MerchantUser $actor, ?array $transactionIds): Settlement
     {
+
         return DB::transaction(function () use ($merchant, $actor, $transactionIds): Settlement {
+            // Batch membership / state moved — orphan this merchant's
+            // cached money reads once this transaction commits.
+            MerchantMoneyCache::bump((int) $merchant->getKey());
+
             $settlement = $this->submit($this->createDraft($merchant, $transactionIds));
 
             if ($settlement->state === SettlementState::AwaitingPayment) {
@@ -225,7 +231,12 @@ final class SettlementBuilder
      */
     public function reject(Settlement $settlement, AdminUser $actor, string $reason): Settlement
     {
+
         return DB::transaction(function () use ($settlement, $actor, $reason): Settlement {
+            // Batch membership / state moved — orphan this merchant's
+            // cached money reads once this transaction commits.
+            MerchantMoneyCache::bump((int) $settlement->merchant_id);
+
             // Take the payment locks BEFORE the settlement row — matchPayment
             // locks in that order too, so the two admin actions queue behind
             // each other instead of deadlocking head-on. The rows themselves
@@ -369,7 +380,12 @@ final class SettlementBuilder
      */
     public function addLines(Settlement $settlement, array $transactionIds): Settlement
     {
+
         return DB::transaction(function () use ($settlement, $transactionIds): Settlement {
+            // Batch membership / state moved — orphan this merchant's
+            // cached money reads once this transaction commits.
+            MerchantMoneyCache::bump((int) $settlement->merchant_id);
+
             $settlement = $this->locked($settlement);
             $this->assertDraft($settlement);
 
@@ -387,7 +403,12 @@ final class SettlementBuilder
      */
     public function removeLine(Settlement $settlement, SettlementLine $line): Settlement
     {
+
         return DB::transaction(function () use ($settlement, $line): Settlement {
+            // Batch membership / state moved — orphan this merchant's
+            // cached money reads once this transaction commits.
+            MerchantMoneyCache::bump((int) $settlement->merchant_id);
+
             $settlement = $this->locked($settlement);
             $this->assertDraft($settlement);
 
@@ -408,7 +429,12 @@ final class SettlementBuilder
      */
     public function submit(Settlement $settlement): Settlement
     {
+
         return DB::transaction(function () use ($settlement): Settlement {
+            // Batch membership / state moved — orphan this merchant's
+            // cached money reads once this transaction commits.
+            MerchantMoneyCache::bump((int) $settlement->merchant_id);
+
             $settlement = $this->locked($settlement);
 
             if ($settlement->state !== SettlementState::Draft) {
@@ -542,7 +568,12 @@ final class SettlementBuilder
      */
     public function cancel(Settlement $settlement): Settlement
     {
+
         return DB::transaction(function () use ($settlement): Settlement {
+            // Batch membership / state moved — orphan this merchant's
+            // cached money reads once this transaction commits.
+            MerchantMoneyCache::bump((int) $settlement->merchant_id);
+
             $settlement = $this->locked($settlement);
 
             if (! in_array($settlement->state, [SettlementState::Draft, SettlementState::AwaitingPayment], true)) {

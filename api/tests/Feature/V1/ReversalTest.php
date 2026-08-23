@@ -144,7 +144,7 @@ it('creates a pending adjustment instead when the line is locked in a submitted 
         ->and(reversalJournals('adjustment', $adjustment->id))->toBe(0);
 
     // The merchant outstanding summary surfaces the un-netted credit.
-    $summary = (new OutstandingSummary)->forMerchant($this->merchant);
+    $summary = (app(OutstandingSummary::class))->forMerchant($this->merchant);
 
     expect($summary['pending_adjustments']['count'])->toBe(1)
         ->and($summary['pending_adjustments']['credit_laari'])->toBe(-2750)
@@ -218,7 +218,7 @@ it('nets the pending adjustment into the next draft, posts its credit journal, a
         ->and($balances->naturalBalance(AccountCode::CustomerCashbackLiability))->toBe(8600 + 4000);
 
     // Netted and applied — the summary no longer shows it pending.
-    $summary = (new OutstandingSummary)->forMerchant($this->merchant);
+    $summary = (app(OutstandingSummary::class))->forMerchant($this->merchant);
 
     expect($summary['pending_adjustments']['count'])->toBe(0)
         ->and($summary['pending_adjustments']['credit_laari'])->toBe(0);

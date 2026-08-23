@@ -1305,6 +1305,33 @@ order, where pending money shows).
 Plugin 0.3.0 published; suite 50/50 on both datastores. WC0–WC4 done;
 the owner's live pass and the Dhivehi review remain.
 
+### The money reads stop re-pricing the board on every visit — DONE (2026-08-23)
+
+Phase 2 of the dashboard speed work (phase 1 was client caches). A new
+`MerchantMoneyCache`: every expensive money read — the home tallies, the
+outstanding summary both dashboards poll, the settle-ALL preview — is
+cached in Redis under a key embedding a PER-MERCHANT VERSION. Anything
+that moves that merchant's money bumps the version (one INCR, deferred
+to after commit), orphaning every cached read at once; the TTL (300s) is
+only the reaper and bounds clock-driven drift (a row ageing across a
+bucket boundary, a discount ageing over midnight).
+
+Bump points: every transaction state change and creation
+(TransitionService — the §5 choke point), settlement submit / cancel /
+reject / wallet-settle / add-line / remove-line (inside each builder
+transaction, so afterCommit defers correctly), the credit-memo path
+(no state change), and amendments. Explicit id-selection previews stay
+live-priced — a quote is never cached; 422 "nothing to settle" is never
+cached (the closure throws before the write). The home payload caches
+only the merchant-scoped tallies, never the whole response, which varies
+by the caller's permissions; the tally key embeds the business date so
+midnight cuts over instantly.
+
+The file's own rules, from this box's history: plain arrays only (never
+a serialized model), (int)-cast the version (Redis hands numerics back
+as strings), bumps after commit. Proven live: second read 0 queries,
+bump → recompute. Suite 1779 green with 4 new cache tests.
+
 ### Queue (updated 2026-08-17) — the mobile programme
 
 The mobile API round is DONE and reviewed (PLAN-mobile-api.md: M1–M5, two

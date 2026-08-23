@@ -6,6 +6,7 @@ namespace App\Domain\Settlement;
 
 use App\Domain\Cashback\TransactionState;
 use App\Domain\Money\Laari;
+use App\Domain\Money\MerchantMoneyCache;
 use App\Models\Adjustment;
 use App\Models\Merchant;
 use App\Models\Transaction;
@@ -20,6 +21,8 @@ use Carbon\CarbonImmutable;
  */
 final class OutstandingSummary
 {
+    public function __construct(private readonly MerchantMoneyCache $cache) {}
+
     private const array BUCKETS = ['0_5', '6_10', '11_15', 'overdue'];
 
     /**
@@ -31,6 +34,19 @@ final class OutstandingSummary
      * }
      */
     public function forMerchant(Merchant $merchant): array
+    {
+        // Version-keyed (MerchantMoneyCache): any money event orphans this
+        // entry, so what is served is event-fresh; the TTL only bounds the
+        // clock-driven drift (a row ageing across a bucket boundary).
+        return $this->cache->remember(
+            (int) $merchant->getKey(),
+            'outstanding',
+            fn (): array => $this->compute($merchant),
+        );
+    }
+
+    /** @return array<string, mixed> */
+    private function compute(Merchant $merchant): array
     {
         $timezone = (string) config('app.business_timezone', 'Indian/Maldives');
         $now = CarbonImmutable::now($timezone);

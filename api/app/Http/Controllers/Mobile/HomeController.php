@@ -9,6 +9,7 @@ use App\Domain\Customers\BalanceQuery;
 use App\Domain\Customers\CustomerAvatar;
 use App\Domain\Customers\PayoutWindow;
 use App\Domain\MerchantAccess\Permission;
+use App\Domain\Money\MerchantMoneyCache;
 use App\Domain\Payout\EligibilityQuery;
 use App\Domain\Settlement\OutstandingSummary;
 use App\Domain\Settlement\SettlementState;
@@ -43,6 +44,8 @@ use Symfony\Component\HttpFoundation\Response;
  */
 final class HomeController extends Controller
 {
+    public function __construct(private readonly MerchantMoneyCache $moneyCache) {}
+
     public function customer(Request $request, BalanceQuery $balances): Response
     {
         /** @var Customer $customer */
@@ -95,14 +98,20 @@ final class HomeController extends Controller
 
         // "Today" is the business day the cashier is standing in, not a UTC
         // one — a sale at 9pm Malé must not land on tomorrow's tally.
-        $startOfDay = CarbonImmutable::now($timezone)->startOfDay()->utc();
+        $now = CarbonImmutable::now($timezone);
+        $startOfDay = $now->startOfDay()->utc();
 
-        $today = DB::table('transactions')
+        // Version-keyed money cache (phase 2, owner 2026-08-23): any landed
+        // credit bumps the version, so the tallies are event-fresh; the
+        // date in the name makes midnight cut over instantly. Only the
+        // merchant-scoped sums are cached — never the whole payload, which
+        // varies by the CALLER's permissions.
+        $tally = fn (CarbonImmutable $since): array => (array) DB::table('transactions')
             ->selectRaw('count(*) as credit_count')
             ->selectRaw('coalesce(sum(eligible_laari), 0) as eligible_laari')
             ->selectRaw('coalesce(sum(cashback_laari), 0) as cashback_laari')
             ->where('merchant_id', $merchant->getKey())
-            ->where('occurred_at', '>=', $startOfDay)
+            ->where('occurred_at', '>=', $since)
             // A reversed or written-off sale is not a sale. Counting either
             // would have the till disagree with the receipt roll by the end
             // of a shift.
@@ -112,24 +121,22 @@ final class HomeController extends Controller
             ])
             ->first();
 
+        $tallies = $this->moneyCache->remember(
+            (int) $merchant->getKey(),
+            'home-tallies:'.$now->toDateString(),
+            fn (): array => [
+                'today' => $tally($startOfDay),
+                'month' => $tally($now->startOfMonth()->utc()),
+            ],
+        );
+        $today = (object) $tallies['today'];
+
         // "This month" answers the question the rest of the dashboard does
         // not: what Manfaa is GENERATING, not only what it costs (owner
         // report 2026-08-18). Same business-timezone boundary and the same
-        // reversed/written-off exclusions as today's tally, so the two can
-        // never tell different stories about the same sale.
-        $startOfMonth = CarbonImmutable::now($timezone)->startOfMonth()->utc();
-
-        $month = DB::table('transactions')
-            ->selectRaw('count(*) as credit_count')
-            ->selectRaw('coalesce(sum(eligible_laari), 0) as eligible_laari')
-            ->selectRaw('coalesce(sum(cashback_laari), 0) as cashback_laari')
-            ->where('merchant_id', $merchant->getKey())
-            ->where('occurred_at', '>=', $startOfMonth)
-            ->whereNotIn('state', [
-                TransactionState::Reversed->value,
-                TransactionState::WrittenOff->value,
-            ])
-            ->first();
+        // reversed/written-off exclusions, computed in the one cached
+        // closure above.
+        $month = (object) $tallies['month'];
 
         $maySeeSettlements = $user->can(Permission::SettlementsView);
 

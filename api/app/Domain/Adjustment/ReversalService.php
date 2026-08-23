@@ -9,6 +9,7 @@ use App\Domain\Cashback\FutureDatedTransactionException;
 use App\Domain\Cashback\TransactionState;
 use App\Domain\Cashback\TransitionService;
 use App\Domain\Ledger\Postings;
+use App\Domain\Money\MerchantMoneyCache;
 use App\Domain\Notifications\NotificationService;
 use App\Domain\Notifications\NotificationTemplateKey;
 use App\Domain\Settlement\SettlementBuilder;
@@ -269,6 +270,8 @@ final readonly class ReversalService
             ),
             'state' => 'pending',
         ]);
+
+        MerchantMoneyCache::bump((int) $transaction->merchant_id);
 
         $this->tellCustomer($transaction, $reason);
 

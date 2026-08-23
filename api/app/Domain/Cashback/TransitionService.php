@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Domain\Cashback;
 
+use App\Domain\Money\MerchantMoneyCache;
 use App\Domain\Platform\PlatformConfig;
 use App\Models\Transaction;
 use App\Models\TransactionEvent;
@@ -84,6 +85,10 @@ final class TransitionService
 
             $transaction->save();
 
+            // Every state change moves what a money read would answer; the
+            // bump defers itself to after this transaction commits.
+            MerchantMoneyCache::bump((int) $transaction->merchant_id);
+
             return $this->writeEvent($transaction, $from, $to, $actor, $reasonCode, $meta);
         });
     }
@@ -109,6 +114,8 @@ final class TransitionService
                 $transaction->getKey(),
             ));
         }
+
+        MerchantMoneyCache::bump((int) $transaction->merchant_id);
 
         return $this->writeEvent($transaction, null, TransactionState::Tracked, $actor, $reasonCode, $meta);
     }
