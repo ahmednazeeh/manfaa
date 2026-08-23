@@ -156,7 +156,13 @@ class _NavButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    final fg = selected ? scheme.onSurface : scheme.onSurfaceVariant;
+    // The active tab speaks the BRAND accent, not grey (owner, 2026-08-24):
+    // violet is the app's one UI accent (tokens.dart — coral stays the
+    // mark's), and the pill wears the same soft/strong tint pair every
+    // IconTile already does, so the bar joins the system instead of
+    // inventing a new colour.
+    final violet = tintColors(ManfaaTint.violet, theme.brightness);
+    final fg = selected ? violet.fg : scheme.onSurfaceVariant;
 
     return Expanded(
       child: InkWell(
@@ -166,7 +172,7 @@ class _NavButton extends StatelessWidget {
           duration: const Duration(milliseconds: 160),
           padding: const EdgeInsets.symmetric(vertical: 7),
           decoration: BoxDecoration(
-            color: selected ? scheme.surfaceContainerHigh : Colors.transparent,
+            color: selected ? violet.bg : Colors.transparent,
             borderRadius: BorderRadius.circular(Corner.bar),
           ),
           child: Column(
