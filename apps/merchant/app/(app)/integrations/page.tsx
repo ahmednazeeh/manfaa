@@ -62,9 +62,13 @@ export default function IntegrationsPage() {
           {/* IsleBooks — connected from inside IsleBooks, not here. */}
           <IntegrationCard
             icon={
-              <span className="flex size-12 items-center justify-center rounded-lg bg-muted text-lg font-bold text-foreground">
-                IB
-              </span>
+              <Image
+                src="/media/integrations/islebooks.png"
+                alt="IsleBooks"
+                width={48}
+                height={48}
+                className="size-12 rounded-lg object-contain"
+              />
             }
             title={t('integrations.isleTitle')}
             body={t('integrations.isleBody')}
