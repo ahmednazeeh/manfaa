@@ -1368,8 +1368,11 @@ Body names the track that cleared: "{{amount}} {{track}} through
 Manfaa" ("in sales" / "in cashback").
 
 9 new tests; suite 1788 green. First real run: 2026-07, 2 merchants, 0
-qualified. Left for the IsleBooks project's own session: the invoice
-discount line. Deferred: the app-side card (Dart, rides the next APK).
+qualified. IsleBooks side shipped 2026-08-23 (their `ManfaaWaiverService`
++ `generateInvoice`: monthly renewals zeroed as their own visible line,
+before credit; fails open to full price; annuals never waived — commit
+`ea77a273` in their repo, MANFAA_TASKS.md §M8). Deferred: the app-side
+card (Dart, rides the next APK).
 
 ### Queue (updated 2026-08-17) — the mobile programme
 
