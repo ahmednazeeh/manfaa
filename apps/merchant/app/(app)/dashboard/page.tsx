@@ -24,6 +24,7 @@ import {
   ToolbarPageTitle,
 } from '@/components/app-layout/toolbar';
 import { ErrorBlock } from '@/components/app/async-states';
+import { PosWaiverCard } from '@/components/dashboard/pos-waiver-card';
 import { PromptDiscountDeadline } from '@/components/settlement/prompt-discount';
 
 const BUCKETS: { key: '0_5' | '6_10' | '11_15' | 'overdue'; label: string }[] = [
@@ -125,6 +126,8 @@ export default function DashboardPage() {
               rows={settleAllPreview.data.transactions}
             />
           )}
+
+          <PosWaiverCard />
 
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5">
             {BUCKETS.map(({ key, label }) =>

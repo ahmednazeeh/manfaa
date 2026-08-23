@@ -1332,6 +1332,37 @@ a serialized model), (int)-cast the version (Redis hands numerics back
 as strings), bumps after commit. Proven live: second read 0 queries,
 bump → recompute. Suite 1779 green with 4 new cache tests.
 
+### Free IsleBooks POS for merchants who move money through Manfaa — DONE (2026-08-23)
+
+The partner programme (owner): a merchant that keeps its cashback rate at
+1.00%+ for the WHOLE month, has no overdue settlements, and puts MVR
+200,000 of earning sales — or MVR 5,000 of cashback — through Manfaa gets
+that month's IsleBooks invoice waived.
+
+Only what EARNED counts (owner: "doesn't earn for us"): excluded-category
+lines, below-minimum sales and reversals contribute nothing; marketplace
+orders do. Months are calendar months in business time, evaluated after
+close (scheduler on the 3rd, 06:00) so late refunds land in their month —
+and there is no clawback, a later reversal just reduces the month it
+happens in. First month needs no proration: IsleBooks' first month is
+already free. The programme self-polices — faking volume costs real
+platform fees, faking cashback pays real customers.
+
+`PosWaiverEvaluator` writes one auditable row per merchant-month
+(`pos_waiver_evaluations`, re-runnable). IsleBooks' invoice job reads
+`GET /v1/connect/waivers?month=` (client-credential Basic, its own
+merchants only, lazy-evaluates missing rows) and applies a 100% discount
+line — the policy lives in Manfaa alone. `GET /v1/merchants/me/pos-waiver`
+(rates:read) and the panel's `GET /api/merchant/pos-waiver`
+(settlements.view) feed the dashboard's "Free IsleBooks POS" card: last
+month's verdict and this month's progress on whichever track is closer,
+with rate and overdue check marks — the visible nudge to route more
+sales through Manfaa.
+
+7 new tests; suite 1786 green. First real run: 2026-07, 2 merchants, 0
+qualified. Left for the IsleBooks project's own session: the invoice
+discount line. Deferred: a pos_waiver_earned push, the app-side card.
+
 ### Queue (updated 2026-08-17) — the mobile programme
 
 The mobile API round is DONE and reviewed (PLAN-mobile-api.md: M1–M5, two

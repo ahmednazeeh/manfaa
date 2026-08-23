@@ -2728,3 +2728,46 @@ export function denyConnect(body: {
     body,
   });
 }
+
+// ---------------------------------------------------------------------------
+// POS-fee waiver (owner, 2026-08-23): free IsleBooks for qualifying months
+// ---------------------------------------------------------------------------
+
+export const PosWaiverMonthSchema = z.object({
+  month: z.string(),
+  qualified: z.boolean(),
+  volume_laari: z.number().int(),
+  cashback_laari: z.number().int(),
+  min_rate_bp: z.number().int(),
+  overdue_laari: z.number().int(),
+});
+
+export const PosWaiverSchema = z.object({
+  criteria: z.object({
+    min_rate_bp: z.number().int(),
+    volume_threshold_laari: z.number().int(),
+    cashback_threshold_laari: z.number().int(),
+  }),
+  last_month: PosWaiverMonthSchema.nullable(),
+  current_month: z.object({
+    month: z.string(),
+    volume_laari: z.number().int(),
+    cashback_laari: z.number().int(),
+    min_rate_bp: z.number().int(),
+    overdue_laari: z.number().int(),
+    rate_ok: z.boolean(),
+    overdue_ok: z.boolean(),
+  }),
+});
+export type PosWaiver = z.infer<typeof PosWaiverSchema>;
+
+/** GET /api/merchant/pos-waiver — settlements.view. */
+export function getPosWaiver(
+  options: RequestOptions = {},
+): Promise<{ data: PosWaiver }> {
+  return apiFetch(
+    "/api/merchant/pos-waiver",
+    z.object({ data: PosWaiverSchema }),
+    { signal: options.signal },
+  );
+}

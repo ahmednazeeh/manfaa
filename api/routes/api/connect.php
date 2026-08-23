@@ -3,6 +3,7 @@
 use App\Http\Controllers\Admin\PlatformClientController;
 use App\Http\Controllers\Merchant\ConnectConsentController;
 use App\Http\Controllers\V1\ConnectTokenController;
+use App\Http\Controllers\V1\ConnectWaiversController;
 use App\Http\Controllers\V1\ConnectWebhooksController;
 use App\Http\Middleware\EnsureMerchantApproved;
 use App\Http\Middleware\EnsureSuperadmin;
@@ -72,4 +73,12 @@ Route::post('v1/connect/token', ConnectTokenController::class)
  * superadmin registry; per-merchant endpoints are /v1/webhooks.
  */
 Route::get('v1/connect/webhooks', [ConnectWebhooksController::class, 'index'])
+    ->middleware('throttle:30,1');
+
+/*
+ * A platform reads which of its merchants earned the month's POS-fee
+ * waiver (owner, 2026-08-23) — IsleBooks' invoice job, once a month.
+ * Same client-credential Basic auth as the webhook read-back.
+ */
+Route::get('v1/connect/waivers', [ConnectWaiversController::class, 'index'])
     ->middleware('throttle:30,1');

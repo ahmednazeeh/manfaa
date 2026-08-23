@@ -3,6 +3,7 @@
 use App\Http\Controllers\Admin\SettlementController as AdminSettlementController;
 use App\Http\Controllers\Admin\SettlementPaymentController;
 use App\Http\Controllers\Admin\WalletController;
+use App\Http\Controllers\Merchant\PosWaiverController;
 use App\Http\Controllers\Merchant\SettlementController as MerchantSettlementController;
 use App\Http\Middleware\EnsureMerchantApproved;
 use Illuminate\Support\Facades\Route;
@@ -28,6 +29,11 @@ use Illuminate\Support\Facades\Route;
 // The wallet is its own pair, because spending a wallet balance settles
 // real money without a bank transfer ever being made.
 Route::prefix('merchant')->middleware('auth:merchant')->group(function () {
+    // The POS-fee waiver card (owner, 2026-08-23): commercial standing,
+    // same permission as the outstanding board it derives from.
+    Route::get('pos-waiver', [PosWaiverController::class, 'show'])
+        ->middleware('merchant.can:settlements.view');
+
     Route::get('outstanding', [MerchantSettlementController::class, 'outstanding'])
         ->middleware('merchant.can:settlements.view');
 

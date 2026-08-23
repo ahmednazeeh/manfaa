@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Merchant\PosWaiverApiController;
 use App\Http\Controllers\V1\CustomerLookupController;
 use App\Http\Controllers\V1\MeController;
 use App\Http\Controllers\V1\MerchantRateController;
@@ -61,6 +62,11 @@ Route::prefix('v1')->middleware(['auth:sanctum', EnsureVendorCredential::class, 
     // Who am I: the token's own abilities and store (owner, 2026-08-22).
     // No ability gate — a live credential may always read what it is.
     Route::get('me', MeController::class);
+
+    // The POS-fee waiver, as the merchant's own integration reads it
+    // (owner, 2026-08-23): last month's verdict + this month's progress.
+    Route::get('merchants/me/pos-waiver', [PosWaiverApiController::class, 'show'])
+        ->middleware(CheckAbilities::class.':rates:read');
 
     Route::get('merchants/me/rate', MerchantRateController::class)
         ->middleware(CheckAbilities::class.':rates:read');

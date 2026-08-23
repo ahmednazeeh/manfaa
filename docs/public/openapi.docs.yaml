@@ -2130,6 +2130,90 @@ paths:
         '401':
           description: '`invalid_client` — missing or wrong credentials, a platform not enabled for connect,
             or a public client (OAuth error shape).'
+  /v1/connect/waivers:
+    get:
+      operationId: listPlatformWaivers
+      tags:
+      - Connect
+      summary: Which of your merchants earned the month's POS-fee waiver
+      security:
+      - platformCredentials: []
+      description: 'The Manfaa partner programme (2026-08-23): a merchant that keeps its
+
+        cashback rate at **1.00% or higher for the whole month**, has **no
+
+        overdue settlements**, and puts **MVR 200,000 of earning sales** —
+
+        or **MVR 5,000 of cashback** — through Manfaa gets that month''s POS
+
+        invoice waived. Only sales that actually EARNED count: excluded
+
+        categories, below-minimum sales and reversals contribute nothing.
+
+
+        Your invoice job calls this once a month (any time from the 1st;
+
+        verdicts are final from the 3rd) and applies a 100% discount line to
+
+        qualifying tenants. `month` is a closed calendar month, `YYYY-MM`,
+
+        defaulting to last month. Confidential platforms only, HTTP Basic
+
+        `client_id:client_secret`.
+
+        '
+      parameters:
+      - name: month
+        in: query
+        required: false
+        schema:
+          type: string
+          pattern: ^\d{4}-\d{2}$
+      responses:
+        '200':
+          description: One verdict per merchant holding a live credential of yours.
+          content:
+            application/json:
+              example:
+                month: 2026-07
+                criteria:
+                  min_rate_bp: 100
+                  volume_threshold_laari: 20000000
+                  cashback_threshold_laari: 500000
+                data:
+                - merchant_id: 12
+                  qualified: true
+                  volume_laari: 21430000
+                  cashback_laari: 428600
+                  min_rate_bp: 200
+                  overdue_laari: 0
+                  merchant_status: active
+                  evaluated_at: '2026-08-03T06:00:11+05:00'
+        '401':
+          description: '`invalid_client` (OAuth error shape).'
+        '422':
+          description: '`validation_failed` — month not closed or malformed.'
+  /v1/merchants/me/pos-waiver:
+    get:
+      operationId: getMerchantPosWaiver
+      tags:
+      - Merchant
+      summary: The merchant's own waiver verdict and running progress
+      x-required-ability: rates:read
+      description: 'Last month''s verdict and this month''s running figures for the same
+
+        programme — what a POS shows its merchant ("MVR 132,500 / 200,000
+
+        this month"). Same criteria object as `/v1/connect/waivers`.
+
+        '
+      responses:
+        '200':
+          description: Verdict and progress.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/ForbiddenAbility'
   /v1/connect/token:
     post:
       operationId: exchangeConnectCode

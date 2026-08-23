@@ -22,6 +22,7 @@ import {
   getBranchDelivery,
   getMarketplaceEnrolment,
   getMerchantOutstanding,
+  getPosWaiver,
   getMerchantProfile,
   getMerchantSetup,
   getMerchantWallet,
@@ -203,6 +204,16 @@ export function useOutstanding() {
     queryKey: queryKeys.outstanding,
     queryFn: ({ signal }) => getMerchantOutstanding({ signal }),
     select: (response) => response.data,
+  });
+}
+
+export function usePosWaiver(enabled = true) {
+  return useQuery({
+    queryKey: ['merchant', 'pos-waiver'] as const,
+    queryFn: ({ signal }) => getPosWaiver({ signal }),
+    select: (response) => response.data,
+    enabled,
+    staleTime: 5 * 60 * 1000,
   });
 }
 

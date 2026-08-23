@@ -54,3 +54,7 @@ Schedule::command('manfaa:prune-idempotency-keys')->dailyAt('03:40')->withoutOve
 // long past the 10-minute code and 15-minute signup-token windows. Same
 // unbounded-table pattern the M5 review fixed for idempotency_keys.
 Schedule::command('manfaa:prune-otp-codes')->dailyAt('03:50')->withoutOverlapping()->onOneServer();
+
+// The POS-waiver month closes on the 3rd (owner, 2026-08-23): refunds from
+// the month's last days have landed, and IsleBooks bills after that.
+Schedule::command('manfaa:evaluate-pos-waivers')->monthlyOn(3, '06:00')->timezone(config('app.business_timezone'))->withoutOverlapping()->onOneServer();
