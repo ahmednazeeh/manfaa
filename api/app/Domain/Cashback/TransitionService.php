@@ -92,17 +92,16 @@ final class TransitionService
             // bump defers itself to after this transaction commits.
             MerchantMoneyCache::bump((int) $transaction->merchant_id);
 
-            // Referral programme (owner, 2026-08-23): entering either
-            // validated-spend state may have carried this customer past the
-            // threshold. AFTER COMMIT — the award opens its own transaction
+            // Referral programme (owner, 2026-08-23): entering confirmed —
+            // the moment spend becomes merchant-funded — may have carried
+            // this customer past the threshold. AFTER COMMIT — the award opens its own transaction
             // and must judge committed spend, never a state a rollback could
             // take away. O(1) for the never-referred: the check starts with
             // one primary-key lookup, and no SUM runs unless it hits.
             // Swallowed on failure like a notification would be — the safety
             // net command re-runs the same check daily, and a referral hiccup
             // is never a reason to fail a money transition.
-            if ($transaction->customer_id !== null
-                && in_array($to, [TransactionState::PayableUnfunded, TransactionState::Confirmed], true)) {
+            if ($transaction->customer_id !== null && $to === TransactionState::Confirmed) {
                 $customerId = (int) $transaction->customer_id;
 
                 DB::afterCommit(function () use ($customerId): void {

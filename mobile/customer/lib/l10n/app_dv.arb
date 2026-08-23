@@ -402,5 +402,6 @@
   "categoryAll": "ހުރިހާ",
   "islandwide": "ރަށްވަށައިގެން",
   "discoverNoneInCategory": "މި ބައިގައި އަދި ފިހާރައެއް ނެތް.",
-  "viewStore": "ފިހާރަ ބައްލަވާ"
+  "viewStore": "ފިހާރަ ބައްލަވާ",
+  "referralPromoTitle": "ރައްޓެއްސަކަށް ދައުވަތު ދީ — {amount} ހޯދާ"
 }

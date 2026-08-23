@@ -10,6 +10,7 @@ use App\Models\Merchant;
 use App\Models\MerchantRole;
 use App\Models\MerchantUser;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use App\Http\Middleware\ThrottlePerRoute;
 use Illuminate\Routing\Middleware\ThrottleRequests;
 use Tests\TestCase;
 
@@ -66,7 +67,7 @@ it('never renders a bare snake_case code as the human-readable message', functio
 });
 
 it('reports a rate limit as a wait, not as a wrong password', function () {
-    $this->withoutMiddleware(ThrottleRequests::class);
+    $this->withoutMiddleware([ThrottleRequests::class, ThrottlePerRoute::class]);
 
     Customer::factory()->create(['phone' => '+9607712345']);
 

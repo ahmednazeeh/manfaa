@@ -23,10 +23,11 @@ use Illuminate\Support\Facades\DB;
  * configurable bonus into their wallet — instantly, once per referred
  * customer, ever. No time limit, no clawback.
  *
- * "Validated spend" is eligible_laari summed over payable_unfunded,
- * confirmed and paid — spend that survived the validation window. Whether
- * the merchant has settled is the merchant's story, not the customer's;
- * pending, reversed and written-off never count.
+ * "Validated spend" is eligible_laari summed over confirmed and paid —
+ * spend a merchant has actually FUNDED (owner decision 2026-08-23,
+ * tightened from payable_unfunded the same day): a platform-funded bonus
+ * must never be minted by credits a defaulting merchant recorded and will
+ * never settle. Pending, unfunded, reversed and written-off never count.
  *
  * ONCE-EVER is enforced twice, deliberately: `referral_rewarded_at` on the
  * REFERRED customer is checked and stamped under a row lock, and the wallet
@@ -174,7 +175,7 @@ final readonly class ReferralService
     {
         return (int) Transaction::query()
             ->where('customer_id', $customerId)
-            ->whereIn('state', ['payable_unfunded', 'confirmed', 'paid'])
+            ->whereIn('state', ['confirmed', 'paid'])
             ->sum('eligible_laari');
     }
 

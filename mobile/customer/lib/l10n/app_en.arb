@@ -550,5 +550,13 @@
   "categoryAll": "All",
   "islandwide": "Islandwide",
   "discoverNoneInCategory": "No stores in this category yet.",
-  "viewStore": "View store"
+  "viewStore": "View store",
+  "referralPromoTitle": "Refer a friend — earn {amount}",
+  "@referralPromoTitle": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  }
 }

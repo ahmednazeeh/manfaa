@@ -4,6 +4,7 @@ use App\Http\Middleware\EnsureMarketplaceEnabled;
 use App\Http\Middleware\EnsureMerchantPermission;
 use App\Http\Middleware\EnsureMerchantRole;
 use App\Http\Middleware\EnsureMobileToken;
+use App\Http\Middleware\ThrottlePerRoute;
 use App\Http\Responses\MobileError;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -45,6 +46,11 @@ return Application::configure(basePath: dirname(__DIR__))
             // so "hidden" is enforced by the server rather than trusted to
             // four clients (PLAN-marketplace.md §10).
             'marketplace' => EnsureMarketplaceEnabled::class,
+
+            // Inline throttle:n,1 with a bucket per ROUTE, not one shared
+            // counter per caller. Named limiters are unaffected. See
+            // App\Http\Middleware\ThrottlePerRoute.
+            'throttle' => ThrottlePerRoute::class,
         ]);
 
         // Origin sits behind nginx (same host) with Cloudflare in front;

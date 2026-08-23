@@ -8,6 +8,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 import '../../app/app.dart';
 import '../../app/providers.dart';
 import '../push/push_registrar.dart';
+import 'package:manfaa_customer/features/profile/referrals_screen.dart';
 
 /// Home — the brand mockup, top to bottom: header, greeting, the available
 /// balance (confirmed is the headline; pending stays separate, §10), the
@@ -127,6 +128,10 @@ class _HomeBody extends ConsumerWidget {
         const SizedBox(height: Gap.lg),
         const _ViewTransactionsButton(),
         const SizedBox(height: Gap.lg),
+        // Carries its own bottom gap: while hidden (config not loaded, or
+        // programme off) the home layout is pixel-identical to a build
+        // without it — the goldens prove that.
+        const ReferralPromoCard(),
         const _DiscoverOffersCard(),
       ],
     );
@@ -840,6 +845,54 @@ class _HomeSkeleton extends StatelessWidget {
         SizedBox(height: Gap.lg),
         SkeletonBox(height: 120, radius: Corner.card),
       ],
+    );
+  }
+}
+
+/// One line, one arrow (owner, 2026-08-23: "don't add too much text").
+/// Nothing renders until the programme config has loaded, and nothing at
+/// all while the programme is off — a promo may never block the home
+/// screen or advertise a bonus the server will not pay.
+class ReferralPromoCard extends ConsumerWidget {
+  const ReferralPromoCard({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = context.l10n;
+    final theme = Theme.of(context);
+    final dhivehi = Localizations.localeOf(context).languageCode == 'dv';
+    final summary = ref.watch(referralsProvider).valueOrNull;
+
+    if (summary == null || !summary.enabled) {
+      return const SizedBox.shrink();
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: Gap.lg),
+      child: ManfaaCard(
+      onTap: () => context.go('/profile/referrals'),
+      child: Row(
+        children: [
+          const IconTile(Icons.card_giftcard_rounded, tint: ManfaaTint.amber),
+          const SizedBox(width: Gap.md),
+          Expanded(
+            child: Text(
+              l10n.referralPromoTitle(
+                formatMoney(summary.rewardLaari, dhivehi: dhivehi),
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.titleMedium,
+            ),
+          ),
+          const SizedBox(width: Gap.sm),
+          Icon(
+            Icons.chevron_right_rounded,
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ],
+        ),
+      ),
     );
   }
 }

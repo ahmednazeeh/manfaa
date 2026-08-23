@@ -8,6 +8,7 @@ use App\Models\Customer;
 use App\Models\Merchant;
 use App\Models\MerchantUser;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use App\Http\Middleware\ThrottlePerRoute;
 use Illuminate\Routing\Middleware\ThrottleRequests;
 use Laravel\Sanctum\PersonalAccessToken;
 use Tests\TestCase;
@@ -405,7 +406,7 @@ it('throttles sign-in per ACCOUNT, which a forged forwarding header cannot rotat
     // which is exactly the control this counter exists to back up. What is
     // under test is the limit an attacker cannot spin around by changing a
     // header.
-    $this->withoutMiddleware(ThrottleRequests::class);
+    $this->withoutMiddleware([ThrottleRequests::class, ThrottlePerRoute::class]);
 
     Customer::factory()->create(['phone' => '+9607712345']);
 
@@ -427,7 +428,7 @@ it('throttles sign-in per ACCOUNT, which a forged forwarding header cannot rotat
 });
 
 it('clears the per-account counter on a correct password', function () {
-    $this->withoutMiddleware(ThrottleRequests::class);
+    $this->withoutMiddleware([ThrottleRequests::class, ThrottlePerRoute::class]);
 
     Customer::factory()->create(['phone' => '+9607712345']);
 

@@ -190,11 +190,20 @@ it('records no attribution when no code was typed, and keeps the columns unfilla
 
 // ------------------------------------------------------------- the award
 
-it('pays the referrer the moment validated spend crosses the threshold via payable_unfunded', function () {
+it('pays nothing on payable_unfunded — only merchant-FUNDED spend counts', function () {
+    // Owner decision 2026-08-23 (tightened same day): a defaulting merchant
+    // can record credits it will never settle; those must not mint a
+    // platform-funded bonus. The award waits for confirmed.
     $friend = referredFriend();
     $tx = pendingSpend($friend, 1_000_000); // exactly MVR 10,000
 
     app(TransitionService::class)->makePayable($tx, Actor::system());
+
+    expect(walletBalance($this->referrer))->toBe(0)
+        ->and($friend->fresh()->referral_rewarded_at)->toBeNull();
+
+    // The merchant settles: the same row confirms, and NOW it pays.
+    app(TransitionService::class)->confirm($tx->fresh(), Actor::system());
 
     expect(walletBalance($this->referrer))->toBe(5000)
         ->and(referralEntries($this->referrer))->toBe(1)
@@ -223,7 +232,7 @@ it('leaves the daily reconciliation green after a bonus is paid', function () {
         'fee_laari' => 0,
         'fee_gst_laari' => 0,
     ]);
-    app(TransitionService::class)->makePayable($tx, Actor::system());
+    app(TransitionService::class)->confirm($tx, Actor::system());
 
     expect(walletBalance($this->referrer))->toBe(5000);
 
@@ -249,10 +258,10 @@ it('accumulates across sales — no single purchase needs to cross alone', funct
     $friend = referredFriend();
     $service = app(TransitionService::class);
 
-    $service->makePayable(pendingSpend($friend, 600_000), Actor::system());
+    $service->confirm(pendingSpend($friend, 600_000), Actor::system());
     expect(walletBalance($this->referrer))->toBe(0);
 
-    $service->makePayable(pendingSpend($friend, 400_000), Actor::system());
+    $service->confirm(pendingSpend($friend, 400_000), Actor::system());
     expect(walletBalance($this->referrer))->toBe(5000);
 });
 
@@ -260,8 +269,8 @@ it('pays once per referred customer, ever', function () {
     $friend = referredFriend();
     $service = app(TransitionService::class);
 
-    $service->makePayable(pendingSpend($friend, 1_000_000), Actor::system());
-    $service->makePayable(pendingSpend($friend, 2_000_000), Actor::system());
+    $service->confirm(pendingSpend($friend, 1_000_000), Actor::system());
+    $service->confirm(pendingSpend($friend, 2_000_000), Actor::system());
     $this->artisan('manfaa:award-referral-bonuses')->assertSuccessful();
 
     expect(walletBalance($this->referrer))->toBe(5000)
@@ -275,7 +284,7 @@ it('counts only spend that survived validation — reversed rows buy nothing', f
     // A large sale that was reversed, and a small one that validated.
     $reversed = pendingSpend($friend, 2_000_000);
     $service->reverse($reversed, Actor::system(), 'refund');
-    $service->makePayable(pendingSpend($friend, 500_000), Actor::system());
+    $service->confirm(pendingSpend($friend, 500_000), Actor::system());
 
     expect(walletBalance($this->referrer))->toBe(0)
         ->and($friend->fresh()->referral_rewarded_at)->toBeNull();
@@ -285,7 +294,7 @@ it('awards nothing while the programme is off, but keeps attribution and pays on
     app(PlatformConfig::class)->set('referral_enabled', 0);
 
     $friend = referredFriend();
-    app(TransitionService::class)->makePayable(pendingSpend($friend, 1_500_000), Actor::system());
+    app(TransitionService::class)->confirm(pendingSpend($friend, 1_500_000), Actor::system());
 
     expect(walletBalance($this->referrer))->toBe(0)
         ->and($friend->fresh()->referred_by_customer_id)->toBe($this->referrer->getKey())
@@ -300,7 +309,7 @@ it('awards nothing while the programme is off, but keeps attribution and pays on
 
 it('awards through the safety net after an admin lowers the threshold', function () {
     $friend = referredFriend();
-    app(TransitionService::class)->makePayable(pendingSpend($friend, 200_000), Actor::system());
+    app(TransitionService::class)->confirm(pendingSpend($friend, 200_000), Actor::system());
 
     expect(walletBalance($this->referrer))->toBe(0);
 
@@ -323,7 +332,7 @@ it('queues the push to the referrer only, and spends no SMS', function () {
     $friend = referredFriend();
     referralDevice($friend);
 
-    app(TransitionService::class)->makePayable(pendingSpend($friend, 1_000_000), Actor::system());
+    app(TransitionService::class)->confirm(pendingSpend($friend, 1_000_000), Actor::system());
 
     Queue::assertPushed(SendPushNotification::class, 1);
     Queue::assertPushed(
@@ -338,10 +347,10 @@ it('queues the push to the referrer only, and spends no SMS', function () {
 it('answers the referral summary on the web mount', function () {
     $friendPaid = referredFriend(name: 'Aisha Ahmed');
     $service = app(TransitionService::class);
-    $service->makePayable(pendingSpend($friendPaid, 1_500_000), Actor::system());
+    $service->confirm(pendingSpend($friendPaid, 1_500_000), Actor::system());
 
     $friendMidway = referredFriend(name: 'Mariyam Naseem');
-    $service->makePayable(pendingSpend($friendMidway, 300_000), Actor::system());
+    $service->confirm(pendingSpend($friendMidway, 300_000), Actor::system());
 
     $data = $this->actingAs($this->referrer, 'customer')
         ->getJson('/api/customer/referrals')

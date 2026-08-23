@@ -65,6 +65,12 @@ function SignupForm() {
     const ref = searchParams.get('ref');
     return ref !== null && /^\d{6}$/.test(ref) ? ref : null;
   });
+  // Typed by hand on the details step when no link carried a code — a
+  // friend told the code out loud deserves the same attribution as one
+  // who tapped a link. Soft validation, mirroring the app: empty is fine,
+  // six digits or the button waits.
+  const [typedCode, setTypedCode] = useState('');
+  const typedCodeOk = typedCode === '' || /^\d{6}$/.test(typedCode);
 
   const requestOtpMutation = useRequestOtp();
   const verifyOtpMutation = useVerifyOtp();
@@ -158,7 +164,9 @@ function SignupForm() {
     registerMutation.mutate(
       {
         signup_token: signupToken,
-        ...(referralCode !== null ? { referral_code: referralCode } : {}),
+        ...((referralCode ?? (/^\d{6}$/.test(typedCode) ? typedCode : null)) !== null
+          ? { referral_code: referralCode ?? typedCode }
+          : {}),
         ...values,
       },
       {
@@ -379,10 +387,37 @@ function SignupForm() {
                     </FormItem>
                   )}
                 />
+                {referralCode === null && (
+                  <div className="flex flex-col gap-1.5">
+                    <label
+                      htmlFor="referral-code"
+                      className="text-sm font-medium"
+                    >
+                      {t('auth.referralCodeOptional')}
+                    </label>
+                    <Input
+                      id="referral-code"
+                      dir="ltr"
+                      inputMode="numeric"
+                      maxLength={6}
+                      autoComplete="off"
+                      placeholder="000000"
+                      value={typedCode}
+                      onChange={(event) =>
+                        setTypedCode(event.target.value.replace(/\D/g, ''))
+                      }
+                    />
+                    {!typedCodeOk && (
+                      <p className="text-xs text-destructive">
+                        {t('auth.referralCodeInvalid')}
+                      </p>
+                    )}
+                  </div>
+                )}
                 <Button
                   type="submit"
                   className="w-full"
-                  disabled={registerMutation.isPending}
+                  disabled={registerMutation.isPending || !typedCodeOk}
                 >
                   {registerMutation.isPending && (
                     <LoaderCircle className="animate-spin" />

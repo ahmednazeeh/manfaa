@@ -1412,11 +1412,15 @@ the bonus is now fully off-ledger like every other wallet credit
 leaks fixed, any-admin config gated to superadmin, web badge no longer
 shows today's config as historical fact. Suite 1807 green.
 
-OWNER DECISION OPEN: bonuses pay on `payable_unfunded` spend (per spec
-"independent of merchant settling") — a never-settling merchant's
-credits can mint qualifying spend at zero cash cost and write-off does
-not claw back. Alternatives if unwanted: count only confirmed/paid, or
-report bonuses whose qualifying spend later writes off.
+DECIDED (owner, 2026-08-23, same day): tightened to confirmed/paid only
+— a bonus is minted only by spend a merchant actually FUNDED; the
+transition hook narrowed to entry-to-confirmed. Also same day: typed
+referral-code field added to WEB signup (link-prefill alone left the
+told-out-loud code appless), and a one-line "Refer a friend — earn
+MVR X" promo on both dashboards (web `ReferralPromo`, app
+`ReferralPromoCard` — self-padding so the hidden state is pixel-
+identical, goldens unchanged; visible state pinned by widget tests).
+Customer app v1.0.33+34 shipped with the promo.
 
 ### Queue (updated 2026-08-17) — the mobile programme
 
@@ -1469,9 +1473,13 @@ the panel)
       side is built and tested; this is the client half).
 
 #### Backend follow-ups (small, from the reviews)
-- [ ] The 18 remaining inline `throttle:n,1` routes share ONE per-IP bucket
-      (logos.php's 240/min can starve panel logins) — repo-wide key-prefix
-      pass, its own ticket.
+- [x] Inline `throttle:n,1` shared one bucket per caller — fixed 2026-08-23
+      by `App\Http\Middleware\ThrottlePerRoute` over the 'throttle' alias:
+      buckets are per method|domain|uri (and the authed key carries the
+      MODEL CLASS, closing the Customer-7/MerchantUser-7 collision). All
+      70+ inline declarations inherited it, no route edits; named limiters
+      untouched. Gotcha: `withoutMiddleware(ThrottleRequests::class)` in
+      tests no longer matches — disable BOTH classes. 3 tests pin it.
 - [ ] Per-channel `active` switch on notification templates: push is free
       per message, SMS is not — `cashback_earned` should be able to push
       without starting an SMS bill.

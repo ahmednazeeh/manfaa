@@ -88,7 +88,9 @@
     "stepBank": "Payout account",
     "referredByFriend": "Referred by a friend",
     "referredByFriendCode": "Referred by a friend · {{code}}",
-    "removeReferral": "Remove referral code"
+    "removeReferral": "Remove referral code",
+    "referralCodeOptional": "Referral code (optional)",
+    "referralCodeInvalid": "A referral code is 6 digits."
   },
   "dashboard": {
     "title": "Dashboard",
@@ -542,6 +544,7 @@
     "progress": "{{spent}} of {{threshold}} spent",
     "rewardedBadge": "Bonus earned",
     "emptyTitle": "Invite your first friend",
-    "emptyBody": "Share your code — when a friend signs up with it and spends {{threshold}} at Manfaa partners, {{reward}} lands straight in your wallet. Every friend counts, forever."
+    "emptyBody": "Share your code — when a friend signs up with it and spends {{threshold}} at Manfaa partners, {{reward}} lands straight in your wallet. Every friend counts, forever.",
+    "promo": "Refer a friend — earn {{amount}}"
   }
 }

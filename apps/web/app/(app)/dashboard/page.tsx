@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { displayName } from '@/lib/display-name';
 import { type CustomerBalance } from '@manfaa/api-client';
 import { MoneyText, useFormatMoney } from '@manfaa/ui';
-import { BadgeCheck, CalendarClock, HandCoins, Landmark } from 'lucide-react';
+import { BadgeCheck, CalendarClock, HandCoins, Landmark, Gift, ChevronRight } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { formatDate } from '@/lib/format';
 import { useBalance } from '@/lib/queries';
@@ -18,6 +18,8 @@ import {
 } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { useQuery } from '@tanstack/react-query';
+import { getReferrals } from '@manfaa/api-client';
 import { useLayout } from '@/components/app-layout/context';
 import {
   Toolbar,
@@ -252,6 +254,8 @@ export default function DashboardPage() {
               then the code (what gets shown at a till), then the payout
               summary, then activity. At xl the code card moves to a side
               column beside the money column. */}
+          <ReferralPromo />
+
           <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(20rem,24rem)]">
             <BalanceHero balance={balance} className="xl:col-start-1" />
             <CodeCard
@@ -265,5 +269,39 @@ export default function DashboardPage() {
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * One line, one link (owner, 2026-08-23: "don't add too much text"). Renders
+ * nothing until the programme config has loaded, and nothing at all while
+ * the programme is off.
+ */
+function ReferralPromo() {
+  const { t } = useTranslation();
+  const formatMoney = useFormatMoney();
+  const referrals = useQuery({
+    queryKey: ['referrals'],
+    queryFn: ({ signal }) => getReferrals({ signal }),
+    retry: false,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const data = referrals.data?.data;
+  if (!data?.enabled) return null;
+
+  return (
+    <Link
+      href="/referrals"
+      className="flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3 transition-colors hover:bg-accent"
+    >
+      <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-600 dark:bg-amber-950 dark:text-amber-400">
+        <Gift className="size-4.5" />
+      </span>
+      <span className="min-w-0 flex-1 truncate text-sm font-medium">
+        {t('referrals.promo', { amount: formatMoney(data.reward_laari) })}
+      </span>
+      <ChevronRight className="size-4 shrink-0 text-muted-foreground rtl:rotate-180" />
+    </Link>
   );
 }
