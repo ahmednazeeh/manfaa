@@ -1717,6 +1717,36 @@ void main() {
     'tablet dashboard light',
     (t) => tabletShot(t, 'tablet_dashboard_light', Brightness.light),
   );
+
+  // The landing hero's tablet: the two-column Dashboard at the 10" slate
+  // size, with real shadows (like the phone marketing shot). Framed in CSS
+  // on the site; this is the clean content behind the bezel.
+  Future<void> marketingTabletShot(
+    WidgetTester tester,
+    String name,
+    Brightness b,
+  ) async {
+    debugDisableShadows = false;
+    await tabletShot(tester, name, b);
+    debugDisableShadows = true;
+  }
+
+  testWidgets(
+    'marketing tablet dashboard light',
+    (t) => marketingTabletShot(
+      t,
+      'marketing_tablet_dashboard_light',
+      Brightness.light,
+    ),
+  );
+  testWidgets(
+    'marketing tablet dashboard dark',
+    (t) => marketingTabletShot(
+      t,
+      'marketing_tablet_dashboard_dark',
+      Brightness.dark,
+    ),
+  );
   testWidgets(
     'tablet credit light',
     (t) => tabletShot(

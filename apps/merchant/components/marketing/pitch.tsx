@@ -25,27 +25,95 @@ export function MerchantPhone({ className }: { className?: string }) {
         aria-hidden
         className="absolute inset-0 -z-10 scale-90 rounded-full bg-violet-600/15 opacity-70 blur-3xl"
       />
-      <div className="motion-safe:animate-hero-float">
-        <div className="relative w-[236px] overflow-hidden rounded-[2.2rem] border-[6px] border-zinc-900 bg-zinc-900 shadow-2xl shadow-zinc-900/25 dark:border-zinc-700 sm:w-[252px]">
-          {/* eslint-disable-next-line @next/next/no-img-element -- static marketing asset, exact pixels wanted */}
-          <img
-            src={toAbsoluteUrl('/app-dashboard-light.png')}
-            alt={t('marketing.phoneAlt')}
-            width={780}
-            height={1688}
-            className="block h-auto w-full dark:hidden"
-          />
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={toAbsoluteUrl('/app-dashboard-dark.png')}
-            alt=""
-            aria-hidden
-            width={780}
-            height={1688}
-            className="hidden h-auto w-full dark:block"
-          />
-        </div>
+      <PhoneFrame className="w-[236px] motion-safe:animate-hero-float sm:w-[252px]" />
+    </div>
+  );
+}
+
+/** The phone bezel — the app dashboard on a handset. */
+function PhoneFrame({ className }: { className?: string }) {
+  const { t } = useTranslation();
+  return (
+    <div
+      className={cn(
+        'overflow-hidden rounded-[2rem] border-[6px] border-zinc-900 bg-zinc-900 shadow-2xl shadow-zinc-900/30 dark:border-zinc-700',
+        className,
+      )}
+    >
+      {/* eslint-disable-next-line @next/next/no-img-element -- static marketing asset */}
+      <img
+        src={toAbsoluteUrl('/app-dashboard-light.png')}
+        alt={t('marketing.phoneAlt')}
+        width={1170}
+        height={2532}
+        className="block h-auto w-full dark:hidden"
+      />
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={toAbsoluteUrl('/app-dashboard-dark.png')}
+        alt=""
+        aria-hidden
+        width={1170}
+        height={2532}
+        className="hidden h-auto w-full dark:block"
+      />
+    </div>
+  );
+}
+
+/** The tablet bezel — the app dashboard on a 10" slate (landscape). */
+function TabletFrame({ className }: { className?: string }) {
+  const { t } = useTranslation();
+  return (
+    <div
+      className={cn(
+        'overflow-hidden rounded-[1.4rem] border-[10px] border-zinc-900 bg-zinc-900 shadow-2xl shadow-zinc-900/25 dark:border-zinc-700',
+        className,
+      )}
+    >
+      {/* eslint-disable-next-line @next/next/no-img-element -- static marketing asset */}
+      <img
+        src={toAbsoluteUrl('/app-tablet-light.png')}
+        alt={t('marketing.tabletAlt')}
+        width={2560}
+        height={1600}
+        className="block h-auto w-full dark:hidden"
+      />
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={toAbsoluteUrl('/app-tablet-dark.png')}
+        alt=""
+        aria-hidden
+        width={2560}
+        height={1600}
+        className="hidden h-auto w-full dark:block"
+      />
+    </div>
+  );
+}
+
+/**
+ * The landing hero device shot: on a wide screen the tablet sits behind
+ * with the phone standing in front of its lower-right corner (owner
+ * request, 2026-08-23). Below `sm` there is no room to stage both, so the
+ * phone stands alone — the tablet says nothing the phone does not.
+ */
+export function MerchantDevices({ className }: { className?: string }) {
+  return (
+    <div className={cn('relative flex justify-center', className)}>
+      <div
+        aria-hidden
+        className="absolute inset-0 -z-10 scale-90 rounded-full bg-violet-600/15 opacity-70 blur-3xl"
+      />
+
+      {/* ≥ sm: tablet behind, phone in front to the right. */}
+      <div className="relative hidden w-full max-w-[540px] motion-safe:animate-hero-float sm:block">
+        <TabletFrame />
+        <PhoneFrame className="absolute -bottom-8 -right-2 w-[30%] max-w-[168px] sm:-right-4 lg:-right-6" />
       </div>
+
+      {/* < sm: the phone alone, centred. */}
+      <PhoneFrame className="w-[230px] motion-safe:animate-hero-float sm:hidden" />
     </div>
   );
 }

@@ -1022,7 +1022,8 @@
     "panelTitle": "The cashback platform for Maldivian stores",
     "phoneAlt": "The Manfaa Merchant app dashboard",
     "forShoppers": "For shoppers: manfaa.app",
-    "getApp": "Download the app"
+    "getApp": "Download the app",
+    "tabletAlt": "The Manfaa Merchant app on a tablet"
   },
   "integrations": {
     "title": "Integrations",

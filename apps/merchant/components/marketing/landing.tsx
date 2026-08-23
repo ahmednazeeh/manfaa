@@ -5,7 +5,7 @@ import { BrandMark } from '@manfaa/ui';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { LanguageSwitcher } from '@/components/app/language-switcher';
-import { MerchantPhone, PitchPoints } from '@/components/marketing/pitch';
+import { MerchantDevices, PitchPoints } from '@/components/marketing/pitch';
 
 /**
  * The signed-out front door of merchant.manfaa.app (PLAN §WL): a lean
@@ -69,7 +69,7 @@ export function MerchantLanding() {
           </a>
         </div>
 
-        <MerchantPhone className="py-6" />
+        <MerchantDevices className="py-6" />
       </main>
 
       <footer className="border-t border-border">
