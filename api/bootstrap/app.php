@@ -23,6 +23,14 @@ return Application::configure(basePath: dirname(__DIR__))
         // app authenticate over session cookies against the api routes.
         $middleware->statefulApi();
 
+        // The self-referral defence's browser ref (DeviceIdentity::WEB_COOKIE)
+        // stays UNencrypted on purpose: EncryptCookies only runs on the
+        // stateful branch of these api routes, and an encrypted value would
+        // arrive as ciphertext on the stateless branch and never match its
+        // UUID-v4 shape. It is a random ref, not a secret — a visitor could
+        // clear or forge it anyway, so the MAC bought nothing.
+        $middleware->encryptCookies(except: ['mfa_did']);
+
         // The merchant panel's permission gate, parameterised by the one
         // permission a route needs: merchant.can:settlements.create (PLAN
         // §13b staff permissions).

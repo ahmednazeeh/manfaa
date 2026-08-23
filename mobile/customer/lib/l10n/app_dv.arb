@@ -385,6 +385,8 @@
   "referralFriendsTitle": "ތިޔަބޭފުޅާގެ ރައްޓެހިން",
   "referralFriendsEmpty": "އަދި އެއްވެސް ބޭފުޅަކު ކޯޑު ބޭނުމެއް ނުކުރޭ. ހޯއްދަވަން ފެއްޓެވުމަށް ޙިއްޞާކުރައްވާ.",
   "referralRewardedBadge": "ބޯނަސް ލިބިއްޖެ",
+  "referralSelfNotice": "އަމިއްލަ ނަފްސަށް ދަޢުވަތު ދިނުން މަނާ — އެފަދަ ރެފަރަލް ބާޠިލުކުރެވޭނެ.",
+  "referralDisqualified": "ބާޠިލުކުރެވިފައި",
   "referralProgress": "{threshold} އިން {spent}",
   "referralJoinedOn": "ގުޅުނީ {date}",
   "referralPaused": "ރެފަރަލް މިވަގުތު މެދުކަނޑާލެވިފައި — ޕްރޮގްރާމް އަލުން ފެށުމުން ކޯޑު މަސައްކަތްކުރާނެ.",

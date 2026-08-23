@@ -35,6 +35,19 @@ use Illuminate\Support\Facades\DB;
  * referred id, type 'referral') — so even a stamp lost to a crash between
  * the two writes cannot pay twice.
  *
+ * SELF-REFERRAL, NO TOLERANCE (owner, 2026-08-24): if referrer and referred
+ * have EVER been seen on the same device (DeviceIdentity — hashed OS ids and
+ * the web browser ref — or a shared FCM token in device_tokens), the referred
+ * customer's bonus is DISQUALIFIED at award time: stamped
+ * `referral_disqualified_at`, never paid, never retried, no review queue.
+ * Permanent by construction — every award path skips the stamp the same way
+ * it skips `referral_rewarded_at`. Already-paid bonuses are never clawed back
+ * — which also means a collision whose evidence first lands AFTER the payout
+ * is forgiven: sharesDevice() is consulted exactly once, at award time. The
+ * defence's other honest limits are on the record in DeviceIdentity's
+ * KNOWN-OPEN PATHS docblock — it deters casual self-referral; it cannot
+ * convict devices the store never saw.
+ *
  * OFF-LEDGER, deliberately: the customer wallet lives entirely outside the
  * §8 ledger (marketplace refunds credit it with no journal, and withdrawals
  * post nothing), and the Reconciler derives Customer Cashback Liability
@@ -49,6 +62,7 @@ final readonly class ReferralService
         private PlatformConfig $config,
         private WalletService $wallet,
         private NotificationService $notifications,
+        private DeviceIdentity $devices,
     ) {}
 
     /**
@@ -81,6 +95,7 @@ final readonly class ReferralService
             ->whereKey($customerId)
             ->whereNotNull('referred_by_customer_id')
             ->whereNull('referral_rewarded_at')
+            ->whereNull('referral_disqualified_at')
             ->first();
 
         if ($referred !== null) {
@@ -105,6 +120,12 @@ final readonly class ReferralService
             return false;
         }
 
+        // The cheap column guard, mirrored inside the lock below: a
+        // disqualified customer costs the caller nothing further, ever.
+        if ($referred->referral_disqualified_at !== null) {
+            return false;
+        }
+
         if ($this->validatedSpendLaari((int) $referred->getKey()) < $this->config->referralSpendThresholdLaari()) {
             return false;
         }
@@ -122,9 +143,30 @@ final readonly class ReferralService
                 return false;
             }
 
+            // Disqualified is PERMANENT: stamped once, skipped forever —
+            // no re-run, threshold change or admin toggle revives it.
+            if ($locked->referral_disqualified_at !== null) {
+                return false;
+            }
+
             $referrer = Customer::query()->find($locked->referred_by_customer_id);
 
             if ($referrer === null) {
+                return false;
+            }
+
+            // SELF-REFERRAL, NO TOLERANCE (owner, 2026-08-24): a device
+            // ever shared between referrer and referred — or a currently
+            // shared FCM token — kills this bonus at the moment it would
+            // have paid. Stamp, no credit, no push, and every later run
+            // stops at the guard above. Already-rewarded customers never
+            // reach this line, so nothing already paid is ever touched.
+            if ($this->devices->sharesDevice($referrer, $locked)) {
+                $locked->forceFill([
+                    'referral_disqualified_at' => CarbonImmutable::now('UTC'),
+                    'referral_disqualified_reason' => 'device_collision',
+                ])->save();
+
                 return false;
             }
 

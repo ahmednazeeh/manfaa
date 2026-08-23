@@ -5,6 +5,7 @@ import 'package:dio/dio.dart';
 import 'activity_models.dart';
 import 'api_base.dart';
 import 'cart_models.dart';
+import 'device_identity.dart';
 import 'market_models.dart';
 import 'models.dart';
 import 'order_models.dart';
@@ -20,7 +21,18 @@ import 'session.dart';
 /// `ManfaaApi`, and renaming it would churn an installed, working app for
 /// nothing.
 class ManfaaApi extends ManfaaApiBase<CustomerSession> {
-  ManfaaApi({required super.session, super.dio});
+  /// [deviceIdentity] is the self-referral defence's holder: the app
+  /// resolves it asynchronously at startup and every request from then on
+  /// carries the id. Optional so tests (and the holder-less default)
+  /// construct exactly as before — the interceptor sends nothing while the
+  /// holder is empty. Customer client only: the server records the header
+  /// solely on the authed customer tree, so the merchant app stays as it is.
+  ManfaaApi({required super.session, super.dio, DeviceIdentity? deviceIdentity})
+      : deviceIdentity = deviceIdentity ?? DeviceIdentity() {
+    dio.interceptors.add(DeviceIdentityInterceptor(this.deviceIdentity));
+  }
+
+  final DeviceIdentity deviceIdentity;
 
   // ------------------------------------------------------------- reads
 

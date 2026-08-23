@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { getReferrals, type ReferralFriend } from '@manfaa/api-client';
 import { useFormatMoney } from '@manfaa/ui';
 import { useQuery } from '@tanstack/react-query';
-import { Check, Copy, Gift, Link2, Share2, TriangleAlert } from 'lucide-react';
+import { Ban, Check, Copy, Gift, Link2, Share2, TriangleAlert } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { formatDate } from '@/lib/format';
 import { cn } from '@/lib/utils';
@@ -77,7 +77,14 @@ function FriendRow({
           )}
         </div>
 
-        {friend.rewarded ? (
+        {friend.disqualified ? (
+          // Self-referral defence: permanent, no progress to show — a muted
+          // chip, deliberately quieter than the success badge.
+          <Badge variant="secondary" appearance="light" size="sm">
+            <Ban className="size-3" />
+            {t('referrals.disqualifiedBadge')}
+          </Badge>
+        ) : friend.rewarded ? (
           // Amount-free, like mobile: the CURRENT reward setting may differ
           // from what this friend actually paid out, and the API carries no
           // per-friend figure — an amount here could misstate history.
@@ -97,7 +104,7 @@ function FriendRow({
 
       {/* Width-driven (like the dashboard's payout bar) so it fills from
           the inline start and mirrors under Dhivehi for free. */}
-      {!friend.rewarded && (
+      {!friend.rewarded && !friend.disqualified && (
         <div
           role="progressbar"
           aria-valuemin={0}
@@ -192,6 +199,12 @@ export default function ReferralsPage() {
               {t('referrals.explainer', { reward, threshold })}
             </span>
           )}
+
+          {/* The self-referral rule is stated even while the programme is
+              paused — it is a prohibition, not a promise. */}
+          <span className="max-w-sm text-2xs text-muted-foreground/80">
+            {t('referrals.selfReferralNote')}
+          </span>
 
           <div className="flex flex-wrap items-center justify-center gap-2">
             <Button

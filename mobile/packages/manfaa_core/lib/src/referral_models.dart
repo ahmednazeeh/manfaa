@@ -74,6 +74,7 @@ class ReferralFriend {
     required this.name,
     required this.spentLaari,
     required this.rewarded,
+    this.disqualified = false,
     this.joinedAt,
   });
 
@@ -81,6 +82,9 @@ class ReferralFriend {
         name: json['name']?.toString() ?? '',
         spentLaari: json['spent_laari'] as int? ?? 0,
         rewarded: json['rewarded'] as bool? ?? false,
+        // `== true` on purpose: the field is new (self-referral defence,
+        // 2026-08-24), so absent — or anything unexpected — parses as false.
+        disqualified: json['disqualified'] == true,
         joinedAt: json['joined_at'] as String?,
       );
 
@@ -92,6 +96,12 @@ class ReferralFriend {
   final int spentLaari;
 
   final bool rewarded;
+
+  /// The self-referral defence's verdict (owner, 2026-08-24): true means
+  /// this friend's bonus is disqualified — permanently, never paid. The API
+  /// then always sends `spent_laari: 0` and `rewarded: false`, and the
+  /// screen shows a muted state instead of a progress bar.
+  final bool disqualified;
 
   /// ISO-8601, or null for accounts older than the attribution columns.
   final String? joinedAt;

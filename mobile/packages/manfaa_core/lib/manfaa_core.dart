@@ -11,6 +11,7 @@ export 'src/brand_assets.dart';
 export 'src/calendar.dart';
 export 'src/config_gate.dart';
 export 'src/credit_queue.dart';
+export 'src/device_identity.dart';
 export 'src/display_name.dart';
 export 'src/errors.dart';
 export 'src/http/interceptors.dart';

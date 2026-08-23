@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Auth;
 
+use App\Domain\Referrals\DeviceIdentity;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\CustomerResource;
 use App\Models\Customer;
@@ -12,7 +13,7 @@ use Illuminate\Validation\ValidationException;
 
 class CustomerAuthController extends Controller
 {
-    public function login(Request $request): CustomerResource
+    public function login(Request $request, DeviceIdentity $devices): CustomerResource
     {
         $credentials = $request->validate([
             'phone' => ['required', 'string'],
@@ -43,6 +44,11 @@ class CustomerAuthController extends Controller
         }
 
         $request->session()->regenerate();
+
+        // Web LOGIN feeds the self-referral defence (owner, 2026-08-24) —
+        // best-effort: this legacy password door only READS the browser ref
+        // the OTP flow plants; a browser without one records nothing.
+        $devices->recordBrowserRef($user, $request->cookie(DeviceIdentity::WEB_COOKIE));
 
         return new CustomerResource($user);
     }

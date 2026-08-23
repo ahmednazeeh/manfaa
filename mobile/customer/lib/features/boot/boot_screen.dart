@@ -6,6 +6,7 @@ import 'package:manfaa_core/manfaa_core.dart';
 import 'package:manfaa_ui/manfaa_ui.dart';
 
 import '../../app/app.dart';
+import '../../app/device_identity.dart';
 import '../../app/providers.dart';
 
 /// Boot: session in, /config checked, THEN anything else.
@@ -30,6 +31,11 @@ class _BootScreenState extends ConsumerState<BootScreen> {
   }
 
   Future<void> _boot() async {
+    // Fire-and-forget: the self-referral defence's device id resolves in
+    // the background and must never hold up first paint or routing —
+    // requests made before it lands simply omit the header.
+    ref.read(deviceIdentityInitProvider);
+
     await ref.read(sessionInitProvider.future);
 
     final session = ref.read(sessionProvider);

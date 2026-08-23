@@ -8,6 +8,7 @@ use App\Domain\Customers\Msisdn;
 use App\Domain\Customers\OtpService;
 use App\Domain\Customers\PhoneAlreadyRegisteredException;
 use App\Domain\Customers\TooManyOtpAttemptsException;
+use App\Domain\Referrals\DeviceIdentity;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\CustomerResource;
 use App\Http\Support\OtpRequestLimiter;
@@ -36,7 +37,10 @@ class OtpAuthController extends Controller
      */
     public const string PHONE_RULE = 'regex:/^\+960[79]\d{6}$/';
 
-    public function __construct(private readonly OtpService $otp) {}
+    public function __construct(
+        private readonly OtpService $otp,
+        private readonly DeviceIdentity $devices,
+    ) {}
 
     public function requestOtp(Request $request): JsonResponse
     {
@@ -56,7 +60,9 @@ class OtpAuthController extends Controller
 
         // Always 200 with an identical body — known and unknown phones are
         // indistinguishable from outside.
-        return response()->json(['message' => 'If the number is valid, a verification code has been sent.']);
+        return $this->withBrowserRef($request, response()->json([
+            'message' => 'If the number is valid, a verification code has been sent.',
+        ]));
     }
 
     public function verifyOtp(Request $request): JsonResponse
@@ -76,7 +82,7 @@ class OtpAuthController extends Controller
             throw ValidationException::withMessages(['code' => 'otp_invalid']);
         }
 
-        return response()->json([
+        return $this->withBrowserRef($request, response()->json([
             'data' => [
                 'signup_token' => $token,
                 'expires_in_minutes' => OtpService::SIGNUP_TOKEN_TTL_MINUTES,
@@ -90,7 +96,7 @@ class OtpAuthController extends Controller
                     ->where('status', '!=', 'closed')
                     ->exists(),
             ],
-        ]);
+        ]));
     }
 
     /**
@@ -122,17 +128,24 @@ class OtpAuthController extends Controller
             Auth::guard('customer')->login($outcome->customer);
             $request->session()->regenerate();
 
-            return (new CustomerResource($outcome->customer))
+            // Web LOGIN feeds the defence too — collisions keep accruing
+            // after signup, not only at it.
+            $this->devices->recordBrowserRef(
+                $outcome->customer,
+                $request->cookie(DeviceIdentity::WEB_COOKIE),
+            );
+
+            return $this->withBrowserRef($request, (new CustomerResource($outcome->customer))
                 ->response($request)
-                ->setStatusCode(200);
+                ->setStatusCode(200));
         }
 
-        return response()->json([
+        return $this->withBrowserRef($request, response()->json([
             'data' => [
                 'signup_token' => $outcome->signupToken,
                 'expires_in_minutes' => OtpService::SIGNUP_TOKEN_TTL_MINUTES,
             ],
-        ]);
+        ]));
     }
 
     public function register(Request $request): JsonResponse
@@ -172,9 +185,33 @@ class OtpAuthController extends Controller
         Auth::guard('customer')->login($customer->fresh());
         $request->session()->regenerate();
 
-        return (new CustomerResource($customer))
+        // The self-referral defence's web leg: the browser ref minted
+        // earlier in this signup flow lands in the SAME device store the
+        // apps feed. NOTE THE HONEST LIMIT: hashes match only exactly, so
+        // a browser ref can never collide with an SSAID/IFV hash — this
+        // leg convicts only when BOTH accounts touch the same browser
+        // (see DeviceIdentity's KNOWN-OPEN PATHS).
+        $this->devices->recordBrowserRef($customer, $request->cookie(DeviceIdentity::WEB_COOKIE));
+
+        return $this->withBrowserRef($request, (new CustomerResource($customer))
             ->response($request)
-            ->setStatusCode(201);
+            ->setStatusCode(201));
+    }
+
+    /**
+     * Ensures the signup flow's responses plant the long-lived browser ref
+     * (DeviceIdentity::WEB_COOKIE) when the browser holds none — so by the
+     * time register (or a later sign-in) runs, there is an identity to
+     * record. An existing well-formed cookie is left untouched: rotating it
+     * would erase exactly the history the defence exists to keep.
+     */
+    private function withBrowserRef(Request $request, JsonResponse $response): JsonResponse
+    {
+        if (! DeviceIdentity::isBrowserRef($request->cookie(DeviceIdentity::WEB_COOKIE))) {
+            $response->withCookie(DeviceIdentity::mintBrowserCookie());
+        }
+
+        return $response;
     }
 
     /**

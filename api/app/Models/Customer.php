@@ -50,6 +50,7 @@ class Customer extends Authenticatable implements MobileTokenSubject
             'referred_by_customer_id' => 'integer',
             'referred_at' => 'immutable_datetime',
             'referral_rewarded_at' => 'immutable_datetime',
+            'referral_disqualified_at' => 'immutable_datetime',
         ];
     }
 
@@ -135,6 +136,15 @@ class Customer extends Authenticatable implements MobileTokenSubject
     public function referrals(): HasMany
     {
         return $this->hasMany(self::class, 'referred_by_customer_id');
+    }
+
+    /**
+     * Hashed device sightings (self-referral defence, owner 2026-08-24).
+     * Written only by DeviceIdentity::record(); never listed by any API.
+     */
+    public function devices(): HasMany
+    {
+        return $this->hasMany(CustomerDevice::class);
     }
 
     public function claims(): HasMany

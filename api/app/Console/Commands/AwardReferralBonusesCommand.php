@@ -39,6 +39,9 @@ final class AwardReferralBonusesCommand extends Command
         Customer::query()
             ->whereNotNull('referred_by_customer_id')
             ->whereNull('referral_rewarded_at')
+            // Disqualified (self-referral device collision) is permanent —
+            // the sweep never revisits, exactly like already-rewarded.
+            ->whereNull('referral_disqualified_at')
             ->orderBy('id')
             ->chunkById(200, function ($customers) use ($referrals, &$checked, &$awarded): void {
                 foreach ($customers as $customer) {

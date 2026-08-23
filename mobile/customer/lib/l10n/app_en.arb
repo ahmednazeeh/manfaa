@@ -516,6 +516,8 @@
   "referralFriendsTitle": "Your friends",
   "referralFriendsEmpty": "No one has used your code yet. Share it to start earning.",
   "referralRewardedBadge": "Bonus earned",
+  "referralSelfNotice": "Self-referral is prohibited and gets disqualified.",
+  "referralDisqualified": "Disqualified",
   "referralProgress": "{spent} of {threshold}",
   "@referralProgress": {
     "placeholders": {

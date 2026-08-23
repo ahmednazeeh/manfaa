@@ -1027,6 +1027,13 @@ export const ReferralFriendSchema = z.object({
   spent_laari: z.number().int(),
   /** True once this friend has earned the referrer their one-time bonus. */
   rewarded: z.boolean(),
+  /**
+   * Self-referral defence: true when this referral was disqualified (device
+   * collision — referrer and referred shared a device). Permanent; the row
+   * then always carries `spent_laari: 0` and `rewarded: false`. Defaulted
+   * for safety against older API responses.
+   */
+  disqualified: z.boolean().default(false),
 });
 export type ReferralFriend = z.infer<typeof ReferralFriendSchema>;
 

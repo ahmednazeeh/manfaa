@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 1.0.35+36
+version: 1.0.36+37
 
 environment:
   sdk: ^3.12.2
@@ -51,6 +51,9 @@ dependencies:
     path: ../packages/manfaa_ui
   screen_brightness: ^2.1.11
   device_info_plus: ^13.2.0
+  # Android SSAID for the self-referral defence (owner, 2026-08-24) — the
+  # sanctioned per-OS device id device_info_plus stopped exposing.
+  android_id: ^0.4.0
   flutter_native_splash: ^2.4.8
   geolocator: ^14.0.3
   url_launcher: ^6.3.2

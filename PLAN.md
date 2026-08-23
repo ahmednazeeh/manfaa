@@ -1422,6 +1422,40 @@ MVR X" promo on both dashboards (web `ReferralPromo`, app
 identical, goldens unchanged; visible state pinned by widget tests).
 Customer app v1.0.33+34 shipped with the promo.
 
+### The self-referral device guard — DONE (2026-08-24)
+
+Owner: device collision = ZERO reward, no tolerance, no review queue.
+`customer_devices` stores HMAC-SHA256(APP_KEY, raw) only — never raw
+ids. Sightings: app sends `X-Device-Id` (Android SSAID; iOS `ifv:`) +
+`X-Device-Ref` (`kc:` Keychain UUID that survives reinstall — review
+caught that sending only one leaves the reinstall hole open) on every
+authed request; web signup/login plants+records the `mfa_did` cookie
+(400d, unencrypted-by-design random ref); every customer push
+registration also records `fcm:<token>` — a durable same-install trail
+that works retroactively on builds that predate the headers.
+`ReferralService::award` stamps `referral_disqualified_at` +
+`device_collision` inside the locked transaction: no credit, no push,
+permanent, sweep skips it; paid bonuses never clawed. Both referral
+pages carry the one-line prohibition; disqualified friends render a
+muted badge, spend hidden. Cap: 30 distinct hashes/customer.
+12+ new tests; suite 1825 green. Shipped: customer v1.0.36+37.
+
+KNOWN-OPEN PATHS (accepted client-supplied-identity limits, owner
+sign-off pending — recorded in DeviceIdentity's docblock): fresh
+browser signup with an app-only referrer; stripped headers on a rooted
+device; second Android work-profile/clone (different SSAID); evidence
+appearing only after payout (no clawback by design). Backstops: the
+economics (bonus needs MVR 10,000 of merchant-FUNDED spend) and the
+payout-account collision check, which remains AVAILABLE TO BUILD if
+farming appears. OWNER TO-DO: ToS wording for the prohibition.
+
+Same day, merchant app polish (v1.0.23+24): bottom-bar active pill
+violet like the customer app's (rail already was); pill gained 10dp
+horizontal clearance + FittedBox so the stadium curve stops clipping
+long middle labels ("Transactions"); single-tint card washes —
+Outstanding lavender, Credit customer mint, Wallet blue (light 40%,
+dark 13%, `cardWash()`); merchant suite 140 green, goldens redone.
+
 ### Queue (updated 2026-08-17) — the mobile programme
 
 The mobile API round is DONE and reviewed (PLAN-mobile-api.md: M1–M5, two

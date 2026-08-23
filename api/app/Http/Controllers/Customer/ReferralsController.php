@@ -41,8 +41,13 @@ final class ReferralsController extends Controller
 
         // One grouped SUM for every friend still mid-bar, instead of a
         // query per row. Already-rewarded friends need no SUM at all —
-        // their bar is full by definition.
-        $pendingIds = $friends->whereNull('referral_rewarded_at')->pluck('id');
+        // their bar is full by definition — and DISQUALIFIED friends
+        // (self-referral device collision) get no SUM either: their row
+        // deliberately leaks nothing.
+        $pendingIds = $friends
+            ->whereNull('referral_rewarded_at')
+            ->whereNull('referral_disqualified_at')
+            ->pluck('id');
         $spend = $pendingIds->isEmpty() ? collect() : Transaction::query()
             ->whereIn('customer_id', $pendingIds)
             ->whereIn('state', ['payable_unfunded', 'confirmed', 'paid'])
@@ -69,7 +74,11 @@ final class ReferralsController extends Controller
                 'earned_total_laari' => $earnedTotal,
             ],
             'friends' => $friends->map(function (Customer $friend) use ($spend, $threshold): array {
-                $rewarded = $friend->referral_rewarded_at !== null;
+                // Self-referral device collision (owner, 2026-08-24):
+                // permanent, and the row says so INSTEAD of a progress bar
+                // — spend reads 0 (leak nothing) and rewarded false.
+                $disqualified = $friend->referral_disqualified_at !== null;
+                $rewarded = ! $disqualified && $friend->referral_rewarded_at !== null;
 
                 return [
                     'name' => MaskedName::of((string) $friend->name),
@@ -80,6 +89,7 @@ final class ReferralsController extends Controller
                         ? $threshold
                         : min((int) ($spend[$friend->getKey()] ?? 0), $threshold),
                     'rewarded' => $rewarded,
+                    'disqualified' => $disqualified,
                 ];
             })->values(),
         ]]);

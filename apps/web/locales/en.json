@@ -527,6 +527,7 @@
     "title": "Refer friends",
     "subtitle": "Share your code and earn a bonus when friends shop at Manfaa partners.",
     "explainer": "Earn {{reward}} when a friend signs up with your code and spends {{threshold}} at Manfaa partners.",
+    "selfReferralNote": "Referring your own second account is not allowed — such referrals are disqualified.",
     "paused": "The referral programme is paused right now — new bonuses are not being awarded.",
     "yourCode": "Your referral code",
     "codeHint": "Friends enter this code when they create their account.",
@@ -543,6 +544,7 @@
     "joined": "Joined {{date}}",
     "progress": "{{spent}} of {{threshold}} spent",
     "rewardedBadge": "Bonus earned",
+    "disqualifiedBadge": "Disqualified",
     "emptyTitle": "Invite your first friend",
     "emptyBody": "Share your code — when a friend signs up with it and spends {{threshold}} at Manfaa partners, {{reward}} lands straight in your wallet. Every friend counts, forever.",
     "promo": "Refer a friend — earn {{amount}}"

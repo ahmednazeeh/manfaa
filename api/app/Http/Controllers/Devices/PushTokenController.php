@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Devices;
 
 use App\Domain\Mobile\MobileAudience;
+use App\Domain\Referrals\DeviceIdentity;
 use App\Http\Controllers\Controller;
 use App\Models\Customer;
 use App\Models\DeviceToken;
@@ -39,7 +40,7 @@ abstract class PushTokenController extends Controller
      * shared phone — MOVES the row rather than leaving a twin that would go
      * on delivering to whoever held it last.
      */
-    public function update(Request $request): JsonResponse
+    public function update(Request $request, DeviceIdentity $devices): JsonResponse
     {
         $validated = $request->validate([
             'token' => ['required', 'string', 'max:512'],
@@ -105,6 +106,16 @@ abstract class PushTokenController extends Controller
 
             DeviceToken::query()->create($attributes + ['locale' => $validated['locale'] ?? 'en']);
         });
+
+        // Self-referral defence (owner, 2026-08-24): an FCM token names one
+        // app INSTALL, so a customer registering it is a device sighting —
+        // hashed into customer_devices like every other identity. This
+        // trail is PERMANENT where the row above is not: `token` is unique
+        // and a handover destroys the previous owner's row, so two accounts
+        // that ever pushed from one install only remain visible here.
+        if ($user instanceof Customer) {
+            $devices->record($user, 'fcm:'.$validated['token'], $validated['platform']);
+        }
 
         return response()->json(null, 204);
     }

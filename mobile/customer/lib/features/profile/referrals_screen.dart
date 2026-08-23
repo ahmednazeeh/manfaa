@@ -109,7 +109,7 @@ class _Body extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: Gap.md),
-              if (summary.enabled)
+              if (summary.enabled) ...[
                 Text(
                   l10n.referralExplainer(
                     formatMoney(summary.thresholdLaari, dhivehi: dhivehi),
@@ -117,6 +117,14 @@ class _Body extends StatelessWidget {
                   ),
                   style: theme.textTheme.bodySmall?.copyWith(color: muted),
                 ),
+                const SizedBox(height: Gap.sm),
+              ],
+              // The rule, stated plainly (owner, 2026-08-24): one line, and
+              // it shows whether or not the programme is running.
+              Text(
+                l10n.referralSelfNotice,
+                style: theme.textTheme.bodySmall?.copyWith(color: muted),
+              ),
               const SizedBox(height: Gap.lg),
               Row(
                 children: [
@@ -247,6 +255,10 @@ class _Stat extends StatelessWidget {
 /// One invited friend: masked name, when they joined, and how far along
 /// the milestone bar they are. Spend arrives capped at the threshold, so
 /// the bar can show progress without ever showing real spending.
+///
+/// A friend the self-referral defence disqualified gets a MUTED state — a
+/// neutral icon and the word, no progress bar. The verdict is permanent
+/// server-side, so this row never turns back into a progress bar.
 class _FriendRow extends StatelessWidget {
   const _FriendRow({required this.friend, required this.thresholdLaari});
 
@@ -270,10 +282,16 @@ class _FriendRow extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           IconTile(
-            friend.rewarded
-                ? Icons.check_circle_rounded
-                : Icons.person_outline_rounded,
-            tint: friend.rewarded ? ManfaaTint.green : ManfaaTint.violet,
+            friend.disqualified
+                ? Icons.block_rounded
+                : friend.rewarded
+                    ? Icons.check_circle_rounded
+                    : Icons.person_outline_rounded,
+            tint: friend.disqualified
+                ? ManfaaTint.neutral
+                : friend.rewarded
+                    ? ManfaaTint.green
+                    : ManfaaTint.violet,
             size: 40,
             iconSize: 20,
           ),
@@ -307,31 +325,42 @@ class _FriendRow extends StatelessWidget {
                     ],
                   ],
                 ),
-                const SizedBox(height: Gap.sm),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(4),
-                  child: LinearProgressIndicator(
-                    value: progress,
-                    minHeight: 6,
-                    backgroundColor: theme.colorScheme.surfaceContainer,
-                    color: friend.rewarded
-                        ? ManfaaColors.green
-                        : ManfaaColors.violet,
+                if (friend.disqualified) ...[
+                  const SizedBox(height: Gap.xs),
+                  Text(
+                    l10n.referralDisqualified,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: muted,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
-                ),
-                const SizedBox(height: Gap.xs),
-                Text(
-                  friend.rewarded
-                      ? l10n.referralRewardedBadge
-                      : l10n.referralProgress(
-                          formatMoney(friend.spentLaari, dhivehi: dhivehi),
-                          formatMoney(thresholdLaari, dhivehi: dhivehi),
-                        ),
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: friend.rewarded ? ManfaaColors.green : muted,
-                    fontWeight: friend.rewarded ? FontWeight.w600 : null,
+                ] else ...[
+                  const SizedBox(height: Gap.sm),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(4),
+                    child: LinearProgressIndicator(
+                      value: progress,
+                      minHeight: 6,
+                      backgroundColor: theme.colorScheme.surfaceContainer,
+                      color: friend.rewarded
+                          ? ManfaaColors.green
+                          : ManfaaColors.violet,
+                    ),
                   ),
-                ),
+                  const SizedBox(height: Gap.xs),
+                  Text(
+                    friend.rewarded
+                        ? l10n.referralRewardedBadge
+                        : l10n.referralProgress(
+                            formatMoney(friend.spentLaari, dhivehi: dhivehi),
+                            formatMoney(thresholdLaari, dhivehi: dhivehi),
+                          ),
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: friend.rewarded ? ManfaaColors.green : muted,
+                      fontWeight: friend.rewarded ? FontWeight.w600 : null,
+                    ),
+                  ),
+                ],
               ],
             ),
           ),

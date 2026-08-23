@@ -47,6 +47,7 @@ use App\Http\Controllers\Mobile\TransactionsController;
 use App\Http\Middleware\EnsureMerchantApproved;
 use App\Http\Middleware\IdempotencyMiddleware;
 use App\Http\Middleware\NormalisesMobileErrors;
+use App\Http\Middleware\RecordsCustomerDevice;
 use Illuminate\Support\Facades\Route;
 
 /**
@@ -133,8 +134,14 @@ Route::prefix('mobile/v1')
 
         /*
          * Customer app.
+         *
+         * RecordsCustomerDevice rides EVERY authed customer route: the app
+         * sends X-Device-Id (+ optional X-Device-Platform) and the
+         * self-referral defence records the keyed hash — O(one cache hit)
+         * on repeat requests, and the first request after signup covers
+         * signup itself.
          */
-        Route::middleware(['auth:sanctum', 'mobile.token:customer'])
+        Route::middleware(['auth:sanctum', 'mobile.token:customer', RecordsCustomerDevice::class])
             ->prefix('customer')
             ->group(function (): void {
                 Route::delete('auth/token', [CustomerTokenController::class, 'destroy']);

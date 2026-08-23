@@ -20,8 +20,16 @@ final sessionInitProvider = FutureProvider<void>(
   (ref) => ref.watch(sessionProvider).init(),
 );
 
+/// The self-referral defence's device identity holder (owner, 2026-08-24).
+/// Empty until the boot-time resolver (app/device_identity.dart) fills it;
+/// the API client attaches it to every request from then on.
+final deviceIdentityProvider = Provider<DeviceIdentity>((_) => DeviceIdentity());
+
 final apiProvider = Provider<ManfaaApi>(
-  (ref) => ManfaaApi(session: ref.watch(sessionProvider)),
+  (ref) => ManfaaApi(
+    session: ref.watch(sessionProvider),
+    deviceIdentity: ref.watch(deviceIdentityProvider),
+  ),
 );
 
 /// GET /config — the version gate. Fetched at boot; conditional thereafter.
