@@ -328,7 +328,10 @@ class _NavButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    final fg = selected ? scheme.onSurface : scheme.onSurfaceVariant;
+    // Brand accent, matching the customer bar and this shell's own rail
+    // (owner, 2026-08-24): the active pill speaks violet, not grey.
+    final violet = tintColors(ManfaaTint.violet, theme.brightness);
+    final fg = selected ? violet.fg : scheme.onSurfaceVariant;
 
     return Expanded(
       child: InkWell(
@@ -337,11 +340,14 @@ class _NavButton extends StatelessWidget {
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 160),
           // MR11 (owner report): the selected pill sat a touch tight around
-          // its icon+label — 2dp more top and bottom. Same stadium, same
-          // colour; only the highlight breathes.
-          padding: const EdgeInsets.symmetric(vertical: 9),
+          // its icon+label — 2dp more top and bottom. And 2026-08-24: the
+          // stadium's corner curve was clipping into longer labels
+          // ("Transactions") at the pill's edge — horizontal padding gives
+          // the text clearance, and the FittedBox below shrinks a label
+          // that still cannot fit rather than letting it touch.
+          padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 10),
           decoration: BoxDecoration(
-            color: selected ? scheme.surfaceContainerHigh : Colors.transparent,
+            color: selected ? violet.bg : Colors.transparent,
             borderRadius: BorderRadius.circular(Corner.bar),
           ),
           child: Column(
@@ -353,15 +359,17 @@ class _NavButton extends StatelessWidget {
                 size: 22,
               ),
               const SizedBox(height: 3),
-              Text(
-                item.label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.labelSmall?.copyWith(
-                  color: fg,
-                  fontSize: 10,
-                  letterSpacing: 0,
-                  fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  item.label,
+                  maxLines: 1,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: fg,
+                    fontSize: 10,
+                    letterSpacing: 0,
+                    fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
+                  ),
                 ),
               ),
             ],

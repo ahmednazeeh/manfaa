@@ -23,6 +23,24 @@ import '../push/push_registrar.dart';
 /// only behind `wallet.view`, and the deadline banner only when the
 /// settle-all preview both may be read (`settlements.preview`) and has
 /// something to price.
+/// A single-tint diagonal wash for a dashboard card (owner, 2026-08-24):
+/// the tint's soft colour fading into plain surface — "almost white", a
+/// hint of what the card is about, never a banner. Same recipe as the
+/// customer app's money card, one colour instead of two, and fainter.
+LinearGradient cardWash(BuildContext context, ManfaaTint tint) {
+  final theme = Theme.of(context);
+  final surface = theme.colorScheme.surfaceContainerLowest;
+  final alpha = theme.brightness == Brightness.light ? 0.40 : 0.13;
+  final soft = tintColors(tint, theme.brightness).bg;
+
+  return LinearGradient(
+    begin: AlignmentDirectional.topStart,
+    end: AlignmentDirectional.bottomEnd,
+    colors: [Color.alphaBlend(soft.withValues(alpha: alpha), surface), surface],
+    stops: const [0.0, 0.85],
+  );
+}
+
 class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({super.key});
 
@@ -197,6 +215,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
     return ManfaaCard(
       onTap: () => context.go('/credit'),
+      gradient: cardWash(context, ManfaaTint.green),
       child: Row(
         children: [
           const IconTile(
@@ -247,6 +266,7 @@ class _WalletCard extends ConsumerWidget {
     final wallet = ref.watch(walletProvider);
 
     return ManfaaCard(
+      gradient: cardWash(context, ManfaaTint.blue),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -432,6 +452,7 @@ class _SettlementCardState extends ConsumerState<_SettlementCard> {
     final total = widget.outstanding.total;
 
     return ManfaaCard(
+      gradient: cardWash(context, ManfaaTint.violet),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
