@@ -7,6 +7,7 @@ import 'package:manfaa_ui/manfaa_ui.dart';
 import '../features/push/push_registrar.dart';
 import '../l10n/gen/app_localizations.dart';
 import 'providers.dart';
+import '../features/money/money_providers.dart';
 import 'router.dart';
 
 /// One extension so screens read `context.l10n.x` instead of the mouthful.
@@ -41,6 +42,10 @@ class MerchantApp extends ConsumerWidget {
       onResume: () {
         BrandAssetCache.instance?.refreshIfStale();
         ref.invalidate(configProvider);
+        // The money screens serve from cache now; a resume is the moment
+        // a stale board would otherwise linger, so refresh whatever has
+        // passed its staleness window (no-op when everything is fresh).
+        refreshStaleMoney(ref);
       },
       child: MaterialApp.router(
       title: 'Manfaa Merchant',

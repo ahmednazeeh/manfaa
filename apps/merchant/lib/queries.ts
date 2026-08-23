@@ -308,6 +308,14 @@ function useInvalidateSettlementData() {
 export function useSettlementPreview(
   selection: SettlementSelection | null,
   enabled = true,
+  /**
+   * `quote` (the default) never serves a stale answer — it is what the
+   * wizard's step 2 shows the merchant they are about to PAY. `display`
+   * is for ambient surfaces (the dashboard's save-banner) where a
+   * 30-second-old figure is fine and refetching on every mount made the
+   * dashboard feel slow (owner report 2026-08-23).
+   */
+  freshness: 'quote' | 'display' = 'quote',
 ) {
   // Never null inside the query function: the empty stand-in only exists so
   // the key is stable while the query is disabled.
@@ -317,9 +325,10 @@ export function useSettlementPreview(
     queryFn: ({ signal }) => previewSettlement(active, signal),
     enabled: enabled && selection !== null,
     retry: false,
-    // A preview is a quote on live rows: never serve a stale one.
-    staleTime: 0,
-    gcTime: 0,
+    // A quote on live rows is never served stale; a display figure may be
+    // up to 30s old and is refreshed by the money-event invalidations.
+    staleTime: freshness === 'quote' ? 0 : 30_000,
+    gcTime: freshness === 'quote' ? 0 : 5 * 60_000,
   });
 }
 

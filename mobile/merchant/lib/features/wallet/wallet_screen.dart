@@ -13,11 +13,24 @@ import '../money/money_providers.dart';
 /// WalletResource — signed integer laari per movement, the running
 /// balance-after beside each, and the type said in words (top-up, spent on
 /// a settlement, credit from a settlement), never the raw code.
-class WalletScreen extends ConsumerWidget {
+class WalletScreen extends ConsumerStatefulWidget {
   const WalletScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<WalletScreen> createState() => _WalletScreenState();
+}
+
+class _WalletScreenState extends ConsumerState<WalletScreen> {
+  @override
+  void initState() {
+    super.initState();
+    // Serve the cached answers instantly; background-refresh anything past
+    // its staleness window (same pattern as the Dashboard).
+    Future.microtask(() => refreshStaleMoney(ref));
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final l10n = context.l10n;
     final wallet = ref.watch(walletProvider);

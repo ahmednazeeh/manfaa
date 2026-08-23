@@ -38,6 +38,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     // screen, the value obvious — never on first launch (PushRegistrar's
     // docblock). Same timing pattern as the customer app's Home.
     Future.microtask(() => ref.read(pushRegistrarProvider).ensureRegistered());
+    // Show the cached board instantly; refetch in the background only when
+    // it is older than moneyStaleAfter (owner report 2026-08-23 — the
+    // Dashboard used to cold-fetch on every visit).
+    Future.microtask(() => refreshStaleMoney(ref));
   }
 
   @override

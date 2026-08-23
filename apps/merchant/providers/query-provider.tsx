@@ -22,7 +22,11 @@ export function QueryProvider({ children }: { children: ReactNode }) {
               return failureCount < 2;
             },
             staleTime: 30_000,
-            refetchOnWindowFocus: false,
+            // Refetch stale queries when the tab regains focus: a merchant
+            // returning from the till app sees money moved elsewhere within
+            // one focus, and staleTime gates it so a quick tab-flick costs
+            // nothing (owner report 2026-08-23).
+            refetchOnWindowFocus: true,
           },
         },
       }),

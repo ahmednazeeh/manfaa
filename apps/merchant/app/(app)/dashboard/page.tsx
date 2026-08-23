@@ -89,6 +89,9 @@ export default function DashboardPage() {
     { settleAll: true },
     can(me, 'settlements.preview') &&
       (outstanding.data?.total.count ?? 0) > 0,
+    // Ambient banner, not a quote: a 30s-old figure is fine here, and the
+    // wizard re-quotes at staleTime 0 before anything is paid.
+    'display',
   );
 
   return (

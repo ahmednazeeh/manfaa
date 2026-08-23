@@ -34,11 +34,24 @@ final settlementsSelectionProvider =
 /// default and travels as the `settle_all` MODE; narrowing to a preset
 /// re-prices the server's own membership ids and submits exactly those ids
 /// — the app never derives money or membership itself.
-class SettlementsScreen extends ConsumerWidget {
+class SettlementsScreen extends ConsumerStatefulWidget {
   const SettlementsScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<SettlementsScreen> createState() => _SettlementsScreenState();
+}
+
+class _SettlementsScreenState extends ConsumerState<SettlementsScreen> {
+  @override
+  void initState() {
+    super.initState();
+    // Serve the cached answers instantly; background-refresh anything past
+    // its staleness window (same pattern as the Dashboard).
+    Future.microtask(() => refreshStaleMoney(ref));
+  }
+
+  @override
+  Widget build(BuildContext context) {
     ref.watch(sessionTickProvider);
     final session = ref.watch(sessionProvider);
     final l10n = context.l10n;
