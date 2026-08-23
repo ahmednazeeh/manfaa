@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace App\Domain\PosWaiver;
 
 use App\Domain\Cashback\TransactionState;
+use App\Domain\MerchantAccess\Permission;
+use App\Domain\Notifications\NotificationService;
+use App\Domain\Notifications\NotificationTemplateKey;
 use App\Domain\Settlement\OutstandingSummary;
 use App\Models\Merchant;
 use App\Models\PosWaiverEvaluation;
@@ -38,7 +41,10 @@ final readonly class PosWaiverEvaluator
 
     public const int CASHBACK_THRESHOLD_LAARI = 500_000;  // MVR 5,000
 
-    public function __construct(private OutstandingSummary $outstanding) {}
+    public function __construct(
+        private OutstandingSummary $outstanding,
+        private NotificationService $notifications,
+    ) {}
 
     /**
      * Evaluate one CLOSED month and persist the verdict. Idempotent:
@@ -56,7 +62,7 @@ final readonly class PosWaiverEvaluator
             && ($figures['volume_laari'] >= self::VOLUME_THRESHOLD_LAARI
                 || $figures['cashback_laari'] >= self::CASHBACK_THRESHOLD_LAARI);
 
-        return PosWaiverEvaluation::query()->updateOrCreate(
+        $row = PosWaiverEvaluation::query()->updateOrCreate(
             ['merchant_id' => $merchant->getKey(), 'month' => $month->toDateString()],
             [
                 ...$figures,
@@ -66,6 +72,32 @@ final readonly class PosWaiverEvaluator
                 'evaluated_at' => CarbonImmutable::now('UTC'),
             ],
         );
+
+        // Tell the shop ONCE per qualified month (push only — good news
+        // with nothing to act on is not worth an SMS bill). The stamp
+        // survives re-runs, so a re-evaluation can never repeat it; and a
+        // month that later re-evaluates unqualified keeps its stamp — we
+        // do not un-send news.
+        if ($qualified && $row->notified_at === null) {
+            $volumeMet = $figures['volume_laari'] >= self::VOLUME_THRESHOLD_LAARI;
+
+            $this->notifications->sendToMerchantStaff(
+                NotificationTemplateKey::PosWaiverEarned,
+                $merchant,
+                [
+                    'month' => $month->format('Y-m'),
+                    'amount' => NotificationService::money(
+                        $volumeMet ? $figures['volume_laari'] : $figures['cashback_laari'],
+                    ),
+                    'track' => $volumeMet ? 'in sales' : 'in cashback',
+                ],
+                Permission::SettlementsView,
+            );
+
+            $row->forceFill(['notified_at' => CarbonImmutable::now('UTC')])->save();
+        }
+
+        return $row;
     }
 
     /**

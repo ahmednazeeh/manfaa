@@ -11,12 +11,19 @@ use App\Models\Customer;
 use App\Models\Merchant;
 use App\Models\MerchantRate;
 use App\Models\MerchantUser;
+use App\Domain\Mobile\MobileAudience;
+use App\Domain\Mobile\MobileTokenService;
+use App\Jobs\SendPushNotification;
+use App\Models\DeviceToken;
+use App\Models\MerchantRole;
 use App\Models\PosVendor;
 use App\Models\Transaction;
 use Carbon\CarbonImmutable;
 use Database\Seeders\LedgerAccountSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Queue;
+use Laravel\Sanctum\PersonalAccessToken;
 use Tests\TestCase;
 
 uses(TestCase::class, RefreshDatabase::class);
@@ -236,4 +243,70 @@ it('the merchant reads last month and this month\'s progress', function () {
         ->getJson('/api/v1/merchants/me/pos-waiver')
         ->assertOk()
         ->assertJsonPath('data.last_month.qualified', true);
+});
+
+// ------------------------------------------------------- the good-news push
+
+/** A staff member with a registered device, so a push has somewhere to land. */
+function waiverDevice(\App\Models\MerchantUser $user): void
+{
+    $auth = app(MobileTokenService::class)->issue($user, MobileAudience::Merchant, 'Till')->plainTextToken;
+
+    DeviceToken::query()->create([
+        'tokenable_type' => $user->getMorphClass(),
+        'tokenable_id' => $user->getKey(),
+        'personal_access_token_id' => PersonalAccessToken::findToken($auth)->getKey(),
+        'token' => 'fcm-'.$user->getKey(),
+        'platform' => 'android',
+    ]);
+}
+
+it('pushes the waiver news once to settlement staff, and never twice', function () {
+    Queue::fake();
+
+    waiverDevice($this->owner);
+
+    // A cashier cannot open the settlements screen; the waiver push would
+    // be news they cannot even verify.
+    $cashier = MerchantUser::factory()->for($this->merchant)->withRole(
+        MerchantRole::query()->create([
+            'merchant_id' => $this->merchant->id,
+            'name' => 'Cashier',
+            'slug' => 'cashier-'.$this->merchant->id,
+            'permissions' => [\App\Domain\MerchantAccess\Permission::CreditsCreate->value],
+            'is_owner' => false,
+            'is_system' => false,
+        ])
+    )->create();
+    waiverDevice($cashier);
+
+    foreach (range(1, 10) as $i) {
+        saleInMonth(2_020_000);
+    }
+
+    $row = app(PosWaiverEvaluator::class)->evaluate($this->merchant, $this->month);
+
+    expect($row->qualified)->toBeTrue()
+        ->and($row->notified_at)->not->toBeNull();
+    Queue::assertPushed(SendPushNotification::class, 1);
+
+    // A re-run replaces the figures but must not repeat the news.
+    $again = app(PosWaiverEvaluator::class)->evaluate($this->merchant, $this->month);
+
+    expect($again->notified_at?->toIso8601String())
+        ->toBe($row->notified_at->toIso8601String());
+    Queue::assertPushed(SendPushNotification::class, 1);
+});
+
+it('stays silent about a month that did not qualify', function () {
+    Queue::fake();
+    waiverDevice($this->owner);
+
+    saleInMonth(2_020_000); // one sale, nowhere near either bar
+
+    $row = app(PosWaiverEvaluator::class)->evaluate($this->merchant, $this->month);
+
+    expect($row->qualified)->toBeFalse()
+        ->and($row->notified_at)->toBeNull();
+    Queue::assertNothingPushed();
 });

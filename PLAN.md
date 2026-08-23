@@ -1359,9 +1359,17 @@ month's verdict and this month's progress on whichever track is closer,
 with rate and overdue check marks — the visible nudge to route more
 sales through Manfaa.
 
-7 new tests; suite 1786 green. First real run: 2026-07, 2 merchants, 0
+A qualified month tells the shop itself: `pos_waiver_earned` goes to
+staff with settlements.view — push AND SMS, per the every-merchant-
+moment-texts rule (2026-08-18) — sent by the evaluator once per
+merchant-month (`notified_at` stamp survives re-runs; a month that
+later re-evaluates unqualified keeps its stamp — news is not unsent).
+Body names the track that cleared: "{{amount}} {{track}} through
+Manfaa" ("in sales" / "in cashback").
+
+9 new tests; suite 1788 green. First real run: 2026-07, 2 merchants, 0
 qualified. Left for the IsleBooks project's own session: the invoice
-discount line. Deferred: a pos_waiver_earned push, the app-side card.
+discount line. Deferred: the app-side card (Dart, rides the next APK).
 
 ### Queue (updated 2026-08-17) — the mobile programme
 

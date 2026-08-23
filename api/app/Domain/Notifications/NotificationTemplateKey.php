@@ -84,6 +84,11 @@ enum NotificationTemplateKey: string
     // line about the run is news, where forty are a nuisance.
     case CustomersPaid = 'customers_paid';
 
+    // The POS-fee waiver earned (owner, 2026-08-23): once a month, to the
+    // staff who watch settlements — the one message that says routing sales
+    // through Manfaa just paid the shop's POS bill.
+    case PosWaiverEarned = 'pos_waiver_earned';
+
     // Marketplace enrolment outcomes (PLAN-marketplace.md §9). The merchant
     // handed us identity documents and waited on a human; silence after
     // that is the one thing this must not be.
@@ -120,6 +125,7 @@ enum NotificationTemplateKey: string
             self::StoreResumed => 'Store resumed cashback',
             self::StoreApproved => 'Store approved',
             self::CustomersPaid => 'Customers paid',
+            self::PosWaiverEarned => 'POS fee waived',
             self::MarketplaceApproved => 'Marketplace approved',
             self::MarketplaceRejected => 'Marketplace not approved',
             self::OrderPlaced => 'New order',
@@ -161,6 +167,7 @@ enum NotificationTemplateKey: string
             self::MarketplaceRejected => 'When an admin refuses a marketplace application, with the reason. The store has to act, so it earns an interruption.',
             self::StoreApproved => 'When an admin approves a new store and it goes live. Sent by SMS as well as push — the merchant has been waiting on a decision and may not have the app open.',
             self::CustomersPaid => 'When a payout run reaches the customers who earned cashback at this store. One message per run, never one per customer, and only about money that actually moved.',
+            self::PosWaiverEarned => 'When a month closes qualified for the POS-fee waiver: rate held at 1%+, nothing overdue, and the volume or cashback bar cleared. Once per month at most.',
         };
     }
 
@@ -194,6 +201,11 @@ enum NotificationTemplateKey: string
             self::CustomersPaid => [
                 'customers' => 'How many of this store\'s customers the run paid',
                 'amount' => 'The cashback paid to them, formatted with its currency',
+            ],
+            self::PosWaiverEarned => [
+                'month' => 'The waived month, e.g. 2026-08',
+                'amount' => 'The figure that qualified, formatted with its currency',
+                'track' => 'What the figure measures: "in sales" or "in cashback"',
             ],
             self::SettlementAccepted => [
                 'reference' => 'The settlement reference',
@@ -271,7 +283,7 @@ enum NotificationTemplateKey: string
             self::StorePaused, self::StoreResumed => false,
             self::StoreApproved,
             self::MarketplaceApproved, self::MarketplaceRejected => true,
-            self::CustomersPaid => true,
+            self::CustomersPaid, self::PosWaiverEarned => true,
         };
     }
 
@@ -335,6 +347,9 @@ enum NotificationTemplateKey: string
             self::OrderReady, self::OrderOutForDelivery, self::OrderDelivered => false,
 
             // Name a key here to keep a MERCHANT moment push-only.
+            // pos_waiver_earned deliberately is NOT here: one text a month
+            // about the shop's own waived invoice is exactly what the
+            // every-merchant-moment-texts rule (owner, 2026-08-18) is for.
             default => true,
         };
     }
@@ -392,6 +407,7 @@ enum NotificationTemplateKey: string
             self::StoreResumed => ['en' => 'Cashback is back', 'dv' => 'ކޭޝްބެކް އަލުން ފެށިއްޖެ'],
             self::StoreApproved => ['en' => 'Store approved', 'dv' => 'ފިހާރަ ފާސްވެއްޖެ'],
             self::CustomersPaid => ['en' => 'Customers paid', 'dv' => 'ކަސްޓަމަރުންނަށް ފައިސާ ދެއްކިއްޖެ'],
+            self::PosWaiverEarned => ['en' => 'POS fee waived', 'dv' => 'POS ފީ މާފުކޮށްދެވިއްޖެ'],
             self::MarketplaceApproved => ['en' => 'Marketplace approved', 'dv' => 'މާކެޓްޕްލޭސް ފާސްވެއްޖެ'],
             self::MarketplaceRejected => ['en' => 'Application refused', 'dv' => 'ހުށަހެޅުން ބަލައިނުގަނެވުނު'],
             self::OrderPlaced => ['en' => 'New order', 'dv' => 'އައު އޯޑަރެއް'],

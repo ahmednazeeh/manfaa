@@ -22,6 +22,7 @@ class PosWaiverEvaluation extends Model
             'overdue_laari' => 'integer',
             'qualified' => 'boolean',
             'evaluated_at' => 'immutable_datetime',
+            'notified_at' => 'immutable_datetime',
         ];
     }
 
