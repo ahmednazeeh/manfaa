@@ -119,6 +119,13 @@ class CopyValue extends StatelessWidget {
     final theme = Theme.of(context);
     final l10n = context.l10n;
 
+    void copy() {
+      Clipboard.setData(ClipboardData(text: value));
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(l10n.copiedToast)));
+    }
+
     final text = Text(
       value,
       textDirection: TextDirection.ltr,
@@ -128,39 +135,41 @@ class CopyValue extends StatelessWidget {
       ),
     );
 
-    return Row(
-      children: [
-        Flexible(
-          child: boxed
-              ? Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 6,
-                  ),
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.surfaceContainerLow,
-                    borderRadius: BorderRadius.circular(Corner.tile),
-                  ),
-                  child: text,
-                )
-              : text,
-        ),
-        IconButton(
-          visualDensity: VisualDensity.compact,
-          tooltip: l10n.copyTooltip,
-          icon: Icon(
-            Icons.copy_rounded,
-            size: 17,
-            color: theme.colorScheme.onSurfaceVariant,
+    // The WHOLE value is the tap target (owner, 2026-08-24) — a thumb
+    // lands on the number it is reading, not on a 17px icon beside it.
+    // The icon stays as the visual cue that tapping copies.
+    return InkWell(
+      borderRadius: BorderRadius.circular(Corner.tile),
+      onTap: copy,
+      child: Row(
+        children: [
+          Flexible(
+            child: boxed
+                ? Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.surfaceContainerLow,
+                      borderRadius: BorderRadius.circular(Corner.tile),
+                    ),
+                    child: text,
+                  )
+                : text,
           ),
-          onPressed: () {
-            Clipboard.setData(ClipboardData(text: value));
-            ScaffoldMessenger.of(context)
-              ..hideCurrentSnackBar()
-              ..showSnackBar(SnackBar(content: Text(l10n.copiedToast)));
-          },
-        ),
-      ],
+          IconButton(
+            visualDensity: VisualDensity.compact,
+            tooltip: l10n.copyTooltip,
+            icon: Icon(
+              Icons.copy_rounded,
+              size: 17,
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+            onPressed: copy,
+          ),
+        ],
+      ),
     );
   }
 }
@@ -580,24 +589,65 @@ class PaymentInstructionsCard extends StatelessWidget {
       ],
     );
 
+    // The one number on this page that matters, on the quietest possible
+    // lavender ground (owner, 2026-08-24: subtle tint, no gradient), with
+    // its own copy button — the merchant pastes the exact figure into
+    // their banking app instead of retyping it.
+    final violet = tintColors(ManfaaTint.violet, theme.brightness);
+    final amountBg = Color.alphaBlend(
+      violet.bg.withValues(
+        alpha: theme.brightness == Brightness.light ? 0.32 : 0.12,
+      ),
+      theme.colorScheme.surfaceContainerLowest,
+    );
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: field(
-                l10n.amountToTransfer,
-                MoneyText(
-                  amountDueLaari,
-                  style: theme.textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.w800,
+        Container(
+          padding: const EdgeInsets.symmetric(
+            horizontal: Gap.lg,
+            vertical: Gap.md,
+          ),
+          decoration: BoxDecoration(
+            color: amountBg,
+            borderRadius: BorderRadius.circular(Corner.control),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: field(
+                  l10n.amountToTransfer,
+                  MoneyText(
+                    amountDueLaari,
+                    style: theme.textTheme.headlineSmall?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
                 ),
               ),
-            ),
-          ],
+              IconButton(
+                visualDensity: VisualDensity.compact,
+                tooltip: l10n.copyTooltip,
+                icon: Icon(
+                  Icons.copy_rounded,
+                  size: 18,
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+                onPressed: () {
+                  // The bare figure ("111.20") — banking apps refuse "MVR".
+                  Clipboard.setData(
+                    ClipboardData(text: laariToInput(amountDueLaari)),
+                  );
+                  ScaffoldMessenger.of(context)
+                    ..hideCurrentSnackBar()
+                    ..showSnackBar(
+                      SnackBar(content: Text(l10n.copiedToast)),
+                    );
+                },
+              ),
+            ],
+          ),
         ),
         const SizedBox(height: Gap.md),
         // Before the receipt lands there IS no settlement, so there is no
@@ -677,15 +727,9 @@ class PaymentInstructionsCard extends StatelessWidget {
                   ),
                 )
               else ...[
+                // The selected bank tile above already names the bank —
+                // a "Bank" row here said it twice (owner, 2026-08-24).
                 const SizedBox(height: Gap.md),
-                field(
-                  l10n.bankNameLabel,
-                  CopyValue(
-                    value: bankDisplayName(chosen.bankName),
-                    boxed: false,
-                  ),
-                ),
-                const SizedBox(height: Gap.sm),
                 field(l10n.accountNoLabel, CopyValue(value: chosen.accountNo)),
                 const SizedBox(height: Gap.sm),
                 field(
@@ -729,14 +773,16 @@ class _BankChoice extends StatelessWidget {
         ),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(Corner.control),
+          // Brand violet marks the chosen bank (owner, 2026-08-24);
+          // unselected tiles stay plain surface with the hairline.
           border: Border.all(
             color: selected
-                ? theme.colorScheme.secondary
+                ? tintColors(ManfaaTint.violet, theme.brightness).fg
                 : theme.colorScheme.outlineVariant,
             width: selected ? 1.6 : 1,
           ),
           color: selected
-              ? theme.colorScheme.secondaryContainer.withValues(alpha: 0.4)
+              ? tintColors(ManfaaTint.violet, theme.brightness).bg
               : Colors.transparent,
         ),
         child: Column(
@@ -889,15 +935,6 @@ class _ReceiptFormState extends State<ReceiptForm> {
   PickedSlip? _slip;
   String? _slipError;
   var _touched = false;
-  late final TextEditingController _amount = TextEditingController(
-    text: laariToInput(widget.amountDueLaari),
-  );
-
-  @override
-  void dispose() {
-    _amount.dispose();
-    super.dispose();
-  }
 
   Future<void> _pick(bool camera) async {
     final l10n = context.l10n;
@@ -925,18 +962,16 @@ class _ReceiptFormState extends State<ReceiptForm> {
     });
   }
 
-  int? get _amountLaari => parseMvrToLaari(_amount.text);
-
-  bool get _amountInvalid => _amountLaari == null || _amountLaari! < 1;
-
   void _submit() {
     setState(() => _touched = true);
     final slip = _slip;
-    final amount = _amountLaari;
-    if (slip == null || amount == null || amount < 1 || widget.busy) return;
+    if (slip == null || widget.busy) return;
+    // The amount input is gone (owner, 2026-08-24): the merchant is told
+    // to transfer exactly the due figure, so that is what the submission
+    // claims — verification reconciles against the real bank credit.
     widget.onSubmit(
       ReceiptSubmission(
-        amountLaari: amount,
+        amountLaari: widget.amountDueLaari,
         slipBytes: slip.bytes,
         slipFilename: slip.name,
       ),
@@ -958,7 +993,6 @@ class _ReceiptFormState extends State<ReceiptForm> {
     final theme = Theme.of(context);
     final l10n = context.l10n;
     final slip = _slip;
-    final amount = _amountLaari;
     final isPdf = slip != null && slip.name.toLowerCase().endsWith('.pdf');
 
     return Column(
@@ -972,7 +1006,10 @@ class _ReceiptFormState extends State<ReceiptForm> {
           padding: const EdgeInsets.all(Gap.lg),
           decoration: BoxDecoration(
             border: Border.all(
-              color: theme.colorScheme.outlineVariant,
+              color: slip == null
+                  ? theme.colorScheme.outlineVariant
+                  : tintColors(ManfaaTint.green, theme.brightness).fg
+                        .withValues(alpha: 0.5),
               style: BorderStyle.solid,
             ),
             borderRadius: BorderRadius.circular(Corner.control),
@@ -1044,14 +1081,30 @@ class _ReceiptFormState extends State<ReceiptForm> {
                         ),
                       ),
                     const SizedBox(height: Gap.sm),
-                    Text(
-                      slip.name,
-                      textDirection: TextDirection.ltr,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.check_circle_rounded,
+                          size: 16,
+                          color: tintColors(
+                            ManfaaTint.green,
+                            theme.brightness,
+                          ).fg,
+                        ),
+                        const SizedBox(width: Gap.xs),
+                        Flexible(
+                          child: Text(
+                            '${l10n.slipAttached} \u00B7 ${slip.name}',
+                            textDirection: TextDirection.ltr,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: Gap.sm),
                     Row(
@@ -1096,43 +1149,10 @@ class _ReceiptFormState extends State<ReceiptForm> {
             ),
           ),
         ],
-        const SizedBox(height: Gap.lg),
-        Text(l10n.transferredAmountLabel, style: theme.textTheme.labelLarge),
-        const SizedBox(height: Gap.sm),
-        TextField(
-          controller: _amount,
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          textDirection: TextDirection.ltr,
-          onChanged: (_) => setState(() {}),
-          decoration: InputDecoration(
-            prefixText: 'MVR ',
-            errorText: _amountInvalid && _touched
-                ? l10n.transferredAmountInvalid
-                : null,
-            helperText: _amountInvalid ? null : l10n.transferredAmountHint,
-            helperMaxLines: 3,
-          ),
-        ),
-        if (!_amountInvalid &&
-            amount != null &&
-            amount < widget.amountDueLaari) ...[
-          const SizedBox(height: Gap.sm),
-          ToneBanner(
-            tone: ToneSurface.pending,
-            icon: Icons.error_outline_rounded,
-            title: l10n.amountUnderNote,
-          ),
-        ],
-        if (!_amountInvalid &&
-            amount != null &&
-            amount > widget.amountDueLaari) ...[
-          const SizedBox(height: Gap.sm),
-          ToneBanner(
-            tone: ToneSurface.info,
-            icon: Icons.info_outline_rounded,
-            title: l10n.amountOverNote,
-          ),
-        ],
+        // The "Amount transferred" input is gone (owner, 2026-08-24:
+        // unnecessary) — the page already tells the merchant the exact
+        // figure to send, and verification reconciles the slip against
+        // the actual bank credit either way.
         if (widget.error != null) ...[
           const SizedBox(height: Gap.sm),
           ToneBanner(

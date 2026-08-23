@@ -2662,7 +2662,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get referenceComesLaterNote =>
-      'No reference is needed for the transfer — Manfaa creates one when you upload the receipt, and you\'ll see it on the settlement.';
+      'No transfer reference needed. Manfaa will generate one after you upload the receipt.';
 
   @override
   String get saleTimeLabel => 'Sale time';
@@ -2765,4 +2765,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get branchAddressFinding => 'Finding…';
+
+  @override
+  String get slipAttached => 'Receipt attached';
 }

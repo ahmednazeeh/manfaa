@@ -1379,7 +1379,7 @@
   "branchSentForReview": "New branch sent for Manfaa's review",
   "branchChangeSentForReview": "Branch changes sent for Manfaa's review",
   "branchRemovalSentForReview": "Removal sent for Manfaa's review",
-  "referenceComesLaterNote": "No reference is needed for the transfer — Manfaa creates one when you upload the receipt, and you'll see it on the settlement.",
+  "referenceComesLaterNote": "No transfer reference needed. Manfaa will generate one after you upload the receipt.",
   "saleTimeLabel": "Sale time",
   "saleTimeNow": "Now",
   "saleTimeSetNow": "Now",
@@ -1426,5 +1426,6 @@
   "visibilityResumed": "Your store is back on the app.",
   "visibilityResumedNotified": "Your store is back on the app. Customers who have earned cashback with you have been told.",
   "reasonMerchantUnpublished": "Store paused",
-  "branchAddressFinding": "Finding…"
+  "branchAddressFinding": "Finding…",
+  "slipAttached": "Receipt attached"
 }

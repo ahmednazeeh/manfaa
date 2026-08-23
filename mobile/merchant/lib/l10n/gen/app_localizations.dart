@@ -4667,7 +4667,7 @@ abstract class AppLocalizations {
   /// No description provided for @referenceComesLaterNote.
   ///
   /// In en, this message translates to:
-  /// **'No reference is needed for the transfer — Manfaa creates one when you upload the receipt, and you\'ll see it on the settlement.'**
+  /// **'No transfer reference needed. Manfaa will generate one after you upload the receipt.'**
   String get referenceComesLaterNote;
 
   /// No description provided for @saleTimeLabel.
@@ -4849,6 +4849,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Finding…'**
   String get branchAddressFinding;
+
+  /// No description provided for @slipAttached.
+  ///
+  /// In en, this message translates to:
+  /// **'Receipt attached'**
+  String get slipAttached;
 }
 
 class _AppLocalizationsDelegate

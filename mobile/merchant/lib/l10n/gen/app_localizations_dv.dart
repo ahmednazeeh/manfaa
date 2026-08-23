@@ -2698,7 +2698,7 @@ class AppLocalizationsDv extends AppLocalizations {
 
   @override
   String get referenceComesLaterNote =>
-      'ފައިސާ ފޮނުއްވުމަށް ރެފަރެންސެއް ބޭނުމެއް ނުވާނެ — ރަސީދު އަޕްލޯޑްކުރެއްވުމުން މަންފާއިން ރެފަރެންސެއް ހަދާ، ސެޓްލްމަންޓްގައި ފެންނާނެއެވެ.';
+      'ޓްރާންސްފަރ ރެފަރެންސެއް ބޭނުމެއް ނުވާނެ. ރަސީދު އަޕްލޯޑްކުރެއްވުމުން މަންފާއިން ހަދައިދޭނެއެވެ.';
 
   @override
   String get saleTimeLabel => 'ވިޔަފާރީގެ ވަގުތު';
@@ -2803,4 +2803,7 @@ class AppLocalizationsDv extends AppLocalizations {
 
   @override
   String get branchAddressFinding => 'ހޯދަނީ…';
+
+  @override
+  String get slipAttached => 'ރަސީދު އެޓޭޗްކުރެވިއްޖެ';
 }
