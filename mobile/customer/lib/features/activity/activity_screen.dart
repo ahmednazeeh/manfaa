@@ -277,6 +277,7 @@ class _EarnedTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = context.l10n;
     final muted = theme.colorScheme.onSurfaceVariant;
     final (label, tone) = _status(context);
     final (icon, tint) = _tile();
@@ -312,8 +313,15 @@ class _EarnedTile extends StatelessWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      formatDayMonth(entry.occurredAt, context),
+                      // The invoice number ties the reward to the till
+                      // receipt in the customer's hand (owner, 2026-08-24).
+                      [
+                        if (entry.invoiceNo.isNotEmpty)
+                          l10n.invoiceLine(entry.invoiceNo),
+                        formatDayMonth(entry.occurredAt, context, year: false),
+                      ].join(' \u00B7 '),
                       style: theme.textTheme.bodySmall?.copyWith(color: muted),
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ],
                 ),
@@ -430,7 +438,9 @@ class _PayoutTile extends StatelessWidget {
                   children: [
                     MoneyText(
                       entry.amountLaari,
-                      style: theme.textTheme.titleLarge?.copyWith(
+                      // titleMedium, not titleLarge — a history row, not a
+                      // balance hero (owner, 2026-08-24).
+                      style: theme.textTheme.titleMedium?.copyWith(
                         color: theme.colorScheme.onSurface,
                       ),
                     ),
@@ -571,11 +581,15 @@ class _ListSkeleton extends StatelessWidget {
 /// "2026-08-25" or ISO → "25 Aug 2026", with the month in the reader's own
 /// script. Month names come from [monthName] rather than intl, which ships no
 /// Divehi date symbols and silently answers in English.
-String formatDayMonth(String iso, BuildContext context) {
+String formatDayMonth(String iso, BuildContext context, {bool year = true}) {
   final date = DateTime.tryParse(iso);
   if (date == null) return iso;
 
   final dhivehi = Localizations.localeOf(context).languageCode == 'dv';
+  final base = '${date.day} ${monthName(date.month, dhivehi: dhivehi)}';
 
-  return '${date.day} ${monthName(date.month, dhivehi: dhivehi)} ${date.year}';
+  // The Earned list drops the year so "Invoice #… · 16 Aug" keeps its date
+  // when the column runs out of room; the payout detail keeps the full
+  // date (owner's example: "Invoice #TP-10482 · 20 Aug 2026").
+  return year ? '$base ${date.year}' : base;
 }

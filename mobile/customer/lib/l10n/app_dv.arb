@@ -405,5 +405,6 @@
   "islandwide": "ރަށްވަށައިގެން",
   "discoverNoneInCategory": "މި ބައިގައި އަދި ފިހާރައެއް ނެތް.",
   "viewStore": "ފިހާރަ ބައްލަވާ",
-  "referralPromoTitle": "ރައްޓެއްސަކަށް ދައުވަތު ދީ — {amount} ހޯދާ"
+  "referralPromoTitle": "ރައްޓެއްސަކަށް ދައުވަތު ދީ — {amount} ހޯދާ",
+  "invoiceLine": "އިންވޮއިސް #{no}"
 }

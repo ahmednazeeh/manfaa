@@ -184,10 +184,17 @@ class _Detail extends StatelessWidget {
                             ),
                             const SizedBox(height: 2),
                             Text(
-                              formatDayMonth(purchase.occurredAt, context),
+                              // Merchant → invoice · date → amount: enough
+                              // to match the reward to a paper receipt.
+                              [
+                                if (purchase.invoiceNo.isNotEmpty)
+                                  l10n.invoiceLine(purchase.invoiceNo),
+                                formatDayMonth(purchase.occurredAt, context),
+                              ].join(' \u00B7 '),
                               style: theme.textTheme.bodySmall?.copyWith(
                                 color: theme.colorScheme.onSurfaceVariant,
                               ),
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ],
                         ),

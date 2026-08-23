@@ -560,5 +560,13 @@
         "type": "String"
       }
     }
+  },
+  "invoiceLine": "Invoice #{no}",
+  "@invoiceLine": {
+    "placeholders": {
+      "no": {
+        "type": "String"
+      }
+    }
   }
 }
