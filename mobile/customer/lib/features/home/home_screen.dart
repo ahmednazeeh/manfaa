@@ -197,6 +197,25 @@ class _AvailableCard extends StatelessWidget {
     final blue = tintColors(ManfaaTint.blue, theme.brightness);
     final showPending = data.pendingLaari > 0;
 
+    // The card's two figures already speak in green and blue; the wash
+    // repeats the same pair at a whisper — available's corner leans green,
+    // pending's leans blue. Alpha is the whole design: quiet enough that
+    // the surface still reads as a card, not a banner.
+    // Dark needs a far lighter hand: the same alpha that reads as a pale
+    // wash on white reads as a full-colour banner on near-black.
+    final surface = theme.colorScheme.surfaceContainerLowest;
+    final washAlpha = theme.brightness == Brightness.light ? 0.55 : 0.16;
+    final wash = LinearGradient(
+      begin: AlignmentDirectional.topStart,
+      end: AlignmentDirectional.bottomEnd,
+      colors: [
+        Color.alphaBlend(green.bg.withValues(alpha: washAlpha), surface),
+        surface,
+        Color.alphaBlend(blue.bg.withValues(alpha: washAlpha), surface),
+      ],
+      stops: const [0.0, 0.55, 1.0],
+    );
+
     final available = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -251,6 +270,7 @@ class _AvailableCard extends StatelessWidget {
 
     if (!showPending) {
       return ManfaaCard(
+        gradient: wash,
         child: SizedBox(width: double.infinity, child: available),
       );
     }
@@ -310,6 +330,7 @@ class _AvailableCard extends StatelessWidget {
     // A Stack sizes itself to the taller column with no guessing, and the
     // rule is a 1px child pinned top-to-bottom over it.
     return ManfaaCard(
+      gradient: wash,
       child: LayoutBuilder(
         builder: (context, constraints) {
           const gutter = Gap.md * 2 + 1;

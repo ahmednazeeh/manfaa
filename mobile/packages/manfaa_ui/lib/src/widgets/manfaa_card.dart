@@ -16,6 +16,7 @@ class ManfaaCard extends StatelessWidget {
     this.onTap,
     this.padding = const EdgeInsets.all(Gap.lg),
     this.color,
+    this.gradient,
     this.soft = false,
   });
 
@@ -23,6 +24,12 @@ class ManfaaCard extends StatelessWidget {
   final VoidCallback? onTap;
   final EdgeInsetsGeometry padding;
   final Color? color;
+
+  /// A wash painted over the card surface (owner request, 2026-08-24 —
+  /// the money card). Painted with [Ink] inside the themed [Card] so the
+  /// radius, elevation and dark-mode border all stay the theme's; keep it
+  /// BARELY there — the tint pairs at low blend, never saturated colour.
+  final Gradient? gradient;
   final bool soft;
 
   @override
@@ -36,17 +43,21 @@ class ManfaaCard extends StatelessWidget {
       );
     }
 
-    final card = Card(
+    final body = onTap == null
+        ? Padding(padding: padding, child: child)
+        : InkWell(
+            borderRadius: BorderRadius.circular(Corner.card),
+            onTap: onTap,
+            child: Padding(padding: padding, child: child),
+          );
+
+    return Card(
       color: color,
-      child: onTap == null
-          ? Padding(padding: padding, child: child)
-          : InkWell(
-              borderRadius: BorderRadius.circular(Corner.card),
-              onTap: onTap,
-              child: Padding(padding: padding, child: child),
-            ),
+      clipBehavior: gradient == null ? Clip.none : Clip.antiAlias,
+      child: gradient == null
+          ? body
+          : Ink(decoration: BoxDecoration(gradient: gradient), child: body),
     );
-    return card;
   }
 }
 
