@@ -78,7 +78,7 @@ final class StoreApi implements IntegrationInterface
         wp_register_script(
             self::HANDLE,
             plugins_url('assets/blocks.js', MANFAA_CASHBACK_FILE),
-            ['wc-blocks-checkout', 'wc-blocks-components', 'wp-element', 'wp-i18n', 'wp-html-entities', 'wp-api-fetch'],
+            ['wc-blocks-checkout', 'wc-blocks-components', 'wp-element', 'wp-data', 'wp-i18n', 'wp-html-entities', 'wp-api-fetch'],
             (string) filemtime($file),
             true,
         );

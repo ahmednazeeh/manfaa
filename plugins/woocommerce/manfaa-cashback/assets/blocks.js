@@ -38,8 +38,25 @@
 		} ).then( function ( r ) { return r.json(); } );
 	}
 
+	// The Cart block hands inner blocks a `cart` prop; the Checkout block
+	// does NOT, so on the checkout step props.cart is undefined and the
+	// field rendered blank even with a code in the session. Read the cart
+	// from the shared wc/store/cart data store, which is populated in both
+	// contexts, and fall back to the prop where it exists.
+	var useSelect = window.wp.data && window.wp.data.useSelect;
+
+	function useCart( props ) {
+		var fromStore = useSelect
+			? useSelect( function ( select ) {
+					var store = select( 'wc/store/cart' );
+					return store ? store.getCartData() : null;
+			  }, [] )
+			: null;
+		return ( fromStore && fromStore.extensions ) ? fromStore : ( props.cart || {} );
+	}
+
 	function Panel( props ) {
-		var cart = props.cart || {};
+		var cart = useCart( props );
 		var ext = ( cart.extensions && cart.extensions.manfaa ) || {};
 		var stored = ext.code || '';
 		var estimate = ext.estimate || { available: false };

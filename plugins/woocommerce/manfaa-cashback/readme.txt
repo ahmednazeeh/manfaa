@@ -6,7 +6,7 @@ Tested up to: 7.0
 Requires PHP: 8.1
 WC requires at least: 9.0
 WC tested up to: 11.0
-Stable tag: 0.3.2
+Stable tag: 0.3.3
 License: GPLv2 or later
 
 Pays Manfaa cashback on WooCommerce orders.
@@ -21,6 +21,9 @@ Buyers enter the 6-digit code from their Manfaa app on the cart or at checkout. 
 * Works with the Cart and Checkout Blocks and the classic shortcode pages; HPOS supported.
 
 == Changelog ==
+
+= 0.3.3 =
+* The Manfaa code entered on the cart now carries into the checkout step (the checkout block reads the shared cart store, not a prop it never had).
 
 = 0.3.2 =
 * A Check for updates button on the settings screen, with Update now when one is available.
