@@ -59,3 +59,6 @@ plugins/woocommerce/manfaa-cashback/node_modules/
 # Built plugin zips + manifest are published artefacts, like the APKs
 download/public/woocommerce/
 plugins/woocommerce/manfaa-cashback/.phpunit.result.cache
+
+# Golden-test failure artefacts (diff images) are run debris, never source
+mobile/*/test/failures/

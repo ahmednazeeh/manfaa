@@ -25,7 +25,7 @@ uses(TestCase::class, RefreshDatabase::class);
 
 beforeEach(function () {
     $this->vendor = PosVendor::query()->create(['name' => 'TillWorks']);
-    $this->admin = AdminUser::factory()->create();
+    $this->admin = AdminUser::factory()->create(['role' => 'superadmin']);
 });
 
 function urlGuardStore(string $url): TestResponse
