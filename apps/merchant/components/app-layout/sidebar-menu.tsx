@@ -72,7 +72,7 @@ export function SidebarMenu({ className }: { className?: string }) {
   })
     .map((section) => ({
       ...section,
-      items: section.items.filter((item) => menuItemAllowed(me, item)),
+      items: section.items.filter((item) => !item.hidden && menuItemAllowed(me, item)),
     }))
     .filter((section) => section.items.length > 0);
 

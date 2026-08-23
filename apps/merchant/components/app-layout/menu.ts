@@ -5,6 +5,7 @@ import {
   Package,
   Truck,
   Banknote,
+  Blocks,
   HandCoins,
   Landmark,
   LayoutGrid,
@@ -53,6 +54,13 @@ export interface AppMenuItem {
    * permissionForPath() deliberately skips such items (see below).
    */
   anyOf?: MerchantPermission[];
+
+  /**
+   * Kept in the menu for gating (permissionForPath / firstSettingsPathFor)
+   * but not drawn in the sidebar — its entry point is a card on another
+   * screen. API & Webhooks is reached from the Integrations hub.
+   */
+  hidden?: boolean;
 }
 
 export interface AppMenuSection {
@@ -234,11 +242,27 @@ export const APP_MENU: AppMenuSection[] = [
         icon: ShieldCheck,
         permission: 'roles.view',
       },
+    ],
+  },
+  {
+    // One place for everything that connects the store to other software:
+    // the API + webhooks, IsleBooks, the WooCommerce plugin. The hub draws
+    // the cards; API & Webhooks keeps its /settings/api-access route (and
+    // therefore its gate), reached from a card rather than its own nav row.
+    label: 'Integrations',
+    items: [
       {
-        title: 'API access',
+        title: 'Integrations',
+        path: '/integrations',
+        icon: Blocks,
+        permission: 'api_credentials.view',
+      },
+      {
+        title: 'API & Webhooks',
         path: '/settings/api-access',
         icon: Plug,
         permission: 'api_credentials.view',
+        hidden: true,
       },
     ],
   },

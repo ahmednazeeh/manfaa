@@ -1023,5 +1023,24 @@
     "phoneAlt": "The Manfaa Merchant app dashboard",
     "forShoppers": "For shoppers: manfaa.app",
     "getApp": "Download the app"
+  },
+  "integrations": {
+    "title": "Integrations",
+    "subtitle": "Connect your store to the software you already use.",
+    "apiTitle": "API & Webhooks",
+    "apiBody": "Issue API credentials for a custom till or shop, and register webhook endpoints to be told when your rate changes or a sale is reversed.",
+    "apiCta": "Open API & Webhooks",
+    "isleTitle": "IsleBooks",
+    "isleBody": "Already on IsleBooks POS? Connect Manfaa from inside IsleBooks — sign in, go to Integrations → Manfaa, and press Connect. Every sale your till records then earns your customers cashback automatically.",
+    "isleSteps": "IsleBooks login → Integrations → Manfaa → Connect",
+    "isleCta": "Open IsleBooks Integrations",
+    "wooTitle": "WooCommerce",
+    "wooBody": "Run an online store on WooCommerce? Install the Manfaa Cashback plugin: buyers enter their Manfaa code at checkout, and cashback is posted when the order completes and reversed on refunds. Connect with Manfaa in one click — no keys to copy.",
+    "wooCta": "Download plugin",
+    "wooGuide": "Setup guide",
+    "wooMeta": "WordPress 6.9+ · WooCommerce 9.0+",
+    "moreTitle": "Something else?",
+    "moreBody": "Building your own integration, or using another platform? Start with API & Webhooks, or email us.",
+    "moreCta": "Email integrations"
   }
 }
