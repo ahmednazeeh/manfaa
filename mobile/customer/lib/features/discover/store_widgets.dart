@@ -805,9 +805,20 @@ class _FeaturedBanner extends StatelessWidget {
               const Spacer(),
               Row(
                 children: [
-                  if (category != null)
-                    CategoryTag(slug: category, label: categoryNames?[category]),
-                  const Spacer(),
+                  // The chip takes only the room left of the button and
+                  // ellipsises rather than pushing the CTA off the card.
+                  Expanded(
+                    child: Align(
+                      alignment: AlignmentDirectional.centerStart,
+                      child: category != null
+                          ? CategoryTag(
+                              slug: category,
+                              label: categoryNames?[category],
+                            )
+                          : const SizedBox.shrink(),
+                    ),
+                  ),
+                  const SizedBox(width: Gap.sm),
                   FilledButton(
                     onPressed: () =>
                         context.push('/discover/store/${store.slug}'),
