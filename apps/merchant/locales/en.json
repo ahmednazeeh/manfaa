@@ -1023,7 +1023,14 @@
     "phoneAlt": "The Manfaa Merchant app dashboard",
     "forShoppers": "For shoppers: manfaa.app",
     "getApp": "Download the app",
-    "tabletAlt": "The Manfaa Merchant app on a tablet"
+    "tabletAlt": "The Manfaa Merchant app on a tablet",
+    "posWaiverKicker": "Partner offer",
+    "posWaiverTitle": "Free IsleBooks POS",
+    "posWaiverBody": "Route your sales through Manfaa and your monthly IsleBooks POS invoice is waived.",
+    "posWaiverRule1": "MVR 200,000 in monthly sales through Manfaa — or MVR 5,000 in cashback given",
+    "posWaiverRule2": "At least 1% cashback, the whole month",
+    "posWaiverRule3": "No overdue settlements",
+    "posWaiverFoot": "Judged on the previous month, every month — the waiver lands on your IsleBooks invoice automatically."
   },
   "integrations": {
     "title": "Integrations",
