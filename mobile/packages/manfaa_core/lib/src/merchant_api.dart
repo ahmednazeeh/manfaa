@@ -799,21 +799,74 @@ class MerchantApi extends ManfaaApiBase<MerchantSession> {
   /// Change the earning knobs. Absent keys are untouched (never cleared);
   /// [minEligibleLaari] is INTEGER LAARI end to end. Both knobs apply to
   /// FUTURE credits only — terms freeze onto each sale at occurred_at (§4).
-  /// Gate: `preferences.update` (no approval gate — deliberately).
+  /// [autoSettleFromWallet] is the wallet screen's switch (owner,
+  /// 2026-08-24): the ONE write path for it — there is no wallet-scoped
+  /// PATCH. Gate: `preferences.update` (no approval gate — deliberately).
   Future<MerchantPreferences> updatePreferences({
     String? settlementMethod,
     int? minEligibleLaari,
     int? validationWindowDays,
+    bool? autoSettleFromWallet,
   }) async {
     final data = await run(
       () => dio.patch<Map<String, dynamic>>('/merchant/preferences', data: {
         'settlement_method': ?settlementMethod,
         'min_eligible_laari': ?minEligibleLaari,
         'validation_window_days': ?validationWindowDays,
+        'auto_settle_from_wallet': ?autoSettleFromWallet,
       }),
     );
 
     return MerchantPreferences.fromJson(
+      (data?['data'] as Map?)?.cast<String, dynamic>() ?? {},
+    );
+  }
+
+  /// Switch the hourly wallet auto-settlement on or off — the wallet
+  /// screen's toggle, written through the documented preferences path.
+  /// Gate: `preferences.update` (owner preset; staff answer 403).
+  Future<MerchantPreferences> setAutoSettle(bool on) =>
+      updatePreferences(autoSettleFromWallet: on);
+
+  /// Claim a wallet top-up (owner, 2026-08-24): the same receipt-first
+  /// shape as [createSettlement] — the laari transferred, WHICH platform
+  /// account it went to (REQUIRED here: the claim is matched against that
+  /// bank's history), the slip, and the bank's reference if the merchant
+  /// has it. 201 with the pending claim; the balance moves only once the
+  /// transfer is matched (auto, or by an admin).
+  ///
+  /// Refusals: `top_up_below_minimum` (422 — under the platform floor the
+  /// wallet payload reports as `top_up_min_laari`; a Laravel `min` refusal
+  /// on the same amount arrives as `validation_failed` with the field
+  /// under meta.fields.amount), `slip_too_large` /
+  /// `slip_unsupported_type` (422, by magic bytes), `duplicate_bank_ref`
+  /// (409), `store_not_approved` (409). Gate: `wallet.top_up` + approved
+  /// store (suspended still tops up, exactly as it still settles).
+  Future<WalletTopUpClaim> createWalletTopUp({
+    required int amountLaari,
+    required int platformBankAccountId,
+    required Uint8List slipBytes,
+    required String slipFilename,
+    String? bankRef,
+  }) async {
+    final form = FormData();
+    form.fields.add(MapEntry('amount', '$amountLaari'));
+    form.fields.add(
+      MapEntry('platform_bank_account_id', '$platformBankAccountId'),
+    );
+    final ref = bankRef?.trim() ?? '';
+    if (ref.isNotEmpty) {
+      form.fields.add(MapEntry('bank_ref', ref));
+    }
+    form.files.add(
+      MapEntry('slip', MultipartFile.fromBytes(slipBytes, filename: slipFilename)),
+    );
+
+    final data = await run(
+      () => dio.post<Map<String, dynamic>>('/merchant/wallet/top-ups', data: form),
+    );
+
+    return WalletTopUpClaim.fromJson(
       (data?['data'] as Map?)?.cast<String, dynamic>() ?? {},
     );
   }

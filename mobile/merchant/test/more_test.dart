@@ -437,6 +437,7 @@ class _FakeApi extends MerchantApi {
     String? settlementMethod,
     int? minEligibleLaari,
     int? validationWindowDays,
+    bool? autoSettleFromWallet,
   }) async => MerchantPreferences.fromJson(const {
     'settlement_method': 'bank',
     'min_eligible_laari': 10000,

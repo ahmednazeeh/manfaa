@@ -74,34 +74,32 @@ function formatBytes(bytes: number): string {
     : `${Math.max(1, Math.round(bytes / 1024))} KB`;
 }
 
-export function ReceiptForm({
-  amountDueLaari,
-  submitLabel,
-  pending,
-  error,
-  onSubmit,
-  footerStart,
+/**
+ * The slip picker on its own: drag-and-drop or click, the pre-flight check,
+ * the preview and the replace/remove controls. Controlled — the caller owns
+ * the chosen file — so the settlement receipt form and the wallet top-up
+ * dialog share ONE dropzone rather than two copies that drift.
+ *
+ * A pre-flight rejection (too large, wrong type) is reported here, under
+ * the zone, and the file is cleared through `onFile(null)`. The caller's
+ * `requiredMessage` ("attach your receipt") shows only when there is no
+ * rejection to show instead.
+ */
+export function SlipDropzone({
+  file,
+  onFile,
+  requiredMessage = null,
 }: {
-  /** Prefills the amount and drives the under/over-payment notes. */
-  amountDueLaari: number;
-  submitLabel: string;
-  pending: boolean;
-  /** The submission error, if the last attempt failed. */
-  error: unknown;
-  onSubmit: (receipt: ReceiptSubmission) => void;
-  /** Rendered at the start of the action row (e.g. a Back button). */
-  footerStart?: ReactNode;
+  file: File | null;
+  /** A file that passed the pre-flight, or null when cleared or refused. */
+  onFile: (file: File | null) => void;
+  requiredMessage?: string | null;
 }) {
   const { t } = useTranslation();
   const inputRef = useRef<HTMLInputElement>(null);
-  const [file, setFile] = useState<File | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
-  const [amountInput, setAmountInput] = useState(() =>
-    laariToInput(amountDueLaari),
-  );
-  const [touched, setTouched] = useState(false);
 
   // One object URL per chosen file, revoked the moment it is replaced or the
   // form unmounts — a preview must not leak the blob it points at.
@@ -119,7 +117,7 @@ export function ReceiptForm({
     if (!candidate) return;
     const rejection = checkSlipFile(candidate);
     if (rejection !== null) {
-      setFile(null);
+      onFile(null);
       setFileError(
         rejection === 'too_large'
           ? t('settlement.fileTooLarge')
@@ -128,7 +126,7 @@ export function ReceiptForm({
       return;
     }
     setFileError(null);
-    setFile(candidate);
+    onFile(candidate);
   };
 
   const onDrop = (event: DragEvent<HTMLDivElement>) => {
@@ -137,24 +135,10 @@ export function ReceiptForm({
     accept(event.dataTransfer.files?.[0]);
   };
 
-  const amountLaari = safeParseMvr(amountInput);
-  const amountInvalid = amountLaari === null || amountLaari < 1;
   const isPdf = file?.type === 'application/pdf';
-  const canSubmit =
-    file !== null && !amountInvalid && !pending;
-
-  const submit = () => {
-    setTouched(true);
-    if (!canSubmit || file === null || amountLaari === null) return;
-    onSubmit({ amountLaari, slip: file });
-  };
-
-  const duplicateRef = apiErrorCode(error) === 'duplicate_bank_ref';
-  const slipRefused = apiErrorCode(error)?.startsWith('slip_') === true;
-  const selectionRefused = isSelectionRefusal(error);
 
   return (
-    <div className="flex flex-col gap-5">
+    <>
       <div
         onDragOver={(event) => {
           event.preventDefault();
@@ -248,7 +232,7 @@ export function ReceiptForm({
                 variant="ghost"
                 size="sm"
                 onClick={() => {
-                  setFile(null);
+                  onFile(null);
                   setFileError(null);
                 }}
               >
@@ -263,11 +247,62 @@ export function ReceiptForm({
       {fileError !== null && (
         <p className="text-xs text-destructive">{fileError}</p>
       )}
-      {fileError === null && touched && file === null && (
-        <p className="text-xs text-destructive">
-          {t('settlement.fileRequired')}
-        </p>
+      {fileError === null && requiredMessage !== null && (
+        <p className="text-xs text-destructive">{requiredMessage}</p>
       )}
+    </>
+  );
+}
+
+export function ReceiptForm({
+  amountDueLaari,
+  submitLabel,
+  pending,
+  error,
+  onSubmit,
+  footerStart,
+}: {
+  /** Prefills the amount and drives the under/over-payment notes. */
+  amountDueLaari: number;
+  submitLabel: string;
+  pending: boolean;
+  /** The submission error, if the last attempt failed. */
+  error: unknown;
+  onSubmit: (receipt: ReceiptSubmission) => void;
+  /** Rendered at the start of the action row (e.g. a Back button). */
+  footerStart?: ReactNode;
+}) {
+  const { t } = useTranslation();
+  const [file, setFile] = useState<File | null>(null);
+  const [amountInput, setAmountInput] = useState(() =>
+    laariToInput(amountDueLaari),
+  );
+  const [touched, setTouched] = useState(false);
+
+  const amountLaari = safeParseMvr(amountInput);
+  const amountInvalid = amountLaari === null || amountLaari < 1;
+  const canSubmit =
+    file !== null && !amountInvalid && !pending;
+
+  const submit = () => {
+    setTouched(true);
+    if (!canSubmit || file === null || amountLaari === null) return;
+    onSubmit({ amountLaari, slip: file });
+  };
+
+  const duplicateRef = apiErrorCode(error) === 'duplicate_bank_ref';
+  const slipRefused = apiErrorCode(error)?.startsWith('slip_') === true;
+  const selectionRefused = isSelectionRefusal(error);
+
+  return (
+    <div className="flex flex-col gap-5">
+      <SlipDropzone
+        file={file}
+        onFile={setFile}
+        requiredMessage={
+          touched && file === null ? t('settlement.fileRequired') : null
+        }
+      />
 
       {/* The bank reference used to sit beside the amount. It is gone: a
           merchant at the slip upload rarely has it to hand, and the slip

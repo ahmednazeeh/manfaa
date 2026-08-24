@@ -546,12 +546,19 @@ class PaymentInstructionsCard extends StatelessWidget {
     required this.amountDueLaari,
     this.selectedAccountId,
     this.onSelectAccount,
+    this.referenceNote,
   });
 
   final SettlementInstructions instructions;
   final int amountDueLaari;
   final int? selectedAccountId;
   final ValueChanged<int>? onSelectAccount;
+
+  /// What to say in place of a reference when there is none. Defaults to
+  /// the settlement wording ("Manfaa will generate one after you upload
+  /// the receipt"); a wallet top-up, which never gets a reference, passes
+  /// its own sentence.
+  final String? referenceNote;
 
   @override
   Widget build(BuildContext context) {
@@ -663,7 +670,7 @@ class PaymentInstructionsCard extends StatelessWidget {
           ),
         ] else
           Text(
-            l10n.referenceComesLaterNote,
+            referenceNote ?? l10n.referenceComesLaterNote,
             style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
             ),

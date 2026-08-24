@@ -4,10 +4,13 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Merchant;
 
+use App\Domain\MerchantAccess\Permission;
 use App\Domain\Platform\PlatformConfig;
 use App\Http\Controllers\Controller;
+use App\Http\Middleware\EnsureMerchantPermission;
 use App\Http\Resources\MerchantPreferencesResource;
 use App\Models\MerchantUser;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
@@ -27,16 +30,27 @@ use Illuminate\Validation\Rule;
  */
 class PreferencesController extends Controller
 {
-    public function update(Request $request, PlatformConfig $config): MerchantPreferencesResource
+    public function update(Request $request, PlatformConfig $config): MerchantPreferencesResource|JsonResponse
     {
         $validated = $request->validate([
             'settlement_method' => ['sometimes', 'string', Rule::in(['bank', 'wallet'])],
+            // The wallet screen's toggle (owner, 2026-08-24): may the hourly
+            // run settle validated cashback from the wallet balance? This
+            // PATCH is its ONE write path — the wallet payload only reads it.
+            'auto_settle_from_wallet' => ['sometimes', 'boolean'],
             'min_eligible_laari' => ['sometimes', 'integer', 'min:0', 'max:100000'],
             'validation_window_days' => ['sometimes', 'integer', 'min:0', 'max:'.$config->defaultValidationWindowDays()],
         ]);
 
         /** @var MerchantUser $user */
         $user = $request->user('merchant');
+
+        // The wallet toggle authorises the platform to SPEND the balance
+        // every hour. That is a Money decision, not an Account one: whoever
+        // flips it must hold the permission to spend the wallet by hand.
+        if (array_key_exists('auto_settle_from_wallet', $validated) && ! $user->can(Permission::WalletSettle)) {
+            return EnsureMerchantPermission::deny(Permission::WalletSettle);
+        }
 
         $merchant = $user->merchant;
         $merchant->fill($validated)->save();

@@ -47,15 +47,17 @@ final class WalletFunding
      * DuplicateBankRefException, so one real transfer credits the wallet
      * exactly once.
      */
-    public function recordTopUp(Merchant $merchant, Laari $amount, string $bankRef): WalletTransaction
+    public function recordTopUp(Merchant $merchant, Laari $amount, string $bankRef, ?string $description = null): WalletTransaction
     {
         if ($amount->value() <= 0) {
             throw new InvalidArgumentException('A wallet top-up must be a positive amount.');
         }
 
+        $description ??= sprintf('Bank top-up (%s)', $bankRef);
+
         try {
-            return DB::transaction(function () use ($merchant, $amount, $bankRef): WalletTransaction {
-                $movement = $this->credit($merchant, $amount->value(), 'top_up', description: sprintf('Bank top-up (%s)', $bankRef), bankRef: $bankRef);
+            return DB::transaction(function () use ($merchant, $amount, $bankRef, $description): WalletTransaction {
+                $movement = $this->credit($merchant, $amount->value(), 'top_up', description: $description, bankRef: $bankRef);
 
                 $this->postings->walletTopUp($amount->value(), referenceId: $movement->id);
 
@@ -80,9 +82,19 @@ final class WalletFunding
      * itself posts as the sales discount that covers the rest of the lines.
      * Wallet settlement allocates the whole batch in one go, so that posting
      * happens exactly once by construction.
+     *
+     * The actor is whoever decided to spend the balance, recorded on every
+     * confirmed line's event row: the merchant user who pressed "settle from
+     * wallet" (passed as themselves), or Actor::system() when the hourly
+     * WalletAutoSettler drew it (owner, 2026-08-24). Same path either way —
+     * only the signature on the event differs.
      */
-    public function settleFromWallet(Settlement $settlement, MerchantUser $actor): Settlement
+    public function settleFromWallet(Settlement $settlement, MerchantUser|Actor $actor): Settlement
     {
+        if ($actor instanceof MerchantUser) {
+            $actor = Actor::merchantUser($actor->id);
+        }
+
         return DB::transaction(function () use ($settlement, $actor): Settlement {
             $settlement = Settlement::query()->whereKey($settlement->getKey())->lockForUpdate()->firstOrFail();
 
@@ -113,7 +125,7 @@ final class WalletFunding
             $now = CarbonImmutable::now('UTC');
 
             foreach (SettlementLines::inAllocationOrder($settlement) as $line) {
-                $this->allocator->allocate($line, Actor::merchantUser($actor->id), $now);
+                $this->allocator->allocate($line, $actor, $now);
             }
 
             $settlement->forceFill([

@@ -3,8 +3,10 @@
 use App\Http\Controllers\Admin\SettlementController as AdminSettlementController;
 use App\Http\Controllers\Admin\SettlementPaymentController;
 use App\Http\Controllers\Admin\WalletController;
+use App\Http\Controllers\Admin\WalletTopUpController as AdminWalletTopUpController;
 use App\Http\Controllers\Merchant\PosWaiverController;
 use App\Http\Controllers\Merchant\SettlementController as MerchantSettlementController;
+use App\Http\Controllers\Merchant\WalletTopUpController as MerchantWalletTopUpController;
 use App\Http\Middleware\EnsureMerchantApproved;
 use Illuminate\Support\Facades\Route;
 
@@ -56,6 +58,17 @@ Route::prefix('merchant')->middleware('auth:merchant')->group(function () {
     Route::post('settlements/wallet', [MerchantSettlementController::class, 'walletSettle'])
         ->middleware(['merchant.can:wallet.settle', EnsureMerchantApproved::class]);
 
+    // Funding the wallet by bank transfer (owner, 2026-08-24): the same
+    // receipt-first act as a settlement — account, slip, optional reference
+    // — creating a pending claim the bank-history verifier or an admin
+    // turns into a credit. Its own permission; approved stores only, as
+    // for every other claim of a real transfer.
+    // Throttled: each claim stores a slip, runs OCR and polls the bank for
+    // the whole verify window, and WalletTopUps::MAX_PENDING bounds how
+    // many may wait at once.
+    Route::post('wallet/top-ups', [MerchantWalletTopUpController::class, 'store'])
+        ->middleware(['merchant.can:wallet.top_up', EnsureMerchantApproved::class, 'throttle:5,1']);
+
     // A further transfer against a batch still owed money (§7 partial
     // payments, or an admin-built fallback batch) — also receipt-bearing.
     Route::post('settlements/{id}/receipts', [MerchantSettlementController::class, 'storeReceipt'])
@@ -73,4 +86,13 @@ Route::prefix('admin')->middleware('auth:admin')->group(function () {
     Route::post('settlements/{id}/reject', [AdminSettlementController::class, 'reject'])->whereNumber('id');
     Route::post('payments/{id}/match', [SettlementPaymentController::class, 'match'])->whereNumber('id');
     Route::post('merchants/{merchant}/wallet/top-ups', [WalletController::class, 'storeTopUp'])->whereNumber('merchant');
+
+    // The wallet top-up queue (owner, 2026-08-24): the fallback for claims
+    // the bank-history verifier could not match. Any admin, like the
+    // settlement payment match above — reconciling against a statement is
+    // queue work, not a superadmin lever.
+    Route::get('wallet-top-ups', [AdminWalletTopUpController::class, 'index']);
+    Route::get('wallet-top-ups/{id}/slip', [AdminWalletTopUpController::class, 'slip'])->whereNumber('id');
+    Route::post('wallet-top-ups/{id}/match', [AdminWalletTopUpController::class, 'match'])->whereNumber('id');
+    Route::post('wallet-top-ups/{id}/reject', [AdminWalletTopUpController::class, 'reject'])->whereNumber('id');
 });

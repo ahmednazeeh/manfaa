@@ -3,7 +3,11 @@
 import { ComponentType, ReactNode } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { listHolds, listStoreReviews } from '@manfaa/api-client';
+import {
+  listHolds,
+  listStoreReviews,
+  listWalletTopUps,
+} from '@manfaa/api-client';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   BadgeCheck,
@@ -19,6 +23,7 @@ import {
   MessageSquare,
   Palette,
   Percent,
+  PiggyBank,
   Plug,
   Radio,
   Receipt,
@@ -141,8 +146,40 @@ function OpenHoldsBadge() {
   );
 }
 
+/**
+ * How many merchant wallet top-up claims the bank-history verifier could
+ * not settle on its own and a person still has to read. Shares its query
+ * key with the /wallet-top-ups default view (pending, page 1); polled so it
+ * stays honest while an admin works elsewhere. Nothing renders at zero.
+ */
+function PendingTopUpsBadge() {
+  const query = useQuery({
+    queryKey: ['admin', 'wallet-top-ups', 'pending', 1],
+    queryFn: ({ signal }) =>
+      listWalletTopUps({ state: 'pending', page: 1 }, { signal }),
+    refetchInterval: 60_000,
+    staleTime: 30_000,
+  });
+
+  const count = query.data?.meta.total ?? 0;
+  if (count === 0) {
+    return null;
+  }
+  return (
+    <Badge variant="warning" size="sm" shape="circle">
+      {count}
+    </Badge>
+  );
+}
+
 const NAV_ITEMS: NavItem[] = [
   { href: '/settlements', label: 'Settlements', icon: Landmark },
+  {
+    href: '/wallet-top-ups',
+    label: 'Wallet top-ups',
+    icon: PiggyBank,
+    badge: PendingTopUpsBadge,
+  },
   { href: '/merchants', label: 'Merchants', icon: Store },
   { href: '/customers', label: 'Customers', icon: Users },
   { href: '/zones', label: 'Zones', icon: MapIcon },

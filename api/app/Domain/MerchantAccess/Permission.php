@@ -48,6 +48,13 @@ enum Permission: string
     case WalletView = 'wallet.view';
     case WalletSettle = 'wallet.settle';
 
+    // Funding the wallet by bank transfer (owner, 2026-08-24). Its own slug
+    // rather than riding on wallet.settle: claiming a real transfer and
+    // uploading the slip is the same weight as submitting a settlement, and
+    // a role that may spend the balance is not automatically one that may
+    // assert money arrived.
+    case WalletTopUp = 'wallet.top_up';
+
     case ProfileView = 'profile.view';
     case ProfileEdit = 'profile.edit';
 
@@ -140,6 +147,7 @@ enum Permission: string
 
             self::WalletView => 'View the wallet',
             self::WalletSettle => 'Settle from the wallet',
+            self::WalletTopUp => 'Top up the wallet',
 
             self::ProfileView => 'View the store profile',
             self::ProfileEdit => 'Edit the store profile',
@@ -190,7 +198,8 @@ enum Permission: string
             self::SettlementsCreate,
             self::SettlementsReceiptAdd,
             self::WalletView,
-            self::WalletSettle => PermissionGroup::Money,
+            self::WalletSettle,
+            self::WalletTopUp => PermissionGroup::Money,
 
             self::PromotionsView,
             self::PromotionsCreate,

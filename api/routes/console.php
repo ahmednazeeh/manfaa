@@ -27,6 +27,12 @@ Artisan::command('inspire', function () {
 */
 
 Schedule::command('manfaa:sweep-validation')->hourly()->withoutOverlapping()->onOneServer();
+// Ten minutes behind the sweep (owner, 2026-08-24): the hour's newly
+// payable sales are on the clock by then, and a merchant holding wallet
+// balance has it spent on their oldest validated cashback — one batch per
+// merchant per run, as far as the balance reaches. The reinstatement sweep
+// at :00/:30 then sees the debt that this run cleared.
+Schedule::command('manfaa:auto-settle-wallets')->hourlyAt(10)->withoutOverlapping()->onOneServer();
 Schedule::command('manfaa:reinstate')->everyThirtyMinutes()->withoutOverlapping()->onOneServer();
 Schedule::command('manfaa:escalate')->dailyAt('09:00')->timezone(config('app.business_timezone'))->withoutOverlapping()->onOneServer();
 Schedule::command('manfaa:remind-settlements')->dailyAt('09:00')->timezone(config('app.business_timezone'))->withoutOverlapping()->onOneServer();

@@ -76,6 +76,7 @@ const MERCHANT_PERMISSION_KEYS: Record<MerchantPermission, string> = {
   'settlements.receipt_add': 'roles.permissions.settlementsReceiptAdd',
   'wallet.view': 'roles.permissions.walletView',
   'wallet.settle': 'roles.permissions.walletSettle',
+  'wallet.top_up': 'roles.permissions.walletTopUp',
   'profile.view': 'roles.permissions.profileView',
   'profile.edit': 'roles.permissions.profileEdit',
   'branding.update': 'roles.permissions.brandingUpdate',

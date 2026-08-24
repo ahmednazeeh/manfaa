@@ -104,6 +104,12 @@ const SETTING_META: Record<PlatformSettingKey, SettingMeta> = {
       'The cumulative validated spend — purchases that survived their refund window — a referred customer must reach before the referrer’s bonus above is paid. Lowering it can make referrals already past the new bar qualify; the daily check picks them up. Changed only by a superadmin.',
     unit: 'mvr',
   },
+  wallet_top_up_min_laari: {
+    label: 'Minimum wallet top-up',
+    description:
+      'The smallest transfer a merchant may claim as a wallet top-up. Below it the claim is refused before a slip is stored; claims already pending are untouched. The merchant app reads it live, so raising it moves the form at once. Changed only by a superadmin.',
+    unit: 'mvr',
+  },
 };
 
 const KEY_ORDER = PlatformSettingKeySchema.options;

@@ -1,10 +1,15 @@
 'use client';
 
-import { MoneyText } from '@manfaa/ui';
+import { useState } from 'react';
+import { MoneyText, useFormatMoney } from '@manfaa/ui';
+import { format } from 'date-fns';
+import { Plus, Wallet as WalletIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/utils';
 import { walletMovementLabel } from '@/lib/labels';
 import { useWallet } from '@/lib/queries';
+import { can } from '@/lib/roles';
+import { Button } from '@/components/ui/button';
 import {
   Card,
   CardContent,
@@ -21,7 +26,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { format } from 'date-fns';
+import { useLayout } from '@/components/app-layout/context';
 import {
   Toolbar,
   ToolbarDescription,
@@ -33,19 +38,45 @@ import {
   ErrorBlock,
   LoadingBlock,
 } from '@/components/app/async-states';
+import { AutoSettleCard } from '@/components/wallet/auto-settle-card';
+import { PendingTopUps } from '@/components/wallet/pending-top-ups';
+import { TopUpDialog } from '@/components/wallet/top-up-dialog';
 
+/**
+ * The store's Manfaa wallet (owner, 2026-08-24 — the wallet IS pre-funding
+ * now). Three things on one screen, each behind its own permission:
+ *
+ *  - the balance, and topping it up by bank transfer (`wallet.top_up`) —
+ *    a receipt-first claim the bank's own history confirms;
+ *  - the auto-settle switch (`preferences.update` to move it) — whether
+ *    the hourly run settles validated cashback from this balance;
+ *  - the claims still being verified, and the movements ledger.
+ *
+ * Everything shown is the server's: no balance is projected, no claim is
+ * counted as money before it is matched.
+ */
 export default function WalletPage() {
   const { t } = useTranslation();
+  const formatMoney = useFormatMoney();
+  const { me } = useLayout();
   const wallet = useWallet();
+  const [topUpOpen, setTopUpOpen] = useState(false);
+
+  const canTopUp = can(me, 'wallet.top_up');
+  const canToggleAutoSettle = can(me, 'preferences.update');
+
+  const pending = wallet.data?.pending_top_ups ?? [];
+  const pendingLaari = pending.reduce(
+    (total, topUp) => total + topUp.amount_laari,
+    0,
+  );
 
   return (
     <div className="container">
       <Toolbar>
         <ToolbarHeading>
-          <ToolbarPageTitle>Wallet</ToolbarPageTitle>
-          <ToolbarDescription>
-            A settlement method — fund batches without a bank transfer
-          </ToolbarDescription>
+          <ToolbarPageTitle>{t('wallet.title')}</ToolbarPageTitle>
+          <ToolbarDescription>{t('wallet.subtitle')}</ToolbarDescription>
         </ToolbarHeading>
       </Toolbar>
 
@@ -53,44 +84,77 @@ export default function WalletPage() {
         <ErrorBlock error={wallet.error} />
       ) : (
         <div className="flex flex-col gap-5 pb-7.5">
-          <Card>
-            <CardContent className="flex flex-col gap-1.5 p-5">
-              <span className="text-xs font-medium uppercase text-muted-foreground">
-                Balance
-              </span>
-              {wallet.data ? (
-                <MoneyText
-                  laari={wallet.data.balance_laari}
-                  className="text-2xl font-semibold text-mono"
-                />
-              ) : (
-                <Skeleton className="h-8 w-40 rounded-md" />
-              )}
-              <span className="text-sm text-muted-foreground">
-                Top-ups are recorded by our team when your transfer arrives.
-              </span>
-            </CardContent>
-          </Card>
+          <div className="grid grid-cols-1 items-stretch gap-5 lg:grid-cols-3">
+            <Card className="lg:col-span-2">
+              <CardContent className="flex flex-wrap items-center gap-4 p-5">
+                <span className="flex size-12 shrink-0 items-center justify-center rounded-full bg-primary/10">
+                  <WalletIcon className="size-6 text-primary" />
+                </span>
+                <div className="flex min-w-0 grow flex-col gap-1">
+                  <span className="text-xs font-medium uppercase text-muted-foreground">
+                    {t('wallet.balance')}
+                  </span>
+                  {wallet.data ? (
+                    <MoneyText
+                      laari={wallet.data.balance_laari}
+                      currency={wallet.data.currency}
+                      className="text-2xl font-semibold text-mono"
+                    />
+                  ) : (
+                    <Skeleton className="h-8 w-40 rounded-md" />
+                  )}
+                  <span className="text-sm text-muted-foreground">
+                    {pending.length > 0
+                      ? t('wallet.pendingSummary', {
+                          count: pending.length,
+                          amount: formatMoney(pendingLaari),
+                        })
+                      : t('wallet.balanceHint')}
+                  </span>
+                </div>
+                {canTopUp && (
+                  <Button
+                    onClick={() => setTopUpOpen(true)}
+                    disabled={!wallet.data}
+                  >
+                    <Plus />
+                    {t('wallet.topUp')}
+                  </Button>
+                )}
+              </CardContent>
+            </Card>
+
+            <AutoSettleCard
+              enabled={wallet.data?.auto_settle_from_wallet}
+              canToggle={canToggleAutoSettle}
+            />
+          </div>
+
+          <PendingTopUps topUps={pending} />
 
           <Card>
             <CardHeader>
-              <CardTitle>Movements</CardTitle>
+              <CardTitle>{t('wallet.movements')}</CardTitle>
             </CardHeader>
             {!wallet.data ? (
               <LoadingBlock lines={4} />
             ) : (wallet.data.transactions?.length ?? 0) === 0 ? (
-              <EmptyBlock>No wallet movements yet.</EmptyBlock>
+              <EmptyBlock>{t('wallet.emptyMovements')}</EmptyBlock>
             ) : (
               <CardTable>
                 <div className="overflow-x-auto">
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Date</TableHead>
-                        <TableHead>Type</TableHead>
-                        <TableHead>Description</TableHead>
-                        <TableHead className="text-end">Amount</TableHead>
-                        <TableHead className="text-end">Balance after</TableHead>
+                        <TableHead>{t('wallet.colDate')}</TableHead>
+                        <TableHead>{t('wallet.colType')}</TableHead>
+                        <TableHead>{t('wallet.colDescription')}</TableHead>
+                        <TableHead className="text-end">
+                          {t('wallet.colAmount')}
+                        </TableHead>
+                        <TableHead className="text-end">
+                          {t('wallet.colBalanceAfter')}
+                        </TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -130,6 +194,15 @@ export default function WalletPage() {
             )}
           </Card>
         </div>
+      )}
+
+      {canTopUp && wallet.data && (
+        <TopUpDialog
+          open={topUpOpen}
+          onOpenChange={setTopUpOpen}
+          minLaari={wallet.data.top_up_min_laari}
+          accounts={wallet.data.bank_accounts}
+        />
       )}
     </div>
   );

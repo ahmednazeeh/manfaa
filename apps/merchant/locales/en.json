@@ -283,6 +283,7 @@
       "settlementsReceiptAdd": "Add a payment receipt to a settlement",
       "walletView": "View the wallet",
       "walletSettle": "Settle from the wallet",
+      "walletTopUp": "Top up the wallet",
       "profileView": "View the store profile",
       "profileEdit": "Edit the store profile",
       "brandingUpdate": "Change the store logo",
@@ -873,6 +874,62 @@
     "chooseBankFirst": "Choose a bank above to see where to send it.",
     "referenceComesLater": "No reference is needed for the transfer — Manfaa creates one when you upload the receipt, and you'll see it on the settlement."
   },
+  "wallet": {
+    "title": "Wallet",
+    "subtitle": "A prepaid balance that settles cashback without a transfer each time",
+    "balance": "Balance",
+    "balanceHint": "Top up by bank transfer — the balance funds your settlements.",
+    "pendingSummary_one": "{{amount}} in {{count}} top-up being verified",
+    "pendingSummary_other": "{{amount}} in {{count}} top-ups being verified",
+    "topUp": "Top up",
+    "movements": "Movements",
+    "emptyMovements": "No wallet movements yet.",
+    "colDate": "Date",
+    "colType": "Type",
+    "colDescription": "Description",
+    "colAmount": "Amount",
+    "colBalanceAfter": "Balance after",
+    "autoSettle": {
+      "title": "Auto-settle from wallet",
+      "body": "Validated cashback settles from your wallet automatically every hour, oldest first, while the balance lasts.",
+      "ownerOnly": "Only the store owner can change this.",
+      "on": "Auto-settle is on.",
+      "off": "Auto-settle is off.",
+      "failed": "Could not change auto-settle."
+    },
+    "pending": {
+      "title": "Top-ups in progress",
+      "lead": "Money you have sent that is not yet balance. Each transfer is matched against the bank's records — usually within the hour.",
+      "submitted": "Submitted {{date}}",
+      "noBank": "Bank not recorded",
+      "reason": "Reason from Manfaa",
+      "noReason": "No reason given."
+    },
+    "topUpDialog": {
+      "title": "Top up your wallet",
+      "lead": "Transfer from your bank to the account below, then upload the slip. The balance is credited once the transfer is found.",
+      "amountLabel": "Amount to transfer",
+      "amountHint": "At least {{min}}.",
+      "amountInvalid": "Enter the amount, e.g. 500.00.",
+      "amountBelowMin": "The minimum top-up is {{min}}.",
+      "slipLabel": "Transfer slip",
+      "bankRefLabel": "Bank reference",
+      "bankRefHint": "Optional — the reference your bank shows for the transfer. It is the fastest way to match your top-up.",
+      "chooseBankFirst": "Choose a bank to send to.",
+      "destinationsFailed": "Could not load the bank details.",
+      "noDestinations": "Transfer details are not available yet — contact Manfaa.",
+      "submit": "Submit top-up",
+      "submitFailed": "Could not submit your top-up.",
+      "duplicateBankRef": "A top-up with this bank reference is already submitted. Check the reference on your slip.",
+      "storeNotApproved": "Top-ups open once your store is approved.",
+      "permissionRequired": "You need permission to top up the wallet.",
+      "successTitle": "Verifying your transfer",
+      "successBody": "We are matching {{amount}} against the transfer to {{bank}}. Your balance updates the moment it is found — nothing else is needed from you.",
+      "successBodyNoBank": "We are matching {{amount}} against your transfer. Your balance updates the moment it is found — nothing else is needed from you.",
+      "done": "Done",
+      "tooManyPending": "You already have 3 top-ups waiting to be matched. Once those are decided you can submit another."
+    }
+  },
   "credit": {
     "backdatedTitle": "Backdated sale — this credit is final",
     "backdatedBody": "This sale is older than your refund window — once credited it cannot be reversed, and it becomes payable to Manfaa immediately.",
@@ -974,6 +1031,11 @@
       "settlement": "Spent on a settlement",
       "settlement_credit": "Credit from a settlement",
       "unknown": "Adjustment"
+    },
+    "walletTopUpState": {
+      "pending": "Verifying",
+      "matched": "Credited",
+      "rejected": "Rejected"
     }
   },
   "transactions": {

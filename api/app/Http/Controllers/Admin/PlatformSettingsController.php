@@ -36,6 +36,10 @@ class PlatformSettingsController extends Controller
         'referral_enabled',
         'referral_reward_laari',
         'referral_spend_threshold_laari',
+        // The wallet top-up floor (owner, 2026-08-24): a superadmin
+        // setting by spec — it shapes how much merchant money the
+        // platform holds in advance.
+        'wallet_top_up_min_laari',
     ];
 
     public function index(PlatformConfig $config): JsonResponse

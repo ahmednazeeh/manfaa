@@ -147,6 +147,11 @@ function merchantPermissionMatrix(): array
         'settlement receipt' => ['method' => 'POST', 'uri' => '/api/merchant/settlements/999999/receipts', 'payload' => [], 'permission' => 'settlements.receipt_add', 'allowed' => 422],
         'wallet read' => ['method' => 'GET', 'uri' => '/api/merchant/wallet', 'payload' => [], 'permission' => 'wallet.view', 'allowed' => 200],
         'wallet settle' => ['method' => 'POST', 'uri' => '/api/merchant/settlements/wallet', 'payload' => [], 'permission' => 'wallet.settle', 'allowed' => 422],
+        // Funding the wallet is its own authority (owner, 2026-08-24): a
+        // role that may spend the balance is not thereby one that may
+        // claim a real transfer arrived. 422: the empty multipart fails
+        // validation once the gate is passed.
+        'wallet top-up' => ['method' => 'POST', 'uri' => '/api/merchant/wallet/top-ups', 'payload' => [], 'permission' => 'wallet.top_up', 'allowed' => 422],
 
         // ---- Marketing --------------------------------------------------
         'promotions read' => ['method' => 'GET', 'uri' => '/api/merchant/promotions', 'payload' => [], 'permission' => 'promotions.view', 'allowed' => 200],

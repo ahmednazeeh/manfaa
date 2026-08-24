@@ -1604,8 +1604,81 @@ class AppLocalizationsEn extends AppLocalizations {
   String get walletBalanceLabel => 'Balance';
 
   @override
-  String get walletTopUpHint =>
-      'Top-ups are recorded by our team when your transfer arrives.';
+  String get walletTopUpCta => 'Top up';
+
+  @override
+  String get walletTopUpTitle => 'Top up your wallet';
+
+  @override
+  String get topUpAmountLabel => 'Amount to top up';
+
+  @override
+  String topUpMinimumHint(String amount) {
+    return 'Minimum $amount';
+  }
+
+  @override
+  String get topUpAmountInvalid =>
+      'Enter the amount you\'ll transfer, e.g. 500.00.';
+
+  @override
+  String topUpBelowMinimum(String amount) {
+    return 'The minimum top-up is $amount.';
+  }
+
+  @override
+  String get topUpBankRefLabel => 'Bank reference (optional)';
+
+  @override
+  String get topUpBankRefHint =>
+      'The reference on your slip, if you have it. It helps us match the transfer faster.';
+
+  @override
+  String get topUpReferenceNote =>
+      'No payment reference needed. We match your transfer to the slip you upload.';
+
+  @override
+  String get topUpBankUnavailable => 'Couldn\'t load the bank details.';
+
+  @override
+  String topUpSuccessBody(String amount) {
+    return 'Your top-up of $amount reached our team. It is added to your balance once the transfer is matched. Nothing more is needed from you.';
+  }
+
+  @override
+  String get pendingTopUpsTitle => 'Top-ups in progress';
+
+  @override
+  String get topUpStateVerifying => 'Verifying';
+
+  @override
+  String get topUpStateMatched => 'Added';
+
+  @override
+  String get topUpStateRejected => 'Rejected';
+
+  @override
+  String topUpToBank(String bank) {
+    return 'To $bank';
+  }
+
+  @override
+  String topUpRejectedReason(String reason) {
+    return 'Reason: $reason';
+  }
+
+  @override
+  String get topUpRejectedNoReason => 'No reason recorded.';
+
+  @override
+  String get autoSettleTitle => 'Auto-settle from wallet';
+
+  @override
+  String get autoSettleBody =>
+      'Every hour, validated cashback is settled from this balance — oldest first, as far as it goes.';
+
+  @override
+  String get autoSettleFailed => 'Couldn\'t change auto-settle. Try again.';
 
   @override
   String get movementsTitle => 'Movements';

@@ -191,10 +191,18 @@ final class SettlementBuilder
      * without touching the wallet at all; that is the only route by which a
      * merchant settles a zero-due batch, and it draws no balance.
      *
+     * Two callers, ONE path (PLAN §7): the merchant pressing "settle from
+     * wallet" passes their MerchantUser; the hourly WalletAutoSettler passes
+     * Actor::system() (owner, 2026-08-24). Either way the lines confirm
+     * through the same allocator with that signature on the event row.
+     *
      * @param  list<int>|null  $transactionIds  null settles everything eligible
      */
-    public function createAndSettleFromWallet(Merchant $merchant, MerchantUser $actor, ?array $transactionIds): Settlement
+    public function createAndSettleFromWallet(Merchant $merchant, MerchantUser|Actor $actor, ?array $transactionIds): Settlement
     {
+        if ($actor instanceof MerchantUser) {
+            $actor = Actor::merchantUser($actor->id);
+        }
 
         return DB::transaction(function () use ($merchant, $actor, $transactionIds): Settlement {
             // Batch membership / state moved — orphan this merchant's

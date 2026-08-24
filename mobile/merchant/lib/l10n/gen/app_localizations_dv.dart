@@ -1627,8 +1627,82 @@ class AppLocalizationsDv extends AppLocalizations {
   String get walletBalanceLabel => 'ބެލެންސް';
 
   @override
-  String get walletTopUpHint =>
-      'ޓޮޕް-އަޕް ރެކޯޑްކުރާނީ ޓްރާންސްފަރ ލިބުމުން އަޅުގަނޑުމެންގެ ޓީމުންނެވެ.';
+  String get walletTopUpCta => 'ޓޮޕް-އަޕް';
+
+  @override
+  String get walletTopUpTitle => 'ވޮލެޓަށް ޓޮޕް-އަޕް ކުރައްވާ';
+
+  @override
+  String get topUpAmountLabel => 'ޓޮޕް-އަޕް ކުރާ އަދަދު';
+
+  @override
+  String topUpMinimumHint(String amount) {
+    return 'އެންމެ މަދުވެގެން $amount';
+  }
+
+  @override
+  String get topUpAmountInvalid =>
+      'ޓްރާންސްފަރ ކުރައްވާ އަދަދު ލިޔުއްވާ، މިސާލު: 500.00';
+
+  @override
+  String topUpBelowMinimum(String amount) {
+    return 'އެންމެ މަދުވެގެން ޓޮޕް-އަޕް ކުރެވޭނީ $amount.';
+  }
+
+  @override
+  String get topUpBankRefLabel => 'ބޭންކް ރެފަރެންސް (އިޚްތިޔާރީ)';
+
+  @override
+  String get topUpBankRefHint =>
+      'ސްލިޕްގައިވާ ރެފަރެންސް، އޮތްނަމަ. މިއިން ޓްރާންސްފަރ އަވަހަށް މެޗްކުރެވޭނެ.';
+
+  @override
+  String get topUpReferenceNote =>
+      'ޕޭމަންޓް ރެފަރެންސެއް ބޭނުމެއް ނުވާނެ. އަޕްލޯޑްކުރައްވާ ސްލިޕާ ޓްރާންސްފަރ މެޗްކުރާނީ އަޅުގަނޑުމެންނެވެ.';
+
+  @override
+  String get topUpBankUnavailable => 'ބޭންކް މަޢުލޫމާތު ލޯޑެއް ނުކުރެވުނު.';
+
+  @override
+  String topUpSuccessBody(String amount) {
+    return '$amount ގެ ޓޮޕް-އަޕް އަޅުގަނޑުމެންގެ ޓީމަށް ލިބިއްޖެ. ޓްރާންސްފަރ މެޗްވުމުން ބެލެންސަށް އިތުރުކުރެވޭނެ. އިތުރު ކަމެއް ކުރައްވާކަށް ނުޖެހޭނެ.';
+  }
+
+  @override
+  String get pendingTopUpsTitle => 'ކުރިއަށްދާ ޓޮޕް-އަޕްތައް';
+
+  @override
+  String get topUpStateVerifying => 'ކަށަވަރުކުރަނީ';
+
+  @override
+  String get topUpStateMatched => 'އިތުރުކުރެވިއްޖެ';
+
+  @override
+  String get topUpStateRejected => 'ބަލައިނުގަނެވުނު';
+
+  @override
+  String topUpToBank(String bank) {
+    return '$bank އަށް';
+  }
+
+  @override
+  String topUpRejectedReason(String reason) {
+    return 'ސަބަބު: $reason';
+  }
+
+  @override
+  String get topUpRejectedNoReason => 'ސަބަބެއް ރެކޯޑްކުރެވިފައެއް ނެތް.';
+
+  @override
+  String get autoSettleTitle => 'ވޮލެޓުން އޮޓޯ-ސެޓްލް';
+
+  @override
+  String get autoSettleBody =>
+      'ކޮންމެ ގަޑިއަކު، ވެލިޑޭޓްވެފައިވާ ކޭޝްބެކް މި ބެލެންސުން ސެޓްލްކުރެވޭނެ — އެންމެ ގިނަދުވަސްވީ ފުރަތަމަ، ބެލެންސް ހުރި މިންވަރަކަށް.';
+
+  @override
+  String get autoSettleFailed =>
+      'އޮޓޯ-ސެޓްލް ބަދަލެއް ނުކުރެވުނު. އަލުން މަސައްކަތްކުރައްވާ.';
 
   @override
   String get movementsTitle => 'މޫވްމަންޓްތައް';

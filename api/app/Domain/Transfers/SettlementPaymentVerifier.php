@@ -31,12 +31,15 @@ use Illuminate\Support\Facades\Log;
  * The account read is the one the merchant was TOLD to pay into, recorded on
  * the settlement at build time. Not a global account, and no fallback: a
  * merchant paying our BML account is not evidenced by MIB's ledger.
+ *
+ * The evidence rules themselves live in {@see TransferEvidence}, shared with
+ * the wallet top-up verifier that walks the same ladder.
  */
 final readonly class SettlementPaymentVerifier
 {
     public function __construct(
         private BankHistoryClient $history,
-        private NameMatcher $names,
+        private TransferEvidence $evidence,
         private SettlementAllocator $allocator,
         private BankCreditClaim $claims,
     ) {}
@@ -86,7 +89,7 @@ final readonly class SettlementPaymentVerifier
             // The merchant's own reference, seen in our history. Proof, and
             // it does not need a name to agree — a company transfer often
             // arrives under an accountant's name or a bare IPS label.
-            if ($reference !== '' && self::sameReference($reference, $row)) {
+            if ($reference !== '' && TransferEvidence::sameReference($reference, $row)) {
                 return $this->match($payment, $row, 100, 'reference');
             }
 
@@ -100,7 +103,7 @@ final readonly class SettlementPaymentVerifier
             // kept: BML files its FT statement id as the reference and prints
             // a DIFFERENT one on the merchant's slip (settlement 8).
             foreach ($row->identifiers() as $identifier) {
-                if (self::receiptMentions($receipt, $identifier)) {
+                if (TransferEvidence::receiptMentions($receipt, $identifier)) {
                     return $this->match($payment, $row, 100, 'receipt_reference');
                 }
             }
@@ -109,7 +112,7 @@ final readonly class SettlementPaymentVerifier
             // Ltd" contains the "INTERBRIDGE" the history gives, and that
             // agreement is the merchant's own document confirming who paid —
             // which is precisely what a person checks by eye.
-            if (self::receiptMentions($receipt, $row->name)) {
+            if (TransferEvidence::receiptMentions($receipt, $row->name)) {
                 return $this->match($payment, $row, 100, 'receipt_name');
             }
 
@@ -124,7 +127,7 @@ final readonly class SettlementPaymentVerifier
             // This matters more than one settlement: BML does not reliably
             // carry the slip's reference in `narrative2`, so the receipt name
             // is often the only evidence a BML transfer leaves us.
-            $fuzzy = $this->receiptNames(
+            $fuzzy = $this->evidence->receiptNames(
                 $receipt,
                 $row->name,
                 (int) $settings->verify_min_score,
@@ -140,11 +143,7 @@ final readonly class SettlementPaymentVerifier
 
             // Last: the names we hold on file. A merchant who uploads an
             // unreadable slip is no worse off than before any of this.
-            $score = 0;
-
-            foreach ($expected as $candidate) {
-                $score = max($score, (int) $this->names->score($candidate, $row->name));
-            }
+            $score = $this->evidence->bestNameScore($expected, $row->name);
 
             if ($score < (int) $settings->verify_min_score) {
                 continue;
@@ -156,136 +155,6 @@ final readonly class SettlementPaymentVerifier
         return false;
     }
 
-    /**
-     * Does the receipt mention this value?
-     *
-     * Both sides are stripped to letters and digits before comparing, so
-     * OCR's spacing and punctuation cannot decide the answer: the slip's
-     * "Transaction# 90863389" contains the history's "90863389", and its
-     * "From Interbridge Pvt Ltd" contains "INTERBRIDGE".
-     *
-     * Short needles are refused. A two-character bank name inside eight
-     * thousand characters of receipt would match nothing in particular, and
-     * a false match here settles a bill against somebody else's money.
-     */
-    private static function receiptMentions(string $receipt, ?string $needle): bool
-    {
-        if ($receipt === '' || $needle === null) {
-            return false;
-        }
-
-        $haystack = self::alnum($receipt);
-        $needle = self::alnum($needle);
-
-        return mb_strlen($needle) >= 5 && str_contains($haystack, $needle);
-    }
-
-    /**
-     * Does the receipt name this payer, allowing for spelling?
-     *
-     * Deliberately stricter than "are these words somewhere on the page".
-     * Only a CONTIGUOUS run of the receipt's words is compared, the run is
-     * exactly as long as the bank's name, and {@see NameMatcher} requires
-     * EVERY token to find a partner — so a long slip cannot assemble a payer
-     * out of words scattered across it, which is the way this kind of match
-     * settles a bill against somebody else's money.
-     *
-     * A single-word payer is refused outright. "AHMED" fuzzily matching one
-     * word of a receipt is not evidence; the exact-containment rule above
-     * already accepts a distinctive single name like "INTERBRIDGE".
-     */
-    private function receiptNames(string $receipt, ?string $payer, int $minimum): ?int
-    {
-        if ($receipt === '' || $payer === null) {
-            return null;
-        }
-
-        $wanted = self::words($payer);
-        $words = self::words($receipt);
-
-        if (count($wanted) < 2 || count($words) < count($wanted)) {
-            return null;
-        }
-
-        $best = null;
-        $size = count($wanted);
-        $last = count($words) - $size;
-
-        for ($i = 0; $i <= $last; $i++) {
-            $score = $this->names->score($payer, implode(' ', array_slice($words, $i, $size)));
-
-            if ($score !== null && $score >= $minimum && ($best === null || $score > $best)) {
-                $best = $score;
-            }
-        }
-
-        return $best;
-    }
-
-    /**
-     * The receipt as words, punctuation and digits dropped.
-     *
-     * OCR renders "AHMD.NAZEEH" without a space, so splitting on anything
-     * that is not a letter is what recovers the two names.
-     *
-     * @return list<string>
-     */
-    private static function words(string $value): array
-    {
-        $value = mb_strtoupper($value);
-        $value = (string) preg_replace('/[^A-Z]+/u', ' ', $value);
-
-        return preg_split('/\s+/u', trim($value), -1, PREG_SPLIT_NO_EMPTY) ?: [];
-    }
-
-    private static function alnum(string $value): string
-    {
-        return mb_strtoupper((string) preg_replace('/[^A-Za-z0-9]/', '', $value));
-    }
-
-    /**
-     * The merchant's reference against the row's.
-     *
-     * Compared loosely on purpose — a person retyping a reference from a
-     * banking app drops spaces and hyphens, and MIB carries both a composite
-     * `trxNumber` and the short `trxNumber2`. A containment test in either
-     * direction catches the honest transcription without accepting a
-     * different transfer: these strings are long and bank-issued.
-     */
-    private static function sameReference(string $typed, BankRow $row): bool
-    {
-        $normalise = static fn (?string $value): string => preg_replace(
-            '/[^A-Z0-9]/',
-            '',
-            mb_strtoupper((string) $value),
-        ) ?? '';
-
-        $typed = $normalise($typed);
-
-        if (mb_strlen($typed) < 6) {
-            // Too short to be evidence. Somebody typed "123" or the batch
-            // number, and a containment test on that would match anything.
-            return false;
-        }
-
-        foreach ($row->identifiers() as $candidate) {
-            $candidate = $normalise($candidate);
-
-            if ($candidate === '') {
-                continue;
-            }
-
-            if ($candidate === $typed
-                || str_contains($candidate, $typed)
-                || str_contains($typed, $candidate)) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    /** What the merchant's bank calls them, falling back to the shop's name. */
     /**
      * Every name this payment could plausibly have arrived under, best
      * evidence first.
@@ -306,31 +175,8 @@ final readonly class SettlementPaymentVerifier
     {
         $merchant = $payment->merchant ?? $payment->settlement?->merchant;
 
-        $candidates = [
-            $merchant?->bank_account_name,
-            $merchant?->name,
-        ];
-
-        $names = [];
-
-        foreach ($candidates as $candidate) {
-            $candidate = trim((string) $candidate);
-
-            if ($candidate !== '' && ! in_array($candidate, $names, true)) {
-                $names[] = $candidate;
-            }
-        }
-
-        return $names;
+        return TransferEvidence::merchantNames($merchant?->bank_account_name, $merchant?->name);
     }
-
-    /**
-     * Has this bank credit already been spent on something?
-     *
-     * Checked across BOTH tables. One platform account takes customer order
-     * payments and merchant settlements alike, so a credit that verified an
-     * order must not also settle a batch.
-     */
 
     /** The profile whose feed this payment was matched against, if any. */
     private function profileIdFor(SettlementPayment $payment): ?int
@@ -378,6 +224,15 @@ final readonly class SettlementPaymentVerifier
                 // Re-checked under the lock: an admin may have matched it
                 // while we were reading the bank.
                 if ($locked->state !== 'pending') {
+                    return;
+                }
+
+                // Cross-table: serialise on the credit itself, then ask
+                // again. Another worker may have spent it on a wallet
+                // top-up or an order between our read and this lock.
+                $this->claims->lock($row);
+
+                if ($this->claims->taken($row, exceptPayment: (int) $locked->getKey())) {
                     return;
                 }
 

@@ -33,4 +33,44 @@ final class DuplicateBankRefException extends DomainException
             $merchant->id,
         ));
     }
+
+    /** The merchant already put this reference on a settlement receipt (pending or matched). */
+    public static function forWalletTopUpHeldBySettlement(Merchant $merchant, string $bankRef): self
+    {
+        return new self(sprintf(
+            'Bank reference %s is already recorded against a settlement payment for merchant #%d.',
+            $bankRef,
+            $merchant->id,
+        ));
+    }
+
+    /** The credit behind this reference was already spent — on an order, a settlement payment, or a wallet. */
+    public static function forWalletTopUpSpent(Merchant $merchant, string $bankRef): self
+    {
+        return new self(sprintf(
+            'Bank reference %s is already spent on another payment; it cannot also top up the wallet of merchant #%d.',
+            $bankRef,
+            $merchant->id,
+        ));
+    }
+
+    /** The merchant already CLAIMED this reference as a wallet top-up (pending or matched). */
+    public static function forSettlementHeldByTopUp(Settlement $settlement, string $bankRef): self
+    {
+        return new self(sprintf(
+            'Bank reference %s is already submitted as a wallet top-up; it cannot also pay settlement %s.',
+            $bankRef,
+            $settlement->reference,
+        ));
+    }
+
+    /** The merchant already CLAIMED this transfer as a top-up (pending or matched). */
+    public static function forWalletTopUpClaim(Merchant $merchant, ?string $bankRef): self
+    {
+        return new self(sprintf(
+            'Bank reference %s is already submitted as a wallet top-up for merchant #%d.',
+            $bankRef ?? '(none)',
+            $merchant->id,
+        ));
+    }
 }

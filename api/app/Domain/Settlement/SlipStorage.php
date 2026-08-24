@@ -6,6 +6,7 @@ namespace App\Domain\Settlement;
 
 use App\Models\Merchant;
 use App\Models\Settlement;
+use App\Models\WalletTopUp;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -101,7 +102,26 @@ final class SlipStorage
      */
     public function store(Merchant $merchant, Settlement $settlement, UploadedFile $file, array $inspection): string
     {
-        $directory = sprintf('settlements/%d/%d', $merchant->id, $settlement->id);
+        return $this->storeIn(sprintf('settlements/%d/%d', $merchant->id, $settlement->id), $file, $inspection);
+    }
+
+    /**
+     * The wallet top-up counterpart: wallet-top-ups/{merchant}/{top-up}/…
+     * Same disk, same rules, same uuid — a top-up slip is a payment slip
+     * that funds the wallet instead of a batch.
+     */
+    public function storeForTopUp(Merchant $merchant, WalletTopUp $topUp, UploadedFile $file, array $inspection): string
+    {
+        return $this->storeIn(sprintf('wallet-top-ups/%d/%d', $merchant->id, $topUp->id), $file, $inspection);
+    }
+
+    /**
+     * @param  array{mime: string, extension: string, size: int}  $inspection
+     *
+     * @throws SlipWriteFailedException the disk refused the write
+     */
+    private function storeIn(string $directory, UploadedFile $file, array $inspection): string
+    {
         $name = sprintf('%s.%s', (string) Str::uuid(), $inspection['extension']);
         $path = $directory.'/'.$name;
 

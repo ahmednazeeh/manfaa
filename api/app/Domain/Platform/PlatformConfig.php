@@ -73,6 +73,11 @@ final class PlatformConfig
         // the bonus. MVR 10,000 by owner decision; floor MVR 100 keeps a
         // typo from making every signup instantly bonus-worthy.
         'referral_spend_threshold_laari' => ['default' => 1000000, 'min' => 10000, 'max' => 100000000],
+        // WALLET TOP-UPS (owner, 2026-08-24). The smallest transfer a
+        // merchant may claim as a wallet top-up. MVR 100 by owner decision;
+        // the floor of MVR 1 stops a typo from turning every stray laari
+        // into a queue item for an admin to reconcile.
+        'wallet_top_up_min_laari' => ['default' => 10000, 'min' => 100, 'max' => 100000000],
     ];
 
     /**
@@ -146,6 +151,12 @@ final class PlatformConfig
     public function referralSpendThresholdLaari(): int
     {
         return $this->get('referral_spend_threshold_laari');
+    }
+
+    /** The smallest bank transfer a merchant may claim as a wallet top-up, in laari. */
+    public function walletTopUpMinLaari(): int
+    {
+        return $this->get('wallet_top_up_min_laari');
     }
 
     public function settlementDueDays(): int

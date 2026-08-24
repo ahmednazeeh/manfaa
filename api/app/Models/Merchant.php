@@ -57,6 +57,7 @@ class Merchant extends Model
         return [
             'validation_window_days' => 'integer',
             'min_eligible_laari' => 'integer',
+            'auto_settle_from_wallet' => 'boolean',
             'setup_state' => 'array',
             'submitted_at' => 'immutable_datetime',
             'approved_at' => 'immutable_datetime',

@@ -51,11 +51,20 @@ SlipRejection? checkSlipFile({required String name, required int sizeBytes}) {
 
 /// The merchant wallet: balance + movements, newest first. The first-ever
 /// read answers 201 (the row is created on demand) — same body either way.
+///
+/// Since 2026-08-24 the wallet is PRE-FUNDABLE: the payload also carries the
+/// platform's top-up floor, the merchant's auto-settle switch (READ here,
+/// WRITTEN only through PATCH /merchant/preferences) and the top-up claims
+/// still waiting on the bank or an admin.
 class MerchantWalletState {
   MerchantWalletState({
     required this.balanceLaari,
     required this.currency,
     required this.movements,
+    this.topUpMinLaari = 0,
+    this.autoSettleFromWallet = true,
+    this.bankAccounts = const [],
+    this.pendingTopUps = const [],
   });
 
   factory MerchantWalletState.fromJson(Map<String, dynamic> json) =>
@@ -66,11 +75,113 @@ class MerchantWalletState {
           for (final item in (json['transactions'] as List? ?? const []))
             WalletMovement.fromJson((item as Map).cast<String, dynamic>()),
         ],
+        topUpMinLaari: _laari(json['top_up_min_laari']),
+        // The server default is ON (owner decision): a payload that predates
+        // the key reads the same way the row was backfilled.
+        autoSettleFromWallet: json['auto_settle_from_wallet'] as bool? ?? true,
+        bankAccounts: [
+          for (final item in (json['bank_accounts'] as List? ?? const []))
+            PlatformBankAccount.fromJson((item as Map).cast<String, dynamic>()),
+        ],
+        pendingTopUps: [
+          for (final item in (json['pending_top_ups'] as List? ?? const []))
+            WalletTopUpClaim.fromJson((item as Map).cast<String, dynamic>()),
+        ],
       );
 
   final int balanceLaari;
   final String currency;
   final List<WalletMovement> movements;
+
+  /// The smallest transfer the merchant may claim as a top-up (integer
+  /// laari; the superadmin's `wallet_top_up_min_laari`, MVR 100 by
+  /// default). Zero when the server did not say — the server enforces it
+  /// again regardless (`top_up_below_minimum`).
+  final int topUpMinLaari;
+
+  /// Whether the hourly run settles validated cashback from this balance
+  /// (oldest first, as far as the balance goes). Written through
+  /// `MerchantApi.setAutoSettle`, never through the wallet route.
+  final bool autoSettleFromWallet;
+
+  /// Where a top-up may be sent: the platform's active accounts, default
+  /// first — the same list a settlement's payment instructions carry,
+  /// published here so a store that has never settled can still fund
+  /// itself. Empty means nothing is configured; never invent one.
+  final List<PlatformBankAccount> bankAccounts;
+
+  /// Top-up claims worth showing, newest first: `pending` ones (money the
+  /// merchant has sent that is not yet balance) and those `rejected` in
+  /// the last week, carrying the reason.
+  final List<WalletTopUpClaim> pendingTopUps;
+}
+
+/// One wallet top-up claim (WalletTopUpResource, and the slimmer
+/// `pending_top_ups[]` entry on the wallet payload — both parse here, so the
+/// claim a submit answers and the claim the wallet lists are one shape).
+class WalletTopUpClaim {
+  WalletTopUpClaim({
+    required this.id,
+    required this.amountLaari,
+    this.bankRef,
+    this.platformBankAccountId,
+    this.bank,
+    required this.state,
+    this.rejectedReason,
+    this.matchedAt,
+    this.rejectedAt,
+    required this.createdAt,
+  });
+
+  factory WalletTopUpClaim.fromJson(Map<String, dynamic> json) {
+    // The wallet payload nests the account as `bank`; the resource as
+    // `platform_bank_account`. Either is the same three display fields.
+    final bank = json['bank'] is Map
+        ? _map(json['bank'])
+        : json['platform_bank_account'] is Map
+            ? _map(json['platform_bank_account'])
+            : null;
+
+    return WalletTopUpClaim(
+      id: json['id'] as int? ?? 0,
+      amountLaari: _laari(json['amount_laari']),
+      bankRef: json['bank_ref'] as String?,
+      platformBankAccountId:
+          json['platform_bank_account_id'] as int? ?? bank?['id'] as int?,
+      bank: bank == null ? null : PlatformBankAccount.fromJson(bank),
+      state: _s(json['state']),
+      rejectedReason: json['rejected_reason'] as String?,
+      matchedAt: json['matched_at'] as String?,
+      rejectedAt: json['rejected_at'] as String?,
+      createdAt: _s(json['created_at']),
+    );
+  }
+
+  final int id;
+  final int amountLaari;
+
+  /// What the MERCHANT typed — often nothing; the slip carries it.
+  final String? bankRef;
+  final int? platformBankAccountId;
+
+  /// The platform account the merchant said they paid, or null when the
+  /// server did not load it.
+  final PlatformBankAccount? bank;
+
+  /// pending | matched | rejected.
+  final String state;
+
+  /// Manfaa's reason, only on a rejected claim.
+  final String? rejectedReason;
+  final String? matchedAt;
+  final String? rejectedAt;
+
+  /// ISO 8601 UTC.
+  final String createdAt;
+
+  bool get isPending => state == 'pending';
+  bool get isMatched => state == 'matched';
+  bool get isRejected => state == 'rejected';
 }
 
 /// One wallet movement. `amountLaari` is SIGNED — positive credits the

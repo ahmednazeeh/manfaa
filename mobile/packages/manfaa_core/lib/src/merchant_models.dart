@@ -927,6 +927,7 @@ class MerchantPreferences {
     required this.minEligibleLaari,
     required this.validationWindowDays,
     required this.validationWindowMaxDays,
+    this.autoSettleFromWallet = true,
   });
 
   factory MerchantPreferences.fromJson(Map<String, dynamic> json) =>
@@ -935,10 +936,16 @@ class MerchantPreferences {
         minEligibleLaari: _laari(json['min_eligible_laari']),
         validationWindowDays: _count(json['validation_window_days']),
         validationWindowMaxDays: _count(json['validation_window_max_days']),
+        autoSettleFromWallet: json['auto_settle_from_wallet'] as bool? ?? true,
       );
 
   /// bank | wallet — how settlements are funded by default (§7).
   final String settlementMethod;
+
+  /// Whether the hourly run settles validated cashback from the wallet
+  /// balance (owner, 2026-08-24; default ON). The wallet screen renders it
+  /// from the wallet payload and writes it through this resource.
+  final bool autoSettleFromWallet;
 
   /// Sales below this earn no cashback (integer laari; platform bound
   /// 0–100000).

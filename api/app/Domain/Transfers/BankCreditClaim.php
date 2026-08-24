@@ -6,7 +6,11 @@ namespace App\Domain\Transfers;
 
 use App\Models\Order;
 use App\Models\SettlementPayment;
+use App\Models\WalletTopUp;
+use App\Models\WalletTransaction;
+use Illuminate\Contracts\Database\Query\Expression;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Has this bank credit already been spent?
@@ -22,26 +26,55 @@ use Illuminate\Database\Eloquent\Builder;
  *     and prints `BLAZ861828284421` on the merchant's slip. Checking only the
  *     identifier we happened to keep leaves the other one unguarded.
  *
- * So the question is asked of EVERY identifier a row carries, against BOTH
- * tables, reading both the keyed column and the recorded set.
+ * So the question is asked of EVERY identifier a row carries, against ALL
+ * THREE tables that spend credits — orders, settlement payments and wallet
+ * top-ups (2026-08-24) — reading both the keyed column and the recorded set.
+ *
+ * A third way surfaced in the wallet round: **credits reconciled by hand**.
+ * An admin matching a settlement payment, or booking a transfer straight
+ * into a wallet, never saw a bank row, so no matched_trx_* was written and
+ * the credit stayed "unspent" for the verifiers — one bank transfer could
+ * settle a batch by hand and then fund a top-up automatically. So the
+ * merchant-typed / admin-typed reference is read too: `bank_ref` on a
+ * MATCHED settlement payment or top-up, and on every wallet movement,
+ * compared the way {@see TransferEvidence::sameReference} compares — letters
+ * and digits only, case-folded.
  *
  * This is still a courtesy check, not the guarantee: two workers reading the
- * same history in the same instant would both see a credit unclaimed. The
- * guarantee remains the unique index on `matched_trx_id`, which is why that
- * column keeps a single stable value per credit.
+ * same history in the same instant would both see a credit unclaimed. Within
+ * one table the unique index on `matched_trx_id` is the guarantee; across
+ * tables the verifiers serialise on {@see lock()} and ask again under it.
  */
 final readonly class BankCreditClaim
 {
     /**
      * @param  int|null  $exceptOrder  an order allowed to already hold it (itself)
      * @param  int|null  $exceptPayment  a settlement payment allowed to already hold it
+     * @param  int|null  $exceptTopUp  a wallet top-up allowed to already hold it
      */
-    public function taken(BankRow $row, ?int $exceptOrder = null, ?int $exceptPayment = null): bool
+    public function taken(BankRow $row, ?int $exceptOrder = null, ?int $exceptPayment = null, ?int $exceptTopUp = null): bool
     {
         $identifiers = $row->identifiers();
 
         if ($identifiers === []) {
             // A row we cannot name is a row we cannot prove unspent.
+            return true;
+        }
+
+        return $this->spent($identifiers, $exceptOrder, $exceptPayment, $exceptTopUp);
+    }
+
+    /**
+     * The same question for a reference that never came from a bank row —
+     * the one an admin types when matching a top-up by hand.
+     *
+     * @param  list<string>  $identifiers
+     */
+    public function spent(array $identifiers, ?int $exceptOrder = null, ?int $exceptPayment = null, ?int $exceptTopUp = null): bool
+    {
+        $identifiers = array_values(array_unique(array_filter(array_map('trim', $identifiers), static fn (string $v): bool => $v !== '')));
+
+        if ($identifiers === []) {
             return true;
         }
 
@@ -57,27 +90,88 @@ final readonly class BankCreditClaim
         }
 
         $payments = SettlementPayment::query();
-        $this->constrain($payments, $identifiers);
+        $this->constrain($payments, $identifiers, byReferenceWhen: 'matched');
 
         if ($exceptPayment !== null) {
             $payments->whereKeyNot($exceptPayment);
         }
 
-        return $payments->exists();
+        if ($payments->exists()) {
+            return true;
+        }
+
+        $topUps = WalletTopUp::query();
+        $this->constrain($topUps, $identifiers, byReferenceWhen: 'matched');
+
+        if ($exceptTopUp !== null) {
+            $topUps->whereKeyNot($exceptTopUp);
+        }
+
+        if ($topUps->exists()) {
+            return true;
+        }
+
+        // Money already IN a wallet under this reference — the admin
+        // top-up route, or a top-up claim credited earlier — regardless of
+        // whose wallet: a credit booked to merchant A must not fund B.
+        return WalletTransaction::query()
+            ->whereNotNull('bank_ref')
+            ->whereIn(self::normalised('bank_ref'), self::normalise($identifiers))
+            ->exists();
+    }
+
+    /**
+     * Serialise every verifier that wants to spend this credit. Postgres
+     * advisory locks are the one cross-table lock we have: taken inside the
+     * caller's transaction and released with it, keyed on the credit's
+     * stable identifier, so two workers matching the same transfer against
+     * two different tables cannot both read "unspent" and both commit —
+     * the second waits, then asks {@see taken()} again and finds it gone.
+     */
+    public function lock(BankRow $row): void
+    {
+        DB::statement('SELECT pg_advisory_xact_lock(hashtext(?))', [$row->key()]);
     }
 
     /**
      * @param  Builder<covariant \Illuminate\Database\Eloquent\Model>  $query
      * @param  list<string>  $identifiers
+     * @param  string|null  $byReferenceWhen  also treat the row's own bank_ref as spent, in this state
      */
-    private function constrain(Builder $query, array $identifiers): void
+    private function constrain(Builder $query, array $identifiers, ?string $byReferenceWhen = null): void
     {
-        $query->where(function (Builder $inner) use ($identifiers): void {
+        $query->where(function (Builder $inner) use ($identifiers, $byReferenceWhen): void {
             $inner->whereIn('matched_trx_id', $identifiers);
 
             foreach ($identifiers as $identifier) {
                 $inner->orWhereJsonContains('matched_trx_refs', $identifier);
             }
+
+            if ($byReferenceWhen !== null) {
+                $inner->orWhere(function (Builder $byRef) use ($identifiers, $byReferenceWhen): void {
+                    $byRef->where('state', $byReferenceWhen)
+                        ->whereNotNull('bank_ref')
+                        ->whereIn(self::normalised('bank_ref'), self::normalise($identifiers));
+                });
+            }
         });
+    }
+
+    /** The column, letters and digits only, upper-cased — in SQL. */
+    private static function normalised(string $column): Expression
+    {
+        return DB::raw(sprintf("regexp_replace(upper(%s), '[^A-Z0-9]', '', 'g')", $column));
+    }
+
+    /**
+     * @param  list<string>  $identifiers
+     * @return list<string>
+     */
+    private static function normalise(array $identifiers): array
+    {
+        return array_values(array_unique(array_filter(array_map(
+            static fn (string $value): string => (string) preg_replace('/[^A-Z0-9]/', '', mb_strtoupper($value)),
+            $identifiers,
+        ), static fn (string $v): bool => $v !== '')));
     }
 }

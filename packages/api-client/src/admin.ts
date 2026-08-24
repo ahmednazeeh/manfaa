@@ -14,9 +14,11 @@ import {
   PromotionSchema,
   SettlementPaymentSchema,
   SettlementSchema,
+  WalletTopUpSchema,
   type ClaimState,
   type PromotionStatus,
   type SettlementState,
+  type WalletTopUpState,
 } from "./resources";
 
 /**
@@ -204,6 +206,136 @@ export function fetchAdminSettlementSlip(
   return apiFetchBlob(adminSettlementSlipPath(settlementId, paymentId), {
     signal: options.signal,
   });
+}
+
+// ---------------------------------------------------------------------------
+// Wallet top-up queue (owner, 2026-08-24)
+// ---------------------------------------------------------------------------
+
+/**
+ * The admin side of merchant wallet top-ups: the fallback when the
+ * bank-history verifier could not find a merchant's transfer. Listing by
+ * state, the slip, and the two review outcomes — Match (credits the wallet
+ * through the same path the verifier uses) or Reject (with a reason the
+ * merchant reads verbatim). Any admin, like the settlement payment match —
+ * reconciling a transfer against a statement is queue work, not a
+ * superadmin lever. Each row carries `merchant` and `platform_bank_account`
+ * embedded.
+ */
+export const AdminWalletTopUpListResponseSchema = paginated(WalletTopUpSchema);
+export type AdminWalletTopUpListResponse = z.infer<
+  typeof AdminWalletTopUpListResponseSchema
+>;
+
+export const AdminWalletTopUpResponseSchema = dataWrapped(WalletTopUpSchema);
+export type AdminWalletTopUpResponse = z.infer<
+  typeof AdminWalletTopUpResponseSchema
+>;
+
+/** GET /api/admin/wallet-top-ups — optionally filtered by state, newest first, 25 per page. */
+export function listWalletTopUps(
+  params: { state?: WalletTopUpState; page?: number } = {},
+  options: RequestOptions = {},
+): Promise<AdminWalletTopUpListResponse> {
+  return apiFetch(
+    `/api/admin/wallet-top-ups${queryString({
+      state: params.state,
+      page: params.page,
+    })}`,
+    AdminWalletTopUpListResponseSchema,
+    { signal: options.signal },
+  );
+}
+
+export const MatchWalletTopUpRequestSchema = z.object({
+  /**
+   * The bank's reference for the transfer, as the admin reads it off the
+   * statement. REQUIRED when the merchant typed none (the row's `bank_ref`
+   * is null): the wallet movement's idempotency key is the reference, and a
+   * credit without one could be booked twice. Optional otherwise — the
+   * merchant's own reference is kept when both are present.
+   */
+  bank_ref: z.string().min(1).max(128).optional(),
+});
+export type MatchWalletTopUpRequest = z.infer<
+  typeof MatchWalletTopUpRequestSchema
+>;
+
+/**
+ * POST /api/admin/wallet-top-ups/{id}/match — confirms the transfer by hand
+ * and credits the wallet in the same transaction; returns the row as
+ * `matched` with its `wallet_transaction_id`. 422 when the merchant gave no
+ * reference and the body carries none; 409 when the claim is no longer
+ * pending (a poll matched it first, or it was already reviewed) or the
+ * reference is already booked.
+ */
+export function matchWalletTopUp(
+  id: number,
+  body: MatchWalletTopUpRequest = {},
+  options: RequestOptions = {},
+): Promise<AdminWalletTopUpResponse> {
+  return apiFetch(
+    `/api/admin/wallet-top-ups/${id}/match`,
+    AdminWalletTopUpResponseSchema,
+    { method: "POST", body, signal: options.signal },
+  );
+}
+
+export const RejectWalletTopUpRequestSchema = z.object({
+  /** Recorded as `rejected_reason`; the merchant reads it verbatim. */
+  reason: z.string().min(3).max(1000),
+});
+export type RejectWalletTopUpRequest = z.infer<
+  typeof RejectWalletTopUpRequestSchema
+>;
+
+/**
+ * POST /api/admin/wallet-top-ups/{id}/reject — the transfer could not be
+ * verified. Nothing is credited, and the claimed bank reference is released
+ * so the merchant can claim it again once sorted. 409 unless pending.
+ */
+export function rejectWalletTopUp(
+  id: number,
+  body: RejectWalletTopUpRequest,
+  options: RequestOptions = {},
+): Promise<AdminWalletTopUpResponse> {
+  return apiFetch(
+    `/api/admin/wallet-top-ups/${id}/reject`,
+    AdminWalletTopUpResponseSchema,
+    { method: "POST", body, signal: options.signal },
+  );
+}
+
+/**
+ * Path of the authenticated top-up slip stream — the ONLY way the uploaded
+ * slip is ever read (same private `slips` disk as settlement receipts).
+ */
+export function walletTopUpSlipPath(id: number): string {
+  return `/api/admin/wallet-top-ups/${id}/slip`;
+}
+
+/**
+ * Absolute URL of the same stream for an <img>/<iframe> src, exactly as
+ * `adminSettlementSlipUrl`: credentialed by the admin session cookie, served
+ * inline with the mime the BYTES declared plus `nosniff`, a 401 without the
+ * session. Prefer `fetchWalletTopUpSlip` when the screen must tell a missing
+ * slip (404) apart from an expired session.
+ */
+export function walletTopUpSlipUrl(id: number): string {
+  return `${apiBaseUrl()}${walletTopUpSlipPath(id)}`;
+}
+
+/**
+ * GET /api/admin/wallet-top-ups/{id}/slip as a Blob — 404 when the claim
+ * carries no slip or the stored file is gone. Wrap it in
+ * `URL.createObjectURL` for the preview and revoke it when the preview
+ * closes.
+ */
+export function fetchWalletTopUpSlip(
+  id: number,
+  options: RequestOptions = {},
+): Promise<Blob> {
+  return apiFetchBlob(walletTopUpSlipPath(id), { signal: options.signal });
 }
 
 // ---------------------------------------------------------------------------
@@ -1447,6 +1579,14 @@ export const PlatformSettingKeySchema = z.enum([
   "referral_enabled",
   "referral_reward_laari",
   "referral_spend_threshold_laari",
+  /**
+   * WALLET TOP-UPS (owner, 2026-08-24). The smallest bank transfer a
+   * merchant may claim into their wallet, integer laari — 10000 (MVR 100)
+   * by default, range 100–100000000. The merchant wallet payload reports it
+   * as `top_up_min_laari`. PATCHes as SUPERADMIN-only (403 otherwise): it
+   * shapes how much merchant money the platform holds in advance.
+   */
+  "wallet_top_up_min_laari",
 ]);
 export type PlatformSettingKey = z.infer<typeof PlatformSettingKeySchema>;
 

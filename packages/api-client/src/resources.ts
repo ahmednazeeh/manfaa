@@ -968,10 +968,15 @@ export type Settlement = z.infer<typeof SettlementSchema>;
 // ---------------------------------------------------------------------------
 
 /**
- * What moved the merchant wallet: `top_up` (bank transfer in), `settlement`
- * (wallet balance spent on a batch) and `settlement_credit` (an overpayment
- * or unallocated remainder parked for the next batch) — WalletFunding and
- * SettlementAllocator write no others.
+ * What moved the merchant wallet: `top_up` (a bank transfer in — since
+ * 2026-08-24 the merchant's own matched claim as well as an admin's manual
+ * credit), `settlement` (wallet balance spent on a batch, whether the
+ * merchant pressed the button or the hourly auto-settle run drew it — same
+ * path, same type) and `settlement_credit` (an overpayment or unallocated
+ * remainder parked for the next batch) — WalletFunding and
+ * SettlementAllocator write no others. Auto-settlement added NO new type:
+ * tell the two apart by the settlement's `funding_method` and its line
+ * events' `actor_type` (`system`), not by the movement.
  */
 export const WALLET_MOVEMENT_TYPES = [
   "top_up",
@@ -1000,10 +1005,163 @@ export const WalletMovementSchema = z.object({
 });
 export type WalletMovement = z.infer<typeof WalletMovementSchema>;
 
+// ---------------------------------------------------------------------------
+// Merchant wallet top-ups (owner, 2026-08-24 — reverses "wallet is not
+// pre-funding")
+// ---------------------------------------------------------------------------
+
+/**
+ * A top-up is a CLAIM, never money: `pending` until the transfer is found in
+ * the bank's own history (auto) or an admin matches it by hand, at which
+ * point it becomes `matched` and the wallet is credited — through the ONE
+ * crediting path — with `wallet_transaction_id` as the audit link. A
+ * rejected claim releases its bank reference so the merchant can claim it
+ * again once the problem is sorted.
+ */
+export const WalletTopUpStateSchema = z.enum(["pending", "matched", "rejected"]);
+export type WalletTopUpState = z.infer<typeof WalletTopUpStateSchema>;
+
+/** The platform account a top-up names, as both surfaces embed it. */
+export const WalletTopUpBankAccountSchema = z.object({
+  id: z.number().int(),
+  bank_name: z.string(),
+  account_no: z.string(),
+  account_name: z.string(),
+});
+export type WalletTopUpBankAccount = z.infer<typeof WalletTopUpBankAccountSchema>;
+
+/**
+ * A wallet top-up claim, as the merchant (on create) and the admin queue
+ * both read it. Deliberately the same shape as SettlementPaymentSchema where
+ * the columns coincide, so the two review screens can share components —
+ * with two differences worth knowing: there is no `slip_path` (branch on
+ * `has_slip`; admins stream the bytes through the top-up slip route), and
+ * the refusal reason is `rejected_reason`, not `rejection_reason`.
+ *
+ * `merchant` is present only on the admin queue; `platform_bank_account` is
+ * loaded on both, and null when the claim named no account.
+ */
+export const WalletTopUpSchema = z.object({
+  id: z.number().int(),
+  merchant_id: z.number().int(),
+  merchant: z
+    .object({
+      id: z.number().int(),
+      name: z.string(),
+      /** The store's registered payer name — what the bank may print. */
+      bank_account_name: z.string().nullable(),
+    })
+    .optional(),
+  amount_laari: z.number().int(),
+  amount_mvr: z.string(),
+  currency: z.string(),
+  /** What the MERCHANT typed. Often null — the slip carries the reference. */
+  bank_ref: z.string().nullable(),
+  platform_bank_account_id: z.number().int().nullable(),
+  platform_bank_account: WalletTopUpBankAccountSchema.nullable().optional(),
+  state: WalletTopUpStateSchema,
+  has_slip: z.boolean(),
+  /** Mime derived from the uploaded BYTES, never the client's Content-Type. */
+  slip_mime: z.string().nullable(),
+  slip_size_bytes: z.number().int().nullable(),
+  uploaded_by: z.number().int().nullable(),
+
+  /**
+   * What the BANK said, once matched — separate from `bank_ref` on purpose:
+   * "the merchant claimed this" and "we found this" are different facts.
+   * `matched_trx_id` is unique across all three claim tables (settlement
+   * payments, orders, top-ups), so one bank credit can never fund two
+   * things; `matched_by_rule` is the top of the ladder settlement payments
+   * use — `reference` or `receipt_reference` ONLY. The name rungs
+   * (`receipt_name`, `receipt_name_fuzzy`, `name`) never auto-credit a
+   * top-up: the merchant chooses the amount and writes the slip, so a name
+   * is not evidence here. Unreferenced transfers wait for the admin queue.
+   */
+  auto_matched: z.boolean(),
+  matched_trx_id: z.string().nullable(),
+  matched_trx_refs: z.array(z.string()),
+  matched_payer_name: z.string().nullable(),
+  matched_score: z.number().int().nullable(),
+  matched_by_rule: z.string().nullable(),
+  matched_by: z.number().int().nullable(),
+  matched_at: z.string().nullable(),
+  /** The wallet movement the match produced — the audit link from claim to money. */
+  wallet_transaction_id: z.number().int().nullable(),
+  /**
+   * The bank watch as it stands on the ROW: the poll runs until this
+   * instant (null once decided), and `poll_attempts` counts its looks.
+   * 0 attempts with the window open means no job was ever dispatched —
+   * auto-verify was off at claim time — so nothing is watching.
+   */
+  poll_until: z.string().nullable(),
+  poll_attempts: z.number().int(),
+  rejected_by: z.number().int().nullable(),
+  rejected_at: z.string().nullable(),
+  /** Why an admin refused the claim — the merchant reads this verbatim. */
+  rejected_reason: z.string().nullable(),
+  created_at: z.string(),
+});
+export type WalletTopUp = z.infer<typeof WalletTopUpSchema>;
+
+/**
+ * A claim still in flight, as the wallet payload lists it — money the
+ * merchant has sent that is not yet balance, so the wallet screen can say
+ * "MVR 500 to BML, waiting". Only `pending` rows appear here; the full row
+ * (WalletTopUpSchema) is what the create call answers with.
+ */
+export const WalletPendingTopUpSchema = z.object({
+  id: z.number().int(),
+  amount_laari: z.number().int(),
+  amount_mvr: z.string(),
+  bank_ref: z.string().nullable(),
+  bank: WalletTopUpBankAccountSchema.nullable(),
+  /**
+   * `pending` while the bank or an admin is still to decide; `rejected`
+   * rows stay on the list for a week after the decision so the merchant
+   * reads the reason instead of watching the claim vanish.
+   */
+  state: WalletTopUpStateSchema,
+  /** Why an admin refused the claim — shown verbatim; null unless rejected. */
+  rejected_reason: z.string().nullable(),
+  rejected_at: z.string().nullable(),
+  created_at: z.string(),
+});
+export type WalletPendingTopUp = z.infer<typeof WalletPendingTopUpSchema>;
+
 export const WalletSchema = z.object({
   balance_laari: z.number().int(),
   balance_mvr: z.string(),
   currency: z.string(),
+  /**
+   * The smallest transfer the merchant may claim as a top-up, integer laari
+   * (the platform's `wallet_top_up_min_laari`, MVR 100 by default). Read
+   * live so an admin raising it moves the form at once — render it as the
+   * amount field's floor and refuse below it before the server does (422
+   * `top_up_below_minimum`).
+   */
+  top_up_min_laari: z.number().int(),
+  /**
+   * Whether the hourly run settles validated cashback from this balance,
+   * oldest first, as much as fits (owner, 2026-08-24; default ON). READ here
+   * because this is where the merchant sees the money; WRITTEN only through
+   * `updateMerchantPreferences({ auto_settle_from_wallet })` — there is no
+   * wallet-scoped write route.
+   */
+  auto_settle_from_wallet: z.boolean(),
+  /**
+   * Where a top-up may be sent: the platform's active accounts, default
+   * first — the same list a settlement's `payment_instructions.bank_accounts`
+   * carries, published here so a store with nothing payable and no
+   * settlement history can still fund its wallet. Pass the chosen `id` as
+   * `platform_bank_account_id`. Empty means the platform has configured no
+   * account yet — say so, never invent one.
+   */
+  bank_accounts: z.array(SettlementDestinationSchema),
+  /**
+   * Present on the merchant wallet read; newest first. Pending claims plus
+   * those rejected in the last 7 days (see WalletPendingTopUpSchema).
+   */
+  pending_top_ups: z.array(WalletPendingTopUpSchema).optional(),
   transactions: z.array(WalletMovementSchema).optional(),
 });
 export type Wallet = z.infer<typeof WalletSchema>;

@@ -32,6 +32,7 @@ use App\Http\Controllers\Merchant\SettlementController;
 use App\Http\Controllers\Merchant\SetupController;
 use App\Http\Controllers\Merchant\StaffController;
 use App\Http\Controllers\Merchant\TransactionCorrectionController;
+use App\Http\Controllers\Merchant\WalletTopUpController;
 use App\Http\Controllers\Mobile\ConfigController;
 use App\Http\Controllers\Mobile\CreditController;
 use App\Http\Controllers\Mobile\CustomerOtpController;
@@ -499,6 +500,13 @@ Route::prefix('mobile/v1')
 
                 Route::post('settlements/wallet', [SettlementController::class, 'walletSettle'])
                     ->middleware(['merchant.can:wallet.settle', EnsureMerchantApproved::class]);
+
+                // Funding the wallet by bank transfer (owner, 2026-08-24) —
+                // the EXACT web route (routes/api/settlements.php), same
+                // controller, same gate: multipart account + slip +
+                // optional reference, creating a pending claim.
+                Route::post('wallet/top-ups', [WalletTopUpController::class, 'store'])
+                    ->middleware(['merchant.can:wallet.top_up', EnsureMerchantApproved::class, 'throttle:5,1']);
 
                 // A further transfer against a batch still owed money (§7
                 // partial payments, or an admin-built fallback batch) — also

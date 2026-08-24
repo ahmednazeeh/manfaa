@@ -24,6 +24,7 @@ import {
   TransactionSchema,
   type PromotionStatus,
   WalletSchema,
+  WalletTopUpSchema,
 } from "./resources";
 
 /**
@@ -55,6 +56,16 @@ import {
  * receipt cannot be created. Settlement MUTATIONS need `settlements.create`
  * plus an approved store; the preview and the reads carry their own narrower
  * permissions (`settlements.preview`, `settlements.view`).
+ *
+ * The wallet is PRE-FUNDABLE since 2026-08-24 (owner decision, reversing
+ * the earlier "wallet is not pre-funding" rule): a merchant tops it up by
+ * bank transfer through the SAME receipt-first act — pick the platform
+ * account, transfer, upload the slip, optionally type the bank reference —
+ * and the claim is auto-matched against bank history by the same rules, an
+ * admin queue as fallback (`createMerchantWalletTopUp`, `wallet.top_up`).
+ * When the wallet holds balance, validated cashback auto-settles from it
+ * hourly, oldest first, as much as fits, behind the `auto_settle_from_wallet`
+ * preference (default ON) — the same settlement path the wallet button uses.
  */
 
 interface RequestOptions {
@@ -419,7 +430,7 @@ export const SETTLEMENT_SLIP_ACCEPT =
  *    submit them. The body's `permission` names the slug that is missing
  *    (`settlements.create`, `settlements.receipt_add`), which is the whole
  *    reason the code is no longer a tier: there is no tier to name;
- *  - `store_not_approved` (403) — the store has not passed review.
+ *  - `store_not_approved` (409) — the store has not passed review.
  *
  * A 422 with no `code` is ordinary validation (an ineligible transaction in
  * the selection, nothing to settle); a 409 with no `code` is a state
@@ -528,6 +539,116 @@ export function getMerchantWallet(
   return apiFetch("/api/merchant/wallet", MerchantWalletResponseSchema, {
     signal: options.signal,
   });
+}
+
+// ---------------------------------------------------------------------------
+// POST /api/merchant/wallet/top-ups — `wallet.top_up`
+// ---------------------------------------------------------------------------
+
+/**
+ * A wallet top-up claim (owner, 2026-08-24): the same receipt half a
+ * settlement submission carries, minus the selection — what was
+ * transferred, WHICH platform account it went to, the slip, and the bank's
+ * reference if the merchant has it. The slip is read by its BYTES like a
+ * settlement slip (JPEG, PNG, WebP or PDF, max 5 MB — reuse
+ * SETTLEMENT_SLIP_MAX_BYTES / SETTLEMENT_SLIP_ACCEPT; the disk and the
+ * inspector are the same).
+ */
+export interface WalletTopUpInput {
+  /**
+   * Integer laari transferred, at least the wallet payload's
+   * `top_up_min_laari` (MVR 100 by default) — below it the server answers a
+   * plain 422 validation error on the `amount` field (`errors.amount`,
+   * NO `code`): the floor is enforced by the request rule before the
+   * domain, so read `errors.amount` and say the minimum yourself.
+   */
+  amount: number;
+  /**
+   * WHICH platform account the transfer went to — an `id` from the wallet
+   * payload's `bank_accounts` (`getMerchantWallet().data.bank_accounts`;
+   * the same active accounts a settlement's `payment_instructions` names).
+   * REQUIRED here, unlike a settlement receipt: the verifier reads that
+   * account's history to find the transfer, so a claim without a
+   * destination could only ever be matched by hand.
+   */
+  platform_bank_account_id: number;
+  slip: File | Blob;
+  /**
+   * The bank's reference for the transfer. Optional — the slip usually
+   * carries it and OCR reads it — but when given it is the strongest
+   * evidence, and it is unique per merchant across non-rejected claims.
+   */
+  bank_ref?: string;
+}
+
+/**
+ * Refusal codes on ApiError bodies for the top-up claim (read them with
+ * `apiErrorCode`):
+ *  - `slip_too_large` (422) / `slip_unsupported_type` (422) — as for a
+ *    settlement slip;
+ *  - `duplicate_bank_ref` (409) — that reference is already claimed by a
+ *    pending or matched top-up, already on one of this store's settlement
+ *    receipts, or already booked into the wallet by an admin; re-claiming
+ *    it would credit the same cash twice;
+ *  - `too_many_pending_top_ups` (409) — the store already has 3 claims
+ *    waiting on the bank or an admin; those must be decided first;
+ *  - `permission_required` (403) — the body's `permission` names
+ *    `wallet.top_up`;
+ *  - `store_not_approved` (409) — the store has not passed review;
+ *  - 429 — more than 5 claims in a minute.
+ *
+ * A 422 with no `code` is ordinary validation: an amount under
+ * `top_up_min_laari` (`errors.amount`), an inactive or unknown
+ * `platform_bank_account_id`, a missing slip.
+ */
+export const WalletTopUpErrorCodeSchema = z.enum([
+  "slip_too_large",
+  "slip_unsupported_type",
+  "duplicate_bank_ref",
+  "too_many_pending_top_ups",
+  "permission_required",
+  "store_not_approved",
+]);
+export type WalletTopUpErrorCode = z.infer<typeof WalletTopUpErrorCodeSchema>;
+
+export const MerchantWalletTopUpResponseSchema = dataWrapped(WalletTopUpSchema);
+export type MerchantWalletTopUpResponse = z.infer<
+  typeof MerchantWalletTopUpResponseSchema
+>;
+
+function topUpForm(input: WalletTopUpInput): FormData {
+  const form = new FormData();
+  form.append("amount", String(input.amount));
+  form.append(
+    "platform_bank_account_id",
+    String(input.platform_bank_account_id),
+  );
+  if (input.bank_ref !== undefined && input.bank_ref.trim() !== "") {
+    form.append("bank_ref", input.bank_ref);
+  }
+  form.append("slip", input.slip);
+  return form;
+}
+
+/**
+ * POST /api/merchant/wallet/top-ups — multipart, mirroring the settlement
+ * receipt submission. Creates a `pending` claim (201, with
+ * `platform_bank_account` embedded) and starts watching the named account's
+ * bank history; the wallet is credited only when the transfer is found
+ * (auto) or an admin matches it, and the claim then reads `matched` with a
+ * `wallet_transaction_id`. Until then it appears in the wallet payload's
+ * `pending_top_ups`. `wallet.top_up`, approved store only. Also mounted for
+ * the app at /api/mobile/v1/merchant/wallet/top-ups.
+ */
+export function createMerchantWalletTopUp(
+  input: WalletTopUpInput,
+  options: RequestOptions = {},
+): Promise<MerchantWalletTopUpResponse> {
+  return apiFetch(
+    "/api/merchant/wallet/top-ups",
+    MerchantWalletTopUpResponseSchema,
+    { method: "POST", body: topUpForm(input), signal: options.signal },
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -1452,6 +1573,10 @@ export const MERCHANT_PERMISSIONS = [
   "settlements.receipt_add",
   "wallet.view",
   "wallet.settle",
+  // Claiming a bank transfer INTO the wallet (owner, 2026-08-24). Granted
+  // to every role that held wallet.settle when it landed; in the Manager
+  // preset; owners hold it through the wildcard.
+  "wallet.top_up",
   "profile.view",
   "profile.edit",
   "branding.update",
@@ -1842,13 +1967,21 @@ export function updateMerchantStaff(
 // ---------------------------------------------------------------------------
 
 /**
- * Operational preferences: how settlements are funded (§7 — wallet is a
- * funding method, not pre-funding) and the two per-merchant earning knobs.
- * Both knobs apply to FUTURE credits only — terms freeze onto each
- * transaction at occurred_at (§4), so history never moves.
+ * Operational preferences: how settlements are funded (§7), whether the
+ * hourly run may settle from the wallet balance, and the two per-merchant
+ * earning knobs. Both knobs apply to FUTURE credits only — terms freeze
+ * onto each transaction at occurred_at (§4), so history never moves.
  */
 export const MerchantPreferencesSchema = z.object({
   settlement_method: SettlementFundingMethodSchema,
+  /**
+   * Whether the hourly run settles validated cashback from the wallet
+   * balance, oldest first, as much as fits (owner, 2026-08-24; default
+   * ON). This PATCH is its ONE write path; the wallet payload
+   * (`getMerchantWallet().data.auto_settle_from_wallet`) only reads it, so a
+   * toggle rendered on the wallet screen writes here.
+   */
+  auto_settle_from_wallet: z.boolean(),
   /** Integer laari. */
   min_eligible_laari: z.number().int(),
   validation_window_days: z.number().int(),
@@ -1870,6 +2003,8 @@ export type MerchantPreferencesResponse = z.infer<
 
 export const UpdateMerchantPreferencesRequestSchema = z.object({
   settlement_method: SettlementFundingMethodSchema.optional(),
+  /** The wallet screen's auto-settle toggle; see MerchantPreferencesSchema. */
+  auto_settle_from_wallet: z.boolean().optional(),
   /** Integer laari; platform bounds 0–100000 (MVR 0–1,000). */
   min_eligible_laari: z.number().int().min(0).max(100000).optional(),
   /**

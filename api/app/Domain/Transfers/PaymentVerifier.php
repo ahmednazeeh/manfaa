@@ -223,6 +223,14 @@ final readonly class PaymentVerifier
                 return;
             }
 
+            // Cross-table: serialise on the credit itself, then ask again —
+            // a settlement payment or wallet top-up may have spent it since.
+            $this->claims->lock($row);
+
+            if ($this->claims->taken($row, exceptOrder: (int) $locked->getKey())) {
+                return;
+            }
+
             $locked->forceFill([
                 'payment_state' => 'verified',
                 'verified_at' => CarbonImmutable::now(),

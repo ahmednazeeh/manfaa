@@ -35,6 +35,7 @@ const _permissions = [
   'settlements.receipt_add',
   'wallet.view',
   'wallet.settle',
+  'wallet.top_up',
   'credits.create',
   'credits.custom_rate',
   'transactions.view',
@@ -645,6 +646,7 @@ class _ShotApi extends MerchantApi {
     String? settlementMethod,
     int? minEligibleLaari,
     int? validationWindowDays,
+    bool? autoSettleFromWallet,
   }) async => MerchantPreferences.fromJson(const {
     'settlement_method': 'bank',
     'min_eligible_laari': 10000,
@@ -1225,6 +1227,19 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  /// The wallet top-up claim (owner, 2026-08-24): the wallet's Top up CTA,
+  /// an amount typed, and — with two platform banks nothing preselected —
+  /// BML picked so the shot shows the chosen tile and the details below.
+  Future<void> driveTopUp(WidgetTester tester) async {
+    await driveWallet(tester);
+    await tester.tap(find.text('Top up'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const Key('top-up-amount')), '500');
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('BML'));
+    await tester.pumpAndSettle();
+  }
+
   testWidgets(
     'dashboard light',
     (t) => shot(t, 'dashboard_light', Brightness.light),
@@ -1311,38 +1326,90 @@ void main() {
       },
     ),
   );
+  // The pre-fundable wallet (owner, 2026-08-24): a claim still verifying,
+  // the auto-settle switch, and the Top up CTA in the hero.
+  const walletFixture = {
+    'balance_laari': 8175,
+    'currency': 'MVR',
+    'top_up_min_laari': 10000,
+    'auto_settle_from_wallet': true,
+    // BOTH platform banks, off the wallet payload itself: the top-up
+    // screen's picker (nothing preselected) exists only with a choice.
+    'bank_accounts': [
+      {
+        'id': 1,
+        'bank_name': 'bml',
+        'account_no': '7730000123456',
+        'account_name': 'Manfaa Pvt Ltd',
+        'currency': 'MVR',
+        'is_primary': true,
+      },
+      {
+        'id': 2,
+        'bank_name': 'mib',
+        'account_no': '9001400987654',
+        'account_name': 'Manfaa Pvt Ltd',
+        'currency': 'MVR',
+        'is_primary': false,
+      },
+    ],
+    'pending_top_ups': [
+      {
+        'id': 3,
+        'amount_laari': 50000,
+        'amount_mvr': 'MVR 500.00',
+        'bank_ref': 'FT99877',
+        'bank': {
+          'id': 1,
+          'bank_name': 'bml',
+          'account_no': '7730000123456',
+          'account_name': 'Manfaa Pvt Ltd',
+        },
+        'state': 'pending',
+        'created_at': '2026-08-16T04:30:00+00:00',
+      },
+    ],
+    'transactions': [
+      {
+        'id': 9,
+        'amount_laari': -11825,
+        'balance_after_laari': 8175,
+        'type': 'settlement',
+        'reference_type': 'settlement',
+        'reference_id': 41,
+        'description': 'Settlement ST-2026-00041',
+        'created_at': '2026-08-15T14:12:00+05:00',
+      },
+      {
+        'id': 8,
+        'amount_laari': 20000,
+        'balance_after_laari': 20000,
+        'type': 'top_up',
+        'reference_type': null,
+        'reference_id': null,
+        'description': 'Bank top-up (FT99231)',
+        'created_at': '2026-08-10T10:00:00+05:00',
+      },
+    ],
+  };
+
+  testWidgets(
+    'wallet top-up light',
+    (t) => shot(
+      t,
+      'wallet_top_up_light',
+      Brightness.light,
+      walletJson: walletFixture,
+      drive: driveTopUp,
+    ),
+  );
   testWidgets(
     'wallet light',
     (t) => shot(
       t,
       'wallet_light',
       Brightness.light,
-      walletJson: const {
-        'balance_laari': 8175,
-        'currency': 'MVR',
-        'transactions': [
-          {
-            'id': 9,
-            'amount_laari': -11825,
-            'balance_after_laari': 8175,
-            'type': 'settlement',
-            'reference_type': 'settlement',
-            'reference_id': 41,
-            'description': 'Settlement ST-2026-00041',
-            'created_at': '2026-08-15T14:12:00+05:00',
-          },
-          {
-            'id': 8,
-            'amount_laari': 20000,
-            'balance_after_laari': 20000,
-            'type': 'top_up',
-            'reference_type': null,
-            'reference_id': null,
-            'description': 'Bank top-up (FT99231)',
-            'created_at': '2026-08-10T10:00:00+05:00',
-          },
-        ],
-      },
+      walletJson: walletFixture,
       drive: driveWallet,
     ),
   );

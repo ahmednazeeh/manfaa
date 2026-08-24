@@ -1,4 +1,8 @@
-import { adminSettlementSlipPath, apiFetchBlob } from '@manfaa/api-client';
+import {
+  adminSettlementSlipPath,
+  apiFetchBlob,
+  walletTopUpSlipPath,
+} from '@manfaa/api-client';
 
 /** A fetched slip held in memory. `url` is a blob: URL owned by the caller. */
 export interface SlipObject {
@@ -10,8 +14,8 @@ export interface SlipObject {
 }
 
 /**
- * Fetches a merchant's uploaded receipt slip through the authorised admin
- * route and hands back an in-memory object URL.
+ * Fetches an uploaded slip through an authorised admin stream route and
+ * hands back an in-memory object URL.
  *
  * The slip disk is private — no URL, not served — so the bytes only ever
  * arrive over a credentialed request against the admin guard. Fetching rather
@@ -19,22 +23,21 @@ export interface SlipObject {
  * file, or an expired session then surfaces as a real message instead of a
  * broken-image icon.
  *
+ * `path` is the API path of the stream — one of the two helpers below builds
+ * it, so a screen never spells a slip route itself.
+ *
  * The caller owns the returned url and MUST revoke it (URL.revokeObjectURL)
  * when the preview unmounts.
  */
 export async function fetchSlipObject(
-  settlementId: number,
-  paymentId: number,
+  path: string,
   signal?: AbortSignal,
 ): Promise<SlipObject> {
-  const blob = await apiFetchBlob(
-    adminSettlementSlipPath(settlementId, paymentId),
-    {
-      signal,
-      // JSON first so Laravel answers failures as JSON, not an HTML error page.
-      headers: { Accept: 'application/json, image/*, application/pdf' },
-    },
-  );
+  const blob = await apiFetchBlob(path, {
+    signal,
+    // JSON first so Laravel answers failures as JSON, not an HTML error page.
+    headers: { Accept: 'application/json, image/*, application/pdf' },
+  });
 
   const mime = blob.type === '' ? 'application/octet-stream' : blob.type;
 
@@ -44,6 +47,19 @@ export async function fetchSlipObject(
     isImage: mime.startsWith('image/'),
     isPdf: mime === 'application/pdf',
   };
+}
+
+/** The stream path of a settlement payment's slip. */
+export function settlementSlipPath(
+  settlementId: number,
+  paymentId: number,
+): string {
+  return adminSettlementSlipPath(settlementId, paymentId);
+}
+
+/** The stream path of a merchant wallet top-up's slip. */
+export function topUpSlipPath(topUpId: number): string {
+  return walletTopUpSlipPath(topUpId);
 }
 
 /** "412 KB" / "1.2 MB" for a stored slip size; em dash when unknown. */

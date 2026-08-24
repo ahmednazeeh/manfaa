@@ -47,24 +47,6 @@ export function PaymentInstructions({
 }) {
   const { t } = useTranslation();
 
-  const choices = bankAccounts ?? [];
-  // A choice is only offered when there is genuinely one to make. With a
-  // single configured account a picker is a control that can only be set to
-  // what it already says.
-  const choosable = choices.length > 1 && onSelectAccount !== undefined;
-  const chosen =
-    choices.find((candidate) => candidate.id === selectedAccountId) ?? null;
-
-  // With a real choice on the table, the details stay hidden until it is
-  // made. Showing one bank's account number under an unanswered question is
-  // how somebody copies it, pays, and only then notices the other option —
-  // and a transfer to the wrong bank is a fee and a day they cannot undo.
-  const account = needsConfiguration
-    ? null
-    : choosable
-      ? chosen
-      : (chosen ?? bankAccount);
-
   return (
     <div className="flex flex-col gap-5">
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
@@ -108,122 +90,171 @@ export function PaymentInstructions({
         )}
       </div>
 
-      {account !== null || (choosable && !needsConfiguration) ? (
-        <div className="rounded-md border border-border p-4">
-          <div className="mb-3 text-xs uppercase text-muted-foreground">
-            {t('settlement.transferTo')}
-          </div>
-
-          {choosable && (
-            <div className="mb-4 flex flex-col gap-2">
-              <span className="text-xs text-muted-foreground">
-                {t('settlement.chooseBank')}
-              </span>
-              <div className="grid gap-2 sm:grid-cols-2">
-                {choices.map((candidate) => {
-                  const active = candidate.id === chosen?.id;
-                  return (
-                    <button
-                      key={candidate.id}
-                      type="button"
-                      onClick={() => onSelectAccount?.(candidate.id)}
-                      aria-pressed={active}
-                      className={cn(
-                        'flex items-center gap-3 rounded-md border p-3 text-start transition-colors',
-                        active
-                          ? 'border-primary bg-primary/5'
-                          : 'border-border hover:border-primary/40',
-                      )}
-                    >
-                      <BankLogo bank={candidate.bank_name} />
-                      <span className="flex min-w-0 flex-col">
-                        <span className="truncate text-sm font-medium text-mono">
-                          {bankLabel(candidate.bank_name)}
-                        </span>
-                        <span className="truncate text-xs text-muted-foreground" dir="ltr">
-                          {candidate.account_no}
-                        </span>
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-              <span className="text-xs text-muted-foreground">
-                {t('settlement.chooseBankHint')}
-              </span>
-            </div>
-          )}
-          {account === null ? (
-            <p className="text-sm text-muted-foreground">
-              {t('settlement.chooseBankFirst')}
-            </p>
-          ) : (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <div className="flex flex-col gap-1">
-              <span className="text-xs text-muted-foreground">
-                {t('settlement.bankName')}
-              </span>
-              <div className="flex items-center gap-2">
-                <BankLabel
-                  bank={account.bank_name}
-                  className="text-sm font-medium text-mono"
-                />
-                <CopyButton
-                  value={bankLabel(account.bank_name)}
-                  label={t('settlement.copyBankName')}
-                />
-              </div>
-            </div>
-            <div className="flex flex-col gap-1">
-              <span className="text-xs text-muted-foreground">
-                {t('settlement.accountNo')}
-              </span>
-              <div className="flex items-center gap-2">
-                <code
-                  dir="ltr"
-                  className="rounded-md bg-muted px-2.5 py-1.5 text-sm font-semibold text-mono"
-                >
-                  {account.account_no}
-                </code>
-                <CopyButton
-                  value={account.account_no}
-                  label={t('settlement.copyAccountNo')}
-                />
-              </div>
-            </div>
-            <div className="flex flex-col gap-1">
-              <span className="text-xs text-muted-foreground">
-                {t('settlement.accountName')}
-              </span>
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-medium text-mono" dir="ltr">
-                  {account.account_name}
-                </span>
-                <CopyButton
-                  value={account.account_name}
-                  label={t('settlement.copyAccountName')}
-                />
-              </div>
-            </div>
-          </div>
-          )}
-        </div>
-      ) : (
-        <Alert variant="warning" appearance="light">
-          <AlertIcon>
-            <TriangleAlert />
-          </AlertIcon>
-          <AlertContent>
-            <AlertTitle>{t('settlement.noAccountTitle')}</AlertTitle>
-            <AlertDescription>{t('settlement.noAccountBody')}</AlertDescription>
-          </AlertContent>
-        </Alert>
-      )}
+      <TransferDestination
+        bankAccount={bankAccount}
+        bankAccounts={bankAccounts}
+        selectedAccountId={selectedAccountId}
+        onSelectAccount={onSelectAccount}
+        needsConfiguration={needsConfiguration}
+      />
 
       <p className="flex items-start gap-2 text-sm text-secondary-foreground">
         <Landmark className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
         {t('settlement.reviewLead')}
       </p>
     </div>
+  );
+}
+
+/**
+ * The "Transfer to" box alone: the bank choice (when there is one to make)
+ * and the chosen account's details, each with its copy button. Shared by
+ * the settlement instructions above and the wallet top-up dialog, which
+ * sends money to the very same accounts — one picker, not two.
+ */
+export function TransferDestination({
+  bankAccount,
+  bankAccounts,
+  selectedAccountId,
+  onSelectAccount,
+  needsConfiguration,
+}: {
+  bankAccount: PlatformBankAccount | null;
+  /** Every account the merchant may send to — one per bank. */
+  bankAccounts?: SettlementDestination[];
+  selectedAccountId?: number | null;
+  onSelectAccount?: (id: number) => void;
+  needsConfiguration: boolean;
+}) {
+  const { t } = useTranslation();
+
+  const choices = bankAccounts ?? [];
+  // A choice is only offered when there is genuinely one to make. With a
+  // single configured account a picker is a control that can only be set to
+  // what it already says.
+  const choosable = choices.length > 1 && onSelectAccount !== undefined;
+  const chosen =
+    choices.find((candidate) => candidate.id === selectedAccountId) ?? null;
+
+  // With a real choice on the table, the details stay hidden until it is
+  // made. Showing one bank's account number under an unanswered question is
+  // how somebody copies it, pays, and only then notices the other option —
+  // and a transfer to the wrong bank is a fee and a day they cannot undo.
+  const account = needsConfiguration
+    ? null
+    : choosable
+      ? chosen
+      : (chosen ?? bankAccount);
+
+  return account !== null || (choosable && !needsConfiguration) ? (
+    <div className="rounded-md border border-border p-4">
+      <div className="mb-3 text-xs uppercase text-muted-foreground">
+        {t('settlement.transferTo')}
+      </div>
+
+      {choosable && (
+        <div className="mb-4 flex flex-col gap-2">
+          <span className="text-xs text-muted-foreground">
+            {t('settlement.chooseBank')}
+          </span>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {choices.map((candidate) => {
+              const active = candidate.id === chosen?.id;
+              return (
+                <button
+                  key={candidate.id}
+                  type="button"
+                  onClick={() => onSelectAccount?.(candidate.id)}
+                  aria-pressed={active}
+                  className={cn(
+                    'flex items-center gap-3 rounded-md border p-3 text-start transition-colors',
+                    active
+                      ? 'border-primary bg-primary/5'
+                      : 'border-border hover:border-primary/40',
+                  )}
+                >
+                  <BankLogo bank={candidate.bank_name} />
+                  <span className="flex min-w-0 flex-col">
+                    <span className="truncate text-sm font-medium text-mono">
+                      {bankLabel(candidate.bank_name)}
+                    </span>
+                    <span className="truncate text-xs text-muted-foreground" dir="ltr">
+                      {candidate.account_no}
+                    </span>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+          <span className="text-xs text-muted-foreground">
+            {t('settlement.chooseBankHint')}
+          </span>
+        </div>
+      )}
+      {account === null ? (
+        <p className="text-sm text-muted-foreground">
+          {t('settlement.chooseBankFirst')}
+        </p>
+      ) : (
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <div className="flex flex-col gap-1">
+          <span className="text-xs text-muted-foreground">
+            {t('settlement.bankName')}
+          </span>
+          <div className="flex items-center gap-2">
+            <BankLabel
+              bank={account.bank_name}
+              className="text-sm font-medium text-mono"
+            />
+            <CopyButton
+              value={bankLabel(account.bank_name)}
+              label={t('settlement.copyBankName')}
+            />
+          </div>
+        </div>
+        <div className="flex flex-col gap-1">
+          <span className="text-xs text-muted-foreground">
+            {t('settlement.accountNo')}
+          </span>
+          <div className="flex items-center gap-2">
+            <code
+              dir="ltr"
+              className="rounded-md bg-muted px-2.5 py-1.5 text-sm font-semibold text-mono"
+            >
+              {account.account_no}
+            </code>
+            <CopyButton
+              value={account.account_no}
+              label={t('settlement.copyAccountNo')}
+            />
+          </div>
+        </div>
+        <div className="flex flex-col gap-1">
+          <span className="text-xs text-muted-foreground">
+            {t('settlement.accountName')}
+          </span>
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium text-mono" dir="ltr">
+              {account.account_name}
+            </span>
+            <CopyButton
+              value={account.account_name}
+              label={t('settlement.copyAccountName')}
+            />
+          </div>
+        </div>
+      </div>
+      )}
+    </div>
+  ) : (
+    <Alert variant="warning" appearance="light">
+      <AlertIcon>
+        <TriangleAlert />
+      </AlertIcon>
+      <AlertContent>
+        <AlertTitle>{t('settlement.noAccountTitle')}</AlertTitle>
+        <AlertDescription>{t('settlement.noAccountBody')}</AlertDescription>
+      </AlertContent>
+    </Alert>
   );
 }

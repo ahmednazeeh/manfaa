@@ -24,6 +24,10 @@ class MerchantPreferencesResource extends JsonResource
     {
         return [
             'settlement_method' => $this->settlement_method,
+            // The hourly run may settle validated cashback from the wallet
+            // balance, oldest first (owner, 2026-08-24). Read here and on
+            // the wallet payload; written ONLY through this endpoint.
+            'auto_settle_from_wallet' => (bool) $this->auto_settle_from_wallet,
             'min_eligible_laari' => (int) $this->min_eligible_laari,
             'validation_window_days' => (int) $this->validation_window_days,
             // The admin-governed ceiling the PATCH validates against (§11:

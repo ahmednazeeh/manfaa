@@ -6,6 +6,7 @@ import type {
   SettlementPaymentState,
   SettlementState,
   TransactionState,
+  WalletTopUpState,
 } from '@manfaa/api-client';
 import {
   customerStatusLabel,
@@ -16,6 +17,7 @@ import {
   settlementPaymentStateLabel,
   settlementStateLabel,
   transactionStateLabel,
+  walletTopUpStateLabel,
 } from '@/lib/labels';
 import { Badge, BadgeDot, type BadgeProps } from '@/components/ui/badge';
 
@@ -71,6 +73,22 @@ export function PaymentStateBadge({
     <StateChip
       label={settlementPaymentStateLabel(state)}
       style={{ variant: PAYMENT_VARIANTS[state], appearance: 'light' }}
+    />
+  );
+}
+
+/** Same colours as a settlement payment: the two queues are one job. */
+const TOP_UP_VARIANTS: Record<WalletTopUpState, BadgeProps['variant']> = {
+  pending: 'warning',
+  matched: 'success',
+  rejected: 'destructive',
+};
+
+export function TopUpStateBadge({ state }: { state: WalletTopUpState }) {
+  return (
+    <StateChip
+      label={walletTopUpStateLabel(state)}
+      style={{ variant: TOP_UP_VARIANTS[state], appearance: 'light' }}
     />
   );
 }

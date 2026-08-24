@@ -87,6 +87,9 @@ final class RolePresetService
             Permission::SettlementsCreate,
             Permission::SettlementsReceiptAdd,
             Permission::WalletSettle,
+            // Funding the wallet sits with spending it: the manager who
+            // submits settlements is the one who transfers the money.
+            Permission::WalletTopUp,
 
             Permission::ProfileView,
 

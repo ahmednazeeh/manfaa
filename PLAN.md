@@ -19,7 +19,7 @@ Settled. Treat as constraints, not proposals.
 | Eligible amount | **The merchant supplies it.** They POST the eligible invoice total plus the invoice number. How they derive it — tax, service charge, excluded categories — is their policy, defined in their agreement, not modelled by the API. |
 | Platform fee | Tiered on the cashback rate (see §4). Merchant pays cashback + fee. |
 | Credit limits | None. Exposure bounded by the 15-day clock and automatic suspension at day 16. |
-| Merchant wallet | A settlement *method* (alternative to bank transfer), not pre-funding, not a risk product. |
+| Merchant wallet | A settlement *method* on the same path as bank transfer — and, since the owner decision of 2026-08-24, **pre-fundable**: merchants top up by receipt-first bank transfer (auto-matched like settlements), and validated cashback auto-settles from the balance hourly, oldest first, while it lasts. Still not a risk product: Manfaa never pays merchants out, and a wallet is only ever spent on the merchant's own settlements. |
 | Non-payment | Customers are told the reward is unsettled and that the merchant is suspended. Factual wording only (§9.4). |
 | Regulatory | Out of scope for the build; licences obtained if and when required. |
 | Customer promise | Nothing promised before Confirmed. Pending is always shown as conditional. |
@@ -1455,6 +1455,44 @@ horizontal clearance + FittedBox so the stadium curve stops clipping
 long middle labels ("Transactions"); single-tint card washes —
 Outstanding lavender, Credit customer mint, Wallet blue (light 40%,
 dark 13%, `cardWash()`); merchant suite 140 green, goldens redone.
+
+### Merchant wallet: top-up + auto-settlement — DONE (2026-08-24)
+
+Reverses the "not pre-funding" doctrine (§ table above; owner decision).
+Owner calls: hourly batching per merchant, oldest-first settle-what-fits,
+toggle default ON, minimum top-up a superadmin setting (MVR 100).
+
+Top-up = the settlement receipt flow reused: `POST /api/merchant/wallet/
+top-ups` (multipart amount ≥ `wallet_top_up_min_laari`, platform bank
+account, slip, optional bank_ref; `wallet.top_up` permission, approved
+stores, throttle 5/min, ≤3 pending) → `wallet_top_ups` row (mirrors
+settlement_payments) → `WalletTopUpVerifier` polls bank history
+(ReadWalletTopUpReceipt + PollWalletTopUp, same bounded loop) → on match
+`WalletTopUps::credit()` — THE one crediting seam (auto + admin) →
+`WalletFunding::recordTopUp` + journal + `wallet_top_up_received`.
+Admin queue `/api/admin/wallet-top-ups` (list/match/reject/slip) with
+its own panel screen. Review-driven hardening: top-ups match on
+REFERENCE or SLIP OCR ONLY — the payer-name rungs were an oracle once
+the merchant chooses the amount (blocker); `BankCreditClaim::spent()`
+now also sees hand-matched settlement refs and wallet movements, with a
+`pg_advisory_xact_lock` per bank row across all three verifiers, so one
+transfer can never fund two things. `TransferEvidence` extracted so the
+verifiers share one rule set. Wallet payload carries the platform bank
+accounts (a store with nothing payable can still top up), pending AND
+recently-rejected top-ups with reasons.
+
+Auto-settle: `merchants.auto_settle_from_wallet` (default true; writing
+it needs `wallet.settle`, not just preferences.update). `manfaa:auto-
+settle-wallets` hourly at :10 → `WalletAutoSettler`: per approved
+merchant with balance and payable_unfunded lines, greedy oldest-first
+by undiscounted (cashback+fee+gst) ≤ balance, one
+`createAndSettleFromWallet` as Actor::system (WalletFunding now takes
+an Actor) — prompt discount applies, leftover stays; one
+`wallet_auto_settled` push+SMS, and none when §7 credits netted the
+batch to zero. Surfaces: panel wallet page (Top up dialog reusing the
+wizard's bank pieces, pending list, toggle), admin queue + platform
+setting, merchant app wallet screen + top-up screen (v1.0.25+26).
+Suite 1894 green; three lenses, 10 findings, all fixed.
 
 ### Queue (updated 2026-08-17) — the mobile programme
 

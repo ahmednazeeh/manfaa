@@ -2858,11 +2858,131 @@ abstract class AppLocalizations {
   /// **'Balance'**
   String get walletBalanceLabel;
 
-  /// No description provided for @walletTopUpHint.
+  /// No description provided for @walletTopUpCta.
   ///
   /// In en, this message translates to:
-  /// **'Top-ups are recorded by our team when your transfer arrives.'**
-  String get walletTopUpHint;
+  /// **'Top up'**
+  String get walletTopUpCta;
+
+  /// No description provided for @walletTopUpTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Top up your wallet'**
+  String get walletTopUpTitle;
+
+  /// No description provided for @topUpAmountLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Amount to top up'**
+  String get topUpAmountLabel;
+
+  /// No description provided for @topUpMinimumHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Minimum {amount}'**
+  String topUpMinimumHint(String amount);
+
+  /// No description provided for @topUpAmountInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the amount you\'ll transfer, e.g. 500.00.'**
+  String get topUpAmountInvalid;
+
+  /// No description provided for @topUpBelowMinimum.
+  ///
+  /// In en, this message translates to:
+  /// **'The minimum top-up is {amount}.'**
+  String topUpBelowMinimum(String amount);
+
+  /// No description provided for @topUpBankRefLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Bank reference (optional)'**
+  String get topUpBankRefLabel;
+
+  /// No description provided for @topUpBankRefHint.
+  ///
+  /// In en, this message translates to:
+  /// **'The reference on your slip, if you have it. It helps us match the transfer faster.'**
+  String get topUpBankRefHint;
+
+  /// No description provided for @topUpReferenceNote.
+  ///
+  /// In en, this message translates to:
+  /// **'No payment reference needed. We match your transfer to the slip you upload.'**
+  String get topUpReferenceNote;
+
+  /// No description provided for @topUpBankUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t load the bank details.'**
+  String get topUpBankUnavailable;
+
+  /// No description provided for @topUpSuccessBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Your top-up of {amount} reached our team. It is added to your balance once the transfer is matched. Nothing more is needed from you.'**
+  String topUpSuccessBody(String amount);
+
+  /// No description provided for @pendingTopUpsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Top-ups in progress'**
+  String get pendingTopUpsTitle;
+
+  /// No description provided for @topUpStateVerifying.
+  ///
+  /// In en, this message translates to:
+  /// **'Verifying'**
+  String get topUpStateVerifying;
+
+  /// No description provided for @topUpStateMatched.
+  ///
+  /// In en, this message translates to:
+  /// **'Added'**
+  String get topUpStateMatched;
+
+  /// No description provided for @topUpStateRejected.
+  ///
+  /// In en, this message translates to:
+  /// **'Rejected'**
+  String get topUpStateRejected;
+
+  /// No description provided for @topUpToBank.
+  ///
+  /// In en, this message translates to:
+  /// **'To {bank}'**
+  String topUpToBank(String bank);
+
+  /// No description provided for @topUpRejectedReason.
+  ///
+  /// In en, this message translates to:
+  /// **'Reason: {reason}'**
+  String topUpRejectedReason(String reason);
+
+  /// No description provided for @topUpRejectedNoReason.
+  ///
+  /// In en, this message translates to:
+  /// **'No reason recorded.'**
+  String get topUpRejectedNoReason;
+
+  /// No description provided for @autoSettleTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Auto-settle from wallet'**
+  String get autoSettleTitle;
+
+  /// No description provided for @autoSettleBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Every hour, validated cashback is settled from this balance — oldest first, as far as it goes.'**
+  String get autoSettleBody;
+
+  /// No description provided for @autoSettleFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t change auto-settle. Try again.'**
+  String get autoSettleFailed;
 
   /// No description provided for @movementsTitle.
   ///

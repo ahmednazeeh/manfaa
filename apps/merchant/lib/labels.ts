@@ -17,6 +17,7 @@ import {
   type TransactionState,
   type VendorAbility,
   type WalletMovementType,
+  type WalletTopUpState,
 } from '@manfaa/api-client';
 import type { TFunction } from 'i18next';
 
@@ -199,6 +200,17 @@ const WALLET_MOVEMENT_KEYS: Record<WalletMovementType, string> = {
 const UNKNOWN_WALLET_MOVEMENT_KEY = 'labels.walletMovement.unknown';
 
 /**
+ * Where a wallet top-up claim stands. A claim is never money until it is
+ * `matched` — "Verifying" says exactly that to the merchant who has just
+ * transferred and is looking for their balance to move.
+ */
+const WALLET_TOP_UP_STATE_KEYS: Record<WalletTopUpState, string> = {
+  pending: 'labels.walletTopUpState.pending',
+  matched: 'labels.walletTopUpState.matched',
+  rejected: 'labels.walletTopUpState.rejected',
+};
+
+/**
  * Why the batch in front of the merchant did — or did not — earn the PLAN §1
  * prompt-payment discount. The API answers with a machine code on refusals as
  * well as grants, which is the whole point: "no discount" is an answer the
@@ -293,6 +305,13 @@ export function walletMovementLabel(t: TFunction, type: string): string {
   return isWalletMovementType(type)
     ? t(WALLET_MOVEMENT_KEYS[type])
     : t(UNKNOWN_WALLET_MOVEMENT_KEY);
+}
+
+export function walletTopUpStateLabel(
+  t: TFunction,
+  state: WalletTopUpState,
+): string {
+  return t(WALLET_TOP_UP_STATE_KEYS[state]);
 }
 
 /**

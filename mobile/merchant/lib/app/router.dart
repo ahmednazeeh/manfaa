@@ -25,6 +25,7 @@ import '../features/signup/signup_screen.dart';
 import '../features/status/setup_pending_screen.dart';
 import '../features/transactions/transactions_screen.dart';
 import '../features/wallet/wallet_screen.dart';
+import '../features/wallet/wallet_top_up_screen.dart';
 import 'providers.dart';
 import 'shell.dart';
 
@@ -137,9 +138,13 @@ final routerProvider = Provider<GoRouter>((ref) {
       }
 
       // The wallet screen stands on its own read grant, exactly as the API
-      // gates GET /merchant/wallet.
-      if (location == '/wallet' && !session.can('wallet.view')) {
-        return homeLocationFor(session);
+      // gates GET /merchant/wallet; the top-up flow underneath it on its own
+      // write grant (POST /merchant/wallet/top-ups is `wallet.top_up`).
+      if (location == '/wallet' || location.startsWith('/wallet/')) {
+        if (!session.can('wallet.view')) return homeLocationFor(session);
+        if (location == '/wallet/top-up' && !session.can('wallet.top_up')) {
+          return '/wallet';
+        }
       }
 
       // The More estate's sub-screens each stand on their own read
@@ -201,7 +206,18 @@ final routerProvider = Provider<GoRouter>((ref) {
                 path: '/dashboard', builder: (_, _) => const DashboardScreen()),
             // Pushed from the dashboard's wallet card; lives in this branch
             // so back lands on the dashboard.
-            GoRoute(path: '/wallet', builder: (_, _) => const WalletScreen()),
+            GoRoute(
+              path: '/wallet',
+              builder: (_, _) => const WalletScreen(),
+              routes: [
+                // The receipt-first top-up (owner, 2026-08-24): back lands
+                // on the wallet, whose balance the claim will one day move.
+                GoRoute(
+                  path: 'top-up',
+                  builder: (_, _) => const WalletTopUpScreen(),
+                ),
+              ],
+            ),
           ]),
           StatefulShellBranch(routes: [
             GoRoute(

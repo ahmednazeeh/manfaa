@@ -70,6 +70,7 @@ function settlementsRoutesMr3(): array
         ['getJson', '/api/mobile/v1/merchant/settlements/1', Permission::SettlementsView->value],
         ['postJson', '/api/mobile/v1/merchant/settlements', Permission::SettlementsCreate->value],
         ['postJson', '/api/mobile/v1/merchant/settlements/wallet', Permission::WalletSettle->value],
+        ['postJson', '/api/mobile/v1/merchant/wallet/top-ups', Permission::WalletTopUp->value],
         ['postJson', '/api/mobile/v1/merchant/settlements/1/receipts', Permission::SettlementsReceiptAdd->value],
     ];
 }

@@ -252,7 +252,15 @@ class SettlementController extends Controller
         );
 
         return new WalletResource(
-            $wallet->load(['transactions' => fn ($query) => $query->orderByDesc('id')]),
+            $wallet->load([
+                // The auto-settle toggle lives on the merchant row.
+                'merchant',
+                'transactions' => fn ($query) => $query->orderByDesc('id'),
+                // Claims in flight (and recently refused ones, with the
+                // reason), newest first, with the account they name — so
+                // the screen can say "MVR 500 to BML, waiting".
+                'recentTopUps' => fn ($query) => $query->with('platformBankAccount')->orderByDesc('id'),
+            ]),
         );
     }
 

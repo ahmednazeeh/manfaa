@@ -788,7 +788,62 @@
   "startNewSettlement": "Start a new settlement",
   "walletScreenTitle": "Wallet",
   "walletBalanceLabel": "Balance",
-  "walletTopUpHint": "Top-ups are recorded by our team when your transfer arrives.",
+  "walletTopUpCta": "Top up",
+  "walletTopUpTitle": "Top up your wallet",
+  "topUpAmountLabel": "Amount to top up",
+  "topUpMinimumHint": "Minimum {amount}",
+  "@topUpMinimumHint": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "topUpAmountInvalid": "Enter the amount you'll transfer, e.g. 500.00.",
+  "topUpBelowMinimum": "The minimum top-up is {amount}.",
+  "@topUpBelowMinimum": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "topUpBankRefLabel": "Bank reference (optional)",
+  "topUpBankRefHint": "The reference on your slip, if you have it. It helps us match the transfer faster.",
+  "topUpReferenceNote": "No payment reference needed. We match your transfer to the slip you upload.",
+  "topUpBankUnavailable": "Couldn't load the bank details.",
+  "topUpSuccessBody": "Your top-up of {amount} reached our team. It is added to your balance once the transfer is matched. Nothing more is needed from you.",
+  "@topUpSuccessBody": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "pendingTopUpsTitle": "Top-ups in progress",
+  "topUpStateVerifying": "Verifying",
+  "topUpStateMatched": "Added",
+  "topUpStateRejected": "Rejected",
+  "topUpToBank": "To {bank}",
+  "@topUpToBank": {
+    "placeholders": {
+      "bank": {
+        "type": "String"
+      }
+    }
+  },
+  "topUpRejectedReason": "Reason: {reason}",
+  "@topUpRejectedReason": {
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "topUpRejectedNoReason": "No reason recorded.",
+  "autoSettleTitle": "Auto-settle from wallet",
+  "autoSettleBody": "Every hour, validated cashback is settled from this balance — oldest first, as far as it goes.",
+  "autoSettleFailed": "Couldn't change auto-settle. Try again.",
   "movementsTitle": "Movements",
   "movementsEmpty": "No wallet movements yet.",
   "movementTopUp": "Top-up",

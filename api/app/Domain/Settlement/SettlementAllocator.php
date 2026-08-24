@@ -16,6 +16,7 @@ use App\Models\AdminUser;
 use App\Models\Settlement;
 use App\Models\SettlementPayment;
 use App\Models\TransferSetting;
+use App\Models\WalletTopUp;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
@@ -102,11 +103,27 @@ final class SettlementAllocator
             throw new InvalidArgumentException('A settlement payment must be a positive amount.');
         }
 
+        // One transfer funds one thing: a reference this merchant already
+        // claimed as a WALLET TOP-UP (pending or matched) cannot also pay a
+        // batch. The per-table indexes cannot see across tables; this can.
+        if ($bankRef !== null && $this->heldByTopUp($settlement, $bankRef)) {
+            throw DuplicateBankRefException::forSettlementHeldByTopUp($settlement, $bankRef);
+        }
+
         try {
             return $this->storeBankPayment($settlement, $amount, $bankRef, $slip);
         } catch (UniqueConstraintViolationException) {
             throw DuplicateBankRefException::forSettlement($settlement, $bankRef);
         }
+    }
+
+    private function heldByTopUp(Settlement $settlement, string $bankRef): bool
+    {
+        return WalletTopUp::query()
+            ->where('merchant_id', $settlement->merchant_id)
+            ->where('bank_ref', $bankRef)
+            ->where('state', '!=', 'rejected')
+            ->exists();
     }
 
     private function storeBankPayment(Settlement $settlement, Laari $amount, ?string $bankRef, ?ReceiptSlip $slip): SettlementPayment
@@ -229,11 +246,24 @@ final class SettlementAllocator
 
             $now = CarbonImmutable::now('UTC');
 
-            $payment->forceFill([
+            $matched = [
                 'state' => 'matched',
                 'matched_by' => $actor?->id,
                 'matched_at' => $now,
-            ])->save();
+            ];
+
+            // A person matched it, so no bank row was read and nothing
+            // wrote matched_trx_*. Record the merchant's own reference as
+            // the credit's name, so BankCreditClaim sees a hand-matched
+            // payment as spent exactly like an automatic one — otherwise
+            // the same transfer could go on to fund a wallet top-up.
+            $bankRef = trim((string) $payment->bank_ref);
+
+            if ($actor !== null && $bankRef !== '' && $payment->matched_trx_id === null && empty($payment->matched_trx_refs)) {
+                $matched['matched_trx_refs'] = [$bankRef];
+            }
+
+            $payment->forceFill($matched)->save();
 
             $receivedBefore = $settlement->amount_received_laari;
             $received = $receivedBefore + $payment->amount_laari;

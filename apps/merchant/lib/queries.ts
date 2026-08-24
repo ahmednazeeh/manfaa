@@ -15,6 +15,7 @@ import {
   createMerchantPromotion,
   createMerchantRole,
   createMerchantStaff,
+  createMerchantWalletTopUp,
   deleteMerchantBranch,
   deleteMerchantRole,
   denyConnect,
@@ -78,6 +79,9 @@ import {
   type CreatePromotionRequest,
   type MerchantSetupStateResponse,
   type MerchantSignupRegisterRequest,
+  type MerchantWalletResponse,
+  type SettlementDestination,
+  type WalletTopUpInput,
   type MerchantSignupVerifyOtpRequest,
   type TransactionState,
   type UpdateMerchantBankAccountRequest,
@@ -382,6 +386,23 @@ export function useWalletSettleSelection() {
     mutationFn: (selection: SettlementSelection) =>
       walletSettleSelection(selection),
     onSuccess: invalidate,
+  });
+}
+
+/**
+ * A wallet top-up CLAIM (owner, 2026-08-24): the merchant has transferred to
+ * a platform account and uploads the slip; the balance moves only once the
+ * bank's own history confirms it. Until then the claim sits in the wallet
+ * payload's `pending_top_ups`, which is why the wallet read is dropped on
+ * success — the list should show the new claim at once.
+ */
+export function useCreateWalletTopUp() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: WalletTopUpInput) => createMerchantWalletTopUp(input),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.wallet });
+    },
   });
 }
 
@@ -1224,6 +1245,45 @@ export function useUpdatePreferences() {
   });
 }
 
+/**
+ * The wallet screen's auto-settle toggle (owner, 2026-08-24). READ off the
+ * wallet payload, WRITTEN through the one preferences route — there is no
+ * wallet-scoped write. Optimistic: the switch moves at once and the wallet
+ * read is patched to match; a refusal puts it back, and the wallet is
+ * refetched either way so the screen ends on the server's answer.
+ */
+export function useSetAutoSettleFromWallet() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (enabled: boolean) =>
+      updateMerchantPreferences({ auto_settle_from_wallet: enabled }),
+    onMutate: async (enabled) => {
+      await queryClient.cancelQueries({ queryKey: queryKeys.wallet });
+      const previous = queryClient.getQueryData<MerchantWalletResponse>(
+        queryKeys.wallet,
+      );
+      if (previous) {
+        queryClient.setQueryData<MerchantWalletResponse>(queryKeys.wallet, {
+          ...previous,
+          data: { ...previous.data, auto_settle_from_wallet: enabled },
+        });
+      }
+      return { previous };
+    },
+    onError: (_error, _enabled, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(queryKeys.wallet, context.previous);
+      }
+    },
+    onSuccess: (response) => {
+      queryClient.setQueryData(queryKeys.preferences, response);
+    },
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.wallet });
+    },
+  });
+}
+
 /** Human-readable message out of an ApiError's JSON body. */
 export function apiErrorMessage(error: unknown, fallback: string): string {
   if (error instanceof ApiError) {
@@ -1234,6 +1294,19 @@ export function apiErrorMessage(error: unknown, fallback: string): string {
     }
   }
   return fallback;
+}
+
+/**
+ * Whether a 422 carries a validation error on the named FIELD — the shape a
+ * request rule answers with (`errors.amount`), as opposed to a domain
+ * refusal with a `code`.
+ */
+export function hasFieldError(error: unknown, field: string): boolean {
+  if (!(error instanceof ApiError) || error.status !== 422) {
+    return false;
+  }
+  const body = error.body as { errors?: Record<string, unknown> } | undefined;
+  return body?.errors !== undefined && field in body.errors;
 }
 
 /**

@@ -17,6 +17,7 @@ import {
   type TransactionOrigin,
   type TransactionReasonCode,
   type TransactionState,
+  type WalletTopUpState,
 } from '@manfaa/api-client';
 
 /**
@@ -104,6 +105,33 @@ const SETTLEMENT_PAYMENT_STATES: Record<SettlementPaymentState, string> = {
   matched: 'Matched',
   rejected: 'Rejected',
 };
+
+/**
+ * A merchant wallet top-up claim (owner, 2026-08-24). The same three words
+ * as a settlement payment on purpose — the two queues are one job, and an
+ * operator moving between them should not have to relearn the chips.
+ */
+const WALLET_TOP_UP_STATES: Record<WalletTopUpState, string> = {
+  pending: 'Pending match',
+  matched: 'Matched',
+  rejected: 'Rejected',
+};
+
+/**
+ * The bank-history verifier's ladder, in the order it climbs: the merchant's
+ * typed reference first, then what the slip says, then the registered payer
+ * name. A free string on the wire (the verifier can grow a rung before this
+ * build does), so anything unlisted degrades to prose.
+ */
+const MATCH_RULES: Record<string, string> = {
+  reference: 'bank reference the merchant typed',
+  receipt_reference: 'reference read off the slip',
+  receipt_name: 'payer name read off the slip',
+  receipt_name_fuzzy: 'payer name read off the slip (close match)',
+  name: 'registered payer name',
+};
+
+const UNKNOWN_MATCH_RULE = 'another rule';
 
 const PAYOUT_BATCH_STATES: Record<PayoutBatchState, string> = {
   draft: 'Draft',
@@ -343,6 +371,21 @@ export function settlementPaymentStateLabel(
   state: SettlementPaymentState,
 ): string {
   return SETTLEMENT_PAYMENT_STATES[state];
+}
+
+export function walletTopUpStateLabel(state: WalletTopUpState): string {
+  return WALLET_TOP_UP_STATES[state];
+}
+
+/**
+ * How the verifier found a transfer, as a clause finishing "matched by the
+ * …". Null when the row was never auto-matched.
+ */
+export function matchRuleLabel(rule: string | null | undefined): string | null {
+  if (rule === null || rule === undefined || rule === '') {
+    return null;
+  }
+  return MATCH_RULES[rule] ?? UNKNOWN_MATCH_RULE;
 }
 
 export function payoutBatchStateLabel(state: PayoutBatchState): string {

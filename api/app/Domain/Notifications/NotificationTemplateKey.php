@@ -96,6 +96,19 @@ enum NotificationTemplateKey: string
     // through Manfaa just paid the shop's POS bill.
     case PosWaiverEarned = 'pos_waiver_earned';
 
+    // Wallet top-ups (owner, 2026-08-24). A merchant transferred money to
+    // pre-fund their wallet and uploaded the slip; the platform either found
+    // the transfer in the bank's history (or an admin did) and credited the
+    // wallet, or refused the claim with a reason. Both are about the shop's
+    // OWN money sitting with us, so both earn the till's attention.
+    case WalletTopUpReceived = 'wallet_top_up_received';
+    case WalletTopUpRejected = 'wallet_top_up_rejected';
+
+    // The hourly auto-settle drew on the wallet balance to settle validated
+    // cashback (owner, 2026-08-24; fired by phase 2). One line per run, not
+    // per line — a batch is news, forty lines are a nuisance.
+    case WalletAutoSettled = 'wallet_auto_settled';
+
     // Marketplace enrolment outcomes (PLAN-marketplace.md §9). The merchant
     // handed us identity documents and waited on a human; silence after
     // that is the one thing this must not be.
@@ -134,6 +147,9 @@ enum NotificationTemplateKey: string
             self::StoreApproved => 'Store approved',
             self::CustomersPaid => 'Customers paid',
             self::PosWaiverEarned => 'POS fee waived',
+            self::WalletTopUpReceived => 'Wallet top-up received',
+            self::WalletTopUpRejected => 'Wallet top-up refused',
+            self::WalletAutoSettled => 'Settled from wallet',
             self::MarketplaceApproved => 'Marketplace approved',
             self::MarketplaceRejected => 'Marketplace not approved',
             self::OrderPlaced => 'New order',
@@ -177,6 +193,9 @@ enum NotificationTemplateKey: string
             self::StoreApproved => 'When an admin approves a new store and it goes live. Sent by SMS as well as push — the merchant has been waiting on a decision and may not have the app open.',
             self::CustomersPaid => 'When a payout run reaches the customers who earned cashback at this store. One message per run, never one per customer, and only about money that actually moved.',
             self::PosWaiverEarned => 'When a month closes qualified for the POS-fee waiver: rate held at 1%+, nothing overdue, and the volume or cashback bar cleared. Once per month at most.',
+            self::WalletTopUpReceived => 'When a store\'s wallet top-up transfer is found in the bank and the wallet is credited — automatically or by an admin. One per top-up.',
+            self::WalletTopUpRejected => 'When a wallet top-up claim is refused, with the reason. The store has to act, so this one earns an interruption.',
+            self::WalletAutoSettled => 'When the hourly run settles validated cashback from the store\'s wallet balance. One message per run, never one per sale.',
         };
     }
 
@@ -219,6 +238,19 @@ enum NotificationTemplateKey: string
                 'month' => 'The waived month, e.g. 2026-08',
                 'amount' => 'The figure that qualified, formatted with its currency',
                 'track' => 'What the figure measures: "in sales" or "in cashback"',
+            ],
+            self::WalletTopUpReceived => [
+                'amount' => 'The top-up credited, formatted with its currency',
+                'balance' => 'The wallet balance after the credit, formatted with its currency',
+            ],
+            self::WalletTopUpRejected => [
+                'amount' => 'The top-up claimed, formatted with its currency',
+                'reason' => 'Why the claim was refused',
+            ],
+            self::WalletAutoSettled => [
+                'amount' => 'What the run drew from the wallet, formatted with its currency',
+                'count' => 'How many sales the run settled',
+                'balance' => 'The wallet balance left after the run, formatted with its currency',
             ],
             self::SettlementAccepted => [
                 'reference' => 'The settlement reference',
@@ -298,6 +330,8 @@ enum NotificationTemplateKey: string
             self::StoreApproved,
             self::MarketplaceApproved, self::MarketplaceRejected => true,
             self::CustomersPaid, self::PosWaiverEarned => true,
+            self::WalletTopUpReceived, self::WalletTopUpRejected,
+            self::WalletAutoSettled => true,
         };
     }
 
@@ -428,6 +462,9 @@ enum NotificationTemplateKey: string
             self::StoreApproved => ['en' => 'Store approved', 'dv' => 'ފިހާރަ ފާސްވެއްޖެ'],
             self::CustomersPaid => ['en' => 'Customers paid', 'dv' => 'ކަސްޓަމަރުންނަށް ފައިސާ ދެއްކިއްޖެ'],
             self::PosWaiverEarned => ['en' => 'POS fee waived', 'dv' => 'POS ފީ މާފުކޮށްދެވިއްޖެ'],
+            self::WalletTopUpReceived => ['en' => 'Wallet topped up', 'dv' => 'ވޮލެޓަށް ފައިސާ ޖަމާވެއްޖެ'],
+            self::WalletTopUpRejected => ['en' => 'Top-up refused', 'dv' => 'ޓޮޕް-އަޕް ބަލައިނުގަނެވުނު'],
+            self::WalletAutoSettled => ['en' => 'Settled from wallet', 'dv' => 'ވޮލެޓުން ސެޓްލްކުރެވިއްޖެ'],
             self::MarketplaceApproved => ['en' => 'Marketplace approved', 'dv' => 'މާކެޓްޕްލޭސް ފާސްވެއްޖެ'],
             self::MarketplaceRejected => ['en' => 'Application refused', 'dv' => 'ހުށަހެޅުން ބަލައިނުގަނެވުނު'],
             self::OrderPlaced => ['en' => 'New order', 'dv' => 'އައު އޯޑަރެއް'],
