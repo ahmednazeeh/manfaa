@@ -120,6 +120,31 @@ export async function apiFetchBlob(
   path: string,
   options: Omit<ApiFetchOptions, 'body'> = {},
 ): Promise<Blob> {
+  return (await apiFetchDownload(path, options)).blob;
+}
+
+/** The bytes of a download plus the name the server asked it be saved as. */
+export interface ApiDownload {
+  blob: Blob;
+  /** From Content-Disposition; null when the response did not name the file. */
+  filename: string | null;
+}
+
+/**
+ * The same credentialed binary fetch as apiFetchBlob, but keeping the one
+ * header a blob throws away: Content-Disposition. A slip is shown on screen,
+ * so its bytes are the whole story; an ATTACHMENT is saved to disk, and the
+ * server is the only party that knows what it should be called — the report
+ * export names itself `manfaa-{report}-{from}-{to}.xlsx`, and re-deriving
+ * that in the panel would be a second copy of a rule the API already owns.
+ *
+ * Errors still arrive as JSON and are thrown as ApiError, so the row-cap
+ * refusal (422 `report_too_large`) is catchable rather than a corrupt file.
+ */
+export async function apiFetchDownload(
+  path: string,
+  options: Omit<ApiFetchOptions, 'body'> = {},
+): Promise<ApiDownload> {
   const { method = 'GET', headers = {}, signal } = options;
   const xsrfToken = readCookie('XSRF-TOKEN');
 
@@ -140,7 +165,66 @@ export async function apiFetchBlob(
     const payload = await response.json().catch(() => undefined);
     throw new ApiError(response.status, payload);
   }
-  return response.blob();
+
+  return {
+    blob: await response.blob(),
+    filename: filenameFromContentDisposition(
+      response.headers.get('Content-Disposition'),
+    ),
+  };
+}
+
+/** `filename*=UTF-8''name.xlsx` — RFC 5987, preferred when both are present. */
+const CONTENT_DISPOSITION_EXTENDED =
+  /filename\*\s*=\s*(?:[\w-]+)?'[^']*'([^;]+)/i;
+/** `filename="name.xlsx"`, quotes allowed to contain escaped characters. */
+const CONTENT_DISPOSITION_QUOTED = /filename\s*=\s*"((?:[^"\\]|\\.)*)"/i;
+/** `filename=name.xlsx` — unquoted token, ends at the next parameter. */
+const CONTENT_DISPOSITION_PLAIN = /filename\s*=\s*([^;]+)/i;
+
+/**
+ * The download name a Content-Disposition header carries, or null when it
+ * carries none. Any directory part is dropped: the value ends up as the
+ * `download` attribute of an anchor, and a server-supplied "../" has no
+ * business steering where a browser writes.
+ */
+export function filenameFromContentDisposition(
+  header: string | null | undefined,
+): string | null {
+  if (!header) {
+    return null;
+  }
+
+  const extended = CONTENT_DISPOSITION_EXTENDED.exec(header);
+  if (extended?.[1] !== undefined) {
+    return sanitiseFilename(decodePercent(extended[1].trim()));
+  }
+
+  const quoted = CONTENT_DISPOSITION_QUOTED.exec(header);
+  if (quoted?.[1] !== undefined) {
+    return sanitiseFilename(quoted[1].replace(/\\(.)/g, '$1'));
+  }
+
+  const plain = CONTENT_DISPOSITION_PLAIN.exec(header);
+  if (plain?.[1] !== undefined) {
+    return sanitiseFilename(plain[1].trim());
+  }
+
+  return null;
+}
+
+function decodePercent(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    // A malformed escape is not worth losing the whole name over.
+    return value;
+  }
+}
+
+function sanitiseFilename(value: string): string | null {
+  const base = value.split(/[\\/]/).pop()?.trim() ?? '';
+  return base === '' || base === '.' || base === '..' ? null : base;
 }
 
 /**

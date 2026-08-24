@@ -1,5 +1,11 @@
 import { z } from "zod";
-import { apiBaseUrl, apiFetch, apiFetchBlob } from "./client";
+import {
+  ApiError,
+  apiBaseUrl,
+  apiFetch,
+  apiFetchBlob,
+  apiFetchDownload,
+} from "./client";
 import {
   BankSlugSchema,
   CashbackPercentInputSchema,
@@ -27,8 +33,10 @@ import {
  * lifecycle (Phase 1), the claims queue and promotions read model (Phase 3),
  * and the platform settings domain — platform bank accounts, the §4 fee tier
  * schedule, typed platform settings, superadmin-only admin account
- * management, and island zoning (polygon CRUD with server-side branch
- * assignment). All amounts sent and received are integer laari; all RATES
+ * management, island zoning (polygon CRUD with server-side branch
+ * assignment), and the superadmin reporting surface (cashback / payouts /
+ * earnings, previewed as JSON and exported as .xlsx). All amounts sent and
+ * received are integer laari; all RATES
  * travel as 2-decimal percent strings (PLAN §1 wire format) — basis points
  * are the API's internal representation and never appear in a body.
  */
@@ -2739,5 +2747,310 @@ export async function testVendorWebhookEndpoint(
     `/api/admin/pos-vendors/${vendorId}/webhook-endpoints/${endpointId}/test`,
     z.object({ data: z.object({ delivery: z.object({ id: z.number().int(), event: z.string(), status: z.string() }) }) }),
     { method: "POST", signal: options.signal },
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Superadmin reports (owner, 2026-08-24)
+// ---------------------------------------------------------------------------
+
+/**
+ * The three reports, by their `{report}` path segment. Anything else is a
+ * router 404, so the panel should build its tabs from REPORT_KINDS rather
+ * than from a hand-typed list that can drift from the route constraint.
+ */
+export const ReportKindSchema = z.enum(["cashback", "payouts", "earnings"]);
+export type ReportKind = z.infer<typeof ReportKindSchema>;
+
+/** The kinds in workbook order, for tabs and for a route param guard. */
+export const REPORT_KINDS = ReportKindSchema.options;
+
+/**
+ * What a preview cell MEANS, which is the only thing that says how to render
+ * it — the wire carries bare scalars and nothing else distinguishes 2000
+ * laari from 2000 basis points:
+ *
+ *   text    string ("" for an absent value, never null)
+ *   int     number | null
+ *   money   number | null — integer LAARI (formatLaari)
+ *   percent number | null — integer BASIS POINTS (formatBpPercent)
+ *   date    string | null — ISO-8601 carrying the +05:00 business offset
+ *
+ * `percent` is the one exception to the package's percent-string wire rule
+ * (PLAN §1): a report cell is a rendered figure rather than a rate a caller
+ * can submit, and the workbook needs the same integer the panel shows.
+ */
+export const ReportColumnTypeSchema = z.enum([
+  "text",
+  "int",
+  "money",
+  "percent",
+  "date",
+]);
+export type ReportColumnType = z.infer<typeof ReportColumnTypeSchema>;
+
+/** One column: the machine key, the human label, and how to render the cell. */
+export const ReportColumnSchema = z.object({
+  key: z.string(),
+  label: z.string(),
+  type: ReportColumnTypeSchema,
+});
+export type ReportColumn = z.infer<typeof ReportColumnSchema>;
+
+/** A single cell, typed by its column's `type`. */
+export const ReportCellSchema = z.union([z.string(), z.number(), z.null()]);
+export type ReportCell = z.infer<typeof ReportCellSchema>;
+
+/**
+ * A row is POSITIONAL — `row[i]` belongs to `columns[i]` — exactly as the API
+ * sends it. The column order IS the sheet: a row keyed by name can disagree
+ * with its header, and a finance table where column six is sometimes GST and
+ * sometimes the fee is worse than no table at all. Index into `columns`;
+ * never look a cell up by key.
+ */
+export const ReportRowSchema = z.array(ReportCellSchema);
+export type ReportRow = z.infer<typeof ReportRowSchema>;
+
+/** The window the API echoes back, in BUSINESS-timezone dates. */
+export const ReportPeriodSchema = z.object({
+  from: z.string(),
+  to: z.string(),
+  /** IANA name, e.g. "Indian/Maldives" — the tz every date in the report is stated in. */
+  timezone: z.string(),
+  /** Whole days covered, both ends inclusive. */
+  days: z.number().int(),
+});
+export type ReportPeriod = z.infer<typeof ReportPeriodSchema>;
+
+/**
+ * The per-report totals block. Deliberately an open record: the three reports
+ * answer three different questions (cashback totals by state, the payout tie,
+ * the ledger-derived money trace), and a union of three shapes would have to
+ * be revised here every time the ledger grows an account. Read it with
+ * reportSummaryNumber / reportSummaryList, whose null return is the honest
+ * answer for a key this report does not carry.
+ *
+ * The keys each report emits (all `_laari` values are integer laari):
+ *
+ *   cashback  transactions{count,eligible_laari,cashback_laari,fee_laari,
+ *             gst_laari,gross_due_laari,discount_laari,forgiveness_laari,
+ *             collected_laari}, by_state[] (state,count,…), settlements{…}
+ *   payouts   transactions{count,cashback_laari}, payout_items{count,
+ *             amount_laari,paid_laari}, batches{…}, wallet_withdrawals{…},
+ *             ties{transactions_cashback_laari,payout_items_paid_laari,
+ *             batches_paid_laari} — three sheets that must state one number
+ *   earnings  fee_revenue_laari, prompt_discounts_laari,
+ *             shortfall_forgiveness_laari, net_fee_income_laari,
+ *             gst_collected_laari, platform_funded_rewards_laari,
+ *             bad_debt_laari, net_platform_earnings_laari,
+ *             accrued_vs_collected{fees_accrued_laari,
+ *             fees_collected_bank_laari,fees_collected_wallet_laari,
+ *             fees_collected_laari}, postings{count,debit_laari,credit_laari}
+ */
+export const ReportSummarySchema = z.record(z.string(), z.unknown());
+export type ReportSummary = z.infer<typeof ReportSummarySchema>;
+
+/** One line of the workbook's table of contents: a sheet and how deep it runs. */
+export const ReportSheetIndexSchema = z.object({
+  title: z.string(),
+  row_count: z.number().int(),
+});
+export type ReportSheetIndex = z.infer<typeof ReportSheetIndexSchema>;
+
+/** The primary sheet's head: its title, its columns, and up to 50 rows. */
+export const ReportPreviewSheetSchema = z.object({
+  sheet: z.string(),
+  columns: z.array(ReportColumnSchema),
+  rows: z.array(ReportRowSchema),
+});
+export type ReportPreviewSheet = z.infer<typeof ReportPreviewSheetSchema>;
+
+/**
+ * GET /api/admin/reports/{report} — the on-screen report: totals, the head of
+ * the primary sheet, and an index of every sheet the .xlsx would hold.
+ *
+ * `row_count` and `capped` describe the PRIMARY sheet only (cashback →
+ * Transactions, payouts → Transactions, earnings → Postings): `capped` true
+ * means the preview stops at REPORT_PREVIEW_ROWS and the export is where the
+ * rest lives. A preview writes no audit row; an export does.
+ */
+export const ReportPreviewSchema = z.object({
+  report: ReportKindSchema,
+  period: ReportPeriodSchema,
+  merchant_id: z.number().int().nullable(),
+  summary: ReportSummarySchema,
+  preview: ReportPreviewSheetSchema,
+  sheets: z.array(ReportSheetIndexSchema),
+  row_count: z.number().int(),
+  capped: z.boolean(),
+});
+export type ReportPreview = z.infer<typeof ReportPreviewSchema>;
+
+/** Rows the JSON preview carries before `capped` goes true. */
+export const REPORT_PREVIEW_ROWS = 50;
+
+/** The server's interactive ceiling: over this the export is a 422, not a file. */
+export const REPORT_ROW_LIMIT = 50_000;
+
+/** The longest span a period may cover — a year and a day (ReportPeriod::MAX_DAYS). */
+export const REPORT_MAX_DAYS = 366;
+
+/**
+ * The window and the optional filter, identical on both endpoints.
+ *
+ * `from`/`to` are Y-m-d dates in the BUSINESS timezone, both ends inclusive —
+ * 2026-08-01 means the Maldivian first of August, so a transaction at 02:00
+ * Malé on the 1st belongs to August even though it was 31 July in UTC. Do not
+ * send an ISO instant; the API validates `date_format:Y-m-d`.
+ */
+export interface ReportPeriodParams {
+  from: string;
+  to: string;
+  /** One merchant, or null/undefined for every merchant. */
+  merchant_id?: number | null;
+}
+
+function reportQuery(params: ReportPeriodParams): string {
+  return queryString({
+    from: params.from,
+    to: params.to,
+    merchant_id: params.merchant_id ?? undefined,
+  });
+}
+
+/**
+ * The 422 a period too big to build in one pass comes back as — distinct from
+ * a validation 422, which carries `errors`. Catch it to say "narrow the
+ * period" with the real numbers rather than a generic failure.
+ */
+export const ReportTooLargeSchema = z.object({
+  code: z.literal("report_too_large"),
+  message: z.string(),
+  row_count: z.number().int(),
+  limit: z.number().int(),
+});
+export type ReportTooLarge = z.infer<typeof ReportTooLargeSchema>;
+
+/** The machine-readable code on that refusal (see apiErrorCode). */
+export const REPORT_TOO_LARGE_CODE = "report_too_large";
+
+/**
+ * Reads the row-cap refusal off a thrown error, or null when the error is
+ * anything else (a validation 422, a 403, a network failure). The refusal is
+ * raised BEFORE the report is built, so it costs nothing to retry narrower.
+ */
+export function reportTooLargeDetail(error: unknown): ReportTooLarge | null {
+  if (!(error instanceof ApiError) || error.status !== 422) {
+    return null;
+  }
+  const parsed = ReportTooLargeSchema.safeParse(error.body);
+  return parsed.success ? parsed.data : null;
+}
+
+/**
+ * GET /api/admin/reports/{kind} — superadmin only (401 without an admin
+ * session, 403 for an admin who is not a superadmin, 404 for an unknown
+ * kind).
+ */
+export function getReportPreview(
+  kind: ReportKind,
+  params: ReportPeriodParams,
+  options: RequestOptions = {},
+): Promise<ReportPreview> {
+  return apiFetch(
+    `/api/admin/reports/${kind}${reportQuery(params)}`,
+    ReportPreviewSchema,
+    { signal: options.signal },
+  );
+}
+
+/** The bytes of an export and the name it should be saved under. */
+export interface ReportExportDownload {
+  blob: Blob;
+  /**
+   * From Content-Disposition — `manfaa-{kind}-{from}-{to}.xlsx`, with
+   * `-m{merchantId}` appended when the export was filtered to one merchant.
+   * Without that suffix a filtered and an unfiltered export of the same
+   * period want the same name, and the second lands as `... (1).xlsx`.
+   */
+  filename: string;
+}
+
+/**
+ * GET /api/admin/reports/{kind}/export — the same figures as an .xlsx.
+ *
+ * A credentialed fetch rather than a link or a window.open: the route needs
+ * the admin session AND rejects a non-superadmin, and only a fetch can turn
+ * that refusal (or the row cap) into a message on screen instead of a browser
+ * tab showing JSON. The caller wraps `blob` in URL.createObjectURL, clicks an
+ * anchor with `download = filename`, and revokes the object URL afterwards.
+ *
+ * Every call writes one `report_exports` audit row — this is the endpoint
+ * that puts customer codes and the money trace into a file that leaves the
+ * building — so fire it on a click, never on render or in an effect.
+ */
+export async function downloadReportExport(
+  kind: ReportKind,
+  params: ReportPeriodParams,
+  options: RequestOptions = {},
+): Promise<ReportExportDownload> {
+  const { blob, filename } = await apiFetchDownload(
+    `/api/admin/reports/${kind}/export${reportQuery(params)}`,
+    { signal: options.signal },
+  );
+
+  return {
+    blob,
+    // The server names the file; the fallback only covers a proxy that eats
+    // the header, and mirrors the same rule — merchant filter included.
+    filename:
+      filename ??
+      `manfaa-${kind}-${params.from}-${params.to}${
+        params.merchant_id == null ? "" : `-m${params.merchant_id}`
+      }.xlsx`,
+  };
+}
+
+/**
+ * One number out of a report summary, by path — `reportSummaryNumber(summary,
+ * "transactions", "cashback_laari")`. Returns null when the key is absent or
+ * is not a number, so a report that does not carry it renders as a dash
+ * rather than as NaN. Money keys end `_laari` and are integer laari.
+ */
+export function reportSummaryNumber(
+  summary: ReportSummary,
+  ...path: string[]
+): number | null {
+  let cursor: unknown = summary;
+
+  for (const key of path) {
+    if (typeof cursor !== "object" || cursor === null) {
+      return null;
+    }
+    cursor = (cursor as Record<string, unknown>)[key];
+  }
+
+  return typeof cursor === "number" && Number.isFinite(cursor) ? cursor : null;
+}
+
+/**
+ * A list of objects out of a report summary — the cashback report's
+ * `by_state` breakdown. Returns [] when the key is absent, so a caller can
+ * map over it unconditionally; read each entry's figures with
+ * reportSummaryNumber.
+ */
+export function reportSummaryList(
+  summary: ReportSummary,
+  key: string,
+): ReportSummary[] {
+  const value = summary[key];
+
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.filter(
+    (entry): entry is ReportSummary =>
+      typeof entry === "object" && entry !== null && !Array.isArray(entry),
   );
 }

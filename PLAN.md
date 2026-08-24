@@ -1494,6 +1494,39 @@ wizard's bank pieces, pending list, toggle), admin queue + platform
 setting, merchant app wallet screen + top-up screen (v1.0.25+26).
 Suite 1894 green; three lenses, 10 findings, all fixed.
 
+### Superadmin reports + Excel export — DONE (2026-08-24)
+
+admin.manfaa.app › Reports (superadmin only): Cashback, Payouts,
+Earnings; period presets computed in BUSINESS time, merchant filter,
+summary tiles, 50-row preview, Export .xlsx. `GET /api/admin/reports/
+{cashback|payouts|earnings}` (+ `/export`, audit row per export), from/
+to ≤ 366 days, row cap → 422 `report_too_large`. PhpSpreadsheet
+workbook: Summary first, real numeric money cells (laari/100,
+'#,##0.00'), real dates, frozen header, autofilter, SUM totals.
+
+Cashback/Transactions carries fee, GST, discount, forgiveness and an
+EXACT per-transaction `collected`: the settlement's STAMPED
+discount_rate_bp (live rate is 10%; the 8 first batches were stamped
+5% — never the current setting), GST relief at the same rate, rounding
+remainder + forgiveness on the batch's last allocated line, so Σ over a
+settlement == amount_received to the laari (verified on all 8 live
+settlements). Payouts periodise on the transaction_events 'paid' row;
+four sheets + Wallet withdrawals; Batches keyed on id — the reference
+is only partially unique (cancelled rebuilds reuse it; live data had
+3× PB-20260816) and keying on it double-counted. Earnings is LEDGER-
+derived (4100 fee revenue − prompt discounts − forgiveness = net fee
+income; 2300 GST as a liability; 5100 referral rewards and 5900 bad
+debt as expenses) with accrued-vs-collected by funding method, By
+account, By merchant, Postings.
+
+Review (3 lenses, 13 findings, 0 blockers, all fixed): draft/cancelled
+batches were counted as owed; a QUOTED-but-withheld prompt discount
+was reported as granted (now spreads min(posted, quoted)); By merchant
+ignored §7 adjustment reversals; collected fees now net of discount;
+export cache-control private/no-store; temp workbook cleanup on the
+failure path; export ceiling measured against the 256M pool and split
+from the preview cap. Suite 1940+ green.
+
 ### Queue (updated 2026-08-17) — the mobile programme
 
 The mobile API round is DONE and reviewed (PLAN-mobile-api.md: M1–M5, two

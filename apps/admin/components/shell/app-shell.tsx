@@ -15,6 +15,7 @@ import {
   ClipboardCheck,
   CreditCard,
   FileDiff,
+  FileSpreadsheet,
   HandCoins,
   Landmark,
   LogOut,
@@ -222,6 +223,12 @@ const NAV_ITEMS: NavItem[] = [
     marketplaceOnly: true,
   },
   { href: '/reconciliation', label: 'Reconciliation', icon: Scale },
+  {
+    href: '/reports',
+    label: 'Reports',
+    icon: FileSpreadsheet,
+    superadminOnly: true,
+  },
 ];
 
 const SETTINGS_ITEMS: NavItem[] = [
