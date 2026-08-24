@@ -20,12 +20,19 @@ class ReportFactory
     /** @var list<string> */
     public const array KEYS = ['cashback', 'payouts', 'earnings'];
 
-    public function make(string $key, ReportPeriod $period, ?int $merchantId = null): Report
+    /**
+     * $options defaults to the SAFE render — reversed rows out, names and
+     * bank accounts masked. A caller that omits it cannot accidentally
+     * produce either the inflated report or the unmasked one.
+     */
+    public function make(string $key, ReportPeriod $period, ?int $merchantId = null, ?ReportOptions $options = null): Report
     {
+        $options ??= ReportOptions::default();
+
         return match ($key) {
-            'cashback' => new CashbackReport($period, $merchantId),
-            'payouts' => new PayoutReport($period, $merchantId),
-            'earnings' => new EarningsReport($period, $merchantId),
+            'cashback' => new CashbackReport($period, $merchantId, $options),
+            'payouts' => new PayoutReport($period, $merchantId, $options),
+            'earnings' => new EarningsReport($period, $merchantId, $options),
             default => throw new InvalidArgumentException(sprintf('Unknown report [%s].', $key)),
         };
     }

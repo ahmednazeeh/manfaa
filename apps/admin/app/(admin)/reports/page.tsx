@@ -42,6 +42,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { PageHeader } from '@/components/admin/page-header';
 import { useAdminUser } from '@/components/auth/admin-guard';
+import { ReportHeaderBlockCard } from '@/components/reports/header-block';
 import { PeriodControl } from '@/components/reports/period-control';
 import { ReportPreviewTable } from '@/components/reports/preview-table';
 import { ReportSummaryPanel } from '@/components/reports/report-summary';
@@ -70,6 +71,14 @@ export default function ReportsPage() {
   const [kind, setKind] = useState<ReportKind>('cashback');
   const [preset, setPreset] = useState<PeriodPreset>('this_month');
   const [merchantId, setMerchantId] = useState<string>(ALL_MERCHANTS);
+
+  // OFF by default (owner, 2026-08-24). A reversed sale is one that was
+  // undone, and a report is safe to be wrong in the direction of leaving
+  // those out. One piece of state drives BOTH the preview query and the
+  // export request — see `params` below — because the entire value of the
+  // switch is that the table on screen describes the file the button
+  // produces. Two sources of truth here would make the preview a lie.
+  const [includeReversed, setIncludeReversed] = useState(false);
 
   // Held in state rather than read per render so the window cannot move under
   // the reader mid-choice, and re-read whenever a preset is picked so a panel
@@ -100,6 +109,7 @@ export default function ReportsPage() {
     from: period.from,
     to: period.to,
     merchant_id: merchantFilter,
+    include_reversed: includeReversed,
   };
 
   const merchants = useQuery({
@@ -110,7 +120,19 @@ export default function ReportsPage() {
   });
 
   const query = useQuery({
-    queryKey: ['admin', 'reports', kind, period.from, period.to, merchantId],
+    // `includeReversed` is part of the key, not just of the request: the two
+    // renders are different rows with different totals, and a cache that
+    // could not tell them apart would show the reader August's figures under
+    // the other setting's label.
+    queryKey: [
+      'admin',
+      'reports',
+      kind,
+      period.from,
+      period.to,
+      merchantId,
+      includeReversed,
+    ],
     queryFn: ({ signal }) => getReportPreview(kind, params, { signal }),
     enabled: isSuperadmin && problem === null,
   });
@@ -231,6 +253,8 @@ export default function ReportsPage() {
         onCustomChange={setPeriod}
         today={today}
         problem={problem}
+        includeReversed={includeReversed}
+        onIncludeReversedChange={setIncludeReversed}
         disabled={exportFile.isPending}
       />
 
@@ -278,6 +302,18 @@ export default function ReportsPage() {
         </div>
       ) : (
         <>
+          {query.data.header !== null ? (
+            // Read off the RESPONSE, never off `includeReversed` — the badge
+            // then states what these rows were actually built under, so a
+            // switch flipped while the request was in flight cannot label a
+            // table with a setting its figures do not have.
+            <ReportHeaderBlockCard
+              header={query.data.header}
+              includeReversed={query.data.include_reversed}
+              reversedRowsApply={query.data.reversed_rows_apply}
+            />
+          ) : null}
+
           <ReportSummaryPanel
             kind={kind}
             summary={query.data.summary}

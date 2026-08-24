@@ -89,7 +89,10 @@ it('writes money, percents and dates as NUMBERS a spreadsheet can add up', funct
         ->and($sheet->getCell('H1')->getValue())->toBe('Eligible sale')
         ->and($sheet->getCell('I1')->getValue())->toBe('Rate')
         ->and($sheet->getCell('J1')->getValue())->toBe('Cashback')
-        ->and($sheet->getCell('P1')->getValue())->toBe('Collected')
+        // The direction is in the label (owner, 2026-08-24): this column is
+        // money the MERCHANT sent us, two columns from one naming the batch
+        // in which we paid the customer.
+        ->and($sheet->getCell('P1')->getValue())->toBe('Collected from merchant')
         ->and($sheet->getStyle('A1')->getFont()->getBold())->toBeTrue();
 
     // Money: laari over a hundred, as a number under a money format. A

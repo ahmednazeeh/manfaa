@@ -39,9 +39,34 @@ use Illuminate\Support\Facades\DB;
  * accrual journals, collected from the fee component of the lines allocated
  * in the period, split by how the batch was funded (bank transfer or
  * merchant wallet).
+ *
+ * `include_reversed` DOES NOT REACH THIS REPORT, on purpose — see
+ * REVERSAL_NOTE, which is printed in the workbook's own header block so a
+ * reader holding both files is told why. Nothing below touches the flag;
+ * journalScope() and entryScope() are exactly what they were.
  */
 final class EarningsReport extends BaseReport
 {
+    /**
+     * The sentence that stops this report and the cashback report from
+     * reading as a contradiction (owner, 2026-08-24).
+     *
+     * `include_reversed` takes reversed SALES off the cashback report. It
+     * must never take reversal JOURNALS off this one, and the difference is
+     * not a nicety — it is the difference between a true fee income figure
+     * and an overstated one. When a sale is reversed, §6 posts a mirror of
+     * its accrual: the original journal credited 4100 with the fee, the
+     * reversal debits it back. Drop the reversal and the credit stands
+     * alone, so the platform reports fee income on a sale that was undone
+     * and never billed. The flag governs rows on the transaction sheets;
+     * the ledger stays whole, always.
+     */
+    private const string REVERSAL_NOTE = 'REVERSALS ARE ALWAYS INCLUDED HERE, whatever the '
+        .'reversed-rows setting says, because this report is built from the ledger: when a sale is '
+        .'reversed, the reversal journal is the posting that TAKES the fee back out of income. Leaving '
+        .'it out would overstate what Manfaa earned. The setting removes reversed SALES from the '
+        .'cashback report\'s transaction rows only — the two reports are not in conflict.';
+
     public const string SUMMARY = 'Summary';
 
     public const string BY_ACCOUNT = 'By account';
@@ -56,6 +81,22 @@ final class EarningsReport extends BaseReport
     public function key(): string
     {
         return 'earnings';
+    }
+
+    /**
+     * The header block's "Reversed rows" line, in BOTH flag states.
+     *
+     * The inherited sentence is written for a report of SALES: with the flag
+     * off it would say reversed sales "are not counted on this report",
+     * which is the exact opposite of the truth here — every reversal journal
+     * is counted, and REVERSAL_NOTE three rows below says so. Two adjacent
+     * lines of the same block contradicting each other is how a reader
+     * decides the whole block is decoration.
+     */
+    protected function reversedRowsNotApplicable(): ?string
+    {
+        return 'Not applicable — this report is built from the ledger, which always carries reversal '
+            .'journals. See the note below; the setting governs sale rows on the cashback report only.';
     }
 
     public function primarySheetTitle(): string
@@ -190,10 +231,14 @@ final class EarningsReport extends BaseReport
 
     private function summarySheet(): Sheet
     {
-        $sheet = new Sheet(self::SUMMARY, [
-            ReportColumn::text('metric', 'Metric'),
-            ReportColumn::money('amount_laari', 'Amount'),
-        ]);
+        $sheet = new Sheet(
+            self::SUMMARY,
+            [
+                ReportColumn::text('metric', 'Metric'),
+                ReportColumn::money('amount_laari', 'Amount'),
+            ],
+            header: $this->headerFor('Manfaa — platform earnings report', [self::REVERSAL_NOTE]),
+        );
 
         // Fee revenue as the ledger holds it, LESS the discount journals —
         // they are counted on their own line so the discount is visible

@@ -8,6 +8,7 @@ use App\Domain\Cashback\TransactionState;
 use App\Domain\Settlement\SettlementState;
 use App\Models\Settlement;
 use App\Models\SettlementLine;
+use Carbon\CarbonImmutable;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Facades\DB;
 
@@ -23,18 +24,43 @@ use Illuminate\Support\Facades\DB;
  *
  * Three sheets, Summary first in the workbook:
  *
- *   Summary       counts and totals by state, then the grand total, then the
- *                 same for the settlements the period submitted.
- *   Transactions  one row per sale, with the exact laari each one collected
- *                 (see SettlementLineAllocation for why that is not simply
- *                 cashback + fee + GST).
- *   Settlements   one row per batch submitted in the period.
+ *   Summary                 counts and totals by state, then the grand
+ *                           total, then the same for the settlements the
+ *                           period submitted.
+ *   Transactions            one row per sale, with the exact laari each one
+ *                           collected (see SettlementLineAllocation for why
+ *                           that is not simply cashback + fee + GST).
+ *   Settlements (money in)  one row per batch submitted in the period, with
+ *                           the bank references it was matched on.
+ *
+ * REVERSED SALES ARE OUT BY DEFAULT (owner, 2026-08-24). A reversed sale
+ * earned nobody anything and is owed by nobody; leaving it on the report
+ * inflated the state breakdown and invited a reader to add it into what
+ * merchants owe. `include_reversed` puts them back for whoever needs to see
+ * what was reversed in a month.
+ *
+ * That exclusion cannot disturb the Collected column's tie to the bank,
+ * and the reason is structural rather than lucky: §6 allows `reversed` only
+ * from tracked, awaiting_validation, payable_unfunded and on_hold, and a
+ * settlement line is allocated by CONFIRMING its transaction. So a row that
+ * collected money is confirmed or paid, and a confirmed or paid row cannot
+ * be reversed — corrections after confirmation are adjustments (§13).
+ * Dropping reversed rows therefore never drops a laari of collection.
+ * CashbackReportTest proves both halves: that the state machine refuses the
+ * transition, and that Σ Collected == amount_received in both modes.
  */
 final class CashbackReport extends BaseReport
 {
     public const string TRANSACTIONS = 'Transactions';
 
-    public const string SETTLEMENTS = 'Settlements';
+    /**
+     * The direction is in the title because "settlement" alone does not
+     * carry it — a tax professional reading the tab cannot tell whether the
+     * merchant is settling to us or we are settling to somebody. The domain
+     * word stays so the sheet still matches the settlement queue in the
+     * panel. 22 characters, inside Excel's 31.
+     */
+    public const string SETTLEMENTS = 'Settlements (money in)';
 
     public const string SUMMARY = 'Summary';
 
@@ -68,12 +94,20 @@ final class CashbackReport extends BaseReport
      * The driving query's WHERE, shared by the count and the build so the
      * cap can never be checked against a different set of rows than the one
      * that gets built.
+     *
+     * The reversed-rows predicate lives HERE, not in the sheet, for the same
+     * reason: countRows() decides whether the report is refused as too
+     * large, and it must count the rows the report will actually contain.
      */
     private function transactionScope(): Builder
     {
         return DB::table('transactions')
             ->where('transactions.occurred_at', '>=', $this->period->start)
             ->where('transactions.occurred_at', '<', $this->period->end)
+            ->when(
+                ! $this->options->includeReversed,
+                fn ($query) => $query->where('transactions.state', '!=', TransactionState::Reversed->value),
+            )
             ->when($this->merchantId !== null, fn ($query) => $query->where('transactions.merchant_id', $this->merchantId));
     }
 
@@ -97,13 +131,19 @@ final class CashbackReport extends BaseReport
                 ReportColumn::money('gross_due_laari', 'Gross due'),
                 ReportColumn::money('discount_laari', 'Discount'),
                 ReportColumn::money('forgiveness_laari', 'Forgiveness'),
-                ReportColumn::money('collected_laari', 'Collected'),
+                // The ambiguous labels, disambiguated (owner, 2026-08-24).
+                // "Collected" and "Settlement ref" both sit one column away
+                // from "Payout batch" on the same row, and the two words
+                // point in opposite directions: one is money the merchant
+                // sent us, the other is money we sent the customer. The
+                // KEYS are untouched — the panel reads those.
+                ReportColumn::money('collected_laari', 'Collected from merchant'),
                 ReportColumn::text('state', 'State'),
-                ReportColumn::text('settlement_ref', 'Settlement ref'),
+                ReportColumn::text('settlement_ref', 'Merchant settlement ref'),
                 ReportColumn::text('funding_method', 'Funding'),
                 ReportColumn::date('settled_at', 'Settled at'),
-                ReportColumn::date('paid_at', 'Paid at'),
-                ReportColumn::text('payout_batch_ref', 'Payout batch'),
+                ReportColumn::date('paid_at', 'Paid to customer at'),
+                ReportColumn::text('payout_batch_ref', 'Customer payout batch'),
             ],
             totals: [
                 'eligible_laari', 'cashback_laari', 'fee_laari', 'gst_laari',
@@ -165,7 +205,7 @@ final class CashbackReport extends BaseReport
                 (string) ($row->branch_name ?? ''),
                 (string) ($row->invoice_no ?? ''),
                 (string) ($row->customer_code ?? ''),
-                $this->maskedName($row->customer_name),
+                $this->personName($row->customer_name),
                 ReportLabels::origin($row->origin),
                 (int) $row->eligible_laari,
                 (int) $row->rate_bp,
@@ -240,7 +280,7 @@ final class CashbackReport extends BaseReport
         $sheet = new Sheet(
             self::SETTLEMENTS,
             [
-                ReportColumn::text('reference', 'Reference'),
+                ReportColumn::text('reference', 'Merchant settlement ref'),
                 ReportColumn::text('merchant', 'Merchant'),
                 ReportColumn::text('state', 'State'),
                 ReportColumn::text('funding_method', 'Funding'),
@@ -248,13 +288,25 @@ final class CashbackReport extends BaseReport
                 ReportColumn::money('cashback_total_laari', 'Cashback'),
                 ReportColumn::money('fee_total_laari', 'Fee'),
                 ReportColumn::money('gst_total_laari', 'GST'),
-                ReportColumn::money('amount_due_laari', 'Amount due'),
+                ReportColumn::money('amount_due_laari', 'Amount due from merchant'),
                 ReportColumn::percent('discount_rate_bp', 'Discount rate'),
                 ReportColumn::money('discount_laari', 'Discount'),
                 ReportColumn::money('forgiveness_laari', 'Forgiveness'),
-                ReportColumn::money('amount_received_laari', 'Received'),
+                ReportColumn::money('amount_received_laari', 'Received from merchant'),
                 ReportColumn::date('submitted_at', 'Submitted at'),
                 ReportColumn::date('settled_at', 'Settled at'),
+                // The reconciliation columns (owner, 2026-08-24). The two
+                // bank references are NOT the same fact and a reader
+                // chasing an unmatched transfer needs both: one is what the
+                // merchant typed into the settle page, the other is what
+                // the bank actually called the money when it arrived. They
+                // disagree often — of the eight live settlements, none
+                // carry a merchant-typed ref and four carry a bank one.
+                ReportColumn::text('bank_ref_merchant', 'Bank reference (merchant)'),
+                ReportColumn::text('bank_ref_matched', 'Bank reference (matched)'),
+                ReportColumn::text('matched_payer_name', 'Payer name (bank)'),
+                ReportColumn::date('matched_at', 'Matched at'),
+                ReportColumn::text('matched_by', 'Matched by'),
             ],
             totals: [
                 'line_count', 'cashback_total_laari', 'fee_total_laari', 'gst_total_laari',
@@ -288,11 +340,14 @@ final class CashbackReport extends BaseReport
             ->orderBy('settlements.id')
             ->lazy(2000);
 
-        $forgiven = SettlementLineAllocation::forgivenBySettlement(
-            $this->settlementScope()->pluck('settlements.id')->map(intval(...))->all(),
-        );
+        $settlementIds = $this->settlementScope()->pluck('settlements.id')->map(intval(...))->all();
+
+        $forgiven = SettlementLineAllocation::forgivenBySettlement($settlementIds);
+        $payments = $this->matchedPayments($settlementIds);
 
         foreach ($rows as $row) {
+            $matched = $payments[(int) $row->id] ?? null;
+
             $sheet->push([
                 (string) $row->reference,
                 (string) ($row->merchant_name ?? ''),
@@ -309,10 +364,207 @@ final class CashbackReport extends BaseReport
                 (int) $row->amount_received_laari,
                 $this->at($row->created_at),
                 $this->at($row->settled_at),
+                $matched['merchant_refs'] ?? '',
+                $matched['matched_refs'] ?? '',
+                $matched['payer_names'] ?? '',
+                $matched['matched_at'] ?? null,
+                $matched['matched_by'] ?? '',
             ]);
         }
 
         return $sheet;
+    }
+
+    /**
+     * The matched bank payments behind each settlement, aggregated to one
+     * row's worth of cells (owner, 2026-08-24).
+     *
+     * ONE SETTLEMENT CAN HAVE SEVERAL. A merchant who pays in two transfers
+     * has two matched payments against one batch; so does a merchant who
+     * underpaid and topped up, and so does a receipt matched twice against
+     * different bank rows. So every column here is a join, not a lookup —
+     * a `->value()` would silently show the first transfer and hide the
+     * rest, which for a reconciliation column is worse than showing none.
+     *
+     * Only `matched` payments. A pending payment is a claim the merchant
+     * has made and nobody has checked; a rejected one is a claim that was
+     * checked and refused. Neither is a bank reference this batch was
+     * settled on, and printing either beside a settled amount would invite
+     * somebody to reconcile against money that never arrived.
+     *
+     * `matched_trx_refs` (the jsonb identifier array the matcher captured)
+     * is merged into the bank column and DEDUPED against `matched_trx_id`:
+     * live rows carry the same id in both, and "90863673, 90863673" reads
+     * as two transfers.
+     *
+     * @param  list<int>  $settlementIds
+     * @return array<int, array{merchant_refs: string, matched_refs: string, payer_names: string, matched_at: CarbonImmutable|null, matched_by: string}>
+     */
+    private function matchedPayments(array $settlementIds): array
+    {
+        if ($settlementIds === []) {
+            return [];
+        }
+
+        $rows = DB::table('settlement_payments')
+            // The admin who matched by hand, by name. `matched_by` is the
+            // answer to the question the column's own label asks, and it is
+            // populated on every hand-matched live row — printing "Manual"
+            // beside a timestamp while the row holds the identity throws
+            // away the one fact an auditor is chasing.
+            ->leftJoin('admin_users', 'admin_users.id', '=', 'settlement_payments.matched_by')
+            ->whereIn('settlement_id', $settlementIds)
+            ->where('settlement_payments.state', 'matched')
+            ->orderBy('settlement_id')
+            ->orderBy('settlement_payments.id')
+            ->select([
+                'settlement_id',
+                'bank_ref',
+                'matched_trx_id',
+                'matched_trx_refs',
+                'matched_payer_name',
+                'matched_at',
+                'auto_matched',
+                'matched_by_rule',
+                'admin_users.name as matched_by_name',
+            ])
+            ->get();
+
+        /** @var array<int, array{merchant: list<string>, matched: list<string>, payers: list<string>, by: list<string>, at: CarbonImmutable|null}> $bySettlement */
+        $bySettlement = [];
+
+        foreach ($rows as $row) {
+            $id = (int) $row->settlement_id;
+            $bySettlement[$id] ??= ['merchant' => [], 'matched' => [], 'payers' => [], 'by' => [], 'at' => null];
+
+            $this->collect($bySettlement[$id]['merchant'], (string) ($row->bank_ref ?? ''));
+            $this->collect($bySettlement[$id]['matched'], (string) ($row->matched_trx_id ?? ''));
+
+            foreach ($this->identifiers($row->matched_trx_refs) as $reference) {
+                $this->collect($bySettlement[$id]['matched'], $reference);
+            }
+
+            // Through personName() like every other person's name in every
+            // report: this is what the BANK called the payer of a merchant's
+            // transfer, and live rows hold plain personal names. The .xlsx
+            // carries it whole — a reconciliation column that cannot be
+            // matched against a statement line is not a reconciliation
+            // column — and the preview masks it, per name, BEFORE the
+            // implode, so a two-payment settlement masks both.
+            $this->collect($bySettlement[$id]['payers'], $this->personName($row->matched_payer_name));
+            $this->collect($bySettlement[$id]['by'], $this->matchedBy(
+                $row->auto_matched,
+                $row->matched_by_rule,
+                $row->matched_by_name,
+            ));
+
+            $matchedAt = $this->at($row->matched_at);
+
+            if ($matchedAt !== null && ($bySettlement[$id]['at'] === null || $matchedAt->greaterThan($bySettlement[$id]['at']))) {
+                $bySettlement[$id]['at'] = $matchedAt;
+            }
+        }
+
+        $aggregated = [];
+
+        foreach ($bySettlement as $id => $parts) {
+            $aggregated[$id] = [
+                'merchant_refs' => implode(', ', $parts['merchant']),
+                'matched_refs' => implode(', ', $parts['matched']),
+                'payer_names' => implode(', ', $parts['payers']),
+                'matched_at' => $parts['at'],
+                'matched_by' => implode(', ', $parts['by']),
+            ];
+        }
+
+        return $aggregated;
+    }
+
+    /**
+     * Appends a value to an aggregation bucket unless it is empty or
+     * already there. Order of first appearance is kept, so the cell reads
+     * in the order the payments were matched.
+     *
+     * @param  list<string>  $bucket
+     */
+    private function collect(array &$bucket, string $value): void
+    {
+        $value = trim($value);
+
+        if ($value !== '' && ! in_array($value, $bucket, true)) {
+            $bucket[] = $value;
+        }
+    }
+
+    /**
+     * `settlement_payments.matched_trx_refs` as a list of strings. It is
+     * jsonb, so DB::table hands it back as raw JSON text; a malformed or
+     * absent value is simply no identifiers rather than an exception, since
+     * a report must never fail to render over a decoration column.
+     *
+     * @return list<string>
+     */
+    private function identifiers(mixed $refs): array
+    {
+        if ($refs === null || $refs === '') {
+            return [];
+        }
+
+        $decoded = is_array($refs) ? $refs : json_decode((string) $refs, true);
+
+        if (! is_array($decoded)) {
+            return [];
+        }
+
+        $identifiers = [];
+
+        foreach ($decoded as $reference) {
+            if (is_string($reference) || is_int($reference)) {
+                $identifiers[] = (string) $reference;
+            }
+        }
+
+        return $identifiers;
+    }
+
+    /**
+     * WHO matched this payment — the first question an auditor asks about a
+     * reconciliation nobody remembers doing, and it wants a name.
+     *
+     * A hand match names the admin (`Manual — Ahmed Nazeeh`), because
+     * `settlement_payments.matched_by` holds them and "Manual" beside a
+     * timestamp reads as an identity that was lost. It falls back to bare
+     * "Manual" for a row whose admin is null or deleted, which is a true
+     * statement rather than a blank.
+     *
+     * An automatic match names the RULE instead, because "automatic" covers
+     * rules of very different confidence (`receipt_reference` read an id off
+     * the slip; an amount-and-window rule guessed).
+     */
+    private function matchedBy(mixed $autoMatched, mixed $rule, mixed $adminName = null): string
+    {
+        // Postgres booleans arrive as PHP bools through PDO, but this column
+        // is read through the query builder rather than a cast model, and a
+        // driver that hands back 't'/'f' would make (bool) say true for
+        // BOTH. Enumerate the truths instead.
+        $auto = $autoMatched === true
+            || $autoMatched === 1
+            || $autoMatched === '1'
+            || $autoMatched === 't'
+            || $autoMatched === 'true';
+
+        if (! $auto) {
+            // Masked on screen, whole in the workbook — an admin's name is a
+            // person's name, and the preview is the render that gets
+            // screenshotted into a support thread.
+            $admin = $this->personName(is_string($adminName) ? $adminName : null);
+
+            return $admin === '' ? 'Manual' : 'Manual — '.$admin;
+        }
+
+        $rule = trim((string) ($rule ?? ''));
+
+        return $rule === '' ? 'Automatic' : 'Automatic — '.$rule;
     }
 
     /**
@@ -359,16 +611,30 @@ final class CashbackReport extends BaseReport
      */
     private function summarySheet(Sheet $transactions, Sheet $settlements): Sheet
     {
-        $sheet = new Sheet(self::SUMMARY, [
-            ReportColumn::text('metric', 'Metric'),
-            ReportColumn::int('count', 'Count'),
-            ReportColumn::money('eligible_laari', 'Eligible sale'),
-            ReportColumn::money('cashback_laari', 'Cashback'),
-            ReportColumn::money('fee_laari', 'Fee'),
-            ReportColumn::money('gst_laari', 'GST'),
-            ReportColumn::money('gross_due_laari', 'Gross due'),
-            ReportColumn::money('collected_laari', 'Collected'),
-        ]);
+        $sheet = new Sheet(
+            self::SUMMARY,
+            [
+                ReportColumn::text('metric', 'Metric'),
+                ReportColumn::int('count', 'Count'),
+                ReportColumn::money('eligible_laari', 'Eligible sale'),
+                ReportColumn::money('cashback_laari', 'Cashback'),
+                ReportColumn::money('fee_laari', 'Fee'),
+                ReportColumn::money('gst_laari', 'GST'),
+                ReportColumn::money('gross_due_laari', 'Gross due'),
+                ReportColumn::money('collected_laari', 'Collected from merchants'),
+            ],
+            header: $this->headerFor('Manfaa — cashback report', [
+                'Every figure on this report is money IN or money owed TO Manfaa by merchants, '
+                    .'except the Cashback column, which is what those merchants owe their customers and '
+                    .'pay through us.',
+                $this->options->includeReversed
+                    ? 'Reversed sales ARE included in the counts and totals below; they earned nobody '
+                        .'anything, so read the state breakdown before adding the grand total into anything.'
+                    : 'Reversed sales are excluded. The earnings report still carries their ledger '
+                        .'journals, and must: there, the reversal is the posting that TAKES the fee back '
+                        .'out of income.',
+            ]),
+        );
 
         $stateIndex = $transactions->indexOf('state');
         $buckets = [];

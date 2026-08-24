@@ -1527,6 +1527,32 @@ export cache-control private/no-store; temp workbook cleanup on the
 failure path; export ceiling measured against the 256M pool and split
 from the preview cap. Suite 1940+ green.
 
+#### Reports refinements (owner, 2026-08-24)
+
+Reversed sales are OUT of the cashback report by default —
+`include_reversed` (default false) on preview and export, one toggle
+driving both, recorded on the audit row. It is INERT on payouts (every
+row is paid, and §6 makes paid terminal) and on earnings (ledger-
+derived: reversal journals must always remain, or fee income is
+overstated), and the workbook now SAYS so per report rather than
+printing a generic sentence that contradicted its own notes.
+Exports carry FULL customer names, account numbers and bank payer
+names — a superadmin, audited, tax artefact; the on-screen preview
+stays masked, enforced by a Masking mode fixed at construction with
+`forExport()` returning a NEW instance and `previewPayload()` throwing
+on a full-mode report.
+Money direction is unmissable: sheet titles carry it ("Settlements
+(money in)", "Payouts (money out)"), each Summary opens with a header
+block (period, timezone, merchant filter, reversed-rows fact, and a
+two-line glossary of the two flows), and ambiguous labels now name the
+counterparty ("Collected from merchant", "Paid to customer at").
+Reconciliation columns added: payout transfer references
+(`payout_items.bank_reference`), and per settlement both the
+merchant-typed bank ref and the BANK's matched transaction id
+(aggregated across a batch's matched payments), payer name, matched at,
+and who matched it. Review: 10 findings, 0 blockers, all fixed. Suite
+1986+ green; 111 report tests.
+
 ### Queue (updated 2026-08-17) — the mobile programme
 
 The mobile API round is DONE and reviewed (PLAN-mobile-api.md: M1–M5, two

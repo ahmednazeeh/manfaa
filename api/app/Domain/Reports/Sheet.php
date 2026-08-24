@@ -16,6 +16,10 @@ use InvalidArgumentException;
  * header, and a finance sheet where column six is sometimes GST and
  * sometimes the fee is worse than no sheet at all. Construction goes
  * through push(), which refuses a row of the wrong width.
+ *
+ * A sheet may also carry a HeaderBlock — prose above the column header,
+ * held apart from $rows so it can never be summed, filtered, previewed or
+ * counted as data. Only the workbook renders it.
  */
 final class Sheet
 {
@@ -25,11 +29,13 @@ final class Sheet
     /**
      * @param  list<ReportColumn>  $columns
      * @param  list<string>  $totals  column keys to SUM in the totals row
+     * @param  ?HeaderBlock  $header  prose above the column header; workbook only
      */
     public function __construct(
         public readonly string $title,
         public readonly array $columns,
         public readonly array $totals = [],
+        public readonly ?HeaderBlock $header = null,
     ) {
         foreach ($totals as $key) {
             $column = $this->column($key);

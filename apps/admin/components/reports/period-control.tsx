@@ -15,16 +15,23 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 
 /**
  * The window every report is read through: three named periods and a
- * hand-picked one, with the resolved range spelled out underneath.
+ * hand-picked one, with the resolved range spelled out underneath — plus the
+ * one switch that changes which rows the window contains.
  *
  * The range is stated in words on purpose. "Last 3 months" is ambiguous
  * everywhere it appears — it could mean three whole calendar months or the
  * ninety days behind you — and a finance figure whose period the reader has
  * to guess at is not a figure they can act on. The dates below the buttons
  * settle it before anyone reads a total.
+ *
+ * The reversed-rows switch lives here, beside the dates, because it is the
+ * same kind of control: both decide WHICH ROWS the report is built from, and
+ * both change every total on the screen. One drives the preview and the
+ * export together — see ReportsPage.
  */
 export function PeriodControl({
   preset,
@@ -33,6 +40,8 @@ export function PeriodControl({
   onCustomChange,
   today,
   problem,
+  includeReversed,
+  onIncludeReversedChange,
   disabled = false,
 }: {
   preset: PeriodPreset;
@@ -44,6 +53,9 @@ export function PeriodControl({
   today: string;
   /** Why this window cannot be sent, from `periodProblem`. */
   problem: string | null;
+  /** Whether reversed transaction rows are in the report. Default off. */
+  includeReversed: boolean;
+  onIncludeReversedChange: (includeReversed: boolean) => void;
   disabled?: boolean;
 }) {
   const days = daysInPeriod(period.from, period.to);
@@ -126,6 +138,31 @@ export function PeriodControl({
           ) : (
             <span className="font-medium">{problem}</span>
           )}
+        </div>
+
+        <div className="flex items-start justify-between gap-4 border-t border-border pt-4">
+          <div className="flex flex-col gap-1">
+            <Label
+              htmlFor="report-include-reversed"
+              className="cursor-pointer text-sm font-medium"
+            >
+              Include reversed transactions
+            </Label>
+            <p className="max-w-3xl text-xs text-muted-foreground">
+              Off by default — a reversed sale was undone, so its row is left
+              out of this table and of the .xlsx alike. The earnings report is
+              the exception and always keeps its reversal postings: on the
+              ledger, the reversal is the entry that takes the fee back out of
+              income.
+            </p>
+          </div>
+
+          <Switch
+            id="report-include-reversed"
+            checked={includeReversed}
+            onCheckedChange={onIncludeReversedChange}
+            disabled={disabled}
+          />
         </div>
       </CardContent>
     </Card>

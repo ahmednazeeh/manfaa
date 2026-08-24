@@ -2766,6 +2766,22 @@ export type ReportKind = z.infer<typeof ReportKindSchema>;
 export const REPORT_KINDS = ReportKindSchema.options;
 
 /**
+ * Whether `include_reversed` can change a given report at all — false for
+ * payouts (every row was paid, and paid is terminal) and for earnings (built
+ * from the ledger, which always keeps reversal journals).
+ *
+ * A MIRROR of the server's Report::reversedRowsApply(), and used only where
+ * there is no server answer to hand: the export filename fallback for a proxy
+ * that ate Content-Disposition. Anywhere a preview response is available,
+ * read `reversed_rows_apply` off it instead — the server is the authority,
+ * and a browser-side list of report names is exactly the drift the header
+ * block is served verbatim to avoid.
+ */
+export function reportUsesReversedRows(kind: ReportKind): boolean {
+  return kind === "cashback";
+}
+
+/**
  * What a preview cell MEANS, which is the only thing that says how to render
  * it — the wire carries bare scalars and nothing else distinguishes 2000
  * laari from 2000 basis points:
@@ -2857,6 +2873,42 @@ export const ReportSheetIndexSchema = z.object({
 });
 export type ReportSheetIndex = z.infer<typeof ReportSheetIndexSchema>;
 
+/** One `label: value` line of the header block — "Period", "Merchant", … */
+export const ReportHeaderFactSchema = z.object({
+  label: z.string(),
+  value: z.string(),
+});
+export type ReportHeaderFact = z.infer<typeof ReportHeaderFactSchema>;
+
+/**
+ * The prose block the workbook's Summary sheet opens with (owner,
+ * 2026-08-24), carried verbatim so the panel can show the reader the same
+ * sentences the file will — before they download it.
+ *
+ * `facts` is the provenance: report name, period, timezone, merchant filter
+ * and whether reversed rows are in this render. `notes` is the glossary that
+ * exists because Manfaa's two money flows share one blurry word:
+ *
+ *   MERCHANT SETTLEMENT   money IN  — the merchant pays Manfaa
+ *   CUSTOMER PAYOUT       money OUT — Manfaa pays the customer
+ *
+ * "Settlement" alone says which side is settling to nobody, and a tax
+ * professional reading this months later was never in the room. The earnings
+ * report adds a third note there: its reversal journals are ALWAYS included,
+ * whatever `include_reversed` says, because on the ledger the reversal is the
+ * posting that takes the fee back out of income.
+ *
+ * It is NOT data. The block never enters the preview's `rows`, so it cannot
+ * shift a positional cell's meaning or be caught by a totals formula. Render
+ * it as prose; `notes` is a list of whole sentences, already written.
+ */
+export const ReportHeaderBlockSchema = z.object({
+  title: z.string(),
+  facts: z.array(ReportHeaderFactSchema),
+  notes: z.array(z.string()),
+});
+export type ReportHeaderBlock = z.infer<typeof ReportHeaderBlockSchema>;
+
 /** The primary sheet's head: its title, its columns, and up to 50 rows. */
 export const ReportPreviewSheetSchema = z.object({
   sheet: z.string(),
@@ -2873,11 +2925,30 @@ export type ReportPreviewSheet = z.infer<typeof ReportPreviewSheetSchema>;
  * Transactions, payouts → Transactions, earnings → Postings): `capped` true
  * means the preview stops at REPORT_PREVIEW_ROWS and the export is where the
  * rest lives. A preview writes no audit row; an export does.
+ *
+ * `include_reversed` is the server's echo of what it actually built, not of
+ * what was asked — read the preview's setting off THIS rather than off the
+ * caller's own state, so a toggle mid-flight cannot label a table with a
+ * setting the rows on it were not built under.
+ *
+ * `reversed_rows_apply` says whether that setting can change this report at
+ * all: false on payouts (every row was paid, and paid is terminal) and on
+ * earnings (ledger-derived, so reversal journals always stay). Label the
+ * setting off BOTH — "reversed rows included" over a report the flag did
+ * nothing to is the same misinformation the workbook's header block was
+ * rewritten to stop telling.
+ *
+ * `header` is the workbook's own header block (null for a report that has
+ * none). Every preview cell is MASKED — `Ahm*** Naz***`, `****3098`; the
+ * .xlsx from /export is the one unmasked render.
  */
 export const ReportPreviewSchema = z.object({
   report: ReportKindSchema,
   period: ReportPeriodSchema,
   merchant_id: z.number().int().nullable(),
+  include_reversed: z.boolean(),
+  reversed_rows_apply: z.boolean(),
+  header: ReportHeaderBlockSchema.nullable(),
   summary: ReportSummarySchema,
   preview: ReportPreviewSheetSchema,
   sheets: z.array(ReportSheetIndexSchema),
@@ -2908,6 +2979,24 @@ export interface ReportPeriodParams {
   to: string;
   /** One merchant, or null/undefined for every merchant. */
   merchant_id?: number | null;
+  /**
+   * Whether rows for REVERSED transactions are in the report. Defaults to
+   * false on both endpoints — a reversed sale is one that was undone, and a
+   * finance report is safe to be wrong in the direction of leaving those out.
+   *
+   * Pass the SAME value to getReportPreview and downloadReportExport. The
+   * whole point of the flag being on both is that the table on screen
+   * describes the file the button produces; two different values make the
+   * preview a lie about the export.
+   *
+   * It does NOT govern the earnings report, which is derived from the ledger
+   * and always carries reversal JOURNALS: there the reversal is the posting
+   * that takes the fee back OUT of income, so dropping it would overstate
+   * what Manfaa earned. The flag removes reversed transaction ROWS from the
+   * cashback report; the two reports are not in conflict, and each workbook
+   * says so in its own header block.
+   */
+  include_reversed?: boolean;
 }
 
 function reportQuery(params: ReportPeriodParams): string {
@@ -2915,6 +3004,12 @@ function reportQuery(params: ReportPeriodParams): string {
     from: params.from,
     to: params.to,
     merchant_id: params.merchant_id ?? undefined,
+    // Sent only when true, and as "1" rather than "true". The API accepts
+    // either spelling (its validation and its parse are one function), but
+    // omitting the default keeps an ordinary report's URL — and so its
+    // cache key and its server logs — byte-identical to what it has always
+    // been, and "1" is the spelling a hand-typed URL uses.
+    include_reversed: params.include_reversed === true ? "1" : undefined,
   });
 }
 
@@ -2969,9 +3064,18 @@ export interface ReportExportDownload {
   blob: Blob;
   /**
    * From Content-Disposition — `manfaa-{kind}-{from}-{to}.xlsx`, with
-   * `-m{merchantId}` appended when the export was filtered to one merchant.
-   * Without that suffix a filtered and an unfiltered export of the same
-   * period want the same name, and the second lands as `... (1).xlsx`.
+   * `-m{merchantId}` appended when the export was filtered to one merchant
+   * and `-with-reversed` when reversed rows were included. Without those
+   * suffixes two different exports of the same period want the same name,
+   * and the second lands as `... (1).xlsx`.
+   *
+   * The reversed suffix is the more important of the two: the same shop and
+   * the same month exported both ways produce files with DIFFERENT TOTALS,
+   * and a reader who cannot tell them apart will eventually send the wrong
+   * one to an accountant. It appears on the cashback export only — on
+   * payouts and earnings the setting is inert, so both spellings produce the
+   * same workbook and naming them differently would advertise a difference
+   * in totals that does not exist.
    */
   filename: string;
 }
@@ -2988,6 +3092,12 @@ export interface ReportExportDownload {
  * Every call writes one `report_exports` audit row — this is the endpoint
  * that puts customer codes and the money trace into a file that leaves the
  * building — so fire it on a click, never on render or in an effect.
+ *
+ * It is also the UNMASKED render (owner, 2026-08-24): the workbook carries
+ * full customer names, whole bank account numbers and full account names,
+ * because its job is to be reconciled line by line against a bank statement
+ * and then filed for tax, and `****4821` reconciles against nothing. The
+ * preview stays masked. Same figures, same rows — a different artefact.
  */
 export async function downloadReportExport(
   kind: ReportKind,
@@ -3002,11 +3112,16 @@ export async function downloadReportExport(
   return {
     blob,
     // The server names the file; the fallback only covers a proxy that eats
-    // the header, and mirrors the same rule — merchant filter included.
+    // the header, and mirrors the same rule — merchant filter and the
+    // reversed-rows choice both included, in that order.
     filename:
       filename ??
       `manfaa-${kind}-${params.from}-${params.to}${
         params.merchant_id == null ? "" : `-m${params.merchant_id}`
+      }${
+        params.include_reversed === true && reportUsesReversedRows(kind)
+          ? "-with-reversed"
+          : ""
       }.xlsx`,
   };
 }

@@ -2,8 +2,10 @@
 
 declare(strict_types=1);
 
+use App\Domain\Reports\HeaderBlock;
 use App\Domain\Reports\Report;
 use App\Domain\Reports\ReportFactory;
+use App\Domain\Reports\ReportOptions;
 use App\Domain\Reports\ReportPeriod;
 use App\Domain\Reports\ReportTooLargeException;
 use App\Domain\Reports\Sheet;
@@ -184,7 +186,7 @@ function bindHugeReport(int $rowCount): void
     {
         public function __construct(private readonly int $rowCount) {}
 
-        public function make(string $key, ReportPeriod $period, ?int $merchantId = null): Report
+        public function make(string $key, ReportPeriod $period, ?int $merchantId = null, ?ReportOptions $options = null): Report
         {
             return new class($this->rowCount) implements Report
             {
@@ -193,6 +195,31 @@ function bindHugeReport(int $rowCount): void
                 public function key(): string
                 {
                     return 'cashback';
+                }
+
+                public function forExport(): static
+                {
+                    return $this;
+                }
+
+                public function includeReversed(): bool
+                {
+                    return false;
+                }
+
+                public function reversedRowsApply(): bool
+                {
+                    return true;
+                }
+
+                public function headerBlock(): ?HeaderBlock
+                {
+                    return null;
+                }
+
+                public function previewPayload(int $limit): array
+                {
+                    return ['sheet' => 'Transactions', 'columns' => [], 'rows' => []];
                 }
 
                 public function rowCount(): int

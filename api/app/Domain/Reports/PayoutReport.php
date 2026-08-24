@@ -38,22 +38,54 @@ use Illuminate\Support\Facades\DB;
  * set: a failure has no transactions left linked — ItemResultService unlinks
  * them so they re-enter the next batch — so it cannot be attributed to a
  * merchant, and a filtered report would be inventing an attribution.
+ *
+ * REVERSED ROWS. `include_reversed` is accepted here and plumbed into the
+ * driving scope, but it cannot change a figure and that is by construction:
+ * every row on this report has a `paid` event, `paid` is terminal in §6,
+ * and reversal is refused from `confirmed` onward anyway. The predicate is
+ * carried regardless so the promise "no report shows reversed rows unless
+ * asked" is enforced by the query rather than by a paragraph — and if the
+ * state machine is ever loosened, the Transactions sheet and the per-item
+ * attribution narrow TOGETHER (both read paidScope()), so the three-way tie
+ * survives the change instead of quietly breaking.
  */
 final class PayoutReport extends BaseReport
 {
     public const string TRANSACTIONS = 'Transactions';
 
-    public const string PAYOUTS = 'Payouts';
+    /**
+     * Titles carry the direction (owner, 2026-08-24). "Payouts" beside
+     * "Settlements" in another workbook is exactly the pair a tax
+     * professional cannot tell apart, and the tab is the first thing they
+     * read. All within Excel's 31-character limit.
+     */
+    public const string PAYOUTS = 'Payouts (money out)';
 
-    public const string BATCHES = 'Batches';
+    public const string BATCHES = 'Payout batches (money out)';
 
-    public const string WITHDRAWALS = 'Wallet withdrawals';
+    public const string WITHDRAWALS = 'Wallet withdrawals (money out)';
 
     public const string SUMMARY = 'Summary';
 
     public function key(): string
     {
         return 'payouts';
+    }
+
+    /**
+     * The header block's "Reversed rows" line, in BOTH flag states, because
+     * this report holds the same rows in both.
+     *
+     * The inherited sentence would tell the reader that reversed sales
+     * "appear below, with 'reversed' in their State column" — on a sheet
+     * with no State column, three rows above this report's own note saying
+     * a reversed sale cannot reach it. Saying the same true thing whichever
+     * way the switch was left is the only version a reader can trust.
+     */
+    protected function reversedRowsNotApplicable(): ?string
+    {
+        return 'Not applicable — every row on this report was PAID, and §6 makes paid terminal, so a '
+            .'reversed sale can never appear here. The setting changes nothing on this report.';
     }
 
     public function primarySheetTitle(): string
@@ -107,6 +139,12 @@ final class PayoutReport extends BaseReport
             ->joinSub($paid, 'paid_event', 'paid_event.transaction_id', '=', 'transactions.id')
             ->where('paid_event.paid_at', '>=', $this->period->start)
             ->where('paid_event.paid_at', '<', $this->period->end)
+            // A no-op today (see the class docblock) and deliberately kept:
+            // the rule is enforced where the rows are chosen, not assumed.
+            ->when(
+                ! $this->options->includeReversed,
+                fn ($query) => $query->where('transactions.state', '!=', TransactionState::Reversed->value),
+            )
             ->when($this->merchantId !== null, fn ($query) => $query->where('transactions.merchant_id', $this->merchantId));
     }
 
@@ -116,13 +154,20 @@ final class PayoutReport extends BaseReport
             self::TRANSACTIONS,
             [
                 ReportColumn::date('paid_at', 'Paid at'),
-                ReportColumn::text('batch_ref', 'Batch ref'),
+                ReportColumn::text('batch_ref', 'Payout batch ref'),
                 ReportColumn::text('customer_code', 'Customer code'),
                 ReportColumn::text('customer', 'Customer'),
                 ReportColumn::text('merchant', 'Merchant'),
                 ReportColumn::text('invoice_no', 'Invoice no'),
                 ReportColumn::date('occurred_at', 'Occurred at'),
                 ReportColumn::money('cashback_laari', 'Cashback'),
+                // The bank's own reference for the transfer that paid this
+                // sale (owner, 2026-08-24). It lives on the payout ITEM —
+                // one transfer pays a customer's whole item, which may
+                // cover several sales — so the same reference repeats down
+                // the sheet, which is exactly what a reader matching a bank
+                // statement line to the sales behind it needs.
+                ReportColumn::text('bank_reference', 'Transfer reference'),
             ],
             totals: ['cashback_laari'],
         );
@@ -142,6 +187,7 @@ final class PayoutReport extends BaseReport
                 'customers.name as customer_name',
                 'merchants.name as merchant_name',
                 'payout_batches.reference as batch_ref',
+                'payout_items.bank_reference',
             ])
             ->orderBy('paid_event.paid_at')
             ->orderBy('transactions.id')
@@ -152,11 +198,12 @@ final class PayoutReport extends BaseReport
                 $this->at($row->paid_at),
                 (string) ($row->batch_ref ?? ''),
                 (string) ($row->customer_code ?? ''),
-                $this->maskedName($row->customer_name),
+                $this->personName($row->customer_name),
                 (string) ($row->merchant_name ?? ''),
                 (string) ($row->invoice_no ?? ''),
                 $this->at($row->occurred_at),
                 (int) $row->cashback_laari,
+                (string) ($row->bank_reference ?? ''),
             ]);
         }
 
@@ -201,15 +248,22 @@ final class PayoutReport extends BaseReport
         $sheet = new Sheet(
             self::PAYOUTS,
             [
-                ReportColumn::text('batch_ref', 'Batch ref'),
+                ReportColumn::text('batch_ref', 'Payout batch ref'),
                 ReportColumn::text('customer_code', 'Customer code'),
                 ReportColumn::text('customer', 'Customer'),
                 ReportColumn::text('bank', 'Bank'),
                 ReportColumn::text('account', 'Account'),
-                ReportColumn::money('amount_laari', 'Item amount'),
-                ReportColumn::money('paid_laari', 'Paid in period'),
+                // The name the money was sent TO, as the bank saw it — the
+                // other half of an account number, and the thing a
+                // reconciliation actually reads when a transfer bounces.
+                ReportColumn::text('account_name', 'Account name'),
+                ReportColumn::money('amount_laari', 'Payout amount'),
+                ReportColumn::money('paid_laari', 'Paid out in period'),
                 ReportColumn::int('transaction_count', 'Transactions'),
                 ReportColumn::text('status', 'Status'),
+                // payout_items.bank_reference — the bank's own reference for
+                // the transfer, populated on every live paid item.
+                ReportColumn::text('bank_reference', 'Transfer reference'),
                 ReportColumn::date('outcome_at', 'Paid / failed at'),
                 ReportColumn::text('failure_reason', 'Failure reason'),
             ],
@@ -252,6 +306,8 @@ final class PayoutReport extends BaseReport
                 'payout_items.state',
                 'payout_items.failure_reason',
                 'payout_items.customer_name',
+                'payout_items.account_name',
+                'payout_items.bank_reference',
                 'payout_items.updated_at',
                 'customers.customer_code',
                 'payout_batches.reference as batch_ref',
@@ -276,13 +332,15 @@ final class PayoutReport extends BaseReport
             $sheet->push([
                 (string) ($row->batch_ref ?? ''),
                 (string) ($row->customer_code ?? ''),
-                $this->maskedName($row->customer_name),
+                $this->personName($row->customer_name),
                 (string) ($row->bank ?? ''),
-                ReportLabels::maskedAccount($row->account),
+                $this->bankAccount($row->account),
+                $this->personName($row->account_name),
                 (int) $row->amount_laari,
                 $attributed['laari'] ?? 0,
                 $attributed['count'] ?? 0,
                 ReportLabels::payoutItemState($row->state),
+                (string) ($row->bank_reference ?? ''),
                 $outcomeAt,
                 (string) ($row->failure_reason ?? ''),
             ]);
@@ -299,14 +357,24 @@ final class PayoutReport extends BaseReport
         $sheet = new Sheet(
             self::BATCHES,
             [
-                ReportColumn::text('reference', 'Batch ref'),
+                // `payout_batches` carries no bank reference of its own —
+                // the bank references a TRANSFER, and a batch is many
+                // transfers, one per customer, each with its own
+                // `payout_items.bank_reference` on the Payouts sheet. What
+                // the batch does carry is the two instants that say how it
+                // reached the bank at all, and those are what a
+                // reconciliation chases when a whole batch is unaccounted
+                // for: the transfer sheet a human uploaded, or the API call.
+                ReportColumn::text('reference', 'Payout batch ref'),
                 ReportColumn::text('period', 'Period covered'),
                 ReportColumn::date('created_at', 'Created at'),
                 ReportColumn::date('approved_at', 'Approved at'),
+                ReportColumn::date('exported_at', 'Transfer sheet exported at'),
+                ReportColumn::date('api_sent_at', 'Sent to bank at'),
                 ReportColumn::date('paid_at', 'Last outcome at'),
                 ReportColumn::int('item_count', 'Items'),
                 ReportColumn::money('total_laari', 'Batch amount'),
-                ReportColumn::money('paid_laari', 'Paid in period'),
+                ReportColumn::money('paid_laari', 'Paid out in period'),
                 ReportColumn::int('excluded_customer_count', 'Excluded customers'),
                 ReportColumn::money('excluded_total_laari', 'Excluded total'),
                 ReportColumn::text('status', 'Status'),
@@ -332,6 +400,8 @@ final class PayoutReport extends BaseReport
                 sprintf('%s to %s', $row->period_start, $row->period_end),
                 $this->at($row->created_at),
                 $this->at($row->approved_at),
+                $this->at($row->exported_at),
+                $this->at($row->api_sent_at),
                 $batch['outcome'],
                 (int) $row->customer_count,
                 (int) $row->total_laari,
@@ -362,10 +432,16 @@ final class PayoutReport extends BaseReport
             [
                 ReportColumn::text('customer_code', 'Customer code'),
                 ReportColumn::text('customer', 'Customer'),
-                ReportColumn::money('amount_laari', 'Amount'),
+                ReportColumn::money('amount_laari', 'Amount paid out'),
                 ReportColumn::text('bank', 'Bank'),
                 ReportColumn::text('account', 'Account'),
+                ReportColumn::text('account_name', 'Account name'),
                 ReportColumn::text('status', 'Status'),
+                // `customer_payouts.trx_id` is the bank's own id for this
+                // withdrawal — the same fact `payout_items.bank_reference`
+                // carries for a cashback payout, under the column label a
+                // reader of both sheets will look for.
+                ReportColumn::text('trx_id', 'Transfer reference'),
                 ReportColumn::date('requested_at', 'Requested at'),
                 ReportColumn::date('processed_at', 'Paid at'),
                 ReportColumn::text('failure_reason', 'Failure reason'),
@@ -385,7 +461,9 @@ final class PayoutReport extends BaseReport
                 'customer_payouts.amount_laari',
                 'customer_payouts.bank',
                 'customer_payouts.account',
+                'customer_payouts.account_name',
                 'customer_payouts.state',
+                'customer_payouts.trx_id',
                 'customer_payouts.requested_at',
                 'customer_payouts.processed_at',
                 'customer_payouts.failure_reason',
@@ -399,11 +477,13 @@ final class PayoutReport extends BaseReport
         foreach ($rows as $row) {
             $sheet->push([
                 (string) ($row->customer_code ?? ''),
-                $this->maskedName($row->customer_name),
+                $this->personName($row->customer_name),
                 (int) $row->amount_laari,
                 (string) ($row->bank ?? ''),
-                ReportLabels::maskedAccount($row->account),
+                $this->bankAccount($row->account),
+                $this->personName($row->account_name),
                 ReportLabels::walletPayoutState($row->state),
+                (string) ($row->trx_id ?? ''),
                 $this->at($row->requested_at),
                 $this->at($row->processed_at),
                 (string) ($row->failure_reason ?? ''),
@@ -415,11 +495,21 @@ final class PayoutReport extends BaseReport
 
     private function summarySheet(Sheet $transactions, Sheet $payouts, Sheet $batches, Sheet $withdrawals): Sheet
     {
-        $sheet = new Sheet(self::SUMMARY, [
-            ReportColumn::text('metric', 'Metric'),
-            ReportColumn::int('count', 'Count'),
-            ReportColumn::money('amount_laari', 'Amount'),
-        ]);
+        $sheet = new Sheet(
+            self::SUMMARY,
+            [
+                ReportColumn::text('metric', 'Metric'),
+                ReportColumn::int('count', 'Count'),
+                ReportColumn::money('amount_laari', 'Amount'),
+            ],
+            header: $this->headerFor('Manfaa — customer payout report', [
+                'Every figure on this report is money OUT. Nothing here is owed to Manfaa and nothing '
+                    .'here is income; the fee Manfaa earned on these same sales is on the earnings report.',
+                'Reversed sales cannot appear on this report at all: every row was PAID, and §6 makes '
+                    .'paid terminal — a sale cannot be reversed after it is confirmed, let alone paid. '
+                    .'The reversed-rows setting therefore changes nothing here.',
+            ]),
+        );
 
         $statusIndex = $payouts->indexOf('status');
         $amountIndex = $payouts->indexOf('amount_laari');

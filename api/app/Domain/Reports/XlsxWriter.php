@@ -34,6 +34,13 @@ use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
  * the header and its data (never the totals row, which must not be filtered
  * away), and a totals row closes each sheet with real =SUM() formulas so a
  * reader can widen the maths themselves.
+ *
+ * A sheet may open with a HeaderBlock — the report's name, the period, the
+ * filters and the money-direction glossary. It is rendered here and NOWHERE
+ * else: the block never enters Sheet::$rows, so the preview cannot serialise
+ * it and no totals formula can reach it. Everything below it is offset by
+ * $headerRow, which is the single number the frozen pane, the autofilter
+ * range and every SUM range are computed from.
  */
 final class XlsxWriter
 {
@@ -79,9 +86,24 @@ final class XlsxWriter
 
         $path = (string) tempnam(sys_get_temp_dir(), 'manfaa-report-');
 
-        (new Xlsx($spreadsheet))->save($path);
+        // The file is owned by the function that CREATES it, not by the
+        // caller that receives the path — because between tempnam() and the
+        // return there is no path to hand back, so a throw here would leave
+        // the caller's own finally with nothing to unlink. It would leave a
+        // partial workbook of full customer names and whole bank account
+        // numbers in the temp dir instead, permanently, with nothing that
+        // reaps them. That is not hypothetical: it is exactly the failure
+        // ReportTooLargeException::MAX_EXPORT_ROWS was measured against,
+        // where the writer dies inside zipstream part-way through.
+        try {
+            (new Xlsx($spreadsheet))->save($path);
+        } catch (\Throwable $e) {
+            @unlink($path);
 
-        $spreadsheet->disconnectWorksheets();
+            throw $e;
+        } finally {
+            $spreadsheet->disconnectWorksheets();
+        }
 
         return $path;
     }
@@ -90,21 +112,48 @@ final class XlsxWriter
     {
         $lastColumn = Coordinate::stringFromColumnIndex(max(1, count($sheet->columns)));
 
+        // EVERY row coordinate below is derived from this one number. A
+        // sheet with no header block offsets by zero and lands exactly where
+        // it always did (labels on row 1, data from row 2); a sheet with one
+        // pushes the whole structure — labels, frozen pane, autofilter and
+        // the SUM ranges — down together. Deriving them all from
+        // $headerRow rather than writing 1s and 2s is what stops a totals
+        // formula from quietly summing the glossary.
+        $headerRow = ($sheet->header?->height() ?? 0) + 1;
+        $firstDataRow = $headerRow + 1;
+
+        if ($sheet->header !== null) {
+            $this->renderHeaderBlock($worksheet, $sheet->header);
+        }
+
         foreach ($sheet->columns as $index => $column) {
             $letter = Coordinate::stringFromColumnIndex($index + 1);
 
-            $worksheet->setCellValueExplicit($letter.'1', $column->label, DataType::TYPE_STRING);
+            $worksheet->setCellValueExplicit($letter.$headerRow, $column->label, DataType::TYPE_STRING);
             $worksheet->getColumnDimension($letter)->setWidth(
                 max($column->type->width(), mb_strlen($column->label) + 3),
             );
         }
 
-        $worksheet->getStyle('A1:'.$lastColumn.'1')->getFont()->setBold(true);
+        $worksheet->getStyle('A'.$headerRow.':'.$lastColumn.$headerRow)->getFont()->setBold(true);
 
         // Frozen header: the labels stay put however far finance scrolls.
-        $worksheet->freezePane('A2');
+        //
+        // Only on a sheet WITHOUT a header block. A frozen pane in Excel
+        // pins everything above the split — there is no way to pin row 12
+        // while rows 1–11 scroll — so freezing the label row of a
+        // block-bearing sheet would nail the whole eleven-line preamble to
+        // the top of the window, on the sheet the workbook opens on. The
+        // block is worth reading once, not worth a third of the viewport
+        // forever. The sheets that carry a block are the Summary sheets,
+        // which are a few dozen rows and never need a pinned header;
+        // Transactions, Settlements, Payouts and Postings are the long ones
+        // and they have no block, so they freeze exactly as they always did.
+        if ($sheet->header === null) {
+            $worksheet->freezePane('A'.$firstDataRow);
+        }
 
-        $row = 1;
+        $row = $headerRow;
 
         foreach ($sheet->rows() as $values) {
             $row++;
@@ -123,8 +172,11 @@ final class XlsxWriter
 
         // The filter covers the header and the data only. Including the
         // totals row would let a filter hide the total, or worse, leave a
-        // total showing that no longer matches what is on screen.
-        $worksheet->setAutoFilter('A1:'.$lastColumn.$lastDataRow);
+        // total showing that no longer matches what is on screen. It must
+        // not reach the header block either: an autofilter starting at row 1
+        // would put dropdown arrows on the glossary and offer "Period" as a
+        // filterable value.
+        $worksheet->setAutoFilter('A'.$headerRow.':'.$lastColumn.$lastDataRow);
 
         if ($sheet->totals === []) {
             return;
@@ -147,7 +199,9 @@ final class XlsxWriter
             // deletes a row gets a total that follows.
             $worksheet->setCellValue(
                 $letter.$totalsRow,
-                $lastDataRow >= 2 ? sprintf('=SUM(%1$s2:%1$s%2$d)', $letter, $lastDataRow) : 0,
+                $lastDataRow >= $firstDataRow
+                    ? sprintf('=SUM(%1$s%2$d:%1$s%3$d)', $letter, $firstDataRow, $lastDataRow)
+                    : 0,
             );
 
             if ($column->type === ColumnType::Money) {
@@ -156,6 +210,37 @@ final class XlsxWriter
         }
 
         $worksheet->getStyle('A'.$totalsRow.':'.$lastColumn.$totalsRow)->getFont()->setBold(true);
+    }
+
+    /**
+     * The prose above the column header: the report's name, the facts that
+     * define this render, and the money-direction glossary.
+     *
+     * Written as explicit strings, like every other text cell, so a note
+     * that begins with a "-" is prose rather than a formula. Nothing here
+     * is merged: merged cells break sorting and copy-paste for the reader,
+     * and a long sentence in column A already overflows readably across the
+     * empty cells beside it.
+     */
+    private function renderHeaderBlock(Worksheet $worksheet, HeaderBlock $header): void
+    {
+        foreach ($header->lines() as $index => [$label, $value]) {
+            $row = $index + 1;
+
+            if ($label !== '') {
+                $worksheet->setCellValueExplicit('A'.$row, $label, DataType::TYPE_STRING);
+            }
+
+            if ($value !== '') {
+                $worksheet->setCellValueExplicit('B'.$row, $value, DataType::TYPE_STRING);
+            }
+        }
+
+        $worksheet->getStyle('A1')->getFont()->setBold(true)->setSize(13);
+
+        if ($header->factCount() > 0) {
+            $worksheet->getStyle('A2:A'.($header->factCount() + 1))->getFont()->setBold(true);
+        }
     }
 
     private function writeCell(Worksheet $worksheet, string $coordinate, ColumnType $type, mixed $value): void

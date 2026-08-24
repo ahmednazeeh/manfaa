@@ -28,6 +28,7 @@ class ReportExport extends Model
             'merchant_id' => 'integer',
             'period_from' => 'immutable_date',
             'period_to' => 'immutable_date',
+            'include_reversed' => 'boolean',
             'row_count' => 'integer',
             'created_at' => 'immutable_datetime',
         ];
