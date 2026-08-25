@@ -31,6 +31,7 @@ import { BankLabel } from '@/components/admin/bank-select';
 import { PageHeader } from '@/components/admin/page-header';
 import { Pager } from '@/components/admin/pager';
 import { TopUpStateBadge } from '@/components/admin/state-badge';
+import { ReceivedAmount } from '@/components/transfers/claim-and-fact';
 import { autoVerifyStatus } from '@/components/wallet-top-ups/auto-verify';
 import { AutoVerifyBadge } from '@/components/wallet-top-ups/auto-verify-badge';
 import {
@@ -51,7 +52,7 @@ const DESCRIPTIONS: Record<StateFilter, string> = {
   pending:
     'Merchants who transferred to a platform account to fund their wallet and uploaded the slip. The bank-history verifier credits what it can find; what it could not is here for a person. Open a row to read the slip, then Match to credit the wallet or Reject with a reason.',
   matched:
-    'Credited claims — automatically by the verifier, or by an admin here. The bank’s own reference sits beside what the merchant typed.',
+    'Credited claims — automatically by the verifier, or by an admin here. The bank’s own reference sits beside what the merchant typed, and so does its amount: what the bank sent is what was credited, even where the merchant typed something else.',
   rejected:
     'Refused claims. Nothing was credited; the bank reference was released so the merchant can claim the transfer again with a corrected slip.',
   all: 'Every wallet top-up claim, newest first.',
@@ -105,11 +106,14 @@ export default function WalletTopUpsPage() {
     setPage(1);
   };
 
+  // CLAIMED beside RECEIVED wherever a bank figure can exist (owner,
+  // 2026-08-25). A pending claim has none yet and a rejected one never will,
+  // so those two tabs carry the claim alone rather than a column of dashes.
   const headings =
     state === 'pending'
       ? [
           'Merchant',
-          'Amount',
+          'Claimed',
           'Paid into',
           'Bank ref',
           'Slip',
@@ -119,7 +123,8 @@ export default function WalletTopUpsPage() {
       : state === 'matched'
         ? [
             'Merchant',
-            'Amount',
+            'Claimed',
+            'Received',
             'Paid into',
             'Bank reference',
             'How',
@@ -129,7 +134,7 @@ export default function WalletTopUpsPage() {
         : state === 'rejected'
           ? [
               'Merchant',
-              'Amount',
+              'Claimed',
               'Bank ref',
               'Reason',
               'Submitted',
@@ -137,14 +142,15 @@ export default function WalletTopUpsPage() {
             ]
           : [
               'Merchant',
-              'Amount',
+              'Claimed',
+              'Received',
               'State',
               'Paid into',
               'Bank ref',
               'Submitted',
             ];
 
-  const endAligned = new Set(['Amount']);
+  const endAligned = new Set(['Claimed', 'Received']);
 
   const merchantCell = (topUp: WalletTopUp) => (
     <TableCell className="font-medium">
@@ -177,6 +183,25 @@ export default function WalletTopUpsPage() {
     </TableCell>
   );
 
+  // The claim, then the bank's own figure. Two cells, never one: replacing
+  // the claim with the credited amount would quietly erase the fact that the
+  // merchant typed something else.
+  const claimedCell = (topUp: WalletTopUp) => (
+    <TableCell className="text-end font-medium">
+      <MoneyText laari={topUp.amount_laari} />
+    </TableCell>
+  );
+
+  const receivedCell = (topUp: WalletTopUp) => (
+    <TableCell className="text-end">
+      <ReceivedAmount
+        row={topUp}
+        unknown={topUp.state === 'matched' ? 'Not recorded' : '—'}
+        className="items-end"
+      />
+    </TableCell>
+  );
+
   const slipCell = (topUp: WalletTopUp) => (
     <TableCell>
       {topUp.has_slip ? (
@@ -195,9 +220,7 @@ export default function WalletTopUpsPage() {
       return (
         <>
           {merchantCell(topUp)}
-          <TableCell className="text-end font-medium">
-            <MoneyText laari={topUp.amount_laari} />
-          </TableCell>
+          {claimedCell(topUp)}
           {paidIntoCell(topUp)}
           <TableCell className="font-mono text-xs">
             {topUp.bank_ref ?? '—'}
@@ -216,9 +239,8 @@ export default function WalletTopUpsPage() {
       return (
         <>
           {merchantCell(topUp)}
-          <TableCell className="text-end font-medium">
-            <MoneyText laari={topUp.amount_laari} />
-          </TableCell>
+          {claimedCell(topUp)}
+          {receivedCell(topUp)}
           {paidIntoCell(topUp)}
           <TableCell className="font-mono text-xs">
             {/* The bank's own reference once matched, else what the
@@ -248,9 +270,7 @@ export default function WalletTopUpsPage() {
       return (
         <>
           {merchantCell(topUp)}
-          <TableCell className="text-end font-medium">
-            <MoneyText laari={topUp.amount_laari} />
-          </TableCell>
+          {claimedCell(topUp)}
           <TableCell className="font-mono text-xs">
             {topUp.bank_ref ?? '—'}
           </TableCell>
@@ -271,9 +291,8 @@ export default function WalletTopUpsPage() {
     return (
       <>
         {merchantCell(topUp)}
-        <TableCell className="text-end font-medium">
-          <MoneyText laari={topUp.amount_laari} />
-        </TableCell>
+        {claimedCell(topUp)}
+        {receivedCell(topUp)}
         <TableCell>
           <TopUpStateBadge state={topUp.state} />
         </TableCell>

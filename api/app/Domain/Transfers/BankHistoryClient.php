@@ -212,6 +212,29 @@ final readonly class BankHistoryClient
             return null;
         }
 
+        // DIRECTION IS DECIDED, NEVER ASSUMED (verifier round, 2026-08-25).
+        // `minus` is BML's only statement of direction, and it was read as
+        // `($row['minus'] ?? false) !== true` — which called a row INCOMING
+        // when the key was missing, and also when the gateway encoded the
+        // flag as `1` or `"true"` rather than a PHP boolean, because the
+        // comparison is strict. Direction is one of the two absolute gates
+        // left on the credit path now that the amount is not one, and a debit
+        // that slips through is claimable for its whole value. So the flag is
+        // parsed, and a row that does not carry one at all is refused the way
+        // MIB's parser refuses an unsigned row.
+        $flag = $row['minus'] ?? null;
+
+        // An absent, null or non-scalar flag is no statement of direction —
+        // and filter_var would read every one of them as "false", i.e. as a
+        // credit, which is the wrong way to fail.
+        $minus = is_scalar($flag)
+            ? filter_var($flag, FILTER_VALIDATE_BOOL, FILTER_NULL_ON_FAILURE)
+            : null;
+
+        if ($minus === null) {
+            return null;
+        }
+
         return new BankRow(
             reference: $reference,
             // narrative3 is the sender's name; narrative1 is the fallback.
@@ -221,7 +244,7 @@ final readonly class BankHistoryClient
             ),
             amountLaari: self::amountLaari($row['amount'] ?? null) ?? 0,
             // `minus` true means a debit, so an incoming row is minus=false.
-            incoming: ($row['minus'] ?? false) !== true,
+            incoming: ! $minus,
             at: self::when(
                 self::str($row, 'bookingDate') ?? self::str($row, 'valueDate'),
             ),

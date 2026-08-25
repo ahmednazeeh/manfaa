@@ -57,6 +57,7 @@ void main() {
     WidgetTester tester, {
     List<String> permissions = walletPermissions,
     bool previewRefuses = false,
+    bool creditedShort = false,
   }) async {
     await tester.binding.setSurfaceSize(const Size(600, 3200));
     final store = await seededStore(permissions);
@@ -70,6 +71,7 @@ void main() {
               session: ref.watch(sessionProvider),
               permissions: permissions,
               previewRefuses: previewRefuses,
+              creditedShort: creditedShort,
             ),
           ),
           configProvider.overrideWith((ref) async => config()),
@@ -137,6 +139,29 @@ void main() {
     // The ledger's types are still words, never codes.
     expect(find.text('Top-up'), findsOneWidget);
     expect(find.text('Spent on a settlement'), findsOneWidget);
+
+    // Nothing differed here, so no discrepancy line intrudes on the list.
+    expect(find.textContaining('Your bank sent'), findsNothing);
+  });
+
+  // THE ROW THAT STARTED THIS ROUND (owner, 2026-08-25). The claim said
+  // MVR 20.00; the bank sent MVR 10.00, and MVR 10.00 is what the wallet
+  // holds. The list quotes the money and explains it in one sentence — a
+  // silently smaller figure would read as a fault.
+  testWidgets('a claim credited with less than was typed shows the BANK '
+      'figure and says why', (tester) async {
+    await pumpWallet(tester, creditedShort: true);
+    await goWallet(tester);
+
+    expect(find.text(mvr(1000)), findsOneWidget);
+    // The typed figure never stands alone as if it were the credit.
+    expect(find.text(mvr(2000)), findsNothing);
+    expect(
+      find.textContaining(
+        'Your bank sent ${mvr(1000)}, not the ${mvr(2000)} you entered',
+      ),
+      findsOneWidget,
+    );
   });
 
   testWidgets('the switch writes through preferences and re-reads the wallet', (
@@ -252,6 +277,7 @@ class _WalletApi extends MerchantApi {
     required super.session,
     required this.permissions,
     this.previewRefuses = false,
+    this.creditedShort = false,
   });
 
   final List<String> permissions;
@@ -259,6 +285,11 @@ class _WalletApi extends MerchantApi {
   /// The settle-all preview answers 422 (nothing to settle) — the case a
   /// merchant pre-funding an idle store is in.
   final bool previewRefuses;
+
+  /// The wallet lists a claim the BANK answered with less than the merchant
+  /// typed — the production row of 2026-08-25 (MVR 20.00 entered, MVR 10.00
+  /// transferred). Off by default so the ordinary list stays ordinary.
+  final bool creditedShort;
 
   /// What the merchant's switch currently says server-side.
   var autoSettle = true;
@@ -340,6 +371,22 @@ class _WalletApi extends MerchantApi {
       'auto_settle_from_wallet': autoSettle,
       'bank_accounts': _instructions['bank_accounts'],
       'pending_top_ups': [
+        // A claim the bank answered with a SMALLER credit. The wallet was
+        // funded with what actually arrived, and the list must lead with
+        // that figure rather than the one on the form.
+        if (creditedShort)
+          {
+            'id': 4,
+            'amount_laari': 2000,
+            'amount_mvr': 'MVR 20.00',
+            'received_laari': 1000,
+            'received_mvr': 'MVR 10.00',
+            'amount_differs': true,
+            'bank_ref': 'BLAZ204399156496',
+            'bank': null,
+            'state': 'matched',
+            'created_at': '2026-08-25T16:20:00+00:00',
+          },
         {
           'id': 3,
           'amount_laari': 50000,

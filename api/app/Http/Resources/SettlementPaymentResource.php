@@ -20,8 +20,16 @@ class SettlementPaymentResource extends JsonResource
         return [
             'id' => $this->id,
             'settlement_id' => $this->settlement_id,
+            // THE CLAIM: what the merchant typed. Never rewritten.
             'amount_laari' => $this->amount_laari,
             'amount_mvr' => Laari::of($this->amount_laari)->formatMvr(),
+            // THE FACT: what the bank credited, off the matched statement
+            // row — and what actually funded the batch. Null on a pending
+            // payment, and on one an admin matched by hand without a figure,
+            // where the claim is what was spent.
+            'received_laari' => $this->received_laari,
+            'received_mvr' => $this->received_laari === null ? null : Laari::of((int) $this->received_laari)->formatMvr(),
+            'amount_differs' => $this->amountDiffers(),
             'currency' => $this->currency,
             'method' => $this->method,
             // What the MERCHANT told us. Left exactly as they typed it —

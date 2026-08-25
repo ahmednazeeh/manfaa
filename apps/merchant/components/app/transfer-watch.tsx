@@ -13,6 +13,7 @@ import {
   FileX2,
   Hourglass,
   Landmark,
+  Scale,
   ShieldQuestion,
   Wallet as WalletIcon,
 } from 'lucide-react';
@@ -60,6 +61,17 @@ import { Progress } from '@/components/ui/progress';
  * pinned to the local moment the response arrived (`dataUpdatedAt`), and the
  * window's start and end are placed relative to that — so a till laptop whose
  * clock is ten minutes out still sees an honest countdown.
+ *
+ * THE AMOUNT IS THE BANK'S, AND WHEN IT DIFFERS THIS SAYS SO (owner,
+ * 2026-08-25). The merchant's typed figure is a CLAIM; the bank credit is
+ * the FACT, and the fact is what was credited. Every outcome here therefore
+ * quotes `received_*`. Substituting it silently would be the worse half of
+ * the fix — a store that typed MVR 20.00 and reads "MVR 10.00 added" with no
+ * explanation concludes something went wrong — so whenever the payload says
+ * `amount_differs`, one plain sentence names BOTH figures and says which one
+ * moved the money. The note is drawn only when a bank figure is actually
+ * known: `amount_differs` is false while `received_laari` is null, and an
+ * unknown is not a discrepancy.
  */
 
 /** The visual register of an answer — bubble tint and icon colour. */
@@ -180,6 +192,21 @@ function Details({ children }: { children: ReactNode }) {
   );
 }
 
+/**
+ * The one sentence a merchant gets when the bank's figure is not the one
+ * they typed. It is a NOTE, not an error: the money is real and it is
+ * theirs — only the number on the form was wrong — so it carries the quiet
+ * register rather than the destructive one.
+ */
+function AmountNote({ children }: { children: ReactNode }) {
+  return (
+    <div className="flex w-full items-start gap-2.5 rounded-lg border border-border bg-muted/40 p-4">
+      <Scale className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+      <p className="text-sm text-secondary-foreground">{children}</p>
+    </div>
+  );
+}
+
 export function TransferWatch({
   target,
   titleAs: Title = 'h2',
@@ -250,7 +277,28 @@ export function TransferWatch({
   let title = t('transferWatch.loadingTitle');
   let body: string = t('transferWatch.loadingBody');
   let details: ReactNode = null;
+  /** The claim-vs-fact sentence, or null when the two figures agree. */
+  let amountNote: ReactNode = null;
   let rejectedReason: string | null | undefined;
+
+  /**
+   * Both figures, or null. `amount_differs` is already false while
+   * `received_laari` is null; the second check is what convinces TypeScript,
+   * and it keeps the "cannot name both sides" rule literal in the code.
+   */
+  function differing(outcome: {
+    amount_differs: boolean;
+    claimed_laari: number;
+    received_laari: number | null;
+  }): { claimed: string; received: string } | null {
+    if (!outcome.amount_differs || outcome.received_laari === null) {
+      return null;
+    }
+    return {
+      claimed: formatMoney(outcome.claimed_laari),
+      received: formatMoney(outcome.received_laari),
+    };
+  }
 
   // Decided. The outcome is read off the payload the two flows share, but
   // the WORDS are each flow's own: a settled batch and a credited wallet are
@@ -261,6 +309,13 @@ export function TransferWatch({
     progress.outcome !== null
   ) {
     const outcome = progress.outcome;
+    // The bank's figure against the merchant's, on THIS payment. Set before
+    // the branches because a settled batch and a part-settled one earn the
+    // same sentence — what differs is only what the batch became.
+    const differs = differing(outcome);
+    if (differs !== null && outcome.result !== 'rejected') {
+      amountNote = t('transferWatch.differsSettlement', differs);
+    }
     if (outcome.result === 'settled') {
       tone = 'good';
       icon = <BadgeCheck />;
@@ -317,6 +372,8 @@ export function TransferWatch({
     if (outcome.result === 'credited') {
       tone = 'good';
       icon = <WalletIcon />;
+      // WHAT WENT IN, never what was typed: `credited_laari` is the bank's
+      // own figure on a matched claim.
       title = t('transferWatch.creditedTitle', {
         amount: formatMoney(outcome.credited_laari),
       });
@@ -326,11 +383,23 @@ export function TransferWatch({
       body = t('transferWatch.creditedBody', {
         balance: formatMoney(outcome.balance_laari),
       });
+      const differs = differing(outcome);
+      if (differs !== null) {
+        amountNote = t('transferWatch.differsTopUp', differs);
+      }
       details = (
         <Details>
           <Detail label={t('transferWatch.labelAdded')}>
             <MoneyText laari={outcome.credited_laari} />
           </Detail>
+          {differs !== null && (
+            <Detail label={t('transferWatch.labelYouEntered')}>
+              <MoneyText
+                laari={outcome.claimed_laari}
+                className="text-muted-foreground"
+              />
+            </Detail>
+          )}
           <Detail label={t('transferWatch.labelBalance')}>
             <MoneyText laari={outcome.balance_laari} />
           </Detail>
@@ -448,6 +517,8 @@ export function TransferWatch({
       )}
 
       {details}
+
+      {amountNote !== null && <AmountNote>{amountNote}</AmountNote>}
 
       {rejectedReason !== undefined && (
         <div className="flex w-full flex-col gap-1 rounded-lg border border-border bg-muted/40 p-4">

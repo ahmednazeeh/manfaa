@@ -57,8 +57,10 @@ import {
   computeMatchOutcome,
   type MatchOutcome,
 } from '@/components/settlements/match-outcome';
+import { MatchPaymentDialog } from '@/components/settlements/match-payment-dialog';
 import { PromptDiscountBadge } from '@/components/settlements/prompt-discount';
 import {
+  outstandingLaari,
   pendingPayment,
   rejection,
   slipPayment,
@@ -66,6 +68,7 @@ import {
 import { ReceiptReviewCard } from '@/components/settlements/receipt-review-card';
 import { RecordPaymentDialog } from '@/components/settlements/record-payment-dialog';
 import { RejectionNotice } from '@/components/settlements/rejection-notice';
+import { ReceivedAmount } from '@/components/transfers/claim-and-fact';
 
 const PAYABLE_STATES: Settlement['state'][] = [
   'awaiting_payment',
@@ -183,7 +186,29 @@ export default function SettlementDetailPage() {
   });
 
   const match = useMutation({
-    mutationFn: (paymentId: number) => matchAdminSettlementPayment(paymentId),
+    // WHAT THE STATEMENT SAYS ARRIVED travels with the id (owner,
+    // 2026-08-25): the merchant's typed amount is a claim, and the reviewer
+    // holding the statement is the only source of the bank's own figure on
+    // this path. It is what gets stamped as `received_laari` and allocated.
+    mutationFn: ({
+      paymentId,
+      receivedLaari,
+      bankRef,
+    }: {
+      paymentId: number;
+      // Null means the reviewer stated no figure. The field is then OMITTED
+      // rather than filled with the claim, which is the server's honest
+      // "nobody ever stated one" — see MatchPaymentDialog.
+      receivedLaari: number | null;
+      // The reference read off the same statement line, where the merchant
+      // quoted none: without it the credit is named nowhere and can be spent
+      // a second time.
+      bankRef: string | null;
+    }) =>
+      matchAdminSettlementPayment(paymentId, {
+        ...(receivedLaari === null ? {} : { received_laari: receivedLaari }),
+        ...(bankRef === null ? {} : { bank_ref: bankRef }),
+      }),
     onSuccess: (response) => {
       const before = query.data?.data;
       if (before) {
@@ -253,6 +278,8 @@ export default function SettlementDetailPage() {
   // evidence stays readable after the fact.
   const receipt = pendingPayment(settlement) ?? slipPayment(settlement);
   const refusal = rejection(settlement);
+  // What the batch still owes — the §7 verdict every match dialog shows.
+  const outstanding = outstandingLaari(settlement);
 
   // Mirrors the domain guard: only a payment_review batch that has received
   // nothing and holds no matched payment can be rejected. Offering the button
@@ -309,7 +336,9 @@ export default function SettlementDetailPage() {
         <ReceiptReviewCard
           settlement={settlement}
           payment={receipt}
-          onMatch={(paymentId) => match.mutate(paymentId)}
+          onMatch={(paymentId, receivedLaari, bankRef) =>
+            match.mutateAsync({ paymentId, receivedLaari, bankRef })
+          }
           matching={match.isPending}
           canReject={canReject}
         />
@@ -398,7 +427,11 @@ export default function SettlementDetailPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="text-end">Amount</TableHead>
+                  {/* CLAIMED beside RECEIVED (owner, 2026-08-25): what the
+                      merchant typed, and what the bank actually sent. The
+                      second is what allocated the batch. */}
+                  <TableHead className="text-end">Claimed</TableHead>
+                  <TableHead className="text-end">Received</TableHead>
                   <TableHead>Method</TableHead>
                   <TableHead>Bank ref</TableHead>
                   <TableHead>Slip</TableHead>
@@ -412,7 +445,7 @@ export default function SettlementDetailPage() {
                 {payments.length === 0 ? (
                   <TableRow>
                     <TableCell
-                      colSpan={8}
+                      colSpan={9}
                       className="py-8 text-center text-muted-foreground"
                     >
                       No payments recorded yet.
@@ -423,6 +456,15 @@ export default function SettlementDetailPage() {
                     <TableRow key={payment.id}>
                       <TableCell className="text-end font-medium">
                         <MoneyText laari={payment.amount_laari} />
+                      </TableCell>
+                      <TableCell className="text-end">
+                        <ReceivedAmount
+                          row={payment}
+                          unknown={
+                            payment.state === 'matched' ? 'Not recorded' : '—'
+                          }
+                          className="items-end"
+                        />
                       </TableCell>
                       <TableCell>
                         {fundingMethodLabel(payment.method)}
@@ -489,13 +531,22 @@ export default function SettlementDetailPage() {
                       </TableCell>
                       <TableCell className="text-end">
                         {payment.state === 'pending' ? (
-                          <Button
+                          // The SAME dialog the review card opens — one place
+                          // the received figure is entered, so a match from
+                          // this table cannot quietly credit the claim.
+                          <MatchPaymentDialog
+                            payment={payment}
+                            outstanding={outstanding}
+                            matching={match.isPending}
                             size="sm"
-                            onClick={() => match.mutate(payment.id)}
-                            disabled={match.isPending}
-                          >
-                            {match.isPending ? 'Matching…' : 'Match'}
-                          </Button>
+                            onConfirm={(receivedLaari, bankRef) =>
+                              match.mutateAsync({
+                                paymentId: payment.id,
+                                receivedLaari,
+                                bankRef,
+                              })
+                            }
+                          />
                         ) : null}
                       </TableCell>
                     </TableRow>
@@ -623,7 +674,10 @@ export default function SettlementDetailPage() {
                   </TableRow>
                   {creditLaari > 0 ? (
                     <TableRow>
-                      <TableCell colSpan={showGst ? 6 : 5} className="font-normal">
+                      <TableCell
+                        colSpan={showGst ? 6 : 5}
+                        className="font-normal"
+                      >
                         Less credit adjustments netted onto the batch at draft
                       </TableCell>
                       <TableCell className="text-end">
@@ -634,7 +688,10 @@ export default function SettlementDetailPage() {
                   ) : null}
                   {discountLaari > 0 ? (
                     <TableRow>
-                      <TableCell colSpan={showGst ? 6 : 5} className="font-normal">
+                      <TableCell
+                        colSpan={showGst ? 6 : 5}
+                        className="font-normal"
+                      >
                         Less prompt-payment discount
                         {settlement.discount_rate_percent === null
                           ? ''
@@ -649,7 +706,9 @@ export default function SettlementDetailPage() {
                   ) : null}
                   {creditLaari > 0 || discountLaari > 0 ? (
                     <TableRow>
-                      <TableCell colSpan={showGst ? 6 : 5}>Amount due</TableCell>
+                      <TableCell colSpan={showGst ? 6 : 5}>
+                        Amount due
+                      </TableCell>
                       <TableCell className="text-end">
                         <MoneyText laari={settlement.amount_due_laari} />
                       </TableCell>

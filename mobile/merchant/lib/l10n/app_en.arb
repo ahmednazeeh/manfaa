@@ -1572,5 +1572,49 @@
         "type": "String"
       }
     }
+  },
+  "transferDiffersTopUp": "Your bank sent {received}, not the {claimed} you entered — so {received} is what went into your wallet. Nothing is lost: we always credit the amount the bank actually sent.",
+  "@transferDiffersTopUp": {
+    "placeholders": {
+      "received": {
+        "type": "String"
+      },
+      "claimed": {
+        "type": "String"
+      }
+    }
+  },
+  "transferDiffersSettlement": "Your bank sent {received}, not the {claimed} you entered — so {received} is what this settlement was credited with. Nothing is lost: we always use the amount the bank actually sent.",
+  "@transferDiffersSettlement": {
+    "placeholders": {
+      "received": {
+        "type": "String"
+      },
+      "claimed": {
+        "type": "String"
+      }
+    }
+  },
+  "topUpDiffers": "Your bank sent {received}, not the {claimed} you entered — your wallet was credited with what actually arrived.",
+  "@topUpDiffers": {
+    "placeholders": {
+      "received": {
+        "type": "String"
+      },
+      "claimed": {
+        "type": "String"
+      }
+    }
+  },
+  "paymentDiffers": "Your bank sent {received}, not the {claimed} you entered — this settlement was credited with what actually arrived.",
+  "@paymentDiffers": {
+    "placeholders": {
+      "received": {
+        "type": "String"
+      },
+      "claimed": {
+        "type": "String"
+      }
+    }
   }
 }

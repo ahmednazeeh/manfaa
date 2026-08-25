@@ -71,7 +71,10 @@ class TransferProgressController extends Controller
             ->select([
                 'id',
                 'settlement_id',
+                // The claim AND what the bank actually credited: the
+                // payload carries both, so both have to be selected.
                 'amount_laari',
+                'received_laari',
                 'state',
                 'auto_matched',
                 'poll_started_at',
@@ -124,7 +127,9 @@ class TransferProgressController extends Controller
             ->select([
                 'id',
                 'merchant_id',
+                // The claim AND what the bank actually credited.
                 'amount_laari',
+                'received_laari',
                 'state',
                 'platform_bank_account_id',
                 'auto_matched',

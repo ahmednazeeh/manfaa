@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Domain\Money\Laari;
 use App\Domain\Settlement\DuplicateBankRefException;
 use App\Domain\Settlement\InvalidWalletTopUpStateException;
 use App\Domain\Settlement\SlipStorage;
@@ -43,6 +44,19 @@ class WalletTopUpController extends Controller
         );
     }
 
+    /**
+     * Match by hand, against a statement the reviewer is holding.
+     *
+     * `received_laari` IS REQUIRED (owner, 2026-08-25). There is no bank row
+     * on this path, so nothing here can discover what actually arrived; the
+     * merchant's typed figure is a claim and crediting it unseen is how a
+     * typo becomes money. The reviewer is looking at the statement line —
+     * they type what it says. The claim is on the row for them to compare
+     * against, and is preserved either way.
+     *
+     * Deliberately NOT defaulted to the claim: a default would be the old
+     * behaviour wearing a new field's name.
+     */
     public function match(Request $request, int $id, WalletTopUps $topUps): WalletTopUpResource
     {
         $topUp = WalletTopUp::query()->findOrFail($id);
@@ -52,13 +66,25 @@ class WalletTopUpController extends Controller
             // idempotency key is the reference, and a credit without one
             // could be booked twice.
             'bank_ref' => [$topUp->bank_ref === null ? 'required' : 'sometimes', 'nullable', 'string', 'max:128'],
+            // Integer laari, as everywhere. Positive: a credit of nothing is
+            // not a credit, and an outgoing figure is not this form's
+            // business. Bounded above (verifier round, 2026-08-25): this
+            // figure is credited to a merchant wallet as spendable money with
+            // nothing downstream to catch a slipped digit, so one extra zero
+            // must be refused here or not at all.
+            'received_laari' => ['required', 'integer', 'min:1', 'max:'.SettlementPaymentController::MAX_RECEIVED_LAARI],
         ]);
 
         /** @var AdminUser $admin */
         $admin = $request->user('admin');
 
         try {
-            $topUp = $topUps->match($topUp, $admin, $validated['bank_ref'] ?? null);
+            $topUp = $topUps->match(
+                $topUp,
+                $admin,
+                $validated['bank_ref'] ?? null,
+                Laari::of((int) $validated['received_laari']),
+            );
         } catch (InvalidWalletTopUpStateException $e) {
             abort(409, $e->getMessage());
         } catch (DuplicateBankRefException $e) {

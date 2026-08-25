@@ -63,6 +63,18 @@ enum _Phase {
 /// runs on the server whether or not the app is open, and the push + SMS on
 /// a match (SettlementAccepted / wallet_top_up_received) fire either way.
 /// Closing the screen costs the merchant nothing, and the card says so.
+///
+/// THE OUTCOME QUOTES THE BANK, AND SAYS SO WHEN THAT IS NOT WHAT THEY TYPED
+/// (owner, 2026-08-25). The amount on the upload form is a CLAIM; the bank
+/// credit is the FACT, and the fact is what was credited or allocated — so
+/// every figure below comes from the outcome, never from
+/// [TransferProgressView.amountLaari]. Substituting quietly would be the
+/// worse half of that: a store that typed MVR 20.00 and reads "MVR 10.00
+/// added to your wallet" with nothing else on the card concludes something
+/// went wrong. So when [MatchOutcome.amountDiffers] is set, one plain
+/// sentence names BOTH figures and says which one moved the money. It is
+/// drawn only when both are actually known — an unknown is not a
+/// discrepancy, and the parser already refuses to set the flag without both.
 class TransferProgressView extends ConsumerStatefulWidget {
   /// The bank path of a settlement: [settlementId] is the BATCH's id — the
   /// route reports its newest payment, so a second slip on a partly paid
@@ -420,6 +432,26 @@ class _TransferProgressViewState extends ConsumerState<TransferProgressView> {
           : l10n.transferRejectedBody,
     };
 
+    // THE CLAIM AND THE FACT, when they disagree and the outcome can name
+    // both. A settled batch and a partly settled one earn the same sentence
+    // — what differs is only what the batch became — and a REJECTED transfer
+    // earns none, because nothing was credited to explain.
+    final differs =
+        outcome != null &&
+            outcome.amountDiffers &&
+            outcome.result != MatchResult.rejected
+        ? switch (settlement) {
+            true => l10n.transferDiffersSettlement(
+              money(outcome.receivedLaari!),
+              money(outcome.claimedLaari!),
+            ),
+            false => l10n.transferDiffersTopUp(
+              money(outcome.receivedLaari!),
+              money(outcome.claimedLaari!),
+            ),
+          }
+        : null;
+
     final muted = theme.textTheme.bodySmall?.copyWith(
       color: theme.colorScheme.onSurfaceVariant,
     );
@@ -442,6 +474,41 @@ class _TransferProgressViewState extends ConsumerState<TransferProgressView> {
               ),
               const SizedBox(height: Gap.md),
               Text(body, style: muted),
+
+              // Why the figure above is not the one they typed. A NOTE, not
+              // an error: the money is real and it is theirs — only the
+              // number on the form was wrong — so it carries the surface's
+              // own colour rather than the error red.
+              if (differs != null) ...[
+                const SizedBox(height: Gap.sm),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(Gap.md),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.05),
+                    borderRadius: BorderRadius.circular(Corner.tile),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(
+                        Icons.balance_rounded,
+                        size: 18,
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                      const SizedBox(width: Gap.sm),
+                      Expanded(
+                        child: Text(
+                          differs,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurface,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
 
               // The ONE place a bar may be drawn, and only with a fraction
               // the server's own stamps produced.

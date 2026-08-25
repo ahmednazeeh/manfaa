@@ -3,7 +3,7 @@
 import { use, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { formatLaari } from '@manfaa/api-client';
-import { MoneyText } from '@manfaa/ui';
+import { MoneyText, useFormatMoney } from '@manfaa/ui';
 import { format } from 'date-fns';
 import {
   BadgeCheck,
@@ -175,9 +175,21 @@ function StatusCard({ settlement }: { settlement: MerchantSettlement }) {
   );
 }
 
+/**
+ * One receipt on the batch. The figure is the BANK's once the bank has
+ * spoken (owner, 2026-08-25): `amount_laari` is only the merchant's CLAIM,
+ * and `received_laari` is what the credit actually was and what funded the
+ * lines. A payment still pending — or one an admin matched by hand without
+ * a statement figure — has no bank number, and then the claim is all there
+ * is to show. When both exist and disagree, one plain sentence says so:
+ * a row that quietly swapped in a smaller number would read as an error
+ * rather than as the typo it is.
+ */
 function PaymentRow({ payment }: { payment: ReceiptPayment }) {
   const { t } = useTranslation();
+  const formatMoney = useFormatMoney();
   const stateLabel = settlementPaymentStateLabel(t, payment.state);
+  const differs = payment.amount_differs && payment.received_laari !== null;
 
   return (
     <div className="flex flex-col gap-1 border-b border-border pb-3 last:border-0 last:pb-0">
@@ -185,7 +197,10 @@ function PaymentRow({ payment }: { payment: ReceiptPayment }) {
         <span className="font-medium text-mono" dir="ltr">
           {payment.bank_ref ?? fundingMethodLabel(t, payment.method)}
         </span>
-        <MoneyText laari={payment.amount_laari} className="font-medium" />
+        <MoneyText
+          laari={payment.received_laari ?? payment.amount_laari}
+          className="font-medium"
+        />
       </div>
       <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
         <span>
@@ -218,6 +233,14 @@ function PaymentRow({ payment }: { payment: ReceiptPayment }) {
           )}
         </span>
       </div>
+      {differs && (
+        <span className="text-xs text-secondary-foreground">
+          {t('settlement.paymentDiffers', {
+            received: formatMoney(payment.received_laari!),
+            claimed: formatMoney(payment.amount_laari),
+          })}
+        </span>
+      )}
       {payment.rejection_reason !== null && (
         <span className="text-xs text-destructive">
           {payment.rejection_reason}

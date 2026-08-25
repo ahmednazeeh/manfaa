@@ -2974,4 +2974,24 @@ class AppLocalizationsDv extends AppLocalizations {
   String transferSettlementRejectedBody(String reference) {
     return 'ސެޓްލްމަންޓް $reference ކެންސަލްވެފައި، އޭގެ މުޢާމަލާތްތައް އަލުން ދައްކަންޖެހޭ ގޮތުގައި ހުރީއެވެ. ރަނގަޅު ސްލިޕާއެކު އައު ސެޓްލްމަންޓެއް ހައްދަވާ.';
   }
+
+  @override
+  String transferDiffersTopUp(String received, String claimed) {
+    return 'ބޭންކުން ފޮނުވާފައިވަނީ $received — ތިޔަބޭފުޅާ ޖެއްސެވި $claimed އެއް ނޫނެވެ. އެހެންކަމުން ވޮލެޓަށް ވަދެފައިވަނީ $received އެވެ. އެއްވެސް ފައިސާއެއް ގެއްލިފައެއް ނުވެއެވެ — ޖަމާކުރަނީ ބޭންކުން ހަގީގަތުގައި ފޮނުވި އަދަދެވެ.';
+  }
+
+  @override
+  String transferDiffersSettlement(String received, String claimed) {
+    return 'ބޭންކުން ފޮނުވާފައިވަނީ $received — ތިޔަބޭފުޅާ ޖެއްސެވި $claimed އެއް ނޫނެވެ. އެހެންކަމުން މި ސެޓްލްމަންޓަށް ޖަމާކުރެވުނީ $received އެވެ. އެއްވެސް ފައިސާއެއް ގެއްލިފައެއް ނުވެއެވެ — ބަލަނީ ބޭންކުން ހަގީގަތުގައި ފޮނުވި އަދަދެވެ.';
+  }
+
+  @override
+  String topUpDiffers(String received, String claimed) {
+    return 'ބޭންކުން ފޮނުވާފައިވަނީ $received — ތިޔަބޭފުޅާ ޖެއްސެވި $claimed އެއް ނޫނެވެ. ވޮލެޓަށް ޖަމާކުރެވުނީ ހަގީގަތުގައި ލިބުނު އަދަދެވެ.';
+  }
+
+  @override
+  String paymentDiffers(String received, String claimed) {
+    return 'ބޭންކުން ފޮނުވާފައިވަނީ $received — ތިޔަބޭފުޅާ ޖެއްސެވި $claimed އެއް ނޫނެވެ. މި ސެޓްލްމަންޓަށް ޖަމާކުރެވުނީ ހަގީގަތުގައި ލިބުނު އަދަދެވެ.';
+  }
 }

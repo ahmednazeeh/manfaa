@@ -10,6 +10,7 @@ use App\Domain\MerchantAccess\Permission;
 use App\Domain\Money\Laari;
 use App\Domain\Notifications\NotificationService;
 use App\Domain\Notifications\NotificationTemplateKey;
+use App\Domain\Transfers\BankCreditClaim;
 use App\Jobs\PollSettlementPayment;
 use App\Jobs\ReadSettlementReceipt;
 use App\Models\AdminUser;
@@ -72,6 +73,7 @@ final class SettlementAllocator
         private readonly WalletFunding $wallet,
         private readonly LineAllocator $allocator,
         private readonly NotificationService $notifications,
+        private readonly BankCreditClaim $claims,
     ) {}
 
     /**
@@ -215,6 +217,15 @@ final class SettlementAllocator
      * allocates too and the platform books the gap. The batch lands on
      * settled only when every line is allocated; partially_settled otherwise.
      *
+     * "This payment's cash" means WHAT THE BANK CREDITED (owner, 2026-08-25):
+     * `received_laari`, stamped by the verifier off the matched statement
+     * row, falling back to the merchant's claimed `amount_laari` only where
+     * no bank figure exists. A merchant who typed MVR 20 and sent MVR 10
+     * funds MVR 10 worth of lines and still owes the rest; one who typed
+     * MVR 10 and sent MVR 20 settles and parks the remainder in the wallet.
+     * Neither is a new branch — both are the branches below, reached by a
+     * figure that is now true.
+     *
      * Available funds are this payment's cash, plus any §7 adjustment credit
      * netted into the batch at draft time (already posted at application —
      * counted for coverage, never posted again), plus whatever of a prior
@@ -235,10 +246,47 @@ final class SettlementAllocator
      *                                 bank's own history. `matched_by` then stays null on purpose — no
      *                                 person decided it, and filing one would put a name on a machine's
      *                                 call. `auto_matched` on the row is what records who did.
+     * @param  Laari|null  $statementAmount  WHAT THE STATEMENT SAYS ARRIVED, stated by
+     *                                       the reviewer on a hand match (owner, 2026-08-25). There is no bank
+     *                                       row on that path, so nothing here can discover the figure; the
+     *                                       merchant's `amount_laari` is a CLAIM, and spending it unseen is how
+     *                                       a typo funds a batch. Null keeps the row's existing
+     *                                       `received_laari` — the verifier's own stamp on an automatic match,
+     *                                       and the claim as the fallback where nobody ever stated a figure,
+     *                                       which is exactly what every row here spent before this existed.
+     * @param  string|null  $statementRef  THE REFERENCE THE REVIEWER READ off the same
+     *                                     statement line (verifier round, 2026-08-25). Without it a payment the
+     *                                     merchant left blank was matched with nothing written to `bank_ref` or
+     *                                     `matched_trx_refs` at all, so {@see BankCreditClaim} reported the
+     *                                     credit unspent forever and a later top-up or order could take it a
+     *                                     second time. Optional, not required: an admin also records and
+     *                                     reconciles payments here for merchants who quoted no reference, and
+     *                                     refusing those would block correct work.
+     *
+     * @throws DuplicateBankRefException an order, another payment, a top-up or a wallet movement already spent this credit
      */
-    public function matchPayment(SettlementPayment $payment, ?AdminUser $actor): Settlement
+    public function matchPayment(SettlementPayment $payment, ?AdminUser $actor, ?Laari $statementAmount = null, ?string $statementRef = null): Settlement
     {
-        return DB::transaction(function () use ($payment, $actor): Settlement {
+        if ($statementAmount !== null && $statementAmount->value() <= 0) {
+            throw new InvalidArgumentException('A matched payment must have received a positive amount.');
+        }
+
+        $statementRef = trim((string) $statementRef);
+        $statementRef = $statementRef === '' ? null : $statementRef;
+
+        try {
+            return $this->match($payment, $actor, $statementAmount, $statementRef);
+        } catch (UniqueConstraintViolationException) {
+            // The reference the reviewer stated is already on another payment
+            // of this merchant's — the partial unique index is the authority,
+            // and this is its message.
+            throw DuplicateBankRefException::forSettlementPaymentSpent($payment, (string) $statementRef);
+        }
+    }
+
+    private function match(SettlementPayment $payment, ?AdminUser $actor, ?Laari $statementAmount, ?string $statementRef): Settlement
+    {
+        return DB::transaction(function () use ($payment, $actor, $statementAmount, $statementRef): Settlement {
             $payment = SettlementPayment::query()->whereKey($payment->getKey())->lockForUpdate()->firstOrFail();
 
             if ($payment->state !== 'pending') {
@@ -262,20 +310,70 @@ final class SettlementAllocator
             ];
 
             // A person matched it, so no bank row was read and nothing
-            // wrote matched_trx_*. Record the merchant's own reference as
-            // the credit's name, so BankCreditClaim sees a hand-matched
-            // payment as spent exactly like an automatic one — otherwise
-            // the same transfer could go on to fund a wallet top-up.
+            // wrote matched_trx_*. Record the reference as the credit's
+            // name, so BankCreditClaim sees a hand-matched payment as spent
+            // exactly like an automatic one — otherwise the same transfer
+            // could go on to fund a wallet top-up.
+            //
+            // The merchant's own reference where they typed one, and the one
+            // the reviewer read off the statement otherwise or as well: a
+            // payment matched with NO name at all leaves the credit
+            // permanently unspent as far as every other path can tell.
             $bankRef = trim((string) $payment->bank_ref);
+            $references = array_values(array_unique(array_filter([
+                $bankRef,
+                (string) $statementRef,
+            ], static fn (string $value): bool => $value !== '')));
 
-            if ($actor !== null && $bankRef !== '' && $payment->matched_trx_id === null && empty($payment->matched_trx_refs)) {
-                $matched['matched_trx_refs'] = [$bankRef];
+            if ($actor !== null && $references !== []) {
+                // Serialise on the credit itself, then ask whether it is
+                // already spent — the same two steps the verifiers take
+                // (SettlementPaymentVerifier::match), which this path did not
+                // take at all: an admin could hand-match a credit a top-up or
+                // an order had already spent, and it would credit twice.
+                $this->claims->lockReferences($references);
+
+                if ($this->claims->spent($references, exceptPayment: (int) $payment->getKey())) {
+                    throw DuplicateBankRefException::forSettlementPaymentSpent($payment, $references[0]);
+                }
+
+                if ($payment->matched_trx_id === null && empty($payment->matched_trx_refs)) {
+                    $matched['matched_trx_refs'] = $references;
+                }
+
+                // The merchant left it blank and the reviewer supplied it:
+                // record it where every other reader of this row looks.
+                if ($bankRef === '' && $statementRef !== null) {
+                    $matched['bank_ref'] = $statementRef;
+                }
+            }
+
+            // The reviewer read a figure off the statement, so record it as
+            // the FACT before anything spends it. The CLAIM (`amount_laari`)
+            // is never rewritten — the two sit side by side on the row, which
+            // is the whole point of the pair.
+            if ($statementAmount !== null) {
+                $matched['received_laari'] = $statementAmount->value();
             }
 
             $payment->forceFill($matched)->save();
 
+            // WHAT ACTUALLY ARRIVED (owner, 2026-08-25) — the bank's own
+            // figure where the verifier found the transfer and stamped
+            // `received_laari`, and the merchant's claim only where nobody
+            // has a bank figure (an admin reconciling off a statement), which
+            // is what every row here spent before this existed.
+            //
+            // Read ONCE, into the name the whole stack below spends. Nothing
+            // else changes: a payment smaller than the batch already flows
+            // down the partial path (whole lines only, remainder still owed)
+            // and a larger one down the wallet-remainder path at the bottom.
+            // Both are exercised by a merchant's typo now rather than only by
+            // a merchant who meant it.
+            $paid = $payment->creditedLaari();
+
             $receivedBefore = $settlement->amount_received_laari;
-            $received = $receivedBefore + $payment->amount_laari;
+            $received = $receivedBefore + $paid;
             $due = $settlement->amount_due_laari;
 
             $lines = SettlementLines::inAllocationOrder($settlement);
@@ -326,7 +424,7 @@ final class SettlementAllocator
             $priorCashConsumed = max(0, $previouslyAllocated - $adjustmentCredit - $discountPosted);
             $priorUnallocated = max(0, $receivedBefore - $priorCashConsumed);
             $walletAvailable = min($priorUnallocated, $this->wallet->lockedBalance($settlement->merchant));
-            $merchantFunds = $payment->amount_laari + $walletAvailable + $adjustmentAvailable;
+            $merchantFunds = $paid + $walletAvailable + $adjustmentAvailable;
             $funds = $merchantFunds + $discountAvailable;
             $remainingDue = $lineTotal - $previouslyAllocated;
 
@@ -392,10 +490,10 @@ final class SettlementAllocator
             // platform-absorbed shortfall.
             $adjustmentPortion = min($adjustmentAvailable, $allocatedNow);
             $discountPortion = min($discountSpendable, $allocatedNow - $adjustmentPortion);
-            $cashPortion = min($payment->amount_laari, $allocatedNow - $adjustmentPortion - $discountPortion);
+            $cashPortion = min($paid, $allocatedNow - $adjustmentPortion - $discountPortion);
             $walletPortion = min($walletAvailable, $allocatedNow - $adjustmentPortion - $discountPortion - $cashPortion);
             $forgivenShortfall = $allocatedNow - $adjustmentPortion - $discountPortion - $cashPortion - $walletPortion;
-            $remainder = $payment->amount_laari - $cashPortion;
+            $remainder = $paid - $cashPortion;
 
             if ($discountPortion > 0) {
                 // Split back into the fee-revenue and GST legs from the
@@ -466,6 +564,33 @@ final class SettlementAllocator
                     ? SettlementState::Settled
                     : SettlementState::PartiallySettled,
             ])->save();
+
+            // A transfer that was found and banked and did NOT close the
+            // batch (verifier round, 2026-08-25). Announcing "accepted" here
+            // would read as "we are done" when they are not — but saying
+            // NOTHING is the worse of the two, and was the behaviour: once
+            // the bank's figure funds the allocation rather than the typed
+            // claim, a merchant who believes they paid the batch in full and
+            // sent less gets no push, no SMS and no in-app line, while both
+            // merchant surfaces promise a message the moment their transfer
+            // is matched. So they are told what arrived and what is left.
+            //
+            // Sent from inside this transaction, like its settled sibling: a
+            // message about an allocation that rolled back is a lie.
+            if ($settlement->state === SettlementState::PartiallySettled) {
+                $this->notifications->sendToMerchantStaff(
+                    NotificationTemplateKey::SettlementPartiallyPaid,
+                    $settlement->merchant,
+                    [
+                        'reference' => (string) $settlement->reference,
+                        'amount' => NotificationService::money($paid),
+                        'outstanding' => NotificationService::money(
+                            max(0, $lineTotal - $previouslyAllocated - $allocatedNow),
+                        ),
+                    ],
+                    Permission::SettlementsView,
+                );
+            }
 
             // Told only when the batch is FULLY paid off, and only on the
             // move into that state. A partial allocation leaves the store

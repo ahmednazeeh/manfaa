@@ -297,6 +297,176 @@ void main() {
     });
   });
 
+  // THE CLAIM AND THE FACT (owner, 2026-08-25). The amount the merchant
+  // typed is a claim; the bank credit is the money. The outcome carries both
+  // so a screen can print what really arrived AND say why it is not the
+  // number on the form — the production row that started this round typed
+  // MVR 20.00 over a MVR 10.00 transfer.
+  group('the claim and the bank fact', () {
+    Map<String, dynamic> credited({
+      required int claimed,
+      required int? received,
+      required bool differs,
+    }) => {
+      'data': {
+        'kind': 'wallet_top_up',
+        'id': 2,
+        'settlement_id': null,
+        'state': 'matched',
+        // The envelope always carries the CLAIM, unchanged by the match.
+        'amount_laari': claimed,
+        'amount_mvr': '20.00',
+        'watching': false,
+        'reason': 'terminal',
+        'attempts': 4,
+        'auto_matched': true,
+        'checked_at': '2026-08-25T16:20:30+00:00',
+        'outcome': {
+          'result': 'credited',
+          'credited_laari': received ?? claimed,
+          'credited_mvr': '10.00',
+          'claimed_laari': claimed,
+          'claimed_mvr': '20.00',
+          'received_laari': received,
+          'received_mvr': received == null ? null : '10.00',
+          'amount_differs': differs,
+          'balance_laari': received ?? claimed,
+          'balance_mvr': '10.00',
+          'rejected_reason': null,
+        },
+      },
+    };
+
+    test('a top-up credits what the BANK sent, and names the claim beside '
+        'it', () async {
+      final adapter = _RecordingAdapter(
+        (_) => _json(credited(claimed: 2000, received: 1000, differs: true), 200),
+      );
+
+      final outcome = (await _api(adapter).walletTopUpProgress(2)).outcome!;
+
+      // The money is the bank's figure. Never the 2000 they typed.
+      expect(outcome.creditedLaari, 1000);
+      expect(outcome.receivedLaari, 1000);
+      expect(outcome.balanceLaari, 1000);
+      // …and the claim survives beside it, so the screen can say WHY.
+      expect(outcome.claimedLaari, 2000);
+      expect(outcome.amountDiffers, isTrue);
+    });
+
+    test('figures that agree are not a discrepancy', () async {
+      final adapter = _RecordingAdapter(
+        (_) =>
+            _json(credited(claimed: 50000, received: 50000, differs: false), 200),
+      );
+
+      final outcome = (await _api(adapter).walletTopUpProgress(2)).outcome!;
+
+      expect(outcome.creditedLaari, 50000);
+      expect(outcome.receivedLaari, 50000);
+      expect(outcome.amountDiffers, isFalse);
+    });
+
+    test('a discrepancy the payload cannot name BOTH sides of is not '
+        'announced', () async {
+      // A hand-matched claim: no bank figure was recorded, so there is
+      // nothing to compare. Even with the server's flag set — which it never
+      // is in this state — the parser refuses, because a screen must never
+      // claim a mismatch it cannot show.
+      final adapter = _RecordingAdapter(
+        (_) => _json(credited(claimed: 2000, received: null, differs: true), 200),
+      );
+
+      final outcome = (await _api(adapter).walletTopUpProgress(2)).outcome!;
+
+      expect(outcome.receivedLaari, isNull);
+      expect(outcome.amountDiffers, isFalse);
+      // The claim is still what was spent, and creditedLaari still answers.
+      expect(outcome.creditedLaari, 2000);
+    });
+
+    test('a settlement payment carries the same pair', () async {
+      final adapter = _RecordingAdapter(
+        (_) => _json(const {
+          'data': {
+            'kind': 'settlement_payment',
+            'id': 91,
+            'settlement_id': 44,
+            'state': 'matched',
+            'amount_laari': 5000,
+            'amount_mvr': '50.00',
+            'watching': false,
+            'reason': 'terminal',
+            'attempts': 4,
+            'auto_matched': true,
+            'checked_at': '2026-08-25T10:03:20+00:00',
+            'outcome': {
+              'result': 'partially_settled',
+              'settlement_state': 'partially_settled',
+              'reference': 'ST-2026-00044',
+              'claimed_laari': 5000,
+              'claimed_mvr': '50.00',
+              'received_laari': 2700,
+              'received_mvr': '27.00',
+              'amount_differs': true,
+              'amount_received_laari': 2700,
+              'amount_received_mvr': '27.00',
+              'amount_outstanding_laari': 7700,
+              'amount_outstanding_mvr': '77.00',
+              'rejected_reason': null,
+            },
+          },
+        }, 200),
+      );
+
+      final outcome = (await _api(adapter).settlementPaymentProgress(44)).outcome!;
+
+      expect(outcome.isPartiallySettled, isTrue);
+      expect(outcome.claimedLaari, 5000);
+      expect(outcome.receivedLaari, 2700);
+      expect(outcome.amountDiffers, isTrue);
+      // The batch's own totals are untouched by the pair.
+      expect(outcome.amountReceivedLaari, 2700);
+      expect(outcome.amountOutstandingLaari, 7700);
+    });
+
+    test('an outcome from a server that predates the pair reads as no '
+        'discrepancy', () async {
+      final adapter = _RecordingAdapter(
+        (_) => _json(const {
+          'data': {
+            'kind': 'wallet_top_up',
+            'id': 12,
+            'settlement_id': null,
+            'state': 'matched',
+            'amount_laari': 50000,
+            'amount_mvr': '500.00',
+            'watching': false,
+            'reason': 'terminal',
+            'attempts': 5,
+            'auto_matched': true,
+            'checked_at': '2026-08-25T10:02:30+00:00',
+            'outcome': {
+              'result': 'credited',
+              'credited_laari': 50000,
+              'credited_mvr': '500.00',
+              'balance_laari': 58175,
+              'balance_mvr': '581.75',
+              'rejected_reason': null,
+            },
+          },
+        }, 200),
+      );
+
+      final outcome = (await _api(adapter).walletTopUpProgress(12)).outcome!;
+
+      expect(outcome.claimedLaari, isNull);
+      expect(outcome.receivedLaari, isNull);
+      expect(outcome.amountDiffers, isFalse);
+      expect(outcome.creditedLaari, 50000);
+    });
+  });
+
   group('the honesty rule', () {
     test('the switch being off is not a watch — and says which', () async {
       final adapter = _RecordingAdapter(

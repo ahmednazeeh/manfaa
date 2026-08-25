@@ -566,6 +566,14 @@ class _LinesCard extends StatelessWidget {
   }
 }
 
+/// Every receipt on the batch. The figure is the BANK's once the bank has
+/// spoken (owner, 2026-08-25): `amountLaari` is only the merchant's CLAIM,
+/// and `receivedLaari` is what the credit actually was and what funded the
+/// lines. A pending payment — or one an admin matched by hand without a
+/// statement figure — has no bank number, and then the claim is all there is
+/// to show. When both exist and disagree, one plain sentence says so: a row
+/// that quietly swapped in a smaller number would read as an error rather
+/// than as the typo it is.
 class _PaymentsCard extends StatelessWidget {
   const _PaymentsCard({required this.settlement});
 
@@ -575,6 +583,7 @@ class _PaymentsCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final l10n = context.l10n;
+    final dhivehi = Localizations.localeOf(context).languageCode == 'dv';
 
     (String, StatusTone) stateChip(String state) => switch (state) {
       'matched' => (l10n.paymentMatched, StatusTone.confirmed),
@@ -610,7 +619,7 @@ class _PaymentsCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       MoneyText(
-                        payment.amountLaari,
+                        payment.creditedLaari,
                         style: theme.textTheme.titleSmall?.copyWith(
                           fontWeight: FontWeight.w700,
                         ),
@@ -628,6 +637,25 @@ class _PaymentsCard extends StatelessWidget {
                           color: theme.colorScheme.onSurfaceVariant,
                         ),
                       ),
+                      if (payment.amountDiffers)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 2),
+                          child: Text(
+                            l10n.paymentDiffers(
+                              formatMoney(
+                                payment.receivedLaari!,
+                                dhivehi: dhivehi,
+                              ),
+                              formatMoney(
+                                payment.amountLaari,
+                                dhivehi: dhivehi,
+                              ),
+                            ),
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.onSurface,
+                            ),
+                          ),
+                        ),
                       if (payment.state == 'rejected' &&
                           (payment.rejectionReason ?? '').isNotEmpty)
                         Text(

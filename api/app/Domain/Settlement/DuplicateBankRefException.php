@@ -6,6 +6,7 @@ namespace App\Domain\Settlement;
 
 use App\Models\Merchant;
 use App\Models\Settlement;
+use App\Models\SettlementPayment;
 use DomainException;
 
 /**
@@ -61,6 +62,20 @@ final class DuplicateBankRefException extends DomainException
             'Bank reference %s is already submitted as a wallet top-up; it cannot also pay settlement %s.',
             $bankRef,
             $settlement->reference,
+        ));
+    }
+
+    /**
+     * The credit behind this reference was already spent — on an order, a
+     * wallet top-up, a wallet movement or another settlement payment — so
+     * matching THIS payment against it would book the same cash twice.
+     */
+    public static function forSettlementPaymentSpent(SettlementPayment $payment, string $bankRef): self
+    {
+        return new self(sprintf(
+            'Bank reference %s is already spent elsewhere; it cannot also match payment #%d.',
+            $bankRef,
+            $payment->id,
         ));
     }
 

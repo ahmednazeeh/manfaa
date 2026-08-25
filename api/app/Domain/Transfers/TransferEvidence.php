@@ -19,16 +19,20 @@ final readonly class TransferEvidence
     public function __construct(private NameMatcher $names) {}
 
     /**
-     * Does the receipt mention this value?
+     * Does the receipt mention this NAME?
      *
      * Both sides are stripped to letters and digits before comparing, so
      * OCR's spacing and punctuation cannot decide the answer: the slip's
-     * "Transaction# 90863389" contains the history's "90863389", and its
      * "From Interbridge Pvt Ltd" contains "INTERBRIDGE".
      *
      * Short needles are refused. A two-character bank name inside eight
      * thousand characters of receipt would match nothing in particular, and
      * a false match here settles a bill against somebody else's money.
+     *
+     * A loose containment is right for a NAME — a payer's name is a prefix
+     * of the receipt's rendering of it as often as not — and wrong for an
+     * IDENTIFIER, which is why identifiers go through {@see receiptQuotes}
+     * instead (2026-08-25).
      */
     public static function receiptMentions(string $receipt, ?string $needle): bool
     {
@@ -40,6 +44,36 @@ final readonly class TransferEvidence
         $needle = self::alnum($needle);
 
         return mb_strlen($needle) >= 5 && str_contains($haystack, $needle);
+    }
+
+    /**
+     * Does the receipt QUOTE this bank identifier — as a whole thing, not as
+     * a fragment of a longer run of characters?
+     *
+     * The same 5-character floor as {@see receiptMentions}, and the same
+     * forgiveness of OCR's spacing and punctuation ("BLAZ 8618 2828 4421" is
+     * the reference), but the run must START and END at a boundary in the
+     * receipt: the character before and after it may not be a letter or a
+     * digit.
+     *
+     * WHY THE BOUNDARY (verifier round, 2026-08-25). Until the amount stopped
+     * gating a match, a receipt naming somebody else's transfer still had to
+     * quote the exact figure as well. Now the identifier is the whole proof —
+     * and the merchant supplies the receipt. A plain containment test over
+     * the alphanumerics lets ONE uploaded slip carrying a dense run of digits
+     * ("...908633889086339090863391...") quote thousands of consecutive bank
+     * references at once, which is an enumeration of the platform account
+     * rather than evidence about one transfer. Anchored, the slip has to name
+     * the reference the way a bank prints it.
+     */
+    public static function receiptQuotes(string $receipt, ?string $identifier): bool
+    {
+        if ($receipt === '' || $identifier === null) {
+            return false;
+        }
+
+        return mb_strlen(self::alnum($identifier)) >= 5
+            && self::quotes($receipt, $identifier);
     }
 
     /**
@@ -109,6 +143,18 @@ final readonly class TransferEvidence
      * `trxNumber` and the short `trxNumber2`. A containment test in either
      * direction catches the honest transcription without accepting a
      * different transfer: these strings are long and bank-issued.
+     *
+     * THE SIX-CHARACTER FLOOR IS UNCHANGED, and containment is now ANCHORED
+     * (verifier round, 2026-08-25). The floor alone stopped being enough the
+     * moment the amount stopped gating a match: a bare `str_contains` accepts
+     * any 6-character SUBSTRING of a bank-issued identifier, and MIB's live
+     * references are 8 sequential digits — so a merchant who has made one
+     * transfer knows the neighbourhood of everyone else's and could take an
+     * unclaimed credit of any size by typing six of its digits. Anchored, the
+     * typed string has to be a WHOLE identifier the row carries (or the row's
+     * identifier has to be a whole part of what they typed): the composite
+     * "1-703337593-804802801-1" still yields "804802801", and "804802" no
+     * longer yields anything.
      */
     public static function sameReference(string $typed, BankRow $row): bool
     {
@@ -118,6 +164,7 @@ final readonly class TransferEvidence
             mb_strtoupper((string) $value),
         ) ?? '';
 
+        $raw = $typed;
         $typed = $normalise($typed);
 
         if (mb_strlen($typed) < 6) {
@@ -126,16 +173,27 @@ final readonly class TransferEvidence
             return false;
         }
 
-        foreach ($row->identifiers() as $candidate) {
-            $candidate = $normalise($candidate);
+        foreach ($row->identifiers() as $identifier) {
+            $candidate = $normalise($identifier);
 
             if ($candidate === '') {
                 continue;
             }
 
-            if ($candidate === $typed
-                || str_contains($candidate, $typed)
-                || str_contains($typed, $candidate)) {
+            if ($candidate === $typed) {
+                return true;
+            }
+
+            // The same floor on the OTHER side of the comparison: an
+            // identifier of two or three characters found inside a long typed
+            // string is a coincidence, not a reference.
+            if (mb_strlen($candidate) < 6) {
+                continue;
+            }
+
+            // Either whole thing inside the other, at a boundary — never a
+            // fragment straddling one.
+            if (self::quotes((string) $identifier, $raw) || self::quotes($raw, (string) $identifier)) {
                 return true;
             }
         }
@@ -183,5 +241,35 @@ final readonly class TransferEvidence
     private static function alnum(string $value): string
     {
         return mb_strtoupper((string) preg_replace('/[^A-Za-z0-9]/', '', $value));
+    }
+
+    /**
+     * Does $haystack contain $needle's alphanumerics as a WHOLE run — every
+     * character in order, punctuation and spacing between them forgiven, and
+     * neither end butting against another letter or digit?
+     *
+     * The forgiveness is what makes "BLAZ 8618 2828 4421" on an OCR'd slip
+     * the reference "BLAZ861828284421", and "FT26235BDLZB\B26" the identifier
+     * "FT26235BDLZBB26". The anchoring is what stops "90863389" being found
+     * inside "908633890863390" — a fragment of a longer number is a different
+     * transfer, and treating it as this one is how a credit gets claimed by
+     * somebody it does not belong to.
+     */
+    private static function quotes(string $haystack, string $needle): bool
+    {
+        $characters = str_split(self::alnum($needle));
+
+        if ($characters === [] || $characters === ['']) {
+            return false;
+        }
+
+        $pattern = '/(?<![A-Za-z0-9])'
+            .implode('[^A-Za-z0-9]*', array_map(
+                static fn (string $character): string => preg_quote($character, '/'),
+                $characters,
+            ))
+            .'(?![A-Za-z0-9])/i';
+
+        return preg_match($pattern, $haystack) === 1;
     }
 }

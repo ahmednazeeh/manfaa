@@ -66,8 +66,15 @@ export default function WalletPage() {
   const canToggleAutoSettle = can(me, 'preferences.update');
 
   const pending = wallet.data?.pending_top_ups ?? [];
-  const pendingLaari = pending.reduce(
-    (total, topUp) => total + topUp.amount_laari,
+  // The hero line says "{amount} in {count} top-ups being verified", so it
+  // must count only the claims that ARE being verified — the list also
+  // carries claims refused in the last week, which are neither waiting nor
+  // money. Each still-waiting claim contributes what the merchant typed,
+  // because no bank figure exists for it yet; once one does the claim is
+  // decided and leaves this sum entirely.
+  const awaiting = pending.filter((topUp) => topUp.state === 'pending');
+  const pendingLaari = awaiting.reduce(
+    (total, topUp) => total + (topUp.received_laari ?? topUp.amount_laari),
     0,
   );
 
@@ -104,9 +111,9 @@ export default function WalletPage() {
                     <Skeleton className="h-8 w-40 rounded-md" />
                   )}
                   <span className="text-sm text-muted-foreground">
-                    {pending.length > 0
+                    {awaiting.length > 0
                       ? t('wallet.pendingSummary', {
-                          count: pending.length,
+                          count: awaiting.length,
                           amount: formatMoney(pendingLaari),
                         })
                       : t('wallet.balanceHint')}
@@ -172,6 +179,12 @@ export default function WalletPage() {
                           <TableCell className="text-secondary-foreground">
                             {movement.description ?? '—'}
                           </TableCell>
+                          {/* The ledger's own figure: what actually moved.
+                              A top-up movement is written from the BANK's
+                              credit, never from the amount the merchant
+                              typed on the claim, so this column already
+                              answers "what really went in" and needs no
+                              claim beside it. */}
                           <TableCell
                             className={cn(
                               'text-end font-medium',

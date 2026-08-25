@@ -2032,23 +2032,39 @@ class MatchOutcome {
     this.amountOutstandingLaari,
     this.creditedLaari,
     this.balanceLaari,
+    this.claimedLaari,
+    this.receivedLaari,
+    this.amountDiffers = false,
     this.rejectedReason,
   });
 
-  factory MatchOutcome.fromJson(Map<String, dynamic> json) => MatchOutcome(
-    result: _matchResult(json['result']),
-    settlementState: _s(json['settlement_state']).isEmpty
-        ? null
-        : _s(json['settlement_state']),
-    reference: _s(json['reference']).isEmpty ? null : _s(json['reference']),
-    amountReceivedLaari: _laariOrNull(json['amount_received_laari']),
-    amountOutstandingLaari: _laariOrNull(json['amount_outstanding_laari']),
-    creditedLaari: _laariOrNull(json['credited_laari']),
-    balanceLaari: _laariOrNull(json['balance_laari']),
-    rejectedReason: _s(json['rejected_reason']).isEmpty
-        ? null
-        : _s(json['rejected_reason']),
-  );
+  factory MatchOutcome.fromJson(Map<String, dynamic> json) {
+    final claimed = _laariOrNull(json['claimed_laari']);
+    final received = _laariOrNull(json['received_laari']);
+
+    return MatchOutcome(
+      result: _matchResult(json['result']),
+      settlementState: _s(json['settlement_state']).isEmpty
+          ? null
+          : _s(json['settlement_state']),
+      reference: _s(json['reference']).isEmpty ? null : _s(json['reference']),
+      amountReceivedLaari: _laariOrNull(json['amount_received_laari']),
+      amountOutstandingLaari: _laariOrNull(json['amount_outstanding_laari']),
+      creditedLaari: _laariOrNull(json['credited_laari']),
+      balanceLaari: _laariOrNull(json['balance_laari']),
+      claimedLaari: claimed,
+      receivedLaari: received,
+      // The server's own flag, but never believed past what it can name.
+      // A discrepancy the screen cannot show BOTH sides of is not a
+      // discrepancy it may announce — so an absent claim or an absent bank
+      // figure reads as "no difference known", which is the safe side.
+      amountDiffers:
+          json['amount_differs'] == true && claimed != null && received != null,
+      rejectedReason: _s(json['rejected_reason']).isEmpty
+          ? null
+          : _s(json['rejected_reason']),
+    );
+  }
 
   final MatchResult result;
 
@@ -2071,13 +2087,36 @@ class MatchOutcome {
   /// one. A partial match reports this rather than congratulating anybody.
   final int? amountOutstandingLaari;
 
-  /// TOP-UP ONLY — what went into the wallet. 0 on a rejection.
+  /// TOP-UP ONLY — what went into the wallet. 0 on a rejection. On a matched
+  /// claim this is the BANK's figure ([receivedLaari]), never the amount the
+  /// merchant typed: a screen congratulating a store on an MVR 20.00 they
+  /// entered over an MVR 10.00 credit would be the platform misleading them
+  /// about their own money.
   final int? creditedLaari;
 
   /// TOP-UP ONLY — the wallet balance AT READ TIME, not a snapshot from when
   /// the credit landed: if the hourly auto-settle spent it in between,
   /// "balance now" still has to be true.
   final int? balanceLaari;
+
+  /// BOTH FLOWS — the merchant's CLAIM: what they typed on the upload form.
+  /// Null only on a payload from a build older than 2026-08-25; the
+  /// envelope's `amount_laari` carries the same figure.
+  final int? claimedLaari;
+
+  /// BOTH FLOWS — the FACT: what the bank actually sent for THIS transfer,
+  /// and therefore what was credited or allocated. Null where no bank figure
+  /// is known (a transfer an admin reconciled by hand off a statement), and
+  /// then there is nothing to compare and [amountDiffers] is false.
+  final int? receivedLaari;
+
+  /// The two figures are both known AND disagree. The merchant's number was
+  /// a claim, the bank's is the money — this is the flag that makes a screen
+  /// SAY so instead of quietly printing a different amount.
+  ///
+  /// It is not an error: a store that typed MVR 20.00 and transferred MVR
+  /// 10.00 is credited the 10.00 that really arrived.
+  final bool amountDiffers;
 
   /// Why it was refused, verbatim from the admin who refused it. The wire
   /// says `rejected_reason` on BOTH flows (settlement payments spell the

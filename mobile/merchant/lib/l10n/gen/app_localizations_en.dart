@@ -2933,4 +2933,24 @@ class AppLocalizationsEn extends AppLocalizations {
   String transferSettlementRejectedBody(String reference) {
     return 'Settlement $reference is cancelled and its transactions are payable again. Create a new settlement with the correct receipt.';
   }
+
+  @override
+  String transferDiffersTopUp(String received, String claimed) {
+    return 'Your bank sent $received, not the $claimed you entered — so $received is what went into your wallet. Nothing is lost: we always credit the amount the bank actually sent.';
+  }
+
+  @override
+  String transferDiffersSettlement(String received, String claimed) {
+    return 'Your bank sent $received, not the $claimed you entered — so $received is what this settlement was credited with. Nothing is lost: we always use the amount the bank actually sent.';
+  }
+
+  @override
+  String topUpDiffers(String received, String claimed) {
+    return 'Your bank sent $received, not the $claimed you entered — your wallet was credited with what actually arrived.';
+  }
+
+  @override
+  String paymentDiffers(String received, String claimed) {
+    return 'Your bank sent $received, not the $claimed you entered — this settlement was credited with what actually arrived.';
+  }
 }

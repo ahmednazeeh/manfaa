@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Domain\Ledger\AccountCode;
 use App\Domain\Ledger\Balances;
 use App\Domain\Money\Laari;
+use App\Domain\Platform\PlatformConfig;
 use App\Domain\Settlement\DuplicateBankRefException;
 use App\Domain\Settlement\SettlementAllocator;
 use App\Domain\Settlement\SettlementBuilder;
@@ -112,6 +113,29 @@ function bankRow(string $name, int $laari, string $reference = '804802801', arra
         'benefName' => $name,
         'trxDate' => '2026-08-24 10:00:00',
     ], $extra)]])]);
+}
+
+/** Two incoming credits in one page of history, in this order. */
+function bankRows(array $rows): void
+{
+    Http::fake(['*/faisanet4/history*' => Http::response(['data' => array_map(
+        static fn (array $row): array => array_merge([
+            'baseAmount' => $row['laari'] / 100,
+            'absAmount' => $row['laari'] / 100,
+            'benefName' => $row['name'] ?? 'WHOEVER',
+            'trxNumber2' => $row['reference'],
+            'trxDate' => '2026-08-24 10:00:00',
+        ], $row['extra'] ?? []),
+        $rows,
+    )])]);
+}
+
+/** The merchant's wallet balance, or nothing where no wallet exists yet. */
+function topUpWalletBalance(): int
+{
+    $wallet = test()->merchant->wallet()->first();
+
+    return $wallet === null ? 0 : (int) $wallet->balance_laari;
 }
 
 function topUpJournals(): int
@@ -233,12 +257,159 @@ it('refuses a credit from a different payer with no reference', function (): voi
     expect($this->merchant->wallet()->exists())->toBeFalse();
 });
 
-it('refuses when the amount is a laari out', function (): void {
+it('credits the BANK\'s figure when it is not the one the merchant typed', function (): void {
+    // THE PRODUCTION CASE (owner, 2026-08-25, wallet top-up #2): the
+    // merchant typed MVR 200.00, the bank credited MVR 199.99. The old
+    // equality gate parked a real transfer in the admin queue over that.
     $topUp = claimTopUp(20000, '804802801');
 
     bankRow('WHOEVER', 19999, '804802801');
 
+    expect(app(WalletTopUpVerifier::class)->attempt($topUp))->toBeTrue();
+
+    $topUp->refresh();
+
+    expect($topUp->state)->toBe('matched')
+        // The claim, exactly as typed, forever.
+        ->and($topUp->amount_laari)->toBe(20000)
+        // The fact, off the statement row.
+        ->and($topUp->received_laari)->toBe(19999)
+        ->and($topUp->amountDiffers())->toBeTrue();
+
+    // The MONEY is the bank's figure, not the claim.
+    expect($this->merchant->wallet()->sole()->balance_laari)->toBe(19999)
+        ->and($this->merchant->wallet()->sole()->transactions()->sole()->amount_laari)->toBe(19999);
+});
+
+it('THE PRODUCTION ROW: claimed MVR 20.00, MVR 10.00 arrived, MVR 10.00 credited', function (): void {
+    // Wallet top-up #2, 2026-08-25. The merchant typed MVR 20.00; the slip
+    // they uploaded and BML's own statement both say MVR 10.00, reference
+    // BLAZ204399156496. The verifier polled the whole window, matched
+    // nothing, and parked a perfectly good transfer for a person to sort
+    // out. This is that row, and it must now go through.
+    app(PlatformConfig::class)->set('wallet_top_up_min_laari', 100);
+
+    $topUp = claimTopUp(2000, 'BLAZ204399156496');
+
+    bankRow('AGROMART PVT LTD', 1000, 'BLAZ204399156496');
+
+    expect(app(WalletTopUpVerifier::class)->attempt($topUp))->toBeTrue();
+
+    $topUp->refresh();
+
+    expect($topUp->state)->toBe('matched')
+        // The EVIDENCE decided it — the reference, unchanged and unrelaxed.
+        ->and($topUp->matched_by_rule)->toBe('reference')
+        // The CLAIM, still readable, still exactly what they typed.
+        ->and($topUp->amount_laari)->toBe(2000)
+        // The FACT, off the statement row.
+        ->and($topUp->received_laari)->toBe(1000)
+        ->and($topUp->amountDiffers())->toBeTrue();
+
+    // MVR 10.00 is what the bank sent, so MVR 10.00 is what the wallet
+    // holds — and the ledger balances on that figure, not on the claim.
+    expect($this->merchant->wallet()->sole()->balance_laari)->toBe(1000)
+        ->and($this->merchant->wallet()->sole()->transactions()->sole()->amount_laari)->toBe(1000)
+        ->and($this->balances->naturalBalance(AccountCode::MerchantWalletBalance))->toBe(1000)
+        ->and($this->balances->journalsAllBalance())->toBeTrue();
+});
+
+it('credits a top-up that arrived UNDER the platform minimum rather than holding it hostage', function (): void {
+    // The minimum gates what may be CLAIMED, at claim time. Money that
+    // genuinely arrived is the merchant's, and refusing to credit it over
+    // their own typo is the failure this round exists to end.
+    app(PlatformConfig::class)->set('wallet_top_up_min_laari', 10000);
+
+    $topUp = claimTopUp(10000, '804802801');
+
+    bankRow('WHOEVER', 500, '804802801');
+
+    expect(app(WalletTopUpVerifier::class)->attempt($topUp))->toBeTrue();
+    expect($topUp->refresh()->received_laari)->toBe(500)
+        ->and($this->merchant->wallet()->sole()->balance_laari)->toBe(500);
+});
+
+it('credits MORE than was claimed when more than was claimed arrived', function (): void {
+    // The mirror. The bank is the fact in both directions — a merchant who
+    // undertyped is not quietly short-changed either.
+    $topUp = claimTopUp(10000, '804802801');
+
+    bankRow('WHOEVER', 20000, '804802801');
+
+    expect(app(WalletTopUpVerifier::class)->attempt($topUp))->toBeTrue();
+
+    $topUp->refresh();
+
+    expect($topUp->amount_laari)->toBe(10000)
+        ->and($topUp->received_laari)->toBe(20000);
+
+    expect($this->merchant->wallet()->sole()->balance_laari)->toBe(20000)
+        ->and($this->balances->naturalBalance(AccountCode::MerchantWalletBalance))->toBe(20000)
+        ->and($this->balances->journalsAllBalance())->toBeTrue();
+});
+
+it('never credits a row that says money came IN but carries nothing', function (): void {
+    // BML's feed is the shape where this is expressible: direction is a
+    // separate `minus` flag rather than the amount's sign, so a row can be
+    // incoming AND zero. Removing the equality gate must not let one
+    // through — a credit of nothing is not a credit.
+    $bml = TransferProfile::create([
+        'name' => 'BML',
+        'base_url' => 'http://10.99.0.1:3005',
+        'segment' => 'bml',
+        'from_account' => null,
+        'upstream_profile' => 'CLEVIDEN',
+        'active' => true,
+    ]);
+
+    $account = PlatformBankAccount::query()->create([
+        'bank_name' => 'bml',
+        'account_no' => '7730000757923',
+        'account_name' => 'Cleviden Pvt Ltd',
+        'currency' => 'MVR',
+        'is_primary' => false,
+        'active' => true,
+        'verify_profile_id' => $bml->id,
+    ]);
+
+    $topUp = claimTopUp(20000, 'BLAZ204399156496', $account->id);
+
+    Http::fake(['*/bml/history*' => Http::response([[
+        'id' => 'FT26235BDLZB',
+        'narrative2' => 'BLAZ204399156496',
+        'narrative3' => 'AGROMART',
+        'amount' => 0,
+        'minus' => false,
+        'bookingDate' => '2026-08-25T00:00:00+05:00',
+    ]])]);
+
     expect(app(WalletTopUpVerifier::class)->attempt($topUp))->toBeFalse();
+    expect($topUp->refresh()->state)->toBe('pending')
+        ->and($this->merchant->wallet()->exists())->toBeFalse();
+});
+
+it('still refuses a typed reference too short to be evidence', function (): void {
+    // TransferEvidence's 6-character floor, UNCHANGED. The amount used to
+    // be a second lock on this door; now the reference is the only one, so
+    // the floor matters more than it did, not less.
+    $topUp = claimTopUp(20000, '80480');
+
+    bankRow('WHOEVER', 20000, '80480');
+
+    expect(app(WalletTopUpVerifier::class)->attempt($topUp))->toBeFalse();
+    expect($topUp->refresh()->state)->toBe('pending')
+        ->and($this->merchant->wallet()->exists())->toBeFalse();
+});
+
+it('still refuses a receipt needle too short to be evidence', function (): void {
+    // The 5-character floor on TransferEvidence::receiptMentions, likewise
+    // untouched.
+    $topUp = claimTopUp(20000, null);
+    $topUp->forceFill(['receipt_text' => 'CLEVIDEN TRANSACTION# 8048 MVR 200.00'])->save();
+
+    bankRow('WHOEVER', 20000, '8048');
+
+    expect(app(WalletTopUpVerifier::class)->attempt($topUp->refresh()))->toBeFalse();
     expect($topUp->refresh()->state)->toBe('pending');
 });
 
@@ -460,4 +631,79 @@ it('tells the store when the wallet is credited', function (): void {
     // needs a device, and the owner has none here.
     Queue::assertPushed(SendCustomerSms::class, 1);
     Queue::assertNotPushed(SendPushNotification::class);
+});
+
+/* ------------------------------------------------------------------ *
+ * What the amount gate was silently doing, and what replaced it
+ * (verifier round, 2026-08-25).
+ * ------------------------------------------------------------------ */
+
+it('will not take a credit off a SCRAP of somebody else\'s reference', function (): void {
+    // The six-character floor is unchanged, and it was never the whole rule:
+    // containment accepted any six-character SUBSTRING of a bank-issued
+    // identifier, and MIB's live references are eight sequential digits. With
+    // equality gone the amount no longer bounds what such a guess is worth,
+    // so a merchant who has made one transfer could have taken an unclaimed
+    // credit of any size by typing six of its digits.
+    $topUp = claimTopUp(10000, '908633');
+
+    // Somebody else's MVR 5,000.00.
+    bankRow('MARIYAM SHIFA', 500000, '90863389');
+
+    expect(app(WalletTopUpVerifier::class)->attempt($topUp))->toBeFalse();
+    expect($topUp->refresh()->state)->toBe('pending');
+    expect(topUpWalletBalance())->toBe(0);
+});
+
+it('still matches the short reference inside the bank\'s composite one', function (): void {
+    // The honest transcription the containment rule exists for: a whole
+    // identifier, quoted inside a longer one. Anchoring keeps this.
+    $topUp = claimTopUp(20000, '1-155301335-90863389-1');
+
+    bankRow('WHOEVER', 20000, '90863389');
+
+    expect(app(WalletTopUpVerifier::class)->attempt($topUp))->toBeTrue();
+    expect($topUp->refresh()->matched_by_rule)->toBe('reference');
+});
+
+it('will not read a reference out of a dense run of digits on a slip', function (): void {
+    // The receipt_reference rung reads OCR of a slip the MERCHANT uploaded.
+    // A plain containment test over its alphanumerics lets ONE crafted image
+    // carrying a long digit run quote thousands of consecutive references at
+    // once — an enumeration of the platform account rather than evidence
+    // about one transfer.
+    $topUp = claimTopUp(10000, null);
+    $topUp->forceFill([
+        'receipt_text' => 'RECEIPT 908633879086338890863389908633909086339190863392',
+    ])->save();
+
+    bankRow('MARIYAM SHIFA', 500000, '90863389');
+
+    expect(app(WalletTopUpVerifier::class)->attempt($topUp))->toBeFalse();
+    expect($topUp->refresh()->state)->toBe('pending');
+    expect(topUpWalletBalance())->toBe(0);
+});
+
+it('takes the row the merchant\'s own reference names, not the first row that answers', function (): void {
+    // The amount was quietly acting as the ROW SELECTOR: it skipped every row
+    // that was not this merchant's transfer. Without it, first-hit means the
+    // BANK'S ORDERING decides which credit becomes their money — here a
+    // weaker receipt hit on an earlier row would take MVR 3.00 and leave the
+    // merchant's real MVR 200.00 credit unclaimed with the window closing.
+    $topUp = claimTopUp(20000, '804802801');
+    $topUp->forceFill(['receipt_text' => 'RECEIPT 700000001 AND 804802801'])->save();
+
+    bankRows([
+        ['reference' => '700000001', 'laari' => 300],
+        ['reference' => '804802801', 'laari' => 20000],
+    ]);
+
+    expect(app(WalletTopUpVerifier::class)->attempt($topUp))->toBeTrue();
+
+    $topUp->refresh();
+
+    expect($topUp->matched_by_rule)->toBe('reference')
+        ->and($topUp->matched_trx_id)->toBe('804802801')
+        ->and($topUp->received_laari)->toBe(20000);
+    expect(topUpWalletBalance())->toBe(20000);
 });

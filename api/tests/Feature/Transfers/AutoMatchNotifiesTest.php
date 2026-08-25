@@ -7,6 +7,7 @@ use App\Domain\Mobile\MobileAudience;
 use App\Domain\Mobile\MobileTokenService;
 use App\Domain\Money\Laari;
 use App\Domain\Notifications\NotificationTemplateKey;
+use App\Domain\Platform\PlatformConfig;
 use App\Domain\Settlement\SettlementAllocator;
 use App\Domain\Settlement\SettlementBuilder;
 use App\Domain\Settlement\SettlementState;
@@ -194,7 +195,7 @@ it('tells the store when the BANK — not an admin — settles their batch', fun
     expect(queuedSmsBody())->toContain((string) $this->settlement->reference);
 });
 
-it('does NOT announce acceptance when the bank\'s money only partly settles the batch', function (): void {
+it('says the transfer arrived AND that the batch is still owed, when it only partly settles', function (): void {
     // §4 dues in allocation order are 2750, 1375, 5500, 2200. 4,125 covers
     // the first two lines whole and no more.
     $payment = bankPayment(4125, 'BML-PART-1');
@@ -208,9 +209,23 @@ it('does NOT announce acceptance when the bank\'s money only partly settles the 
         ->and($this->settlement->refresh()->state)->toBe(SettlementState::PartiallySettled);
 
     // "Settlement is paid off, thank you" would be a lie: 7,700 laari are
-    // still owed. The progress screen says so instead.
-    Queue::assertNotPushed(SendPushNotification::class);
-    Queue::assertNotPushed(SendCustomerSms::class);
+    // still owed. SILENCE is the other lie, and the one this round would
+    // otherwise have introduced (verifier round, 2026-08-25): with the
+    // BANK's figure funding the allocation, "typed the whole batch, sent
+    // less" is an ordinary auto-match rather than a deliberate instalment,
+    // and both merchant surfaces promise a message the moment a transfer is
+    // matched. So it is the OTHER template that fires, naming what arrived
+    // and what is left.
+    Queue::assertPushed(SendPushNotification::class, 1);
+    Queue::assertPushed(SendCustomerSms::class, 1);
+
+    $body = queuedSmsBody();
+
+    expect($body)->toContain((string) $this->settlement->reference)
+        // What the bank sent, and what the batch is still owed: 11,825 less
+        // the 4,125 that arrived.
+        ->and($body)->toContain('41.25')
+        ->and($body)->toContain('77.00');
 });
 
 it('tells the store when the BANK — not an admin — credits their wallet', function (): void {
@@ -234,6 +249,43 @@ it('tells the store when the BANK — not an admin — credits their wallet', fu
     // The message carries what the screen also prints: the amount that went
     // in, and the balance it produced.
     expect(queuedSmsBody())->toContain('500.00');
+});
+
+it('QUOTES WHAT LANDED, AND NAMES THE DIFFERENCE, when the bank credited something else', function (): void {
+    // The production row (owner, 2026-08-25): typed MVR 20.00, banked
+    // MVR 10.00. "Your wallet top-up of MVR 20.00 is in" would be the
+    // platform lying to a shop about the shop's own money.
+    app(PlatformConfig::class)->set('wallet_top_up_min_laari', 100);
+
+    $claim = walletClaim(2000, 'BLAZ204399156496');
+
+    Queue::fake();
+    creditRow(1000, 'BLAZ204399156496');
+
+    expect(app(WalletTopUpVerifier::class)->attempt($claim))->toBeTrue();
+
+    Queue::assertPushed(SendPushNotification::class, 1);
+    Queue::assertPushed(SendCustomerSms::class, 1);
+
+    // Both numbers, and which is which — word for word.
+    expect(queuedSmsBody())->toBe(
+        'Your wallet top-up is in: MVR 10.00 arrived. That is not the MVR 20.00 '
+        .'you entered — we credited what the bank actually sent. '
+        .'Wallet balance: MVR 10.00.'
+    );
+});
+
+it('keeps the plain sentence for the ordinary case where the two agree', function (): void {
+    // A discrepancy message on every top-up would be noise, and would train
+    // a merchant to ignore the one that matters.
+    $claim = walletClaim(50000, '901901901');
+
+    Queue::fake();
+    creditRow(50000, '901901901');
+
+    expect(app(WalletTopUpVerifier::class)->attempt($claim))->toBeTrue();
+
+    expect(queuedSmsBody())->toBe('Your wallet top-up of MVR 500.00 is in. Wallet balance: MVR 500.00.');
 });
 
 it('reaches only the staff who may act on the moment', function (): void {

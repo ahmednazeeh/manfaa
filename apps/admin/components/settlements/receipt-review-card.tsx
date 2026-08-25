@@ -3,10 +3,7 @@
 import type { ReactNode } from 'react';
 import type { Settlement, SettlementPayment } from '@manfaa/api-client';
 import { formatMoney, MoneyText } from '@manfaa/ui';
-import { CircleCheck, Info, TriangleAlert } from 'lucide-react';
 import { formatDateTime } from '@/lib/format';
-import { Alert, AlertDescription, AlertIcon } from '@/components/ui/alert';
-import { Button } from '@/components/ui/button';
 import {
   Card,
   CardContent,
@@ -16,8 +13,14 @@ import {
   CardToolbar,
 } from '@/components/ui/card';
 import { PaymentStateBadge } from '@/components/admin/state-badge';
+import {
+  DiscrepancyBadge,
+  DiscrepancyNote,
+} from '@/components/transfers/claim-and-fact';
+import { ClaimVerdict } from './claim-verdict';
+import { MatchPaymentDialog } from './match-payment-dialog';
 import { BatchPriceBreakdown, PromptDiscountNote } from './prompt-discount';
-import { compareClaim, outstandingLaari } from './receipt';
+import { outstandingLaari } from './receipt';
 import { RejectSettlementDialog } from './reject-settlement-dialog';
 import { SlipPreview } from './slip-preview';
 
@@ -29,81 +32,6 @@ function Fact({ label, children }: { label: string; children: ReactNode }) {
       </span>
       <span className="text-sm text-foreground">{children}</span>
     </div>
-  );
-}
-
-/**
- * What matching this claim will do, stated before the admin commits to it.
- * Purely §7: whole lines oldest-first, sub-MVR-1 forgiveness, overpayment to
- * the wallet. It measures cash against cash — the outstanding figure is the
- * batch's own due, already net of any prompt-payment discount and §7 credits,
- * and any merchant credit parked in the wallet is counted on top at match
- * time, so a shortfall shown here is the worst case.
- */
-function ClaimVerdict({
-  claimedLaari,
-  outstanding,
-}: {
-  claimedLaari: number;
-  outstanding: number;
-}) {
-  const comparison = compareClaim(claimedLaari, outstanding);
-
-  if (comparison.kind === 'exact') {
-    return (
-      <Alert variant="success" appearance="light" size="sm">
-        <AlertIcon>
-          <CircleCheck />
-        </AlertIcon>
-        <AlertDescription>
-          The claim matches the amount outstanding exactly — matching allocates
-          every line and settles the batch.
-        </AlertDescription>
-      </Alert>
-    );
-  }
-
-  if (comparison.kind === 'over') {
-    return (
-      <Alert variant="info" appearance="light" size="sm">
-        <AlertIcon>
-          <Info />
-        </AlertIcon>
-        <AlertDescription>
-          {formatMoney(comparison.deltaLaari)} more than outstanding. Matching
-          allocates every line; the excess is parked as merchant wallet credit
-          for the next batch — never refunded.
-        </AlertDescription>
-      </Alert>
-    );
-  }
-
-  if (comparison.forgivable) {
-    return (
-      <Alert variant="info" appearance="light" size="sm">
-        <AlertIcon>
-          <Info />
-        </AlertIcon>
-        <AlertDescription>
-          {formatMoney(comparison.deltaLaari)} short — under MVR 1, so matching
-          forgives the gap (platform-funded), allocates every line and settles
-          the batch in full.
-        </AlertDescription>
-      </Alert>
-    );
-  }
-
-  return (
-    <Alert variant="warning" appearance="light" size="sm">
-      <AlertIcon>
-        <TriangleAlert />
-      </AlertIcon>
-      <AlertDescription>
-        {formatMoney(comparison.deltaLaari)} short of the amount outstanding.
-        Matching confirms whole transactions oldest-first and leaves the
-        uncovered lines pending — never pro-rata.
-      </AlertDescription>
-    </Alert>
   );
 }
 
@@ -122,7 +50,15 @@ export function ReceiptReviewCard({
 }: {
   settlement: Settlement;
   payment: SettlementPayment;
-  onMatch: (paymentId: number) => void;
+  /**
+   * Runs the match with WHAT THE STATEMENT SAYS ARRIVED — collected by the
+   * dialog, never assumed from the claim. Resolves when the server answers.
+   */
+  onMatch: (
+    paymentId: number,
+    receivedLaari: number | null,
+    bankRef: string | null,
+  ) => Promise<unknown>;
   matching: boolean;
   canReject: boolean;
 }) {
@@ -140,10 +76,14 @@ export function ReceiptReviewCard({
             <RejectSettlementDialog settlement={settlement} />
           ) : null}
           {isPending ? (
-            <Button onClick={() => onMatch(payment.id)} disabled={matching}>
-              <CircleCheck />
-              {matching ? 'Matching…' : 'Match payment'}
-            </Button>
+            <MatchPaymentDialog
+              payment={payment}
+              outstanding={outstanding}
+              matching={matching}
+              onConfirm={(receivedLaari, bankRef) =>
+                onMatch(payment.id, receivedLaari, bankRef)
+              }
+            />
           ) : null}
         </CardToolbar>
       </CardHeader>
@@ -157,11 +97,48 @@ export function ReceiptReviewCard({
                 {payment.bank_ref ?? '—'}
               </span>
             </Fact>
+            {/* THE CLAIM AND THE FACT, side by side (owner, 2026-08-25).
+                The claim is what the merchant typed and is never rewritten;
+                the received figure is the bank's, and is what allocated. */}
             <Fact label="Amount claimed">
               <MoneyText
                 laari={payment.amount_laari}
-                className="text-base font-semibold"
+                className={
+                  payment.amount_differs
+                    ? 'text-base text-muted-foreground'
+                    : 'text-base font-semibold'
+                }
               />
+              {payment.amount_differs ? (
+                <span className="ms-2 text-xs text-muted-foreground">
+                  what the merchant typed
+                </span>
+              ) : null}
+            </Fact>
+            <Fact label="Amount received">
+              {payment.received_laari === null ? (
+                <span className="text-muted-foreground">
+                  {isPending
+                    ? 'Not yet known — the bank has not been matched to this payment.'
+                    : 'Not recorded; the claim is what funded the batch.'}
+                </span>
+              ) : (
+                <span className="flex flex-wrap items-center gap-2">
+                  <MoneyText
+                    laari={payment.received_laari}
+                    className="text-base font-semibold"
+                  />
+                  <DiscrepancyBadge row={payment} />
+                </span>
+              )}
+              {payment.amount_differs ? (
+                <span className="mt-1 block text-xs text-muted-foreground">
+                  <DiscrepancyNote
+                    row={payment}
+                    credited="allocated to the batch"
+                  />
+                </span>
+              ) : null}
             </Fact>
             <Fact label="Amount outstanding on the batch">
               <MoneyText laari={outstanding} className="text-base" />
@@ -188,8 +165,11 @@ export function ReceiptReviewCard({
           <PromptDiscountNote settlement={settlement} />
 
           {isPending ? (
+            // The figure on the row: the bank's where the verifier stamped
+            // one, the claim while nobody has anything better. The match
+            // dialog recomputes this live against what the reviewer types.
             <ClaimVerdict
-              claimedLaari={payment.amount_laari}
+              amountLaari={payment.received_laari ?? payment.amount_laari}
               outstanding={outstanding}
             />
           ) : null}

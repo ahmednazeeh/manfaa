@@ -1627,8 +1627,47 @@ void main() {
           'result': 'credited',
           'credited_laari': 50000,
           'credited_mvr': '500.00',
+          // The claim and the bank's fact agree here, so no discrepancy
+          // line appears — that sentence has to stay signal.
+          'claimed_laari': 50000,
+          'claimed_mvr': '500.00',
+          'received_laari': 50000,
+          'received_mvr': '500.00',
+          'amount_differs': false,
           'balance_laari': 58175,
           'balance_mvr': '581.75',
+          'rejected_reason': null,
+        },
+      ),
+      drive: driveTopUpSubmitted,
+    ),
+  );
+  // THE ROW THAT STARTED THIS ROUND (owner, 2026-08-25): a merchant typed
+  // MVR 500.00 over a real MVR 300.00 transfer. The headline is what
+  // ARRIVED, and the note under it names both figures — a silently smaller
+  // number with no explanation is what this shot exists to prevent.
+  testWidgets(
+    'transfer credited differs light',
+    (t) => shot(
+      t,
+      'transfer_credited_differs_light',
+      Brightness.light,
+      walletJson: walletFixture,
+      progressJson: _shotProgress(
+        kind: 'wallet_top_up',
+        watching: false,
+        reason: 'terminal',
+        outcome: const {
+          'result': 'credited',
+          'credited_laari': 30000,
+          'credited_mvr': '300.00',
+          'claimed_laari': 50000,
+          'claimed_mvr': '500.00',
+          'received_laari': 30000,
+          'received_mvr': '300.00',
+          'amount_differs': true,
+          'balance_laari': 38175,
+          'balance_mvr': '381.75',
           'rejected_reason': null,
         },
       ),
@@ -1651,6 +1690,11 @@ void main() {
           'result': 'settled',
           'settlement_state': 'settled',
           'reference': 'ST-2026-00045',
+          'claimed_laari': 2712,
+          'claimed_mvr': '27.12',
+          'received_laari': 2712,
+          'received_mvr': '27.12',
+          'amount_differs': false,
           'amount_received_laari': 2712,
           'amount_received_mvr': '27.12',
           'amount_outstanding_laari': 0,

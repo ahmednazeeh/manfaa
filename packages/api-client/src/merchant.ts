@@ -811,6 +811,31 @@ const transferProgressShape = {
   checked_at: z.string(),
 };
 
+/**
+ * THE MERCHANT'S CLAIM AND THE BANK'S FACT, carried by BOTH outcomes
+ * (owner, 2026-08-25). One object literal spread into both, exactly as the
+ * server builds it once — this pair is precisely what a merchant is reading
+ * when the two numbers disagree, and two copies of it would drift.
+ *
+ * `claimed_laari` is what they typed. `received_laari` is what the bank
+ * actually sent, and is what was credited or allocated. It is NULL where no
+ * bank figure is known — a payment an admin reconciled by hand off a
+ * statement — and `amount_differs` is then FALSE, because an unknown is not
+ * a discrepancy: a screen must never announce a mismatch it cannot name both
+ * sides of.
+ *
+ * The envelope's `amount_laari` above is the CLAIM, deliberately unchanged
+ * by a match, so a client reading only the envelope cannot mistake one
+ * figure for the other.
+ */
+const transferClaimAndFactShape = {
+  claimed_laari: z.number().int(),
+  claimed_mvr: z.string(),
+  received_laari: z.number().int().nullable(),
+  received_mvr: z.string().nullable(),
+  amount_differs: z.boolean(),
+};
+
 /** `unknown` is never on the wire; an unrecognised result lands there. */
 export const SettlementProgressResultSchema = z
   .enum(["settled", "partially_settled", "rejected", "unknown"])
@@ -836,6 +861,13 @@ export type SettlementProgressResult = z.infer<
  */
 export const SettlementPaymentOutcomeSchema = z.object({
   result: SettlementProgressResultSchema,
+  /**
+   * THIS payment's two figures. The bank's is what funded the batch; the
+   * merchant's is what they typed. A screen that printed only the claim
+   * would explain a `partially_settled` batch with the very number that
+   * does not account for it.
+   */
+  ...transferClaimAndFactShape,
   /** The raw §6 state, for a panel that would rather branch on the batch. */
   settlement_state: SettlementStateSchema,
   reference: z.string(),
@@ -867,11 +899,18 @@ export type WalletTopUpProgressResult = z.infer<
  * `balance_laari` is the balance AT READ TIME rather than a snapshot taken
  * when the credit landed — if the hourly auto-settle spent it in between,
  * "balance now" has to be true.
+ *
+ * `credited_laari` is WHAT WENT IN, not what was asked for: on a matched
+ * claim it equals `received_laari` where the bank gave a figure. When
+ * `amount_differs` is true, a screen that congratulates the merchant on the
+ * claim while a smaller sum sits in the wallet is telling them something
+ * untrue — say the arrived figure, and say it was not the one they entered.
  */
 export const WalletTopUpOutcomeSchema = z.object({
   result: WalletTopUpProgressResultSchema,
   credited_laari: z.number().int(),
   credited_mvr: z.string(),
+  ...transferClaimAndFactShape,
   balance_laari: z.number().int(),
   balance_mvr: z.string(),
   rejected_reason: z.string().nullable(),

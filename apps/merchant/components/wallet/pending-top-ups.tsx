@@ -1,7 +1,7 @@
 'use client';
 
 import { bankLabel, type WalletPendingTopUp } from '@manfaa/api-client';
-import { MoneyText } from '@manfaa/ui';
+import { MoneyText, useFormatMoney } from '@manfaa/ui';
 import { format } from 'date-fns';
 import { useTranslation } from 'react-i18next';
 import { walletTopUpStateLabel } from '@/lib/labels';
@@ -14,6 +14,13 @@ import { BankLogo } from '@/components/app/bank-select';
  * yet balance. The chip answers the question they came to ask — "did it
  * arrive?" — in three words or fewer, and a refused claim shows the reason
  * Manfaa gave, verbatim, when the payload carries one.
+ *
+ * THE FIGURE IS THE BANK'S ONCE THE BANK HAS SPOKEN (owner, 2026-08-25).
+ * `amount_laari` is the merchant's CLAIM — what they typed on the form —
+ * and `received_laari` is what the credit actually was. A claim still
+ * waiting has no bank figure yet, so the claim is all there is to show; the
+ * moment one exists, it leads, and when the two disagree one plain sentence
+ * says so rather than letting a smaller number appear without explanation.
  */
 
 const STATE_VARIANTS: Record<WalletPendingTopUp['state'], BadgeProps['variant']> =
@@ -25,6 +32,7 @@ const STATE_VARIANTS: Record<WalletPendingTopUp['state'], BadgeProps['variant']>
 
 export function PendingTopUps({ topUps }: { topUps: WalletPendingTopUp[] }) {
   const { t } = useTranslation();
+  const formatMoney = useFormatMoney();
 
   if (topUps.length === 0) return null;
 
@@ -47,7 +55,7 @@ export function PendingTopUps({ topUps }: { topUps: WalletPendingTopUp[] }) {
               <div className="flex min-w-0 grow flex-col gap-0.5">
                 <span className="flex flex-wrap items-center gap-2">
                   <MoneyText
-                    laari={topUp.amount_laari}
+                    laari={topUp.received_laari ?? topUp.amount_laari}
                     className="text-sm font-semibold text-mono"
                   />
                   <Badge
@@ -78,6 +86,14 @@ export function PendingTopUps({ topUps }: { topUps: WalletPendingTopUp[] }) {
                     </span>
                   )}
                 </span>
+                {topUp.amount_differs && topUp.received_laari !== null && (
+                  <span className="text-xs text-secondary-foreground">
+                    {t('wallet.pending.differs', {
+                      received: formatMoney(topUp.received_laari),
+                      claimed: formatMoney(topUp.amount_laari),
+                    })}
+                  </span>
+                )}
                 {topUp.state === 'rejected' && (
                   <span className="text-xs text-destructive">
                     {t('wallet.pending.reason')}:{' '}

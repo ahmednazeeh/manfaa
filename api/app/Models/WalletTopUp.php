@@ -12,6 +12,11 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * or an admin's click) credits the wallet, through WalletFunding::recordTopUp.
  *
  * The column set mirrors settlement_payments on purpose; see the migration.
+ *
+ * TWO FIGURES, ONE TRANSFER (owner, 2026-08-25): `amount_laari` is the
+ * merchant's CLAIM and never changes; `received_laari` is what the bank
+ * actually credited, stamped at match time. They usually agree. When they do
+ * not, the bank wins — see {@see creditedLaari()}.
  */
 class WalletTopUp extends Model
 {
@@ -25,6 +30,7 @@ class WalletTopUp extends Model
         return [
             'merchant_id' => 'integer',
             'amount_laari' => 'integer',
+            'received_laari' => 'integer',
             'platform_bank_account_id' => 'integer',
             'slip_size_bytes' => 'integer',
             'uploaded_by' => 'integer',
@@ -40,6 +46,27 @@ class WalletTopUp extends Model
             'rejected_by' => 'integer',
             'rejected_at' => 'immutable_datetime',
         ];
+    }
+
+    /**
+     * THE FIGURE THAT MOVES MONEY: what the bank credited, and the claim
+     * only while no bank figure is known.
+     *
+     * The fallback is not a compromise — it is the state of every row before
+     * a match, and of a settlement payment reconciled by hand where nobody
+     * stated a figure. A top-up matched by an admin always carries one: the
+     * admin queue requires it.
+     */
+    public function creditedLaari(): int
+    {
+        return (int) ($this->received_laari ?? $this->amount_laari);
+    }
+
+    /** True once we know the bank credited something else than was claimed. */
+    public function amountDiffers(): bool
+    {
+        return $this->received_laari !== null
+            && (int) $this->received_laari !== (int) $this->amount_laari;
     }
 
     public function merchant(): BelongsTo

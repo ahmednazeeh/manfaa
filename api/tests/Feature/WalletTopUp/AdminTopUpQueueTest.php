@@ -110,12 +110,16 @@ it('matches a claim the merchant referenced and credits the wallet once, telling
     $topUp = submitTopUp(20000, 'BML-TOPUP-1');
 
     $this->actingAs($this->admin, 'admin')
-        ->postJson("/api/admin/wallet-top-ups/{$topUp->id}/match")
+        ->postJson("/api/admin/wallet-top-ups/{$topUp->id}/match", ['received_laari' => 20000])
         ->assertOk()
         ->assertJsonPath('data.state', 'matched')
         ->assertJsonPath('data.auto_matched', false)
         ->assertJsonPath('data.matched_by', $this->admin->id)
-        ->assertJsonPath('data.matched_trx_id', 'BML-TOPUP-1');
+        ->assertJsonPath('data.matched_trx_id', 'BML-TOPUP-1')
+        // What the reviewer read on the statement, recorded beside the
+        // claim it happens to agree with.
+        ->assertJsonPath('data.received_laari', 20000)
+        ->assertJsonPath('data.amount_differs', false);
 
     $wallet = $this->merchant->wallet()->sole();
     $movement = $wallet->transactions()->sole();
@@ -138,11 +142,58 @@ it('matches a claim the merchant referenced and credits the wallet once, telling
 
     // Matching again is a conflict, and credits nothing.
     $this->actingAs($this->admin, 'admin')
-        ->postJson("/api/admin/wallet-top-ups/{$topUp->id}/match")
+        ->postJson("/api/admin/wallet-top-ups/{$topUp->id}/match", ['received_laari' => 20000])
         ->assertConflict();
 
     expect($this->merchant->wallet()->sole()->balance_laari)->toBe(20000)
         ->and($this->merchant->wallet()->sole()->transactions()->count())->toBe(1);
+});
+
+it('records what the reviewer read on the statement, not what the merchant typed', function (): void {
+    // The manual path used to credit the claim blindly — the one place a
+    // typed number could still become money on its own authority. The
+    // reviewer is holding the statement; they type what it says.
+    $topUp = submitTopUp(20000, 'BML-TOPUP-1');
+
+    $this->actingAs($this->admin, 'admin')
+        ->postJson("/api/admin/wallet-top-ups/{$topUp->id}/match", ['received_laari' => 10000])
+        ->assertOk()
+        ->assertJsonPath('data.state', 'matched')
+        // The claim, preserved.
+        ->assertJsonPath('data.amount_laari', 20000)
+        // The fact, as stated.
+        ->assertJsonPath('data.received_laari', 10000)
+        ->assertJsonPath('data.amount_differs', true);
+
+    expect($this->merchant->wallet()->sole()->balance_laari)->toBe(10000)
+        ->and($this->merchant->wallet()->sole()->transactions()->sole()->amount_laari)->toBe(10000)
+        ->and($this->balances->naturalBalance(AccountCode::MerchantWalletBalance))->toBe(10000)
+        ->and($this->balances->journalsAllBalance())->toBeTrue();
+
+    // And the store is told the figure that landed, not the one they asked
+    // for — one message, quoting both.
+    Queue::assertPushed(SendCustomerSms::class, 1);
+});
+
+it('will not credit by hand without a figure, or on a figure of nothing', function (): void {
+    $topUp = submitTopUp(20000, 'BML-TOPUP-1');
+
+    $this->actingAs($this->admin, 'admin');
+
+    // Deliberately NOT defaulted to the claim: a default would be the old
+    // behaviour wearing a new field's name.
+    $this->postJson("/api/admin/wallet-top-ups/{$topUp->id}/match")
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors('received_laari');
+
+    foreach ([0, -500] as $figure) {
+        $this->postJson("/api/admin/wallet-top-ups/{$topUp->id}/match", ['received_laari' => $figure])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('received_laari');
+    }
+
+    expect($topUp->refresh()->state)->toBe('pending')
+        ->and($this->merchant->wallet()->exists())->toBeFalse();
 });
 
 it('needs a reference from the admin when the merchant gave none', function (): void {
@@ -157,7 +208,7 @@ it('needs a reference from the admin when the merchant gave none', function (): 
     expect($topUp->refresh()->state)->toBe('pending')
         ->and($this->merchant->wallet()->exists())->toBeFalse();
 
-    $this->postJson("/api/admin/wallet-top-ups/{$topUp->id}/match", ['bank_ref' => 'FT26235BDLZB'])
+    $this->postJson("/api/admin/wallet-top-ups/{$topUp->id}/match", ['bank_ref' => 'FT26235BDLZB', 'received_laari' => 20000])
         ->assertOk()
         ->assertJsonPath('data.state', 'matched')
         ->assertJsonPath('data.matched_trx_id', 'FT26235BDLZB');
@@ -172,7 +223,7 @@ it('refuses to credit a reference the wallet already holds', function (): void {
     app(WalletFunding::class)->recordTopUp($this->merchant, Laari::of(20000), 'BML-TOPUP-1');
 
     $this->actingAs($this->admin, 'admin')
-        ->postJson("/api/admin/wallet-top-ups/{$topUp->id}/match")
+        ->postJson("/api/admin/wallet-top-ups/{$topUp->id}/match", ['received_laari' => 20000])
         ->assertConflict();
 
     expect($topUp->refresh()->state)->toBe('pending')
@@ -186,8 +237,8 @@ it('refuses to spend one bank credit on two claims', function (): void {
 
     $this->actingAs($this->admin, 'admin');
 
-    $this->postJson("/api/admin/wallet-top-ups/{$first->id}/match", ['bank_ref' => 'FT-ONE'])->assertOk();
-    $this->postJson("/api/admin/wallet-top-ups/{$second->id}/match", ['bank_ref' => 'FT-ONE'])->assertConflict();
+    $this->postJson("/api/admin/wallet-top-ups/{$first->id}/match", ['bank_ref' => 'FT-ONE', 'received_laari' => 20000])->assertOk();
+    $this->postJson("/api/admin/wallet-top-ups/{$second->id}/match", ['bank_ref' => 'FT-ONE', 'received_laari' => 20000])->assertConflict();
 
     expect($second->refresh()->state)->toBe('pending')
         ->and($this->merchant->wallet()->sole()->balance_laari)->toBe(20000);
@@ -205,7 +256,7 @@ it('refuses to credit by hand a reference another table already spent', function
     $claim = submitTopUp(20000, null);
 
     $this->actingAs($this->admin, 'admin')
-        ->postJson("/api/admin/wallet-top-ups/{$claim->id}/match", ['bank_ref' => 'FT-ONE'])
+        ->postJson("/api/admin/wallet-top-ups/{$claim->id}/match", ['bank_ref' => 'FT-ONE', 'received_laari' => 20000])
         ->assertConflict();
 
     expect($claim->refresh()->state)->toBe('pending')
@@ -245,7 +296,7 @@ it('rejects a claim with a reason the store is told, moving no money', function 
 
     // Decided: neither outcome can be applied again.
     $this->postJson("/api/admin/wallet-top-ups/{$topUp->id}/reject", ['reason' => 'again'])->assertConflict();
-    $this->postJson("/api/admin/wallet-top-ups/{$topUp->id}/match")->assertConflict();
+    $this->postJson("/api/admin/wallet-top-ups/{$topUp->id}/match", ['received_laari' => 20000])->assertConflict();
 
     // The merchant sees it REFUSED, with the reason to act on — not gone —
     // and may claim the same reference again once the problem is sorted.

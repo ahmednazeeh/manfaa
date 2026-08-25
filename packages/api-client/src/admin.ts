@@ -133,15 +133,55 @@ export function recordAdminSettlementPayment(
   );
 }
 
+export const MatchSettlementPaymentRequestSchema = z.object({
+  /**
+   * WHAT THE STATEMENT SAYS ARRIVED, integer laari, at least 1 — OPTIONAL
+   * (owner, 2026-08-25).
+   *
+   * The merchant's `amount_laari` is a CLAIM; the bank credit is the FACT,
+   * and it is the fact that funds the batch. On this path there is no bank
+   * row to read, so a reviewer holding the statement is the only source of
+   * it: what they type is stamped as `received_laari` and is what allocates.
+   *
+   * OMITTING IT keeps whatever figure the row already carries — the
+   * verifier's own stamp where the poller matched it, and the claim where
+   * nobody ever had a better number, which is exactly what every hand match
+   * spent before this field existed. So a screen may prefill it with the
+   * claim (the best guess when nothing better is known) provided the
+   * reviewer can see and change it before committing.
+   *
+   * A figure smaller than the batch's outstanding flows down the existing
+   * partial path — whole lines oldest-first, the remainder still owed — and
+   * a larger one parks the excess as merchant wallet credit. No new branch.
+   */
+  received_laari: z.number().int().min(1).max(100_000_000).optional(),
+  /**
+   * THE REFERENCE THE REVIEWER READ off the same statement line (verifier
+   * round, 2026-08-25).
+   *
+   * A payment the merchant left blank was hand-matched with nothing written
+   * to `bank_ref` or `matched_trx_refs` at all, so the credit stayed
+   * "unspent" for every other path and a later wallet top-up or customer
+   * order could take the same transfer a second time. Optional, because an
+   * admin also reconciles payments nobody ever quoted a reference for — but
+   * send it whenever the statement line is in front of you.
+   */
+  bank_ref: z.string().min(1).max(128).optional(),
+});
+export type MatchSettlementPaymentRequest = z.infer<
+  typeof MatchSettlementPaymentRequestSchema
+>;
+
 /** POST /api/admin/payments/{id}/match — confirms a payment; returns the settlement. */
 export function matchAdminSettlementPayment(
   paymentId: number,
+  body: MatchSettlementPaymentRequest = {},
   options: RequestOptions = {},
 ): Promise<AdminSettlementResponse> {
   return apiFetch(
     `/api/admin/payments/${paymentId}/match`,
     AdminSettlementResponseSchema,
-    { method: "POST", signal: options.signal },
+    { method: "POST", body, signal: options.signal },
   );
 }
 
@@ -268,6 +308,22 @@ export const MatchWalletTopUpRequestSchema = z.object({
    * merchant's own reference is kept when both are present.
    */
   bank_ref: z.string().min(1).max(128).optional(),
+  /**
+   * WHAT THE STATEMENT SAYS ARRIVED, integer laari, at least 1 — REQUIRED
+   * (owner, 2026-08-25). The server 422s without it.
+   *
+   * There is no bank row on this path, so nothing on the server can discover
+   * what actually landed; the merchant's `amount_laari` is a CLAIM and
+   * crediting it unseen is how a typo becomes money. The reviewer is looking
+   * at the statement line — they type what it says, and the wallet is
+   * credited that.
+   *
+   * Deliberately NOT defaulted server-side to the claim: a default would be
+   * the old behaviour wearing a new field's name. A UI may prefill the field
+   * with the claim (it is the best guess when nothing better is known) as
+   * long as the reviewer can see and change it before committing.
+   */
+  received_laari: z.number().int().min(1),
 });
 export type MatchWalletTopUpRequest = z.infer<
   typeof MatchWalletTopUpRequestSchema
@@ -276,14 +332,18 @@ export type MatchWalletTopUpRequest = z.infer<
 /**
  * POST /api/admin/wallet-top-ups/{id}/match — confirms the transfer by hand
  * and credits the wallet in the same transaction; returns the row as
- * `matched` with its `wallet_transaction_id`. 422 when the merchant gave no
- * reference and the body carries none; 409 when the claim is no longer
- * pending (a poll matched it first, or it was already reviewed) or the
- * reference is already booked.
+ * `matched` with its `wallet_transaction_id` and `received_laari` set to the
+ * figure the reviewer stated. 422 when `received_laari` is missing, or when
+ * the merchant gave no reference and the body carries none; 409 when the
+ * claim is no longer pending (a poll matched it first, or it was already
+ * reviewed) or the reference is already booked.
+ *
+ * The body is REQUIRED — `received_laari` has no default, so there is no
+ * empty-body call any more.
  */
 export function matchWalletTopUp(
   id: number,
-  body: MatchWalletTopUpRequest = {},
+  body: MatchWalletTopUpRequest,
   options: RequestOptions = {},
 ): Promise<AdminWalletTopUpResponse> {
   return apiFetch(
@@ -3483,6 +3543,17 @@ export const DashboardMatchedSplitSchema = z.object({
   total: z.number().int(),
   auto: z.number().int(),
   manual: z.number().int(),
+  /**
+   * Matches in the period where the bank credited something OTHER than the
+   * merchant typed (owner, 2026-08-25) — a subset of `total`, cutting across
+   * the auto/manual split rather than partitioning it.
+   *
+   * NOT an error count. The credited figure is the bank's and the money is
+   * real; a merchant who typed MVR 20.00 and sent MVR 10.00 is correctly
+   * credited the 10.00. It is worth a person's eye and nothing louder, so
+   * render it as a quiet fact — a rising one says the slips are worth a look.
+   */
+  differing_amounts: z.number().int(),
   /** Percent string, or null when `total` is 0 — never coerce to "0.00". */
   auto_rate_percent: PercentSchema.nullable(),
 });

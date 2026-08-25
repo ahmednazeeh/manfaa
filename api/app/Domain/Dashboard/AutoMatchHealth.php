@@ -34,7 +34,12 @@ use Illuminate\Support\Facades\DB;
  *   expired_unmatched_24h  windows that lapsed in the last day — the shape of
  *                          a problem that started recently
  *   matched_in_period      auto vs manual over the window, so a FALLING auto
- *                          rate is visible before the queue grows
+ *                          rate is visible before the queue grows — plus
+ *                          differing_amounts, the matches where the bank
+ *                          credited something other than the merchant typed
+ *                          (owner, 2026-08-25). Not an error count: the
+ *                          credited figure is the bank's and the money is
+ *                          real. A rising one is worth a look at the slips.
  *
  * BOTH FLOWS, SEPARATELY LABELLED: settlement payments and wallet top-ups
  * are matched by two different verifiers against two different tables, and
@@ -216,7 +221,18 @@ final class AutoMatchHealth
      * null when nothing matched at all, because a rate over no matches is
      * not 0%, it is nothing to report.
      *
-     * @return array{total: int, auto: int, manual: int, auto_rate_percent: string|null}
+     * `differing_amounts` counts the matches where the bank credited
+     * something other than the merchant typed (owner, 2026-08-25). NOT an
+     * error count: the money is real and the credited figure is the bank's,
+     * so a discrepancy is worth an auditor's eye and nothing louder. It is a
+     * third FILTER aggregate on the SAME row this method already reads — no
+     * extra query reaches the landing page for it.
+     *
+     * The predicate is the SQL twin of the models' own `amountDiffers()`:
+     * a NULL `received_laari` is not a discrepancy, it is an unknown, and
+     * `<>` over NULL would drop the row anyway.
+     *
+     * @return array{total: int, auto: int, manual: int, differing_amounts: int, auto_rate_percent: string|null}
      */
     private function matchedSplit(Builder $table, ReportPeriod $period): array
     {
@@ -225,6 +241,7 @@ final class AutoMatchHealth
             ->where('matched_at', '>=', $period->start)
             ->where('matched_at', '<', $period->end)
             ->selectRaw('COUNT(*) AS n, COUNT(*) FILTER (WHERE auto_matched) AS auto_n')
+            ->selectRaw('COUNT(*) FILTER (WHERE received_laari IS NOT NULL AND received_laari <> amount_laari) AS differing_n')
             ->first();
 
         $total = (int) $row->n;
@@ -234,6 +251,7 @@ final class AutoMatchHealth
             'total' => $total,
             'auto' => $auto,
             'manual' => $total - $auto,
+            'differing_amounts' => (int) $row->differing_n,
             // A rate that was OBSERVED, not chosen: Percent::effectiveRate is
             // the house's integer half-up derivation, and it answers null
             // over nothing rather than a "0.00" that would read as a stall.

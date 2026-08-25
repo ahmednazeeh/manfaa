@@ -186,6 +186,13 @@ class _BalanceHero extends StatelessWidget {
 /// Money the merchant has SENT that is not yet balance: each claim with
 /// the bank it named, when it was raised, and where it stands. A refused
 /// claim carries Manfaa's reason in a sentence, never a bare state.
+///
+/// THE FIGURE IS THE BANK'S ONCE THE BANK HAS SPOKEN (owner, 2026-08-25).
+/// `amountLaari` is only the CLAIM the merchant typed; `receivedLaari` is
+/// what the credit actually was, and it is what funded the wallet. A claim
+/// still waiting has no bank figure yet, so the claim is all there is to
+/// show — and the moment one exists it leads, with one plain sentence
+/// naming both when they disagree.
 class _PendingTopUps extends StatelessWidget {
   const _PendingTopUps({required this.claims});
 
@@ -221,6 +228,7 @@ class _TopUpRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final l10n = context.l10n;
+    final dhivehi = Localizations.localeOf(context).languageCode == 'dv';
     final muted = theme.textTheme.bodySmall?.copyWith(
       color: theme.colorScheme.onSurfaceVariant,
     );
@@ -259,11 +267,24 @@ class _TopUpRow extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               MoneyText(
-                claim.amountLaari,
+                claim.creditedLaari,
                 style: theme.textTheme.titleSmall?.copyWith(
                   fontWeight: FontWeight.w700,
                 ),
               ),
+              if (claim.amountDiffers)
+                Padding(
+                  padding: const EdgeInsets.only(top: 2),
+                  child: Text(
+                    l10n.topUpDiffers(
+                      formatMoney(claim.receivedLaari!, dhivehi: dhivehi),
+                      formatMoney(claim.amountLaari, dhivehi: dhivehi),
+                    ),
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurface,
+                    ),
+                  ),
+                ),
               Text(
                 bank == null
                     ? when

@@ -48,8 +48,17 @@ class WalletResource extends JsonResource
                 'recentTopUps',
                 fn () => $this->recentTopUps->map(fn (WalletTopUp $topUp): array => [
                     'id' => $topUp->id,
+                    // The claim, then what the bank actually credited once
+                    // it is known (owner, 2026-08-25). Both, because the
+                    // wallet screen is where a merchant will notice that
+                    // MVR 10.00 landed on a claim they typed MVR 20.00 on.
                     'amount_laari' => $topUp->amount_laari,
                     'amount_mvr' => Laari::of($topUp->amount_laari)->formatMvr(),
+                    'received_laari' => $topUp->received_laari,
+                    'received_mvr' => $topUp->received_laari === null
+                        ? null
+                        : Laari::of((int) $topUp->received_laari)->formatMvr(),
+                    'amount_differs' => $topUp->amountDiffers(),
                     'bank_ref' => $topUp->bank_ref,
                     'bank' => $topUp->relationLoaded('platformBankAccount') && $topUp->platformBankAccount !== null
                         ? [

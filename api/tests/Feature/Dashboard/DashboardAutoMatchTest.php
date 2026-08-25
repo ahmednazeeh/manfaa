@@ -240,7 +240,7 @@ it('shows the auto-versus-manual split so a falling auto rate is visible', funct
 
     // A wallet claim matched by hand, and one still pending.
     $claim = autoMatchTopUp($this->watched->id, 'none', '901901901');
-    app(WalletTopUps::class)->match($claim, $this->admin, null);
+    app(WalletTopUps::class)->match($claim, $this->admin, null, Laari::of(50_000));
     autoMatchTopUp($this->watched->id, CarbonImmutable::now()->addMinutes(10), '901901902');
 
     $panel = autoMatchPanel();
@@ -249,6 +249,8 @@ it('shows the auto-versus-manual split so a falling auto rate is visible', funct
         'total' => 3,
         'auto' => 2,
         'manual' => 1,
+        // Every one of them was matched for the amount claimed.
+        'differing_amounts' => 0,
         'auto_rate_percent' => '66.67',
     ])
         ->and($panel['settlement_payments']['pending_total'])->toBe(0)
@@ -256,6 +258,7 @@ it('shows the auto-versus-manual split so a falling auto rate is visible', funct
             'total' => 1,
             'auto' => 0,
             'manual' => 1,
+            'differing_amounts' => 0,
             'auto_rate_percent' => '0.00',
         ])
         ->and($panel['wallet_top_ups']['pending_total'])->toBe(1);
@@ -269,6 +272,7 @@ it('reports no rate at all when nothing matched, rather than nought per cent', f
         'total' => 0,
         'auto' => 0,
         'manual' => 0,
+        'differing_amounts' => 0,
         'auto_rate_percent' => null,
     ])
         ->and($panel['wallet_top_ups']['matched_in_period']['auto_rate_percent'])->toBeNull();
@@ -289,4 +293,44 @@ it('bounds the match split on BUSINESS midnight, not the UTC one', function (): 
     $payment->refresh()->forceFill(['matched_at' => CarbonImmutable::parse('2026-07-31T18:00:00+00:00')])->save();
 
     expect(autoMatchPanel()['settlement_payments']['matched_in_period']['total'])->toBe(0);
+});
+
+it('counts the matches where the bank credited something other than the claim', function (): void {
+    // The production row this round exists for: MVR 500.00 typed, MVR 100.00
+    // actually transferred. The wallet is credited what arrived, and the
+    // panel says one match in the period disagreed with its claim.
+    $claim = autoMatchTopUp($this->watched->id, 'none', '901901903');
+    app(WalletTopUps::class)->match($claim, $this->admin, null, Laari::of(10_000));
+
+    // A second claim matched for exactly what was typed is NOT counted —
+    // agreement is the ordinary case and must stay invisible.
+    $agreeing = autoMatchTopUp($this->watched->id, 'none', '901901904');
+    app(WalletTopUps::class)->match($agreeing, $this->admin, null, Laari::of(50_000));
+
+    // The settlement side counts the same way, off its own table.
+    $payment = autoMatchPayment(0, $this->watched->id, 'none');
+    app(SettlementAllocator::class)->matchPayment($payment, $this->admin, Laari::of(700));
+
+    $panel = autoMatchPanel();
+
+    expect($panel['wallet_top_ups']['matched_in_period'])->toMatchArray([
+        'total' => 2,
+        'differing_amounts' => 1,
+    ])
+        ->and($panel['settlement_payments']['matched_in_period'])->toMatchArray([
+            'total' => 1,
+            'differing_amounts' => 1,
+        ]);
+});
+
+it('does not count a hand-matched payment with no stated figure as a discrepancy', function (): void {
+    // No bank figure was ever recorded, so `received_laari` stays null and
+    // the claim is what funded the batch. An unknown is not a discrepancy.
+    $payment = autoMatchPayment(0, $this->watched->id, 'none');
+    app(SettlementAllocator::class)->matchPayment($payment, $this->admin);
+
+    expect(autoMatchPanel()['settlement_payments']['matched_in_period'])->toMatchArray([
+        'total' => 1,
+        'differing_amounts' => 0,
+    ]);
 });

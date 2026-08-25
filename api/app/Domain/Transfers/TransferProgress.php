@@ -140,6 +140,11 @@ final class TransferProgress
             'id' => $id,
             'settlement_id' => $settlementId,
             'state' => $state,
+            // THE CLAIM: what the merchant typed when they uploaded the
+            // slip. Unchanged by a match on purpose — the bank's figure
+            // lives in the outcome, beside it (`received_laari`), so a
+            // client reading only the envelope cannot mistake one for the
+            // other.
             'amount_laari' => $amountLaari,
             'amount_mvr' => Laari::of($amountLaari)->formatMvr(),
             'watching' => $watching,
@@ -155,6 +160,31 @@ final class TransferProgress
             'decided_at' => $decidedAt?->toIso8601String(),
             'checked_at' => CarbonImmutable::now('UTC')->toIso8601String(),
             'outcome' => $outcome,
+        ];
+    }
+
+    /**
+     * The merchant's CLAIM and the bank's FACT, in the one shape both
+     * outcomes carry (owner, 2026-08-25).
+     *
+     * Built here rather than twice, for the same reason the envelope is: two
+     * copies of a money payload drift, and this pair is precisely the one a
+     * merchant will be reading when the numbers disagree.
+     *
+     * `amount_differs` is the client's branch. It is FALSE while no bank
+     * figure is known — an unknown is not a discrepancy — so a screen never
+     * announces a mismatch it cannot name both sides of.
+     *
+     * @return array<string, mixed>
+     */
+    private function claimAndFact(int $claimedLaari, ?int $receivedLaari, bool $differs): array
+    {
+        return [
+            'claimed_laari' => $claimedLaari,
+            'claimed_mvr' => Laari::of($claimedLaari)->formatMvr(),
+            'received_laari' => $receivedLaari,
+            'received_mvr' => $receivedLaari === null ? null : Laari::of($receivedLaari)->formatMvr(),
+            'amount_differs' => $differs,
         ];
     }
 
@@ -195,6 +225,14 @@ final class TransferProgress
                 $settlement->state === SettlementState::Settled => 'settled',
                 default => 'partially_settled',
             },
+            // THIS payment's two figures (owner, 2026-08-25). The bank's is
+            // what funded the batch; the merchant's is what they typed. A
+            // screen that printed only the claim would explain a
+            // partially_settled batch with the very number that does not
+            // account for it. `received_*` is null where no bank figure is
+            // known — a hand-matched payment — and `amount_differs` is then
+            // false, because nothing is known to differ.
+            ...$this->claimAndFact((int) $payment->amount_laari, $payment->received_laari, $payment->amountDiffers()),
             // The raw §6 state alongside the verdict, for a client that
             // wants to branch on the batch rather than on this payment.
             'settlement_state' => $settlement->state->value,
@@ -301,7 +339,10 @@ final class TransferProgress
             return null;
         }
 
-        $credited = $topUp->state === 'matched' ? (int) $topUp->amount_laari : 0;
+        // WHAT WENT IN, not what was asked for (owner, 2026-08-25). A screen
+        // congratulating a merchant on the MVR 20.00 they typed while MVR
+        // 10.00 sits in the wallet is the lie this round exists to end.
+        $credited = $topUp->state === 'matched' ? $topUp->creditedLaari() : 0;
 
         $balance = (int) MerchantWallet::query()
             ->where('merchant_id', $topUp->merchant_id)
@@ -311,6 +352,10 @@ final class TransferProgress
             'result' => $topUp->state === 'matched' ? 'credited' : 'rejected',
             'credited_laari' => $credited,
             'credited_mvr' => Laari::of($credited)->formatMvr(),
+            // The claim beside the fact, so the screen can say WHY the
+            // credited figure is not the one they typed rather than leaving
+            // them to work it out from a balance.
+            ...$this->claimAndFact((int) $topUp->amount_laari, $topUp->received_laari, $topUp->amountDiffers()),
             'balance_laari' => $balance,
             'balance_mvr' => Laari::of($balance)->formatMvr(),
             'rejected_reason' => $topUp->rejected_reason,

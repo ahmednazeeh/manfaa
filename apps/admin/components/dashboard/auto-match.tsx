@@ -12,6 +12,7 @@ import {
 import {
   CircleCheck,
   Clock,
+  EqualNot,
   Radar,
   TriangleAlert,
   UserRoundSearch,
@@ -175,6 +176,27 @@ function AutoRateMeter({ health }: { health: DashboardTransferHealth }) {
           in total
         </span>
       </div>
+
+      {/* WHERE THE BANK DISAGREED WITH THE MERCHANT (owner, 2026-08-25).
+          Not an error count and not styled as one: the credited figure is
+          the bank's, so the money is right and the typed amount was simply
+          wrong. It earns a line because a RISING one says the slips are
+          worth reading — and it costs no extra query, riding the same
+          aggregate as the split above. Silent at zero rather than printing
+          a reassuring "0", which would add noise to every healthy day. */}
+      {matched.differing_amounts > 0 ? (
+        <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
+          <EqualNot className="mt-px size-3.5 shrink-0 text-yellow-700 dark:text-yellow-500" />
+          <span>
+            <span className="font-medium text-foreground">
+              {formatCount(matched.differing_amounts)}
+            </span>{' '}
+            {matched.differing_amounts === 1 ? 'was' : 'were'} for a different
+            amount than the merchant typed — the bank&apos;s figure is what was
+            credited. Worth an eye, not an alarm.
+          </span>
+        </p>
+      ) : null}
     </div>
   );
 }

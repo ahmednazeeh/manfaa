@@ -11,6 +11,12 @@
 library;
 
 int _laari(Object? v) => switch (v) { final int i => i, _ => 0 };
+
+/// A money field that is legitimately ABSENT — `received_laari` before a
+/// transfer is matched. Null and 0 are different facts here ("we do not know
+/// what the bank sent" vs "the bank sent nothing"), so this never invents a
+/// zero the way [_laari] does.
+int? _laariOrNull(Object? v) => v is int ? v : null;
 int _count(Object? v) => switch (v) { final int i => i, _ => 0 };
 String _s(Object? v) => v?.toString() ?? '';
 
@@ -119,10 +125,19 @@ class MerchantWalletState {
 /// One wallet top-up claim (WalletTopUpResource, and the slimmer
 /// `pending_top_ups[]` entry on the wallet payload — both parse here, so the
 /// claim a submit answers and the claim the wallet lists are one shape).
+///
+/// TWO FIGURES, ONE TRANSFER (owner, 2026-08-25). [amountLaari] is the
+/// merchant's CLAIM — what they typed — and is never rewritten.
+/// [receivedLaari] is the FACT: what the bank actually credited, which is
+/// what the wallet was funded with. Screens lead with [creditedLaari] and,
+/// when [amountDiffers], say in one sentence why it is not the number the
+/// merchant entered.
 class WalletTopUpClaim {
   WalletTopUpClaim({
     required this.id,
     required this.amountLaari,
+    this.receivedLaari,
+    this.amountDiffers = false,
     this.bankRef,
     this.platformBankAccountId,
     this.bank,
@@ -142,9 +157,14 @@ class WalletTopUpClaim {
             ? _map(json['platform_bank_account'])
             : null;
 
+    final received = _laariOrNull(json['received_laari']);
+
     return WalletTopUpClaim(
       id: json['id'] as int? ?? 0,
       amountLaari: _laari(json['amount_laari']),
+      receivedLaari: received,
+      // Never announced without both sides to name — see [amountDiffers].
+      amountDiffers: json['amount_differs'] == true && received != null,
       bankRef: json['bank_ref'] as String?,
       platformBankAccountId:
           json['platform_bank_account_id'] as int? ?? bank?['id'] as int?,
@@ -158,7 +178,24 @@ class WalletTopUpClaim {
   }
 
   final int id;
+
+  /// THE CLAIM: what the merchant typed on the top-up form. Never rewritten.
   final int amountLaari;
+
+  /// THE FACT: what the bank actually credited, off the matched statement
+  /// row (or, on a hand-matched claim, the figure the reviewer read on the
+  /// statement). Null until the claim is matched — a claim still waiting has
+  /// no bank figure, and an unknown is never rendered as one.
+  final int? receivedLaari;
+
+  /// Both figures are known and they disagree. A NOTE, not an error: the
+  /// bank's amount is what was credited, and the merchant's was a typo.
+  final bool amountDiffers;
+
+  /// What actually went into the wallet — the bank's figure once it exists,
+  /// the claim while it does not. Mirrors the API's own `creditedLaari()`,
+  /// which is what the credit is written from.
+  int get creditedLaari => receivedLaari ?? amountLaari;
 
   /// What the MERCHANT typed — often nothing; the slip carries it.
   final String? bankRef;
@@ -666,11 +703,18 @@ class SettlementLineInfo {
 /// One payment with its receipt columns (SettlementPaymentResource).
 /// `hasSlip` is what a UI branches on — the slip itself is on a private
 /// disk and only an admin can stream it.
+///
+/// TWO FIGURES, ONE TRANSFER (owner, 2026-08-25). [amountLaari] is the
+/// merchant's CLAIM; [receivedLaari] is what the bank actually credited, and
+/// therefore what funded the batch's lines. Show [creditedLaari], and when
+/// [amountDiffers] say why it is not the number on the form.
 class SettlementPaymentInfo {
   SettlementPaymentInfo({
     required this.id,
     required this.settlementId,
     required this.amountLaari,
+    this.receivedLaari,
+    this.amountDiffers = false,
     required this.currency,
     required this.method,
     this.bankRef,
@@ -684,27 +728,47 @@ class SettlementPaymentInfo {
     required this.createdAt,
   });
 
-  factory SettlementPaymentInfo.fromJson(Map<String, dynamic> json) =>
-      SettlementPaymentInfo(
-        id: json['id'] as int? ?? 0,
-        settlementId: json['settlement_id'] as int? ?? 0,
-        amountLaari: _laari(json['amount_laari']),
-        currency: _s(json['currency']),
-        method: _s(json['method']),
-        bankRef: json['bank_ref'] as String?,
-        hasSlip: json['has_slip'] as bool? ?? false,
-        slipMime: json['slip_mime'] as String?,
-        slipSizeBytes: json['slip_size_bytes'] as int?,
-        state: _s(json['state']),
-        matchedAt: json['matched_at'] as String?,
-        rejectedAt: json['rejected_at'] as String?,
-        rejectionReason: json['rejection_reason'] as String?,
-        createdAt: _s(json['created_at']),
-      );
+  factory SettlementPaymentInfo.fromJson(Map<String, dynamic> json) {
+    final received = _laariOrNull(json['received_laari']);
+
+    return SettlementPaymentInfo(
+      id: json['id'] as int? ?? 0,
+      settlementId: json['settlement_id'] as int? ?? 0,
+      amountLaari: _laari(json['amount_laari']),
+      receivedLaari: received,
+      amountDiffers: json['amount_differs'] == true && received != null,
+      currency: _s(json['currency']),
+      method: _s(json['method']),
+      bankRef: json['bank_ref'] as String?,
+      hasSlip: json['has_slip'] as bool? ?? false,
+      slipMime: json['slip_mime'] as String?,
+      slipSizeBytes: json['slip_size_bytes'] as int?,
+      state: _s(json['state']),
+      matchedAt: json['matched_at'] as String?,
+      rejectedAt: json['rejected_at'] as String?,
+      rejectionReason: json['rejection_reason'] as String?,
+      createdAt: _s(json['created_at']),
+    );
+  }
 
   final int id;
   final int settlementId;
+
+  /// THE CLAIM: what the merchant typed when they uploaded the slip.
   final int amountLaari;
+
+  /// THE FACT: what the bank credited, off the matched statement row. Null
+  /// on a pending payment, and on one an admin matched by hand without
+  /// stating a figure — where the claim is what was spent.
+  final int? receivedLaari;
+
+  /// Both figures are known and they disagree.
+  final bool amountDiffers;
+
+  /// What actually funded the batch — the bank's figure once it exists, the
+  /// claim while it does not.
+  int get creditedLaari => receivedLaari ?? amountLaari;
+
   final String currency;
   final String method;
   final String? bankRef;

@@ -29,8 +29,17 @@ class WalletTopUpResource extends JsonResource
                 'name' => $this->merchant->name,
                 'bank_account_name' => $this->merchant->bank_account_name,
             ]),
+            // THE CLAIM: what the merchant typed. Never rewritten.
             'amount_laari' => $this->amount_laari,
             'amount_mvr' => Laari::of($this->amount_laari)->formatMvr(),
+            // THE FACT: what the bank actually credited, off the matched
+            // statement row (or, on a hand-matched claim, what the reviewer
+            // read on the statement). Null until matched — and the reason
+            // the queue must show both: a discrepancy is the thing an
+            // auditor asks about.
+            'received_laari' => $this->received_laari,
+            'received_mvr' => $this->received_laari === null ? null : Laari::of((int) $this->received_laari)->formatMvr(),
+            'amount_differs' => $this->amountDiffers(),
             'currency' => $this->currency,
             // What the MERCHANT told us — often nothing; the slip carries it.
             'bank_ref' => $this->bank_ref,

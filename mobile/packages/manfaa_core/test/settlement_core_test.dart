@@ -365,6 +365,46 @@ void main() {
       expect(topUp.referenceType, isNull);
     });
 
+    // A claim the bank answered with a SMALLER credit than the merchant
+    // typed — the production row of 2026-08-25. The wallet screen must lead
+    // with what arrived and be able to name what was entered.
+    test('a claim carries the bank fact beside the claim', () {
+      final claim = WalletTopUpClaim.fromJson(const {
+        'id': 2,
+        'amount_laari': 2000,
+        'amount_mvr': 'MVR 20.00',
+        'received_laari': 1000,
+        'received_mvr': 'MVR 10.00',
+        'amount_differs': true,
+        'bank_ref': 'BLAZ204399156496',
+        'bank': null,
+        'state': 'matched',
+        'rejected_reason': null,
+        'created_at': '2026-08-25T16:20:00+00:00',
+      });
+
+      expect(claim.amountLaari, 2000);
+      expect(claim.receivedLaari, 1000);
+      expect(claim.creditedLaari, 1000);
+      expect(claim.amountDiffers, isTrue);
+    });
+
+    test('a claim still waiting has no bank figure and no discrepancy', () {
+      final claim = WalletTopUpClaim.fromJson(const {
+        'id': 3,
+        'amount_laari': 50000,
+        'amount_mvr': 'MVR 500.00',
+        'bank_ref': 'FT99877',
+        'bank': null,
+        'state': 'pending',
+        'created_at': '2026-08-16T04:30:00+00:00',
+      });
+
+      expect(claim.receivedLaari, isNull);
+      expect(claim.amountDiffers, isFalse);
+      expect(claim.creditedLaari, 50000);
+    });
+
     test('a first read answering 201 parses identically', () async {
       final adapter = _RecordingAdapter(
         (_) => _json(const {
@@ -695,6 +735,57 @@ void main() {
       expect(payment.hasSlip, isTrue);
       expect(payment.slipMime, 'image/jpeg');
       expect(payment.state, 'pending');
+      // Still pending: the bank has said nothing, so there is no fact yet
+      // and the claim is what a screen may show.
+      expect(payment.receivedLaari, isNull);
+      expect(payment.amountDiffers, isFalse);
+      expect(payment.creditedLaari, 2712);
+    });
+
+    // THE CLAIM AND THE FACT (owner, 2026-08-25): what funded the batch is
+    // the bank's credit, not the figure typed on the upload form.
+    test('a matched payment leads with what the bank actually sent', () {
+      final data = Map<String, dynamic>.from(
+        (_settlementFixture['data'] as Map).cast<String, dynamic>(),
+      );
+      data['payments'] = [
+        {
+          ...(data['payments'] as List).first as Map<String, dynamic>,
+          'state': 'matched',
+          'received_laari': 1000,
+          'received_mvr': '10.00',
+          'amount_differs': true,
+        },
+      ];
+
+      final payment = MerchantSettlement.fromJson(data).payments.single;
+
+      expect(payment.amountLaari, 2712);
+      expect(payment.receivedLaari, 1000);
+      expect(payment.creditedLaari, 1000);
+      expect(payment.amountDiffers, isTrue);
+    });
+
+    test('a payment matched by hand with no bank figure is not a '
+        'discrepancy', () {
+      final data = Map<String, dynamic>.from(
+        (_settlementFixture['data'] as Map).cast<String, dynamic>(),
+      );
+      data['payments'] = [
+        {
+          ...(data['payments'] as List).first as Map<String, dynamic>,
+          'state': 'matched',
+          'received_laari': null,
+          'received_mvr': null,
+          // Even set, the flag is refused: there is no second figure to name.
+          'amount_differs': true,
+        },
+      ];
+
+      final payment = MerchantSettlement.fromJson(data).payments.single;
+
+      expect(payment.amountDiffers, isFalse);
+      expect(payment.creditedLaari, 2712);
     });
 
     test('a list row without loaded lines parses to empty lists', () {

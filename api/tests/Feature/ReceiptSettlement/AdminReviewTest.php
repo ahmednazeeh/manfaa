@@ -316,3 +316,63 @@ it('refuses a duplicate reference on the same batch too', function () {
 
     expect(SettlementPayment::query()->count())->toBe(1);
 });
+
+it('allocates what the STATEMENT says arrived, not what the merchant typed', function () {
+    // The merchant typed the whole due but only transferred 4,125 — the two
+    // oldest lines' worth. The reviewer is holding the statement and says so.
+    $settlementId = submitReceipt(11_825, 'BML-CLAIM-TYPO');
+    $payment = SettlementPayment::query()->sole();
+
+    $this->actingAs($this->admin, 'admin')
+        ->postJson("/api/admin/payments/{$payment->id}/match", ['received_laari' => 4_125])
+        ->assertOk()
+        // Not `settled`: the claim would have settled it, the money does not.
+        ->assertJsonPath('data.state', 'partially_settled')
+        ->assertJsonPath('data.amount_received_laari', 4_125);
+
+    // THE CLAIM SURVIVES. Both figures sit on the row, and the resource
+    // says they disagree so a queue can mark it.
+    $payment->refresh();
+    expect($payment->amount_laari)->toBe(11_825)
+        ->and($payment->received_laari)->toBe(4_125)
+        ->and($payment->amountDiffers())->toBeTrue();
+
+    // Whole lines oldest-first, exactly as an honest 4,125 receipt would.
+    expect($this->fixture->transactions[0]->refresh()->state)->toBe(TransactionState::Confirmed)
+        ->and($this->fixture->transactions[1]->refresh()->state)->toBe(TransactionState::Confirmed)
+        ->and($this->fixture->transactions[2]->refresh()->state)->toBe(TransactionState::PayableUnfunded);
+
+    // Cash books only what cash covered.
+    expect($this->balances->accountBalance(AccountCode::SettlementCash))->toBe(4_125)
+        ->and($this->balances->journalsAllBalance())->toBeTrue();
+
+    expect(Settlement::query()->findOrFail($settlementId)->state)->toBe(SettlementState::PartiallySettled);
+});
+
+it('keeps the claim as the figure when the reviewer states none', function () {
+    $settlementId = submitReceipt(11_825, 'BML-NO-FIGURE');
+    $payment = SettlementPayment::query()->sole();
+
+    $this->actingAs($this->admin, 'admin')
+        ->postJson("/api/admin/payments/{$payment->id}/match")
+        ->assertOk()
+        ->assertJsonPath('data.amount_received_laari', 11_825);
+
+    // Null, not backfilled with the claim: nobody ever read a bank figure
+    // for this payment, and an unknown must not masquerade as a fact.
+    expect($payment->refresh()->received_laari)->toBeNull()
+        ->and($payment->amountDiffers())->toBeFalse();
+
+    expect(Settlement::query()->findOrFail($settlementId)->state)->toBe(SettlementState::Settled);
+});
+
+it('refuses a non-positive received figure rather than booking nothing as something', function () {
+    submitReceipt(11_825, 'BML-ZERO-RECEIVED');
+    $payment = SettlementPayment::query()->sole();
+
+    $this->actingAs($this->admin, 'admin')
+        ->postJson("/api/admin/payments/{$payment->id}/match", ['received_laari' => 0])
+        ->assertStatus(422);
+
+    expect($payment->refresh()->state)->toBe('pending');
+});

@@ -61,13 +61,30 @@ void main() {
     'attempts': reason == 'window_expired' ? 12 : 0,
   };
 
+  /// THIS payment's claim and the bank's fact (owner, 2026-08-25).
+  /// `claimed` is what the merchant typed; `bankSent` is what the credit
+  /// really was, and null stands for a payment matched by hand off a
+  /// statement with no figure recorded.
+  Map<String, dynamic> claimAndFact({
+    required int claimed,
+    required int? bankSent,
+  }) => {
+    'claimed_laari': claimed,
+    'claimed_mvr': '27.12',
+    'received_laari': bankSent,
+    'received_mvr': bankSent == null ? null : '27.12',
+    'amount_differs': bankSent != null && bankSent != claimed,
+  };
+
   Map<String, dynamic> settlementOutcome(
     String result, {
     int received = 2712,
     int outstanding = 0,
+    int claimed = 2712,
+    int? bankSent = 2712,
     String? rejected,
   }) => {
-    ...watching(),
+    ...watching(amountLaari: claimed),
     'state': result == 'rejected' ? 'rejected' : 'matched',
     'watching': false,
     'reason': 'terminal',
@@ -75,6 +92,7 @@ void main() {
     'decided_at': checked,
     'outcome': {
       'result': result,
+      ...claimAndFact(claimed: claimed, bankSent: bankSent),
       // A refused receipt always cancels the batch and releases its lines
       // (SettlementBuilder::reject is the only writer of `rejected`), so
       // `cancelled` is the only settlement_state the server ever pairs with
@@ -93,9 +111,16 @@ void main() {
     String result, {
     int credited = 50000,
     int balance = 58175,
+    int claimed = 50000,
+    int? bankSent = 50000,
     String? rejected,
   }) => {
-    ...watching(kind: 'wallet_top_up', id: 12, settlementId: null, amountLaari: 50000),
+    ...watching(
+      kind: 'wallet_top_up',
+      id: 12,
+      settlementId: null,
+      amountLaari: claimed,
+    ),
     'state': result == 'rejected' ? 'rejected' : 'matched',
     'watching': false,
     'reason': 'terminal',
@@ -103,8 +128,14 @@ void main() {
     'decided_at': checked,
     'outcome': {
       'result': result,
+      // WHAT WENT IN: the bank's figure on a matched claim, never the claim.
       'credited_laari': result == 'rejected' ? 0 : credited,
       'credited_mvr': '500.00',
+      ...claimAndFact(
+        claimed: claimed,
+        // A refused claim credited nothing, so no bank figure exists.
+        bankSent: result == 'rejected' ? null : bankSent,
+      ),
       'balance_laari': balance,
       'balance_mvr': '581.75',
       'rejected_reason': rejected,
@@ -251,9 +282,123 @@ void main() {
     await tick(tester, const Duration(seconds: 5));
     expect(find.text('${mvr(50000)} added to your wallet'), findsOneWidget);
     expect(find.text('Your balance is now ${mvr(58175)}.'), findsOneWidget);
+    // The figures agreed, so no discrepancy sentence intrudes — that line
+    // has to stay signal.
+    expect(find.textContaining('Your bank sent'), findsNothing);
     // The money moved: the wallet answer behind this screen was re-read,
     // so navigating back shows the new balance and not the old one.
     expect(api.walletReads, 2);
+  });
+
+  // THE ROW THAT STARTED THIS ROUND (owner, 2026-08-25): a merchant typed
+  // MVR 20.00 over a real MVR 10.00 transfer. The bank's figure is the money
+  // — and the screen has to SAY that, or a store reading "MVR 10.00 added"
+  // over their own MVR 20.00 concludes something went wrong.
+  testWidgets('a credit that is not the amount typed quotes the BANK and '
+      'says so in one plain sentence', (tester) async {
+    await pump(
+      tester,
+      [
+        watching(
+          kind: 'wallet_top_up',
+          id: 12,
+          settlementId: null,
+          amountLaari: 2000,
+        ),
+        topUpOutcome(
+          'credited',
+          credited: 1000,
+          balance: 1000,
+          claimed: 2000,
+          bankSent: 1000,
+        ),
+      ],
+      settlement: false,
+    );
+    await tick(tester, const Duration(seconds: 5));
+
+    // The headline is what ARRIVED, not what was asked for.
+    expect(find.text('${mvr(1000)} added to your wallet'), findsOneWidget);
+    expect(find.text('${mvr(2000)} added to your wallet'), findsNothing);
+    expect(find.text('Your balance is now ${mvr(1000)}.'), findsOneWidget);
+
+    // …and the substitution is explained, naming BOTH figures.
+    expect(
+      find.textContaining(
+        'Your bank sent ${mvr(1000)}, not the ${mvr(2000)} you entered',
+      ),
+      findsOneWidget,
+    );
+    expect(find.textContaining('Nothing is lost'), findsOneWidget);
+  });
+
+  testWidgets('a part-settled batch names the bank figure against the claim', (
+    tester,
+  ) async {
+    await pump(tester, [
+      watching(),
+      settlementOutcome(
+        'partially_settled',
+        received: 2000,
+        outstanding: 712,
+        claimed: 2712,
+        bankSent: 2000,
+      ),
+    ]);
+    await tick(tester, const Duration(seconds: 5));
+
+    expect(find.text('Part of this settlement is paid'), findsOneWidget);
+    expect(
+      find.textContaining(
+        'Your bank sent ${mvr(2000)}, not the ${mvr(2712)} you entered',
+      ),
+      findsOneWidget,
+    );
+    // The remainder is still the honest one, computed by the server.
+    expect(
+      find.textContaining('${mvr(712)} is still owed'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('a payment matched by hand names no discrepancy it cannot '
+      'show', (tester) async {
+    // No bank figure was recorded, so there is no second number to name —
+    // and an unknown is never announced as a mismatch.
+    await pump(tester, [
+      watching(),
+      settlementOutcome('settled', received: 2712, bankSent: null),
+    ]);
+    await tick(tester, const Duration(seconds: 5));
+
+    expect(find.text('Settled — your transfer matched'), findsOneWidget);
+    expect(find.textContaining('Your bank sent'), findsNothing);
+  });
+
+  testWidgets('a refused claim carries no amount sentence — nothing was '
+      'credited to explain', (tester) async {
+    await pump(
+      tester,
+      [
+        watching(
+          kind: 'wallet_top_up',
+          id: 12,
+          settlementId: null,
+          amountLaari: 2000,
+        ),
+        topUpOutcome(
+          'rejected',
+          credited: 0,
+          claimed: 2000,
+          rejected: 'Reference not on the statement',
+        ),
+      ],
+      settlement: false,
+    );
+    await tick(tester, const Duration(seconds: 5));
+
+    expect(find.text('This transfer was not matched'), findsOneWidget);
+    expect(find.textContaining('Your bank sent'), findsNothing);
   });
 
   testWidgets('a rejection says so and carries the reason verbatim', (

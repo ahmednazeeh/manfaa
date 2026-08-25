@@ -138,6 +138,49 @@ it('reads minus as the debit flag', function (): void {
     expect($rows[0]->incoming)->toBeFalse();
 });
 
+it('reads a minus BML encodes as something other than a boolean', function (mixed $flag, bool $incoming): void {
+    // The flag was compared with `!== true`, which called a row INCOMING for
+    // any non-boolean encoding. Direction is one of the two absolute gates
+    // left on the credit path now that the amount is not one, and a debit
+    // that slips through is claimable for its whole value.
+    Http::fake(['*/bml/history*' => Http::response([[
+        'id' => 'row-1',
+        'narrative3' => 'AHMED NAZEEH',
+        'amount' => 20,
+        'minus' => $flag,
+    ]])]);
+
+    $rows = app(BankHistoryClient::class)->history(bmlProfile(), '7730000757923');
+
+    expect($rows[0]->incoming)->toBe($incoming);
+})->with([
+    'integer debit' => [1, false],
+    'string debit' => ['1', false],
+    'worded debit' => ['true', false],
+    'integer credit' => [0, true],
+    'string credit' => ['0', true],
+    'worded credit' => ['false', true],
+]);
+
+it('drops a BML row that states no direction at all', function (mixed ...$flag): void {
+    // Fail CLOSED, the way MIB's parser already does for an unsigned row: a
+    // row we cannot call a credit is not one we may spend. `filter_var`
+    // reads an absent or null flag as "false" — a credit — which is the
+    // wrong way to be wrong.
+    Http::fake(['*/bml/history*' => Http::response([array_filter([
+        'id' => 'row-1',
+        'narrative3' => 'AHMED NAZEEH',
+        'amount' => 20,
+        'minus' => $flag[0] ?? null,
+    ], static fn ($value): bool => $value !== null)])]);
+
+    expect(app(BankHistoryClient::class)->history(bmlProfile(), '7730000757923'))->toBe([]);
+})->with([
+    'absent' => [],
+    'null' => [null],
+    'nonsense' => ['maybe'],
+]);
+
 it('sends the account and page for MIB and the account and profile for BML', function (): void {
     Http::fake([
         '*/faisanet/history*' => Http::response(['data' => []]),

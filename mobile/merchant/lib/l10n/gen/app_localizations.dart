@@ -5101,6 +5101,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Settlement {reference} is cancelled and its transactions are payable again. Create a new settlement with the correct receipt.'**
   String transferSettlementRejectedBody(String reference);
+
+  /// No description provided for @transferDiffersTopUp.
+  ///
+  /// In en, this message translates to:
+  /// **'Your bank sent {received}, not the {claimed} you entered — so {received} is what went into your wallet. Nothing is lost: we always credit the amount the bank actually sent.'**
+  String transferDiffersTopUp(String received, String claimed);
+
+  /// No description provided for @transferDiffersSettlement.
+  ///
+  /// In en, this message translates to:
+  /// **'Your bank sent {received}, not the {claimed} you entered — so {received} is what this settlement was credited with. Nothing is lost: we always use the amount the bank actually sent.'**
+  String transferDiffersSettlement(String received, String claimed);
+
+  /// No description provided for @topUpDiffers.
+  ///
+  /// In en, this message translates to:
+  /// **'Your bank sent {received}, not the {claimed} you entered — your wallet was credited with what actually arrived.'**
+  String topUpDiffers(String received, String claimed);
+
+  /// No description provided for @paymentDiffers.
+  ///
+  /// In en, this message translates to:
+  /// **'Your bank sent {received}, not the {claimed} you entered — this settlement was credited with what actually arrived.'**
+  String paymentDiffers(String received, String claimed);
 }
 
 class _AppLocalizationsDelegate

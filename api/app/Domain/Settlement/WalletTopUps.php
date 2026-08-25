@@ -189,10 +189,27 @@ final class WalletTopUps
 
     /**
      * THE crediting path — the only one. Called by the automatic verifier
-     * (actor null, matched_* already written by the caller under the same
-     * lock) and by the admin's manual match (actor set). Credits the wallet
-     * through WalletFunding::recordTopUp, links the movement to the claim,
-     * marks it matched, bumps the money cache and tells the store.
+     * (actor null, matched_* and `received_laari` already written by the
+     * caller under the same lock) and by the admin's manual match (actor
+     * set, `received_laari` written from the figure the admin stated).
+     * Credits the wallet through WalletFunding::recordTopUp, links the
+     * movement to the claim, marks it matched, bumps the money cache and
+     * tells the store.
+     *
+     * WHAT IS CREDITED IS WHAT ARRIVED (owner, 2026-08-25) —
+     * `received_laari`, taken off the matched statement row, NOT the figure
+     * the merchant typed and NOT the one OCR read off their slip. The claim
+     * stays on `amount_laari` for the auditor; the bank's number is the one
+     * that becomes money.
+     *
+     * THE MINIMUM STILL GATES THE CLAIM, NOT THE CREDIT. PlatformConfig's
+     * `wallet_top_up_min_laari` is enforced in {@see claim()}, on what a
+     * merchant may ASK for. It is deliberately NOT re-checked here: a
+     * transfer that genuinely arrived under the minimum is the merchant's
+     * own money sitting in our account, and refusing to credit it would hold
+     * that money hostage to a typo — the exact failure this round exists to
+     * end. The minimum shapes what may be claimed; the bank decides what is
+     * credited.
      *
      * The caller holds the row lock and has verified the claim is pending;
      * this runs inside the caller's transaction.
@@ -211,11 +228,26 @@ final class WalletTopUps
         // once this transaction commits.
         MerchantMoneyCache::bump((int) $merchant->getKey());
 
+        // The ledger row names BOTH figures when they disagree (verifier
+        // round, 2026-08-25). The screens carry the discrepancy for a week;
+        // the movement carries it forever, and a movement that reads only
+        // "Wallet top-up #2" is unexplainable to the merchant, and to an
+        // auditor, the moment those screens have moved on.
+        $description = $locked->amountDiffers()
+            ? sprintf(
+                'Wallet top-up #%d (%s) — bank sent %s against a claim of %s',
+                $locked->id,
+                $bankRef,
+                Laari::of($locked->creditedLaari())->formatMvr(),
+                Laari::of((int) $locked->amount_laari)->formatMvr(),
+            )
+            : sprintf('Wallet top-up #%d (%s)', $locked->id, $bankRef);
+
         $movement = $this->wallet->recordTopUp(
             $merchant,
-            Laari::of((int) $locked->amount_laari),
+            Laari::of($locked->creditedLaari()),
             $bankRef,
-            sprintf('Wallet top-up #%d (%s)', $locked->id, $bankRef),
+            $description,
         );
 
         $locked->forceFill([
@@ -226,13 +258,22 @@ final class WalletTopUps
             'poll_until' => null,
         ])->save();
 
+        // Say what actually landed — and when that is not what they typed,
+        // SAY SO. A store told "your top-up of MVR 20.00 is in" over a MVR
+        // 10.00 credit would be misled by their own platform about their own
+        // money, and would find the shortfall later, from a balance.
+        $differs = $locked->amountDiffers();
+
         $this->notifications->sendToMerchantStaff(
-            NotificationTemplateKey::WalletTopUpReceived,
+            $differs
+                ? NotificationTemplateKey::WalletTopUpAmountDiffers
+                : NotificationTemplateKey::WalletTopUpReceived,
             $merchant,
-            [
+            array_filter([
                 'amount' => NotificationService::money((int) $movement->amount_laari),
+                'claimed' => $differs ? NotificationService::money((int) $locked->amount_laari) : null,
                 'balance' => NotificationService::money((int) $movement->balance_after_laari),
-            ],
+            ], static fn (?string $value): bool => $value !== null),
             Permission::WalletView,
         );
 
@@ -246,22 +287,38 @@ final class WalletTopUps
      * admin read off the statement — one of the two is required, because
      * without a reference the movement has no idempotency key.
      *
+     * THE ADMIN STATES WHAT ARRIVED (owner, 2026-08-25). This path used to
+     * credit the merchant's claimed figure with no cross-check at all, which
+     * is the one place a typed number could still become money on nothing
+     * but its own authority. There is no bank row here to read the truth
+     * off, so the reviewer holding the statement supplies it: `$received` is
+     * required, is stamped on `received_laari`, and is what
+     * {@see credit()} pays into the wallet. The claim stays on
+     * `amount_laari` beside it.
+     *
      * `matched_trx_id` records what was found in the bank, so the credit is
      * spent everywhere BankCreditClaim looks — and BankCreditClaim is asked
      * FIRST, so a reference an order, a settlement payment or another
      * wallet already spent (auto-matched or by hand) is refused here rather
      * than credited a second time.
      *
+     * @param  Laari  $received  what the STATEMENT shows arrived — never assumed from the claim
+     *
+     * @throws InvalidArgumentException a non-positive figure, or no reference at all
      * @throws InvalidWalletTopUpStateException the claim is no longer pending
      * @throws DuplicateBankRefException the reference already credited a wallet, or another claim holds it
      */
-    public function match(WalletTopUp $topUp, AdminUser $actor, ?string $bankRef): WalletTopUp
+    public function match(WalletTopUp $topUp, AdminUser $actor, ?string $bankRef, Laari $received): WalletTopUp
     {
         $bankRef = trim((string) $bankRef);
         $bankRef = $bankRef === '' ? null : $bankRef;
 
+        if ($received->value() <= 0) {
+            throw new InvalidArgumentException('A wallet top-up must credit a positive amount.');
+        }
+
         try {
-            return DB::transaction(function () use ($topUp, $actor, $bankRef): WalletTopUp {
+            return DB::transaction(function () use ($topUp, $actor, $bankRef, $received): WalletTopUp {
                 $locked = $this->locked($topUp);
 
                 if ($locked->state !== 'pending') {
@@ -276,12 +333,19 @@ final class WalletTopUps
 
                 $references = array_values(array_unique(array_filter([$reference, $bankRef])));
 
+                // Serialise on the credit itself before asking whether it is
+                // spent — the same lock the verifiers take, so an admin's
+                // click and a poller cannot both read "unspent" in the same
+                // instant and both commit.
+                $this->claims->lockReferences($references);
+
                 if ($this->claims->spent($references, exceptTopUp: (int) $locked->getKey())) {
                     throw DuplicateBankRefException::forWalletTopUpSpent($locked->merchant, $reference);
                 }
 
                 $locked->forceFill([
                     'auto_matched' => false,
+                    'received_laari' => $received->value(),
                     'matched_trx_id' => $bankRef ?? $reference,
                     'matched_trx_refs' => $references,
                 ])->save();

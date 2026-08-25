@@ -1682,6 +1682,45 @@ plotted a series whose past points mutate as later receipts match —
 kept the definition (Reports agreement wins) and fixed the labelling to
 say so. Suite 2119 green.
 
+### The bank figure is the truth — DONE (2026-08-25)
+
+From a real row: wallet top-up #2 claimed MVR 20, the slip and the bank
+said MVR 10, and the equality gate parked a perfectly good transfer in
+the queue. Owner: match on the evidence, credit what actually arrived.
+So `amount_laari` is now formally the CLAIM (immutable, both tables)
+and `received_laari` records what the bank sent; the wallet credit,
+`settlements.amount_received_laari` and the whole funding stack read the
+received figure, and a short or over settlement flows through the
+partially_settled / wallet-remainder branches that already existed.
+
+THE LINE THE REVIEW DREW, and it is the important part: equality was
+carrying anti-fraud weight. It is removed ONLY for bank-issued proof —
+the reference rungs. The payer-NAME rungs read the merchant's own
+uploaded slip, so they KEEP the equality guard: a name on a
+merchant-authored slip can still only claim a credit for exactly what
+was claimed. Blockers also caught: row ORDER had silently become the
+row selector once equality stopped filtering (now an explicit
+BankRowMatch scoring rung strength, then distance from the claim, then
+name score, then time), and reference containment was unanchored so one
+dense digit run on a slip quoted thousands of other references (now
+anchored on both ends). BankCreditClaim is the primary guard now — the
+advisory lock was added to the admin top-up path, and a hand-matched
+payment finally registers its reference so a credit cannot be spent
+twice.
+
+Admin manual match now REQUIRES the figure that arrived rather than
+crediting the claim blindly (a NULL means nobody ever stated one, and
+the auto-vs-manual health split excludes unknowns instead of
+miscounting them). Merchants are told when the two differ
+(`wallet_top_up_amount_differs`) and when a settlement lands SHORT
+(`settlement_partially_paid`, a moment nobody was told about before).
+
+15 findings, 3 blockers, all fixed. Suite 2159 green; merchant app
+v1.0.28+29. OPEN FOR THE OWNER: sub-MVR-1 shortfall forgiveness is now
+reachable from a merchant's typo, not just a bank rounding quirk;
+production top-up #2 is deliberately still pending — releasing its
+MVR 10 is a money decision, not mine.
+
 ### Queue (updated 2026-08-17) — the mobile programme
 
 The mobile API round is DONE and reviewed (PLAN-mobile-api.md: M1–M5, two

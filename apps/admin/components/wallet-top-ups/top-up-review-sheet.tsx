@@ -3,6 +3,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import {
   matchWalletTopUp,
+  parseMvrToLaari,
   rejectWalletTopUp,
   type TransferSettingsResponse,
   type WalletTopUp,
@@ -37,12 +38,30 @@ import { Textarea } from '@/components/ui/textarea';
 import { BankLabel } from '@/components/admin/bank-select';
 import { SlipFrame } from '@/components/admin/slip-frame';
 import { TopUpStateBadge } from '@/components/admin/state-badge';
+import {
+  DiscrepancyBadge,
+  DiscrepancyNote,
+} from '@/components/transfers/claim-and-fact';
 import { autoVerifyStatus } from './auto-verify';
 import { AutoVerifyBadge, autoVerifyExplanation } from './auto-verify-badge';
 
 const MIN_REASON = 3;
 const MAX_REASON = 1000;
 const MAX_BANK_REF = 128;
+
+/**
+ * What the admin typed into the received field, as integer laari — or null
+ * when it is not a usable amount. The string never passes through a float:
+ * `parseMvrToLaari` decomposes it, and it throws rather than guessing.
+ */
+function receivedLaari(input: string): number | null {
+  try {
+    const laari = parseMvrToLaari(input);
+    return laari >= 1 ? laari : null;
+  } catch {
+    return null;
+  }
+}
 
 export const WALLET_TOP_UPS_QUERY_KEY = ['admin', 'wallet-top-ups'] as const;
 
@@ -111,6 +130,14 @@ function ReviewBody({
   const queryClient = useQueryClient();
   const [mode, setMode] = useState<'idle' | 'reject'>('idle');
   const [bankRef, setBankRef] = useState('');
+  // WHAT THE STATEMENT SAYS ARRIVED (owner, 2026-08-25). Deliberately EMPTY
+  // rather than prefilled with the merchant's claim (verifier round,
+  // 2026-08-25): this figure is credited to a wallet as spendable money on
+  // one click, and a prefill puts a blind credit of an amount that may never
+  // have arrived behind a button that reads "Credit MVR 20.00". The reviewer
+  // is holding the statement line — they type what it says, and the claim is
+  // named beside the field to compare against. Nothing is guessed for them.
+  const [received, setReceived] = useState('');
   const [reason, setReason] = useState('');
   const [reasonError, setReasonError] = useState<string | null>(null);
   // A stable "now" for the watch-window verdict; re-read once a minute so a
@@ -130,18 +157,24 @@ function ReviewBody({
     queryClient.invalidateQueries({ queryKey: WALLET_TOP_UPS_QUERY_KEY });
 
   const match = useMutation({
-    mutationFn: () =>
-      matchWalletTopUp(
-        topUp.id,
-        needsBankRef ? { bank_ref: bankRef.trim() } : {},
-      ),
+    mutationFn: (laari: number) =>
+      matchWalletTopUp(topUp.id, {
+        received_laari: laari,
+        ...(needsBankRef ? { bank_ref: bankRef.trim() } : {}),
+      }),
     onSuccess: (response) => {
       invalidate();
       onDecided(response.data);
+      const credited =
+        response.data.received_laari ?? response.data.amount_laari;
       toast.success(
-        `${formatMoney(response.data.amount_laari)} credited to ${
+        `${formatMoney(credited)} credited to ${
           response.data.merchant?.name ?? 'the merchant'
-        }'s wallet.`,
+        }'s wallet.${
+          response.data.amount_differs
+            ? ` The merchant had typed ${formatMoney(response.data.amount_laari)} — the bank's figure is what was credited.`
+            : ''
+        }`,
       );
     },
     onError: (error) => toast.error(apiErrorMessage(error)),
@@ -165,6 +198,9 @@ function ReviewBody({
   const busy = match.isPending || reject.isPending;
   const bankRefMissing = needsBankRef && bankRef.trim() === '';
   const bankRefTooLong = bankRef.trim().length > MAX_BANK_REF;
+  const receivedValue = receivedLaari(received);
+  const receivedDiffers =
+    receivedValue !== null && receivedValue !== topUp.amount_laari;
 
   const submitReject = () => {
     const trimmed = reason.trim();
@@ -236,11 +272,25 @@ function ReviewBody({
                     Wallet credited {formatDateTime(topUp.matched_at)}
                   </AlertTitle>
                   <AlertDescription>
-                    {formatMoney(topUp.amount_laari)} is now balance
+                    {/* What actually went in — the bank's figure where there
+                        is one, the claim only where nobody ever had a better
+                        number. Printing the claim on a row the bank
+                        contradicted would put a number in the audit trail
+                        that no money matches. */}
+                    {formatMoney(topUp.received_laari ?? topUp.amount_laari)} is
+                    now balance
                     {topUp.wallet_transaction_id !== null
                       ? ` — wallet movement #${topUp.wallet_transaction_id}`
                       : ''}
                     . {explanation}
+                    {topUp.amount_differs ? (
+                      <p className="mt-1.5">
+                        <DiscrepancyNote
+                          row={topUp}
+                          credited="credited to the wallet"
+                        />
+                      </p>
+                    ) : null}
                   </AlertDescription>
                 </AlertContent>
               </Alert>
@@ -265,11 +315,40 @@ function ReviewBody({
                   </span>
                 ) : null}
               </Fact>
+              {/* THE CLAIM AND THE FACT, side by side. The claim is what the
+                  merchant typed and is never rewritten; the received figure
+                  is the bank's, and is the one that became balance. */}
               <Fact label="Amount claimed">
                 <MoneyText
                   laari={topUp.amount_laari}
-                  className="text-base font-semibold"
+                  className={
+                    topUp.amount_differs
+                      ? 'text-base text-muted-foreground'
+                      : 'text-base font-semibold'
+                  }
                 />
+                {topUp.amount_differs ? (
+                  <span className="ms-2 text-xs text-muted-foreground">
+                    what the merchant typed
+                  </span>
+                ) : null}
+              </Fact>
+              <Fact label="Amount received">
+                {topUp.received_laari === null ? (
+                  <span className="text-muted-foreground">
+                    {topUp.state === 'pending'
+                      ? 'Not yet known — the bank has not been matched to this claim.'
+                      : 'Not recorded on this claim.'}
+                  </span>
+                ) : (
+                  <span className="flex flex-wrap items-center gap-2">
+                    <MoneyText
+                      laari={topUp.received_laari}
+                      className="text-base font-semibold"
+                    />
+                    <DiscrepancyBadge row={topUp} />
+                  </span>
+                )}
               </Fact>
               <Fact label="Paid into">
                 {topUp.platform_bank_account ? (
@@ -347,8 +426,12 @@ function ReviewBody({
                     <Info />
                   </AlertIcon>
                   <AlertDescription>
-                    Matching credits {formatMoney(topUp.amount_laari)} to the
-                    merchant&apos;s wallet at once. While the store keeps
+                    Matching credits{' '}
+                    {receivedValue === null
+                      ? 'the amount you enter below'
+                      : formatMoney(receivedValue)}{' '}
+                    to the merchant&apos;s wallet at once — the figure on the
+                    STATEMENT, not the one they typed. While the store keeps
                     auto-settle on, the hourly run settles validated cashback
                     from that balance oldest-first, as much as fits. The
                     reference below becomes the movement&apos;s idempotency key,
@@ -358,6 +441,40 @@ function ReviewBody({
 
                 {mode === 'idle' ? (
                   <>
+                    <div className="flex flex-col gap-2">
+                      <Label htmlFor={`top-up-received-${topUp.id}`}>
+                        Amount received (MVR, required)
+                      </Label>
+                      <Input
+                        id={`top-up-received-${topUp.id}`}
+                        value={received}
+                        onChange={(event) => setReceived(event.target.value)}
+                        inputMode="decimal"
+                        placeholder="e.g. 1,234.56"
+                        disabled={busy}
+                        className="tabular-nums"
+                      />
+                      {received.trim() !== '' && receivedValue === null ? (
+                        <p className="text-sm text-destructive">
+                          Enter a valid positive MVR amount, e.g. 1,234.56.
+                        </p>
+                      ) : receivedDiffers ? (
+                        <p className="text-xs text-yellow-700 dark:text-yellow-500">
+                          Not the {formatMoney(topUp.amount_laari)} the merchant
+                          typed. That is fine — the statement is the money and
+                          this figure is what will be credited. Their claim is
+                          kept on the row either way.
+                        </p>
+                      ) : (
+                        <p className="text-xs text-muted-foreground">
+                          Read it off the statement line. The merchant claimed{' '}
+                          {formatMoney(topUp.amount_laari)} — that is what they
+                          typed, not what arrived, so nothing is filled in for
+                          you here.
+                        </p>
+                      )}
+                    </div>
+
                     {needsBankRef ? (
                       <div className="flex flex-col gap-2">
                         <Label htmlFor={`top-up-ref-${topUp.id}`}>
@@ -382,13 +499,24 @@ function ReviewBody({
 
                     <div className="flex flex-wrap items-center gap-2">
                       <Button
-                        disabled={busy || bankRefMissing || bankRefTooLong}
-                        onClick={() => match.mutate()}
+                        disabled={
+                          busy ||
+                          bankRefMissing ||
+                          bankRefTooLong ||
+                          receivedValue === null
+                        }
+                        onClick={() =>
+                          receivedValue === null
+                            ? undefined
+                            : match.mutate(receivedValue)
+                        }
                       >
                         <CircleCheck />
                         {match.isPending
                           ? 'Matching…'
-                          : 'Match and credit wallet'}
+                          : receivedValue === null
+                            ? 'Match and credit wallet'
+                            : `Credit ${formatMoney(receivedValue)}`}
                       </Button>
                       <Button
                         variant="outline"

@@ -24,9 +24,11 @@ use Illuminate\Support\Facades\Log;
  *   reference → receipt_reference
  *
  * Bank-issued identifiers only. A settlement payment may also match on the
- * payer's NAME (on the slip, or against the registered account name)
- * because the platform fixes the amount there: a stranger's credit of
- * exactly the batch's due is a coincidence. A top-up fixes nothing — the
+ * payer's NAME (on the slip, or against the registered account name) — but
+ * only for a credit of EXACTLY the claimed figure, which is the form that
+ * rung's old justification survives in now that equality is no longer a gate
+ * in general (verifier round, 2026-08-25): a stranger's credit of exactly the
+ * batch's due is a coincidence. A top-up fixes nothing — the
  * merchant chooses the amount AND writes the slip the OCR reads AND edits
  * the account name the last rung compares — so each of the name rungs
  * would become a merchant-controlled oracle over every unclaimed credit on
@@ -35,10 +37,30 @@ use Illuminate\Support\Facades\Log;
  * A transfer that leaves no reference on the slip and none typed waits for
  * the admin queue, which is the designed fallback.
  *
- * The amount must be equal to the laari, the money must be INCOMING, the
- * credit must not already be spent on an order, a settlement payment,
- * another top-up or a wallet movement ({@see BankCreditClaim}), and the
- * account read is the one the merchant said they paid into — no fallback.
+ * THE TYPED AMOUNT IS NOT EVIDENCE AND NEVER WAS (owner, 2026-08-25, from
+ * top-up #2 in production: the merchant typed MVR 20.00, the slip and BML
+ * both said MVR 10.00, and requiring the two to be EQUAL parked a perfectly
+ * good transfer in the admin queue for a typo). The merchant's figure is a
+ * CLAIM; the bank credit is the FACT. So the ladder above identifies WHICH
+ * transfer is theirs, and the matched row then says how much arrived — that
+ * is what is credited, and it is stamped on `received_laari` beside the
+ * untouched claim.
+ *
+ * Which makes the evidence the ONLY thing between a merchant and somebody
+ * else's transfer, so none of it is relaxed to compensate: the 6-character
+ * minimum on a typed reference and the 5-character minimum on a receipt
+ * needle ({@see TransferEvidence}) stand, and the payer-name rungs stay off
+ * this ladder entirely.
+ *
+ * The money must be INCOMING and the credit POSITIVE — a debit is us paying
+ * somebody and a zero is not money — the credit must not already be spent on
+ * an order, a settlement payment, another top-up or a wallet movement
+ * ({@see BankCreditClaim}, now the primary guard that one credit funds one
+ * thing), and the account read is the one the merchant said they paid into —
+ * no fallback.
+ *
+ * The credited figure comes from the STATEMENT ROW, never from the OCR'd
+ * slip. OCR is matching evidence; a misread digit must not move money.
  *
  * What differs is only what a match FUNDS: here the wallet is credited
  * through {@see WalletTopUps::credit}, the one path the admin's manual
@@ -78,8 +100,20 @@ final readonly class WalletTopUpVerifier
         $reference = trim((string) $topUp->bank_ref);
         $receipt = (string) $topUp->receipt_text;
 
+        // EVERY row is scored and the BEST one wins — never the first row
+        // that answers a rung. See {@see BankRowMatch}: the amount used to be
+        // what skipped the rows that were not this merchant's transfer, and
+        // without it the bank's own ordering would otherwise decide which
+        // credit becomes their money.
+        $best = null;
+
         foreach ($rows as $row) {
-            if (! $row->incoming || $row->amountLaari !== (int) $topUp->amount_laari) {
+            // THE AMOUNT IS NOT A GATE ANY MORE (owner, 2026-08-25). It is
+            // read off the matched row afterwards; see the class doc.
+            // Direction and positivity remain absolute: an outgoing row is
+            // us paying somebody, and a zero or negative credit is money
+            // that did not arrive.
+            if (! $row->incoming || $row->amountLaari <= 0) {
                 continue;
             }
 
@@ -87,24 +121,41 @@ final readonly class WalletTopUpVerifier
                 continue;
             }
 
-            // The merchant's own reference, seen in our history.
-            if ($reference !== '' && TransferEvidence::sameReference($reference, $row)) {
-                return $this->match($topUp, $row, 100, 'reference');
-            }
+            $candidate = $this->evidence($row, $reference, $receipt);
 
-            // The same proof read off the slip: banking apps print the
-            // transaction number, and every identifier the row carries is
-            // tried (BML files one and prints another).
-            foreach ($row->identifiers() as $identifier) {
-                if (TransferEvidence::receiptMentions($receipt, $identifier)) {
-                    return $this->match($topUp, $row, 100, 'receipt_reference');
-                }
+            if ($candidate !== null && $candidate->beats($best, (int) $topUp->amount_laari, $topUp->created_at?->toImmutable())) {
+                $best = $candidate;
             }
-
-            // No name rungs — see the class doc.
         }
 
-        return false;
+        if ($best === null) {
+            return false;
+        }
+
+        return $this->match($topUp, $best->row, $best->score, $best->rule);
+    }
+
+    /**
+     * The rung this row answers, if any — bank-issued identifiers only.
+     * No name rungs; see the class doc.
+     */
+    private function evidence(BankRow $row, string $reference, string $receipt): ?BankRowMatch
+    {
+        // The merchant's own reference, seen in our history.
+        if ($reference !== '' && TransferEvidence::sameReference($reference, $row)) {
+            return new BankRowMatch($row, 'reference', BankRowMatch::RULE_REFERENCE, 100);
+        }
+
+        // The same proof read off the slip: banking apps print the
+        // transaction number, and every identifier the row carries is
+        // tried (BML files one and prints another).
+        foreach ($row->identifiers() as $identifier) {
+            if (TransferEvidence::receiptQuotes($receipt, $identifier)) {
+                return new BankRowMatch($row, 'receipt_reference', BankRowMatch::RULE_RECEIPT_REFERENCE, 100);
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -159,6 +210,11 @@ final readonly class WalletTopUpVerifier
 
                 $locked->forceFill([
                     'auto_matched' => true,
+                    // WHAT ACTUALLY ARRIVED, from the statement row and from
+                    // nowhere else. `amount_laari` — their claim — is left
+                    // exactly as they typed it, so a discrepancy stays
+                    // readable for as long as the row exists.
+                    'received_laari' => $row->amountLaari,
                     // Keyed on the merchant-facing reference: for BML that is
                     // the one on their slip, not the internal statement id.
                     'matched_trx_id' => $row->key(),

@@ -25,7 +25,13 @@ String? routeForPushData(Map<String, Object?> data) {
   final settlementId = int.tryParse('${data['settlement_id'] ?? ''}');
 
   return switch (data['template']) {
-    'settlement_accepted' || 'settlement_rejected' =>
+    // `settlement_partially_paid` joins the pair (verifier round,
+    // 2026-08-25): the transfer was matched for LESS than the batch needed,
+    // so the store still owes — and the one screen that says how much is the
+    // settlement's own.
+    'settlement_accepted' ||
+    'settlement_rejected' ||
+    'settlement_partially_paid' =>
       settlementId != null && settlementId > 0
           ? '/settlements/$settlementId'
           : '/settlements',
@@ -52,7 +58,13 @@ String? routeForPushData(Map<String, Object?> data) {
     // and its reason are listed, and it is the settlement pair's own rule
     // (both `settlement_accepted` and `settlement_rejected` are routed).
     // Both are gated by `wallet.view` in the router's own redirect.
-    'wallet_top_up_received' || 'wallet_top_up_rejected' => '/wallet',
+    // `wallet_top_up_amount_differs` is the SAME credit landing for a figure
+    // that is not the one they typed — the one top-up message a merchant most
+    // needs to act on, so it must not be the one that lands nowhere.
+    'wallet_top_up_received' ||
+    'wallet_top_up_amount_differs' ||
+    'wallet_top_up_rejected' =>
+      '/wallet',
     _ => null,
   };
 }

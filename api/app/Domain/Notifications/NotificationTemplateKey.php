@@ -44,6 +44,17 @@ enum NotificationTemplateKey: string
     case SettlementAccepted = 'settlement_accepted';
     case SettlementRejected = 'settlement_rejected';
 
+    // The transfer was found and banked, and it did NOT cover the batch
+    // (verifier round, 2026-08-25). Once the BANK's figure funds the
+    // allocation rather than the merchant's typed claim, "I paid it all"
+    // and "less than the batch arrived" are the ordinary case rather than a
+    // deliberate instalment — and settlement_accepted deliberately fires
+    // only on the move into settled, so without this the store would be
+    // told nothing at all while still owing. The merchant surfaces promise
+    // a message "the moment your transfer is matched"; this is that message
+    // for the half of matches that do not pay the batch off.
+    case SettlementPartiallyPaid = 'settlement_partially_paid';
+
     // Deadline reminders (MR4). Fired by the daily manfaa:remind-settlements
     // walk at 09:00 business time; the DAY each one fires on is computed from
     // the live platform settings (prompt_discount_max_age_days,
@@ -104,6 +115,14 @@ enum NotificationTemplateKey: string
     case WalletTopUpReceived = 'wallet_top_up_received';
     case WalletTopUpRejected = 'wallet_top_up_rejected';
 
+    // The same credit, when the BANK's figure is not the one the merchant
+    // typed (owner, 2026-08-25). A typo must not strand real money, so the
+    // transfer is credited for what actually arrived — and the merchant is
+    // told THAT number, with their own beside it. A separate key rather than
+    // a clause bolted onto the line above, because the sentence is different
+    // and both halves of it need their own en + dv.
+    case WalletTopUpAmountDiffers = 'wallet_top_up_amount_differs';
+
     // The hourly auto-settle drew on the wallet balance to settle validated
     // cashback (owner, 2026-08-24; fired by phase 2). One line per run, not
     // per line — a batch is news, forty lines are a nuisance.
@@ -144,6 +163,7 @@ enum NotificationTemplateKey: string
             self::ReferralBonusEarned => 'Referral bonus earned',
             self::PayoutPaid => 'Payout paid',
             self::SettlementAccepted => 'Settlement accepted',
+            self::SettlementPartiallyPaid => 'Settlement part-paid',
             self::SettlementRejected => 'Settlement rejected',
             self::PromptDiscountExpiring => 'Prompt discount expiring',
             self::ReminderDay10 => 'Day-10 reminder',
@@ -157,6 +177,7 @@ enum NotificationTemplateKey: string
             self::CustomersPaid => 'Customers paid',
             self::PosWaiverEarned => 'POS fee waived',
             self::WalletTopUpReceived => 'Wallet top-up received',
+            self::WalletTopUpAmountDiffers => 'Wallet top-up received (different amount)',
             self::WalletTopUpRejected => 'Wallet top-up refused',
             self::WalletAutoSettled => 'Settled from wallet',
             self::GstNowApplies => 'GST now applies',
@@ -182,6 +203,7 @@ enum NotificationTemplateKey: string
             self::ReferralBonusEarned => 'When a friend who joined with this customer\'s code reaches the referral spend milestone and the bonus lands in the referrer\'s wallet. At most once per friend, ever.',
             self::PayoutPaid => 'When a payout item is marked paid and the money is on its way to the customer\'s bank. One per customer per payout run.',
             self::SettlementAccepted => 'When Manfaa matches a store\'s transfer receipt and the settlement is paid off.',
+            self::SettlementPartiallyPaid => 'When a matched transfer is found to be LESS than the batch needed: the money is banked against the oldest sales and the rest is still owed. Names what arrived, what was claimed, and what is left — a store that believes it paid in full must not learn otherwise from a balance.',
             self::SettlementRejected => 'When a transfer receipt is refused, with the reason. The store has to act, so this one earns an interruption.',
             self::PromptDiscountExpiring => 'The morning of the LAST day the prompt-payment discount can still be kept. Sent only when settling everything today would actually save money.',
             self::ReminderDay10 => 'The §7 ladder\'s day-10 notice: the oldest unfunded sale has turned ten days old.',
@@ -204,6 +226,7 @@ enum NotificationTemplateKey: string
             self::CustomersPaid => 'When a payout run reaches the customers who earned cashback at this store. One message per run, never one per customer, and only about money that actually moved.',
             self::PosWaiverEarned => 'When a month closes qualified for the POS-fee waiver: rate held at 1%+, nothing overdue, and the volume or cashback bar cleared. Once per month at most.',
             self::WalletTopUpReceived => 'When a store\'s wallet top-up transfer is found in the bank and the wallet is credited — automatically or by an admin. One per top-up.',
+            self::WalletTopUpAmountDiffers => 'The same moment, when the bank credited a DIFFERENT amount from the one the store typed. The wallet takes what actually arrived, and this message quotes it beside their own figure rather than pretending they agree.',
             self::WalletTopUpRejected => 'When a wallet top-up claim is refused, with the reason. The store has to act, so this one earns an interruption.',
             self::WalletAutoSettled => 'When the hourly run settles validated cashback from the store\'s wallet balance. One message per run, never one per sale.',
             self::GstNowApplies => 'The one time a superadmin switches GST on: the platform fee starts carrying tax, and every settlement from then on shows the fee and the GST as separate figures. Sent once, to every approved store, and never again when the rate is edited.',
@@ -254,6 +277,11 @@ enum NotificationTemplateKey: string
                 'amount' => 'The top-up credited, formatted with its currency',
                 'balance' => 'The wallet balance after the credit, formatted with its currency',
             ],
+            self::WalletTopUpAmountDiffers => [
+                'amount' => 'What the BANK actually credited — the money now in the wallet, formatted with its currency',
+                'claimed' => 'What the store typed on the claim, formatted with its currency',
+                'balance' => 'The wallet balance after the credit, formatted with its currency',
+            ],
             self::WalletTopUpRejected => [
                 'amount' => 'The top-up claimed, formatted with its currency',
                 'reason' => 'Why the claim was refused',
@@ -270,6 +298,11 @@ enum NotificationTemplateKey: string
             ],
             self::SettlementAccepted => [
                 'reference' => 'The settlement reference',
+            ],
+            self::SettlementPartiallyPaid => [
+                'reference' => 'The settlement reference',
+                'amount' => 'What the BANK credited against this batch, formatted with its currency',
+                'outstanding' => 'What is still owed on the batch after this transfer, formatted with its currency',
             ],
             self::SettlementRejected => [
                 'reference' => 'The settlement reference',
@@ -335,6 +368,7 @@ enum NotificationTemplateKey: string
             self::CashbackEarned, self::CashbackConfirmed, self::CashbackReversed,
             self::ReferralBonusEarned, self::PayoutPaid => false,
             self::SettlementAccepted, self::SettlementRejected,
+            self::SettlementPartiallyPaid,
             self::PromptDiscountExpiring,
             self::ReminderDay10, self::UrgentDay13, self::DueDay15,
             self::StoreChangeApproved, self::StoreChangeRejected => true,
@@ -346,8 +380,8 @@ enum NotificationTemplateKey: string
             self::StoreApproved,
             self::MarketplaceApproved, self::MarketplaceRejected => true,
             self::CustomersPaid, self::PosWaiverEarned => true,
-            self::WalletTopUpReceived, self::WalletTopUpRejected,
-            self::WalletAutoSettled => true,
+            self::WalletTopUpReceived, self::WalletTopUpAmountDiffers,
+            self::WalletTopUpRejected, self::WalletAutoSettled => true,
             // The shop's own bill changes shape — merchant staff, never a
             // shopper: a customer's cashback is untouched by our tax.
             self::GstNowApplies => true,
@@ -469,6 +503,9 @@ enum NotificationTemplateKey: string
             self::ReferralBonusEarned => ['en' => 'Referral bonus earned', 'dv' => 'ރެފަރަލް ބޯނަސް ލިބިއްޖެ'],
             self::PayoutPaid => ['en' => 'Payout sent', 'dv' => 'ފައިސާ ފޮނުވިއްޖެ'],
             self::SettlementAccepted => ['en' => 'Settlement accepted', 'dv' => 'ސެޓްލްމަންޓް ބަލައިގަނެވިއްޖެ'],
+            // Says the money landed AND that the batch is not closed, so a
+            // merchant reading only the title is not left believing it is.
+            self::SettlementPartiallyPaid => ['en' => 'Transfer received — still owing', 'dv' => 'ފައިސާ ލިބިއްޖެ — އަދިވެސް ދައްކަންޖެހޭ'],
             self::SettlementRejected => ['en' => 'Receipt refused', 'dv' => 'ރަސީދު ބަލައިނުގަނެވުނު'],
             self::PromptDiscountExpiring => ['en' => 'Discount expiring', 'dv' => 'ޑިސްކައުންޓް ގެއްލިދާނެ'],
             self::ReminderDay10 => ['en' => 'Settlement reminder', 'dv' => 'ސެޓްލްމަންޓް ހަނދާންކޮށްދިނުން'],
@@ -482,6 +519,9 @@ enum NotificationTemplateKey: string
             self::CustomersPaid => ['en' => 'Customers paid', 'dv' => 'ކަސްޓަމަރުންނަށް ފައިސާ ދެއްކިއްޖެ'],
             self::PosWaiverEarned => ['en' => 'POS fee waived', 'dv' => 'POS ފީ މާފުކޮށްދެވިއްޖެ'],
             self::WalletTopUpReceived => ['en' => 'Wallet topped up', 'dv' => 'ވޮލެޓަށް ފައިސާ ޖަމާވެއްޖެ'],
+            // Says the money landed AND that the number is not theirs, so a
+            // merchant reading only the title is not surprised by the body.
+            self::WalletTopUpAmountDiffers => ['en' => 'Topped up — different amount', 'dv' => 'ވޮލެޓަށް ޖަމާވެއްޖެ — އަދަދު ތަފާތު'],
             self::WalletTopUpRejected => ['en' => 'Top-up refused', 'dv' => 'ޓޮޕް-އަޕް ބަލައިނުގަނެވުނު'],
             self::WalletAutoSettled => ['en' => 'Settled from wallet', 'dv' => 'ވޮލެޓުން ސެޓްލްކުރެވިއްޖެ'],
             self::GstNowApplies => ['en' => 'GST now applies', 'dv' => 'ޖީއެސްޓީ ނަގަން ފަށައިފި'],

@@ -15,6 +15,15 @@ use Illuminate\Support\Facades\DB;
 /**
  * Has this bank credit already been spent?
  *
+ * THE PRIMARY GUARD, as of 2026-08-25. Until then the verifiers also
+ * required the bank credit to EQUAL the merchant's typed amount, and that
+ * equality was quietly carrying anti-fraud weight — a stranger's credit had
+ * to be for exactly the right figure as well as answer to the right
+ * reference. The owner removed it (a merchant typed MVR 20.00, sent MVR
+ * 10.00, and a real transfer sat in a queue over the typo), so what now
+ * stands between a merchant and somebody else's transfer is the evidence
+ * ladder plus THIS: the rule that one credit funds exactly one thing.
+ *
  * One credit may only ever settle one thing. That is easy to state and easy
  * to get wrong in two ways, both of which were live before this class:
  *
@@ -124,13 +133,44 @@ final readonly class BankCreditClaim
      * Serialise every verifier that wants to spend this credit. Postgres
      * advisory locks are the one cross-table lock we have: taken inside the
      * caller's transaction and released with it, keyed on the credit's
-     * stable identifier, so two workers matching the same transfer against
-     * two different tables cannot both read "unspent" and both commit —
-     * the second waits, then asks {@see taken()} again and finds it gone.
+     * identifiers, so two workers matching the same transfer against two
+     * different tables cannot both read "unspent" and both commit — the
+     * second waits, then asks {@see taken()} again and finds it gone.
      */
     public function lock(BankRow $row): void
     {
-        DB::statement('SELECT pg_advisory_xact_lock(hashtext(?))', [$row->key()]);
+        $this->lockReferences($row->identifiers());
+    }
+
+    /**
+     * The same serialisation for a path holding REFERENCES rather than a
+     * bank row — the admin matching a top-up off a statement by hand
+     * (2026-08-25). That path checks {@see spent()} like the verifiers do,
+     * but held no lock while it did, so it could read "unspent" in the same
+     * instant a verifier did and both commit.
+     *
+     * Two details make this actually meet the verifiers rather than merely
+     * look like it:
+     *
+     *  - the keys are NORMALISED the way {@see spent()} compares — letters
+     *    and digits, upper-cased — so an admin's "ref same" and a bank row's
+     *    "REF-SAME" hash to the same lock instead of passing each other;
+     *  - EVERY identifier is locked, not just the one we keyed on, because a
+     *    BML credit answers to two names and the two paths may each be
+     *    holding a different one. Sorted first: taking several locks in a
+     *    deterministic order is what stops two transactions holding half of
+     *    each other's set.
+     *
+     * @param  list<string>  $references
+     */
+    public function lockReferences(array $references): void
+    {
+        $keys = self::normalise($references);
+        sort($keys);
+
+        foreach ($keys as $key) {
+            DB::statement('SELECT pg_advisory_xact_lock(hashtext(?))', [$key]);
+        }
     }
 
     /**

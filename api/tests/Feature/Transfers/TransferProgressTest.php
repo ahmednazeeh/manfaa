@@ -6,6 +6,7 @@ use App\Domain\MerchantAccess\Permission;
 use App\Domain\Mobile\MobileAudience;
 use App\Domain\Mobile\MobileTokenService;
 use App\Domain\Money\Laari;
+use App\Domain\Platform\PlatformConfig;
 use App\Domain\Settlement\SettlementAllocator;
 use App\Domain\Settlement\SettlementBuilder;
 use App\Domain\Settlement\WalletFunding;
@@ -712,7 +713,7 @@ it('reports a refused receipt with the reason, and nothing owed on a cancelled b
 it('reports a credited top-up as the amount added and the balance now', function (): void {
     $claim = topUp();
 
-    app(WalletTopUps::class)->match($claim, $this->admin, '901901901');
+    app(WalletTopUps::class)->match($claim, $this->admin, '901901901', Laari::of(50000));
 
     $this->actingAs($this->owner, 'merchant')
         ->getJson(topUpProgressUrl($claim->id))
@@ -730,11 +731,51 @@ it('reports a credited top-up as the amount added and the balance now', function
         ->assertJsonPath('data.outcome.rejected_reason', null);
 });
 
+it('reports what actually landed, with the claim beside it, when they differ', function (): void {
+    // The production shape (owner, 2026-08-25): typed MVR 20.00, banked
+    // MVR 10.00. The screen must print the ten, not the twenty, and must
+    // be able to say which is which.
+    app(PlatformConfig::class)->set('wallet_top_up_min_laari', 100);
+
+    $claim = topUp(2000, 'BLAZ204399156496');
+
+    app(WalletTopUps::class)->match($claim, $this->admin, 'BLAZ204399156496', Laari::of(1000));
+
+    $this->actingAs($this->owner, 'merchant')
+        ->getJson(topUpProgressUrl($claim->id))
+        ->assertOk()
+        ->assertJsonPath('data.outcome.result', 'credited')
+        // What went in.
+        ->assertJsonPath('data.outcome.credited_laari', 1000)
+        ->assertJsonPath('data.outcome.credited_mvr', '10.00')
+        ->assertJsonPath('data.outcome.received_laari', 1000)
+        ->assertJsonPath('data.outcome.received_mvr', '10.00')
+        // What they asked for, so the screen can explain the gap.
+        ->assertJsonPath('data.outcome.claimed_laari', 2000)
+        ->assertJsonPath('data.outcome.claimed_mvr', '20.00')
+        ->assertJsonPath('data.outcome.amount_differs', true)
+        ->assertJsonPath('data.outcome.balance_laari', 1000)
+        // The envelope keeps carrying the CLAIM, unchanged, so a client
+        // cannot mistake one figure for the other.
+        ->assertJsonPath('data.amount_laari', 2000);
+});
+
+it('says nothing differs while nothing is known to differ', function (): void {
+    $claim = topUp();
+
+    $this->actingAs($this->owner, 'merchant')
+        ->getJson(topUpProgressUrl($claim->id))
+        ->assertOk()
+        // Pending: no outcome at all, so no half-answer about the amount.
+        ->assertJsonPath('data.outcome', null)
+        ->assertJsonPath('data.amount_laari', 50000);
+});
+
 it('adds a credited top-up to whatever the wallet already held', function (): void {
-    app(WalletTopUps::class)->match(topUp(20000, 'FIRST-1'), $this->admin, 'FIRST-1');
+    app(WalletTopUps::class)->match(topUp(20000, 'FIRST-1'), $this->admin, 'FIRST-1', Laari::of(20000));
     $second = topUp(50000, 'SECOND-2');
 
-    app(WalletTopUps::class)->match($second, $this->admin, 'SECOND-2');
+    app(WalletTopUps::class)->match($second, $this->admin, 'SECOND-2', Laari::of(50000));
 
     $this->actingAs($this->owner, 'merchant')
         ->getJson(topUpProgressUrl($second->id))

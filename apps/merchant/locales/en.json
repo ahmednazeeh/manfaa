@@ -844,6 +844,7 @@
     "paymentsTitle": "Payments",
     "paymentSlip": "Slip attached",
     "paymentNoSlip": "No slip",
+    "paymentDiffers": "Your bank sent {{received}}, not the {{claimed}} you entered — this settlement was credited with what actually arrived.",
     "paymentPending": "Awaiting verification",
     "paymentMatched": "Verified",
     "paymentRejected": "Rejected",
@@ -900,6 +901,7 @@
       "lead": "Money you have sent that is not yet balance. Each transfer is matched against the bank's records — usually within the hour.",
       "submitted": "Submitted {{date}}",
       "noBank": "Bank not recorded",
+    "differs": "Your bank sent {{received}}, not the {{claimed}} you entered — your wallet was credited with what actually arrived.",
       "reason": "Reason from Manfaa",
       "noReason": "No reason given."
     },
@@ -948,6 +950,8 @@
     "settlementRejectedBody": "Settlement {{reference}} is cancelled and its transactions are payable again. Create a new settlement with the correct receipt.",
     "creditedTitle": "{{amount}} added to your wallet",
     "creditedBody": "We found your transfer in the bank's records. Your wallet balance is now {{balance}}.",
+    "differsTopUp": "Your bank sent {{received}}, not the {{claimed}} you entered — so {{received}} is what went into your wallet. Nothing is lost: we always credit the amount the bank actually sent.",
+    "differsSettlement": "Your bank sent {{received}}, not the {{claimed}} you entered — so {{received}} is what this settlement was credited with. Nothing is lost: we always use the amount the bank actually sent.",
     "topUpRejectedTitle": "Manfaa could not verify this top-up",
     "topUpRejectedBody": "No balance was added. Check the slip and the bank reference against your bank's own record, then submit the top-up again.",
     "decidedTitle": "This transfer has been decided",
@@ -959,6 +963,7 @@
     "labelOutstanding": "Still owed",
     "labelAdded": "Added to your wallet",
     "labelBalance": "Wallet balance now",
+    "labelYouEntered": "You entered",
     "reason": "Reason from Manfaa",
     "noReason": "No reason was recorded."
   },

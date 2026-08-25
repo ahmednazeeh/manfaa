@@ -3,21 +3,28 @@
 declare(strict_types=1);
 
 use App\Domain\Money\Laari;
+use App\Domain\Settlement\DuplicateBankRefException;
 use App\Domain\Settlement\SettlementAllocator;
 use App\Domain\Settlement\SettlementBuilder;
 use App\Domain\Settlement\SettlementState;
+use App\Domain\Settlement\WalletFunding;
 use App\Domain\Transfers\BankCreditClaim;
 use App\Domain\Transfers\BankHistoryClient;
 use App\Domain\Transfers\BankRow;
 use App\Domain\Transfers\SettlementPaymentVerifier;
+use App\Domain\Transfers\TransferProgress;
+use App\Models\AdminUser;
+use App\Models\Merchant;
 use App\Models\Order;
 use App\Models\PlatformBankAccount;
 use App\Models\SettlementPayment;
 use App\Models\TransferProfile;
 use App\Models\TransferSetting;
+use App\Models\WalletTopUp;
 use Database\Seeders\LedgerAccountSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Tests\Feature\Settlement\SettlementFixture;
 use Tests\TestCase;
 
@@ -83,6 +90,21 @@ function settlementRow(string $name, int $laari, string $reference = '804802801'
         'benefName' => $name,
         'trxDate' => '2026-08-19 10:00:00',
     ], $extra)]])]);
+}
+
+/** Several incoming credits in one page of history, in this order. */
+function settlementRows(array $rows): void
+{
+    Http::fake(['*/faisanet4/history*' => Http::response(['data' => array_map(
+        static fn (array $row): array => [
+            'trxNumber2' => $row['reference'],
+            'baseAmount' => $row['laari'] / 100,
+            'absAmount' => $row['laari'] / 100,
+            'benefName' => $row['name'] ?? 'WHOEVER',
+            'trxDate' => '2026-08-19 10:00:00',
+        ],
+        $rows,
+    )])]);
 }
 
 function recordPayment(int $laari, ?string $bankRef): SettlementPayment
@@ -170,13 +192,102 @@ it('refuses a credit from a different payer with no reference', function (): voi
     expect($payment->refresh()->state)->toBe('pending');
 });
 
-it('refuses when the amount is a laari out', function (): void {
+it('records what the BANK credited, not what the merchant typed', function (): void {
+    // The gate this replaces (owner, 2026-08-25) required the two to be
+    // equal, so a transfer one laari out sat in the admin queue over a typo.
+    // The reference is the evidence; the row is the money.
     $due = (int) $this->settlement->amount_due_laari;
     $payment = recordPayment($due, '804802801');
 
     settlementRow('WHOEVER', $due - 1, '804802801');
 
+    expect(app(SettlementPaymentVerifier::class)->attempt($payment))->toBeTrue();
+
+    $payment->refresh();
+
+    // Both figures survive: the claim as typed, the fact as banked.
+    expect($payment->amount_laari)->toBe($due)
+        ->and($payment->received_laari)->toBe($due - 1)
+        ->and($payment->amountDiffers())->toBeTrue();
+
+    // And the §7 forgiveness rule carries the one-laari gap exactly as it
+    // always did — no new branch was invented for it.
+    expect($this->settlement->refresh()->state)->toBe(SettlementState::Settled)
+        ->and($this->settlement->amount_received_laari)->toBe($due - 1);
+});
+
+it('a payment SHORT of the claim flows down the partial path that already existed', function (): void {
+    // The merchant typed the whole batch and transferred a third of it.
+    // Nothing new happens: §7 allocates whole lines oldest-first out of
+    // what actually arrived, and the rest stays owed.
+    $due = (int) $this->settlement->amount_due_laari;
+    $payment = recordPayment($due, '804802801');
+
+    // §4 dues in allocation order are 2750, 1375, 5500, 2200. 4,125 covers
+    // the first two whole and no more.
+    settlementRow('WHOEVER', 4125, '804802801');
+
+    expect(app(SettlementPaymentVerifier::class)->attempt($payment))->toBeTrue();
+
+    $payment->refresh();
+
+    expect($payment->amount_laari)->toBe($due)
+        ->and($payment->received_laari)->toBe(4125);
+
+    $settlement = $this->settlement->refresh();
+
+    expect($settlement->state)->toBe(SettlementState::PartiallySettled)
+        // The BANK's figure is what the batch banked, not the claim.
+        ->and($settlement->amount_received_laari)->toBe(4125);
+
+    // And the screen prints the real remainder — 11,825 less the 4,125
+    // that arrived — beside both figures, so the merchant can see WHY.
+    $progress = app(TransferProgress::class)->forSettlementPayment($settlement, $payment);
+
+    expect($progress['outcome']['result'])->toBe('partially_settled')
+        ->and($progress['outcome']['amount_outstanding_laari'])->toBe(7700)
+        ->and($progress['outcome']['claimed_laari'])->toBe($due)
+        ->and($progress['outcome']['received_laari'])->toBe(4125)
+        ->and($progress['outcome']['amount_differs'])->toBeTrue();
+
+    // Every laari that arrived allocated, so nothing was parked.
+    expect($this->merchant->wallet()->exists()
+        ? $this->merchant->wallet()->sole()->transactions()->where('type', 'settlement_credit')->count()
+        : 0)->toBe(0);
+});
+
+it('never spends a credit a WALLET TOP-UP already took', function (): void {
+    // The other direction of the cross-table guard. With the amounts no
+    // longer required to agree, BankCreditClaim is the thing standing
+    // between this batch and somebody else's transfer.
+    $due = (int) $this->settlement->amount_due_laari;
+    $payment = recordPayment($due, '804802801');
+
+    WalletTopUp::query()->create([
+        'merchant_id' => Merchant::factory()->create()->id,
+        'amount_laari' => 20000,
+        'currency' => 'MVR',
+        'state' => 'matched',
+        'matched_trx_id' => '804802801',
+        'matched_trx_refs' => ['804802801'],
+    ]);
+
+    settlementRow('WHOEVER', $due, '804802801');
+
     expect(app(SettlementPaymentVerifier::class)->attempt($payment))->toBeFalse();
+    expect($payment->refresh()->state)->toBe('pending');
+});
+
+it('never spends a credit already booked into somebody\'s wallet', function (): void {
+    $due = (int) $this->settlement->amount_due_laari;
+    $payment = recordPayment($due, '804802801');
+
+    app(WalletFunding::class)->recordTopUp(Merchant::factory()->create(), Laari::of(20000), '804802801');
+
+    settlementRow('WHOEVER', $due, '804802801');
+
+    expect(app(SettlementPaymentVerifier::class)->attempt($payment))->toBeFalse();
+    expect($payment->refresh()->state)->toBe('pending');
 });
 
 it('ignores money going the wrong way', function (): void {
@@ -316,16 +427,29 @@ it('falls to the payer named on the receipt when the number is not on it',
         expect($payment->refresh()->matched_by_rule)->toBe('receipt_name');
     });
 
-it('will not match a receipt against the wrong amount', function (): void {
+it('banks an OVER-payment down the wallet-remainder path that already existed', function (): void {
     $due = (int) $this->settlement->amount_due_laari;
 
     $payment = recordPayment($due, null);
     $payment->forceFill(['receipt_text' => REAL_RECEIPT])->save();
 
-    // Right payer, right number, wrong money. Amount is not negotiable.
+    // Right payer, right number, and MVR 1.00 more than the batch wanted.
     settlementRow('INTERBRIDGE', $due + 100, '90863389');
 
-    expect(app(SettlementPaymentVerifier::class)->attempt($payment))->toBeFalse();
+    expect(app(SettlementPaymentVerifier::class)->attempt($payment))->toBeTrue();
+
+    expect($payment->refresh()->received_laari)->toBe($due + 100)
+        ->and($payment->amount_laari)->toBe($due);
+
+    // §7: an overpayment is a merchant credit, never a refund — the same
+    // path an admin's over-matched payment has always taken.
+    expect($this->settlement->refresh()->state)->toBe(SettlementState::Settled);
+
+    $movement = $this->merchant->wallet()->sole()->transactions()
+        ->where('type', 'settlement_credit')->sole();
+
+    expect($movement->amount_laari)->toBe(100)
+        ->and($movement->description)->toContain('Overpayment on');
 });
 
 it('does not match a receipt that mentions neither the payer nor the number',
@@ -441,9 +565,9 @@ function useBmlAccount(): void
 }
 
 /**
- * @param array<string, mixed> $extra
- * @param array<string, mixed>|null $markUsed the gateway's answer to mark-used;
- *        default: one row affected, as the real gateway answers for a known ref
+ * @param  array<string, mixed>  $extra
+ * @param  array<string, mixed>|null  $markUsed  the gateway's answer to mark-used;
+ *                                               default: one row affected, as the real gateway answers for a known ref
  */
 function bmlRow(int $laari, array $extra = [], ?array $markUsed = null): void
 {
@@ -457,20 +581,20 @@ function bmlRow(int $laari, array $extra = [], ?array $markUsed = null): void
             'bank_notifications_affected' => 0,
         ]),
         '*/bml/history*' => Http::response(['data' => [array_merge([
-        'id' => 'FT26235BDLZB\\B26',
-        'description' => 'Transfer Credit',
-        'reference' => 'FT26235BDLZB\\B26',
-        'bookingDate' => '2026-08-23T00:00:00+05:00',
-        'valueDate' => '2026-08-23T00:00:00+05:00',
-        'currency' => 'MVR',
-        'amount' => $laari / 100,
-        'balance' => 2060.3,
-        'narrative1' => '21-08-2026 03-38-58',
-        'narrative2' => 'BLAZ861828284421',
-        'narrative3' => 'AHMED NAZEEH',
-        'narrative4' => '',
-        'minus' => false,
-    ], $extra)]]),
+            'id' => 'FT26235BDLZB\\B26',
+            'description' => 'Transfer Credit',
+            'reference' => 'FT26235BDLZB\\B26',
+            'bookingDate' => '2026-08-23T00:00:00+05:00',
+            'valueDate' => '2026-08-23T00:00:00+05:00',
+            'currency' => 'MVR',
+            'amount' => $laari / 100,
+            'balance' => 2060.3,
+            'narrative1' => '21-08-2026 03-38-58',
+            'narrative2' => 'BLAZ861828284421',
+            'narrative3' => 'AHMED NAZEEH',
+            'narrative4' => '',
+            'minus' => false,
+        ], $extra)]]),
     ]);
 }
 
@@ -793,7 +917,7 @@ it('a gateway that refuses mark-used does not unwind the match', function (): vo
 
     try {
         app(SettlementPaymentVerifier::class)->attempt($payment);
-    } catch (\RuntimeException) {
+    } catch (RuntimeException) {
         // the sync queue re-throws the job's refusal
     }
 
@@ -811,11 +935,161 @@ it('a mark-used that matched no row is logged, not treated as success', function
 
     bmlRow($due, [], ['success' => true, 'bml_transactions_affected' => 0, 'bank_notifications_affected' => 0]);
 
-    \Illuminate\Support\Facades\Log::spy();
+    Log::spy();
 
     expect(app(SettlementPaymentVerifier::class)->attempt($payment))->toBeTrue();
 
-    \Illuminate\Support\Facades\Log::shouldHaveReceived('warning')
+    Log::shouldHaveReceived('warning')
         ->withArgs(fn ($message) => $message === 'mark-used matched no bank row')
         ->once();
+});
+
+/* ------------------------------------------------------------------ *
+ * What the amount gate was silently doing (verifier round, 2026-08-25).
+ *
+ * Equality was two things at once: a check that the figures agreed, and the
+ * ROW SELECTOR that skipped every credit which was not this merchant's. The
+ * owner removed the first. These are the tests that the second was replaced
+ * rather than deleted.
+ * ------------------------------------------------------------------ */
+
+it('takes the row the merchant\'s reference names, not an earlier row a NAME answers', function (): void {
+    $this->merchant->forceFill(['bank_account_name' => 'Ahmed Nazeeh'])->save();
+
+    $due = (int) $this->settlement->amount_due_laari;
+    $payment = recordPayment($due, '804802801');
+
+    // The platform account is shared by every merchant, so the earlier row is
+    // frequently not the claimant's. Under first-hit the weakest rung on row
+    // one won, banked MVR 500.00 against this batch and parked MVR 381.75 of
+    // somebody else's credit in the merchant's wallet as spendable credit.
+    settlementRows([
+        ['reference' => '700000001', 'laari' => 50000, 'name' => 'AHMED NAZEEH'],
+        ['reference' => '804802801', 'laari' => $due, 'name' => 'AHMED NAZEEH'],
+    ]);
+
+    expect(app(SettlementPaymentVerifier::class)->attempt($payment))->toBeTrue();
+
+    $payment->refresh();
+
+    expect($payment->matched_by_rule)->toBe('reference')
+        ->and($payment->matched_trx_id)->toBe('804802801')
+        ->and($payment->received_laari)->toBe($due);
+
+    expect($this->settlement->refresh()->amount_received_laari)->toBe($due);
+
+    // Nothing of anybody else's was parked.
+    expect($this->merchant->wallet()->exists()
+        ? $this->merchant->wallet()->sole()->transactions()->where('type', 'settlement_credit')->count()
+        : 0)->toBe(0);
+});
+
+it('will not let a NAME on a merchant-authored slip claim a credit of any size', function (): void {
+    // receipt_name compares the bank's payer against OCR of a slip the
+    // MERCHANT uploaded, and `name` against a field they edit at will. The
+    // reason those rungs were ever allowed to credit is that the platform
+    // fixed the amount — "a stranger's credit of exactly the batch's due is a
+    // coincidence". Drop equality everywhere and a merchant could claim MVR
+    // 1.00, name any payer, and be credited MVR 50,000.00, with the surplus
+    // spendable in their wallet.
+    $this->merchant->forceFill(['bank_account_name' => 'Nobody At All'])->save();
+
+    $payment = recordPayment(100, null);
+    $payment->forceFill(['receipt_text' => 'TRANSFER FROM INTERBRIDGE PVT LTD'])->save();
+
+    settlementRow('INTERBRIDGE', 5000000, '999999999');
+
+    expect(app(SettlementPaymentVerifier::class)->attempt($payment))->toBeFalse();
+    expect($payment->refresh()->state)->toBe('pending');
+    expect($this->settlement->refresh()->state)->not->toBe(SettlementState::Settled);
+});
+
+it('will not let the REGISTERED name claim a credit of any size either', function (): void {
+    // The same door, opened with the self-service bank-account field.
+    $this->merchant->forceFill(['bank_account_name' => 'Ahmed Nazeeh'])->save();
+
+    $payment = recordPayment(100, null);
+
+    settlementRow('AHMED NAZEEH', 5000000, '999999999');
+
+    expect(app(SettlementPaymentVerifier::class)->attempt($payment))->toBeFalse();
+    expect($payment->refresh()->state)->toBe('pending');
+});
+
+it('still matches on the name when the credit IS for what was claimed', function (): void {
+    // Nothing that matched before this round stops matching: the name rungs
+    // keep exactly the gate they always had.
+    $this->merchant->forceFill(['bank_account_name' => 'Ahmed Nazeeh'])->save();
+
+    $due = (int) $this->settlement->amount_due_laari;
+    $payment = recordPayment($due, null);
+
+    settlementRow('AHMED NAZEEH', $due, '999999999');
+
+    expect(app(SettlementPaymentVerifier::class)->attempt($payment))->toBeTrue();
+    expect($payment->refresh()->matched_by_rule)->toBe('name');
+});
+
+it('will not take a credit off a SCRAP of somebody else\'s reference', function (): void {
+    $due = (int) $this->settlement->amount_due_laari;
+    // Six characters — the floor, not below it — of an eight-digit reference.
+    $payment = recordPayment($due, '908633');
+
+    settlementRow('MARIYAM SHIFA', 500000, '90863389');
+
+    expect(app(SettlementPaymentVerifier::class)->attempt($payment))->toBeFalse();
+    expect($payment->refresh()->state)->toBe('pending');
+});
+
+/* ------------------------------------------------------------------ *
+ * The admin's hand match: the path this round gave a free-text amount.
+ * ------------------------------------------------------------------ */
+
+it('refuses a hand match on a credit a WALLET TOP-UP already spent', function (): void {
+    // matchPayment never consulted BankCreditClaim and took no lock, so an
+    // admin could hand-match a reference a top-up or an order had already
+    // spent and it would credit a second time.
+    $due = (int) $this->settlement->amount_due_laari;
+    $payment = recordPayment($due, '804802801');
+
+    WalletTopUp::query()->create([
+        'merchant_id' => Merchant::factory()->create()->id,
+        'amount_laari' => 20000,
+        'currency' => 'MVR',
+        'state' => 'matched',
+        'matched_trx_id' => '804802801',
+        'matched_trx_refs' => ['804802801'],
+    ]);
+
+    expect(fn () => app(SettlementAllocator::class)->matchPayment(
+        $payment,
+        AdminUser::factory()->create(),
+    ))->toThrow(DuplicateBankRefException::class);
+
+    expect($payment->refresh()->state)->toBe('pending');
+});
+
+it('names a hand-matched credit with the reference the reviewer read', function (): void {
+    // The merchant quoted none, so nothing was written to bank_ref or
+    // matched_trx_refs at all — and BankCreditClaim then reported the credit
+    // unspent forever, leaving it free to fund a top-up as well.
+    $due = (int) $this->settlement->amount_due_laari;
+    $payment = recordPayment($due, null);
+
+    app(SettlementAllocator::class)->matchPayment(
+        $payment,
+        AdminUser::factory()->create(),
+        Laari::of($due),
+        '90863389',
+    );
+
+    $payment->refresh();
+
+    expect($payment->state)->toBe('matched')
+        ->and($payment->bank_ref)->toBe('90863389')
+        ->and($payment->matched_trx_refs)->toBe(['90863389'])
+        ->and($payment->received_laari)->toBe($due);
+
+    // And the credit is now spent everywhere BankCreditClaim looks.
+    expect(app(BankCreditClaim::class)->spent(['90863389']))->toBeTrue();
 });

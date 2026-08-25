@@ -77,6 +77,27 @@ void main() {
         routeForPushData({'template': 'wallet_top_up_rejected'}),
         '/wallet',
       );
+      // The third verdict: credited, for a figure that is not the one they
+      // typed. The one a merchant most needs to open.
+      expect(
+        routeForPushData({'template': 'wallet_top_up_amount_differs'}),
+        '/wallet',
+      );
+    });
+
+    test('a part-paid settlement opens the batch that is still owed', () {
+      // The transfer was matched for less than the batch needed. The store
+      // still owes, and the settlement's own screen is the only one that
+      // says how much.
+      expect(
+        routeForPushData(
+            {'template': 'settlement_partially_paid', 'settlement_id': '7'}),
+        '/settlements/7',
+      );
+      expect(
+        routeForPushData({'template': 'settlement_partially_paid'}),
+        '/settlements',
+      );
     });
 
     test('a store-change verdict lands on the estate hub (MR9)', () {

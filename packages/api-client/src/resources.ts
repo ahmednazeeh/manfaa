@@ -795,11 +795,44 @@ export type SettlementPaymentState = z.infer<
   typeof SettlementPaymentStateSchema
 >;
 
+/**
+ * TWO FIGURES, ONE TRANSFER (owner, 2026-08-25). Spread into both claim
+ * schemas — settlement payments and wallet top-ups — so the two review
+ * screens read the same three field names and cannot drift apart.
+ *
+ * `amount_laari` is the merchant's CLAIM: what they typed on the upload
+ * form. It is never rewritten, on either table.
+ *
+ * `received_laari` is the FACT: what the bank actually credited, off the
+ * matched statement row (or, on a hand-matched row, what the reviewer read
+ * on the statement). NULL until the row is matched — and null forever on
+ * rows matched by hand before this field existed. It is what actually funded
+ * the batch or the wallet, so it is the figure a screen must lead with once
+ * it is known.
+ *
+ * `amount_differs` is the branch: TRUE only when a bank figure is known AND
+ * disagrees with the claim. An unknown is not a discrepancy, so a screen can
+ * never announce a mismatch it cannot name both sides of.
+ *
+ * A discrepancy is NOT an error. A merchant typing MVR 20.00 and sending
+ * MVR 10.00 is credited the 10.00 that arrived — the money is real and the
+ * claim was a typo. It is worth an auditor's eye, never an alarm.
+ */
+const claimAndFactShape = {
+  /** THE CLAIM: what the merchant typed. Never rewritten. */
+  amount_laari: z.number().int(),
+  amount_mvr: z.string(),
+  /** THE FACT: what the bank credited. Null until matched. */
+  received_laari: z.number().int().nullable(),
+  received_mvr: z.string().nullable(),
+  /** True only when both figures are known and disagree. */
+  amount_differs: z.boolean(),
+};
+
 export const SettlementPaymentSchema = z.object({
   id: z.number().int(),
   settlement_id: z.number().int(),
-  amount_laari: z.number().int(),
-  amount_mvr: z.string(),
+  ...claimAndFactShape,
   currency: z.string(),
   method: z.string(),
   /** What the MERCHANT typed. Often null — the slip carries the reference. */
@@ -1107,6 +1140,12 @@ export type WalletTopUpBankAccount = z.infer<typeof WalletTopUpBankAccountSchema
  *
  * `merchant` is present only on the admin queue; `platform_bank_account` is
  * loaded on both, and null when the claim named no account.
+ *
+ * The money is the CLAIM/FACT pair (see `claimAndFactShape`): `amount_laari`
+ * is what the merchant typed, `received_laari` what the bank actually sent,
+ * and the wallet is credited the second. On the admin match there is no bank
+ * row to read, so the reviewer states `received_laari` themselves — see
+ * `MatchWalletTopUpRequestSchema`.
  */
 export const WalletTopUpSchema = z.object({
   id: z.number().int(),
@@ -1119,8 +1158,7 @@ export const WalletTopUpSchema = z.object({
       bank_account_name: z.string().nullable(),
     })
     .optional(),
-  amount_laari: z.number().int(),
-  amount_mvr: z.string(),
+  ...claimAndFactShape,
   currency: z.string(),
   /** What the MERCHANT typed. Often null — the slip carries the reference. */
   bank_ref: z.string().nullable(),
@@ -1178,8 +1216,13 @@ export type WalletTopUp = z.infer<typeof WalletTopUpSchema>;
  */
 export const WalletPendingTopUpSchema = z.object({
   id: z.number().int(),
-  amount_laari: z.number().int(),
-  amount_mvr: z.string(),
+  /**
+   * The claim, and what the bank actually credited once that is known —
+   * the same three fields the full row carries. Both, because the wallet
+   * screen is where a merchant notices that MVR 10.00 landed on a claim
+   * they typed MVR 20.00 on.
+   */
+  ...claimAndFactShape,
   bank_ref: z.string().nullable(),
   bank: WalletTopUpBankAccountSchema.nullable(),
   /**
