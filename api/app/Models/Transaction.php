@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Domain\Cashback\TransactionState;
+use App\Domain\Platform\FeeRelief;
 use App\Domain\Tax\FeeTax;
 use App\Domain\Tax\FeeTreatment;
 use Database\Factories\TransactionFactory;
@@ -40,6 +41,11 @@ class Transaction extends Model
             // the live tax_settings row.
             'fee_gst_bp' => 'integer',
             'fee_treatment' => FeeTreatment::class,
+            // The platform fee promotion this sale was priced under, frozen
+            // the same way (owner, 2026-08-25).
+            'fee_promo_fee_bp' => 'integer',
+            'list_fee_bp' => 'integer',
+            'fee_forgone_laari' => 'integer',
             'state' => TransactionState::class,
             'backdated' => 'boolean',
             'occurred_at' => 'immutable_datetime',
@@ -63,6 +69,20 @@ class Transaction extends Model
     public function stampedFeeTax(): FeeTax
     {
         return FeeTax::of((int) $this->fee_gst_bp, $this->fee_treatment);
+    }
+
+    /**
+     * The platform fee promotion this row was priced under, as stamped on
+     * it — the same law as stampedFeeTax(), and the same reason.
+     *
+     * An AMENDMENT re-prices a lined sale through this, so a correction made
+     * after the promotion ended (or after its fee moved) reproduces the terms
+     * the sale was rung up under instead of today's. A row written before
+     * this feature existed answers FeeRelief::none(), which is the identity.
+     */
+    public function stampedFeeRelief(): FeeRelief
+    {
+        return FeeRelief::fromStamp($this->fee_promo_kind, $this->fee_promo_fee_bp);
     }
 
     public function merchant(): BelongsTo

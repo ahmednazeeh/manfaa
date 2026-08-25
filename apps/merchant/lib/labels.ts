@@ -3,6 +3,7 @@ import {
   isVendorAbility,
   isWalletMovementType,
   type ChangeRequestKind,
+  type FeePromotionKind,
   type MerchantChannel,
   type MerchantRoleErrorCode,
   type MerchantRoleSummary,
@@ -518,4 +519,30 @@ export function changeFieldLabel(
     kind === 'profile' ? PROFILE_CHANGE_FIELD_KEYS : BRANCH_CHANGE_FIELD_KEYS;
 
   return field in keys ? t(keys[field]) : t('pending.field.unknown');
+}
+
+/**
+ * WHICH platform-fee promotion is pricing this store's sales.
+ *
+ * The API sends `kind_label` beside `kind` — English prose, written for the
+ * admin console. It is never rendered here: a Dhivehi merchant reading a
+ * Dhivehi panel would get one English phrase in the middle of their own
+ * sentence. The machine `kind` is the durable half, so the words come from
+ * the locale files like every other state name in this file.
+ *
+ * This is the ONE thing the banner says about a promotion that is not the
+ * superadmin's own copy — being told you are paying less is useless without
+ * being told which offer it is, since only one of the two is yours alone and
+ * only one of them runs out when your store gets older.
+ */
+const FEE_PROMOTION_KIND_KEYS: Record<FeePromotionKind, string> = {
+  introductory: 'feePromotion.kind.introductory',
+  platform_wide: 'feePromotion.kind.platform_wide',
+};
+
+export function feePromotionKindLabel(
+  t: TFunction,
+  kind: FeePromotionKind,
+): string {
+  return t(FEE_PROMOTION_KIND_KEYS[kind]);
 }

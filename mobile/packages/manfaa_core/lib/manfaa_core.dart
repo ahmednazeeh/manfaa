@@ -14,6 +14,7 @@ export 'src/credit_queue.dart';
 export 'src/device_identity.dart';
 export 'src/display_name.dart';
 export 'src/errors.dart';
+export 'src/fee_promotion_models.dart';
 export 'src/http/interceptors.dart';
 export 'src/merchant_api.dart';
 export 'src/merchant_models.dart';

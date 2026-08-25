@@ -18,6 +18,7 @@ use App\Http\Controllers\Devices\MerchantPushTokenController;
 use App\Http\Controllers\Merchant\BankAccountController;
 use App\Http\Controllers\Merchant\BranchesController;
 use App\Http\Controllers\Merchant\CustomerLookupController;
+use App\Http\Controllers\Merchant\FeePromotionBannerController;
 use App\Http\Controllers\Merchant\MarketplaceEnrolmentController;
 use App\Http\Controllers\Merchant\OrderController as MerchantOrderController;
 use App\Http\Controllers\Merchant\PreferencesController;
@@ -305,6 +306,14 @@ Route::prefix('mobile/v1')
                 // history: invoice numbers, frozen rates, fees and GST.
                 Route::get('transactions', [TransactionsController::class, 'merchant'])
                     ->middleware('merchant.can:transactions.view');
+
+                // The platform fee promotion banner (owner, 2026-08-25) —
+                // the SAME controller the panel mounts
+                // (routes/api/fee-promotions.php): one sentence, two doors.
+                // Ungated like the panel's, and for the same reason: every
+                // account that may log in to a store may be told what that
+                // store is being charged.
+                Route::get('fee-promotion', FeePromotionBannerController::class);
 
                 /*
                  * MARKETPLACE — the shop's order queue and shelf

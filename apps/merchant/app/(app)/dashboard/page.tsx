@@ -26,6 +26,7 @@ import {
 } from '@/components/app-layout/toolbar';
 import { ErrorBlock } from '@/components/app/async-states';
 import { PosWaiverCard } from '@/components/dashboard/pos-waiver-card';
+import { MerchantFeePromotionBanner } from '@/components/fee-promotion/fee-promotion-banner';
 import { QuickActionsCard } from '@/components/dashboard/quick-actions-card';
 import { PromptDiscountDeadline } from '@/components/settlement/prompt-discount';
 
@@ -119,6 +120,13 @@ export default function DashboardPage() {
       </Toolbar>
 
       <div className="flex flex-col gap-5 pb-7.5">
+        {/* What the platform is charging this store today, when a promotion
+            is running. Above everything and OUTSIDE the ageing's error
+            branch for the same reason the quick actions are: it is news
+            about the store's own terms, and it must not disappear with the
+            outstanding figures. Renders nothing the rest of the time. */}
+        <MerchantFeePromotionBanner />
+
         {/* First, and OUTSIDE the ageing's error branch: crediting a
             customer is what a till reaches for, and it neither needs the
             outstanding figures nor should disappear with them. */}

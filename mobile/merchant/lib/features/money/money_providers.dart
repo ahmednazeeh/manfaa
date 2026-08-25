@@ -45,6 +45,19 @@ void refreshStaleMoney(WidgetRef ref) {
   if (_stale('wallet')) ref.invalidate(walletProvider);
   if (_stale('preview')) ref.invalidate(settleAllPreviewProvider);
   if (_stale('settlements')) ref.invalidate(settlementsPageProvider);
+  refreshStaleFeePromotion(ref);
+}
+
+/// Refresh the fee promotion ALONE if it has gone stale — for a screen that
+/// quotes a fee without being a money screen. The till is the one that
+/// matters: it prices its cost preview at the promotional rate, so it has
+/// to notice a campaign ending, and it must not drag the whole board's
+/// worth of refetches along on every visit to the Credit tab.
+///
+/// The banner also expires itself locally off `ends_at`, so this is the
+/// second line of defence, not the only one.
+void refreshStaleFeePromotion(WidgetRef ref) {
+  if (_stale('fee_promotion')) ref.invalidate(feePromotionProvider);
 }
 
 /// The MR3 money providers — one place, because the Dashboard and the
@@ -58,6 +71,34 @@ final homeProvider = FutureProvider.autoDispose<MerchantHome>((ref) async {
   ref.cacheMoney('home');
   return home;
 });
+
+/// GET /merchant/fee-promotion — the platform fee promotion this store is
+/// trading under (owner, 2026-08-25). Lives beside the other money reads
+/// because three screens ask for it (Dashboard, Credit, Settlements) and
+/// they must never disagree about what the store is being charged.
+///
+/// UNGATED, like the endpoint: every account that may log in to a store may
+/// be told what that store is being charged.
+final feePromotionProvider =
+    FutureProvider.autoDispose<MerchantFeePromotion>((ref) async {
+  final promotion = await ref.watch(apiProvider).feePromotion();
+  ref.cacheMoney('fee_promotion');
+  return promotion;
+});
+
+/// The promotion AS A SCREEN SHOULD TREAT IT: the served answer, or
+/// "nothing running" while the read is in flight, has failed, or came back
+/// describing something this build does not understand.
+///
+/// Every surface reads THIS, never the AsyncValue — which is what makes
+/// "nothing when no promo is active" and "nothing when the server got ahead
+/// of us" the same code path, and why a failed read quietly prices at the
+/// tier fee (the figure the server would have charged anyway) instead of
+/// putting an error on a till screen about a discount.
+final activeFeePromotionProvider = Provider.autoDispose<MerchantFeePromotion>(
+  (ref) =>
+      ref.watch(feePromotionProvider).valueOrNull ?? MerchantFeePromotion.none,
+);
 
 /// Balance + movements. Only watched behind `wallet.view` — the card is
 /// hidden rather than left to fail, exactly as the web panel decides it.

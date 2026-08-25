@@ -6,6 +6,7 @@ namespace App\Domain\Reports;
 
 use App\Domain\Cashback\TransactionState;
 use App\Domain\Payout\PayoutBatchState;
+use App\Domain\Platform\FeePromotionKind;
 use App\Domain\Settlement\SettlementState;
 use Illuminate\Support\Str;
 
@@ -118,6 +119,27 @@ final class ReportLabels
             'wallet' => 'Wallet',
             null, '' => '',
             default => self::humanise($method),
+        };
+    }
+
+    /**
+     * WHICH platform fee promotion priced a sale (owner, 2026-08-25) —
+     * `transactions.fee_promo_kind`, frozen on the row at creation.
+     *
+     * Blank on every sale that paid its ordinary §4 tier fee, which is every
+     * sale before this feature existed. It has to be readable somewhere: both
+     * kinds share ONE mutable settings row, so a superadmin who re-rates or
+     * ends a campaign leaves the answer recoverable from nothing but the
+     * stamp — and "why was this sale 0.00%?" is the question the stamp exists
+     * to answer.
+     */
+    public static function feePromotionKind(?string $kind): string
+    {
+        return match ($kind) {
+            'introductory' => FeePromotionKind::Introductory->label(),
+            'platform_wide' => FeePromotionKind::PlatformWide->label(),
+            null, '' => '',
+            default => self::humanise($kind),
         };
     }
 

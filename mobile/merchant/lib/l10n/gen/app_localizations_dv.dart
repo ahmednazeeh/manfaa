@@ -832,6 +832,29 @@ class AppLocalizationsDv extends AppLocalizations {
   String get queuedBannerAction => 'މިހާރު ސިންކުކުރައްވާ';
 
   @override
+  String get feePromoIntroTitle => 'ފެށުމުގެ ޚާއްޞަ ފީ';
+
+  @override
+  String get feePromoWideTitle => 'ޕްލެޓްފޯމްގެ ޚާއްޞަ ފީ';
+
+  @override
+  String feePromoFee(String rate) {
+    return 'ޕްލެޓްފޯމް ފީ $rate';
+  }
+
+  @override
+  String feePromoDaysLeft(int days) {
+    String _temp0 = intl.Intl.pluralLogic(
+      days,
+      locale: localeName,
+      other: '$days ދުވަސް ބާކީ',
+      one: '1 ދުވަސް ބާކީ',
+      zero: 'އެންމެ ފަހު ދުވަސް',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String get queuedSnack =>
       'އިންޓަނެޓެއް ނެތް — ވިޔަފާރި ރައްކާކުރެވިއްޖެ، އަމިއްލައަށް ސިންކުވާނެއެވެ.';
 

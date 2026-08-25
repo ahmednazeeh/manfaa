@@ -127,6 +127,27 @@ final class CashbackReport extends BaseReport
                 ReportColumn::percent('rate_bp', 'Rate'),
                 ReportColumn::money('cashback_laari', 'Cashback'),
                 ReportColumn::money('fee_laari', 'Fee'),
+                // What a platform fee promotion cost us on this sale: the
+                // §4 tier fee this row would have paid, less the fee it did
+                // pay, frozen on the row at creation. 0 on every sale no
+                // promotion touched, which is every sale before 2026-08-25.
+                ReportColumn::money('fee_forgone_laari', 'Fee forgone'),
+                // ...and WHICH offer paid for it, beside WHAT it displaced.
+                // Without these two the money column can say a sale was
+                // cheaper but never why: both promotion kinds share one
+                // MUTABLE settings row, so the moment a superadmin re-rates
+                // or ends a campaign the answer survives nowhere but this
+                // frozen stamp, and "why was this sale 0.00%?" is exactly the
+                // question the stamp was added to answer. Empty on every sale
+                // that paid its ordinary tier fee.
+                ReportColumn::text('fee_promo_kind', 'Fee promotion'),
+                // The §4 tier fee the promotion displaced — the "before"
+                // price of the row's BASE-RATE snapshot, and so the partner
+                // of "Rate" above rather than of the whole sale. Blank on a
+                // lined sale whose BASE rate the promotion did not beat even
+                // where it did reduce a category line; Fee forgone still
+                // carries the whole cost (see the stamp migration).
+                ReportColumn::percent('list_fee_bp', 'Fee before promotion'),
                 ReportColumn::money('gst_laari', 'GST'),
                 ReportColumn::money('gross_due_laari', 'Gross due'),
                 ReportColumn::money('discount_laari', 'Discount'),
@@ -146,7 +167,7 @@ final class CashbackReport extends BaseReport
                 ReportColumn::text('payout_batch_ref', 'Customer payout batch'),
             ],
             totals: [
-                'eligible_laari', 'cashback_laari', 'fee_laari', 'gst_laari',
+                'eligible_laari', 'cashback_laari', 'fee_laari', 'fee_forgone_laari', 'gst_laari',
                 'gross_due_laari', 'discount_laari', 'forgiveness_laari', 'collected_laari',
             ],
         );
@@ -170,6 +191,9 @@ final class CashbackReport extends BaseReport
                 'transactions.rate_bp',
                 'transactions.cashback_laari',
                 'transactions.fee_laari',
+                'transactions.fee_forgone_laari',
+                'transactions.fee_promo_kind',
+                'transactions.list_fee_bp',
                 'transactions.fee_gst_laari',
                 'transactions.state',
                 'merchants.name as merchant_name',
@@ -211,7 +235,16 @@ final class CashbackReport extends BaseReport
                 (int) $row->rate_bp,
                 (int) $row->cashback_laari,
                 (int) $row->fee_laari,
+                (int) $row->fee_forgone_laari,
+                ReportLabels::feePromotionKind($row->fee_promo_kind),
+                // Nullable on purpose: the panel prints an em dash and the
+                // workbook leaves the cell empty, where a 0 would read as a
+                // real 0.00% before-price.
+                $row->list_fee_bp === null ? null : (int) $row->list_fee_bp,
                 (int) $row->fee_gst_laari,
+                // Gross due deliberately EXCLUDES the forgone fee: that
+                // number is what the merchant did not have to pay, so adding
+                // it back would bill them for the promotion.
                 (int) $row->cashback_laari + (int) $row->fee_laari + (int) $row->fee_gst_laari,
                 $allocation?->discountFor($transactionId) ?? 0,
                 $allocation?->forgivenFor($transactionId) ?? 0,
@@ -619,6 +652,7 @@ final class CashbackReport extends BaseReport
                 ReportColumn::money('eligible_laari', 'Eligible sale'),
                 ReportColumn::money('cashback_laari', 'Cashback'),
                 ReportColumn::money('fee_laari', 'Fee'),
+                ReportColumn::money('fee_forgone_laari', 'Fee forgone'),
                 ReportColumn::money('gst_laari', 'GST'),
                 ReportColumn::money('gross_due_laari', 'Gross due'),
                 ReportColumn::money('collected_laari', 'Collected from merchants'),
@@ -633,20 +667,26 @@ final class CashbackReport extends BaseReport
                     : 'Reversed sales are excluded. The earnings report still carries their ledger '
                         .'journals, and must: there, the reversal is the posting that TAKES the fee back '
                         .'out of income.',
+                'Fee forgone is what platform fee promotions cost Manfaa on these sales — what the §4 tier '
+                    .'would have charged, less what was charged. It is NOT part of Gross due: it is money the '
+                    .'merchant never had to pay. Each sale carries the promotion it was priced under, so ending '
+                    .'a promotion never changes a figure on this report.',
             ]),
         );
 
         $stateIndex = $transactions->indexOf('state');
+        $empty = ['count' => 0, 'eligible' => 0, 'cashback' => 0, 'fee' => 0, 'forgone' => 0, 'gst' => 0, 'gross' => 0, 'collected' => 0];
         $buckets = [];
 
         foreach (TransactionState::cases() as $state) {
-            $buckets[$state->label()] = ['count' => 0, 'eligible' => 0, 'cashback' => 0, 'fee' => 0, 'gst' => 0, 'gross' => 0, 'collected' => 0];
+            $buckets[$state->label()] = $empty;
         }
 
         $columns = [
             'eligible' => $transactions->indexOf('eligible_laari'),
             'cashback' => $transactions->indexOf('cashback_laari'),
             'fee' => $transactions->indexOf('fee_laari'),
+            'forgone' => $transactions->indexOf('fee_forgone_laari'),
             'gst' => $transactions->indexOf('gst_laari'),
             'gross' => $transactions->indexOf('gross_due_laari'),
             'collected' => $transactions->indexOf('collected_laari'),
@@ -654,7 +694,7 @@ final class CashbackReport extends BaseReport
 
         foreach ($transactions->rows() as $row) {
             $label = (string) $row[$stateIndex];
-            $buckets[$label] ??= ['count' => 0, 'eligible' => 0, 'cashback' => 0, 'fee' => 0, 'gst' => 0, 'gross' => 0, 'collected' => 0];
+            $buckets[$label] ??= $empty;
             $buckets[$label]['count']++;
 
             foreach ($columns as $name => $index) {
@@ -669,6 +709,7 @@ final class CashbackReport extends BaseReport
                 $bucket['eligible'],
                 $bucket['cashback'],
                 $bucket['fee'],
+                $bucket['forgone'],
                 $bucket['gst'],
                 $bucket['gross'],
                 $bucket['collected'],
@@ -681,6 +722,7 @@ final class CashbackReport extends BaseReport
             $transactions->sum('eligible_laari'),
             $transactions->sum('cashback_laari'),
             $transactions->sum('fee_laari'),
+            $transactions->sum('fee_forgone_laari'),
             $transactions->sum('gst_laari'),
             $transactions->sum('gross_due_laari'),
             $transactions->sum('collected_laari'),
@@ -711,6 +753,11 @@ final class CashbackReport extends BaseReport
                 null,
                 $bucket['cashback'],
                 $bucket['fee'],
+                // Fee forgone is a property of a SALE, not of a batch: a
+                // batch bills what its lines were priced at, and what those
+                // lines were never charged has no place in a total of what
+                // is owed.
+                null,
                 $bucket['gst'],
                 $bucket['due'],
                 $bucket['received'],
@@ -723,6 +770,7 @@ final class CashbackReport extends BaseReport
             null,
             $settlements->sum('cashback_total_laari'),
             $settlements->sum('fee_total_laari'),
+            null,
             $settlements->sum('gst_total_laari'),
             $settlements->sum('amount_due_laari'),
             $settlements->sum('amount_received_laari'),
@@ -819,7 +867,7 @@ final class CashbackReport extends BaseReport
      * paid on the batches the period raised — which is a column, and the
      * same column the Settlements sheet totals.
      *
-     * @return array{transactions: array{count: int, eligible_laari: int, cashback_laari: int, fee_laari: int, gst_laari: int}, settlements: array{count: int, amount_due_laari: int, amount_received_laari: int}}
+     * @return array{transactions: array{count: int, eligible_laari: int, cashback_laari: int, fee_laari: int, fee_forgone_laari: int, gst_laari: int}, settlements: array{count: int, amount_due_laari: int, amount_received_laari: int}}
      */
     public function moneyTotals(): array
     {
@@ -829,6 +877,11 @@ final class CashbackReport extends BaseReport
                 .', COALESCE(SUM(transactions.eligible_laari), 0) AS eligible_laari'
                 .', COALESCE(SUM(transactions.cashback_laari), 0) AS cashback_laari'
                 .', COALESCE(SUM(transactions.fee_laari), 0) AS fee_laari'
+                // The acquisition spend, from the SAME scope and the same
+                // stamped column the Transactions sheet totals — so the
+                // dashboard's figure and the report's are one number by
+                // construction, not by coincidence.
+                .', COALESCE(SUM(transactions.fee_forgone_laari), 0) AS fee_forgone_laari'
                 .', COALESCE(SUM(transactions.fee_gst_laari), 0) AS gst_laari',
             )
             ->first();
@@ -847,6 +900,7 @@ final class CashbackReport extends BaseReport
                 'eligible_laari' => (int) $transactions->eligible_laari,
                 'cashback_laari' => (int) $transactions->cashback_laari,
                 'fee_laari' => (int) $transactions->fee_laari,
+                'fee_forgone_laari' => (int) $transactions->fee_forgone_laari,
                 'gst_laari' => (int) $transactions->gst_laari,
             ],
             'settlements' => [
@@ -869,23 +923,30 @@ final class CashbackReport extends BaseReport
         $byState = [];
         $settlementsByState = [];
 
+        // BY NAME, not by position. The summary sheet's columns are shared
+        // by the transaction rows and the settlement rows, so inserting one
+        // (Fee forgone, 2026-08-25) would silently re-label every figure
+        // below if these were integers.
+        $at = fn (array $row, string $column): int => (int) ($row[$summary->indexOf($column)] ?? 0);
+
         foreach ($summary->rows() as $row) {
             $label = (string) $row[0];
 
-            if ((int) $row[1] === 0) {
+            if ($at($row, 'count') === 0) {
                 continue;
             }
 
             if (str_starts_with($label, 'Transactions — ') && $label !== 'Transactions — all states') {
                 $byState[] = [
                     'state' => substr($label, strlen('Transactions — ')),
-                    'count' => (int) $row[1],
-                    'eligible_laari' => (int) $row[2],
-                    'cashback_laari' => (int) $row[3],
-                    'fee_laari' => (int) $row[4],
-                    'gst_laari' => (int) $row[5],
-                    'gross_due_laari' => (int) $row[6],
-                    'collected_laari' => (int) $row[7],
+                    'count' => $at($row, 'count'),
+                    'eligible_laari' => $at($row, 'eligible_laari'),
+                    'cashback_laari' => $at($row, 'cashback_laari'),
+                    'fee_laari' => $at($row, 'fee_laari'),
+                    'fee_forgone_laari' => $at($row, 'fee_forgone_laari'),
+                    'gst_laari' => $at($row, 'gst_laari'),
+                    'gross_due_laari' => $at($row, 'gross_due_laari'),
+                    'collected_laari' => $at($row, 'collected_laari'),
                 ];
 
                 continue;
@@ -898,12 +959,12 @@ final class CashbackReport extends BaseReport
             if (str_starts_with($label, 'Settlements — ') && $label !== 'Settlements — all states') {
                 $settlementsByState[] = [
                     'state' => substr($label, strlen('Settlements — ')),
-                    'count' => (int) $row[1],
-                    'cashback_total_laari' => (int) $row[3],
-                    'fee_total_laari' => (int) $row[4],
-                    'gst_total_laari' => (int) $row[5],
-                    'amount_due_laari' => (int) $row[6],
-                    'amount_received_laari' => (int) $row[7],
+                    'count' => $at($row, 'count'),
+                    'cashback_total_laari' => $at($row, 'cashback_laari'),
+                    'fee_total_laari' => $at($row, 'fee_laari'),
+                    'gst_total_laari' => $at($row, 'gst_laari'),
+                    'amount_due_laari' => $at($row, 'gross_due_laari'),
+                    'amount_received_laari' => $at($row, 'collected_laari'),
                 ];
             }
         }
@@ -914,6 +975,7 @@ final class CashbackReport extends BaseReport
                 'eligible_laari' => $transactions->sum('eligible_laari'),
                 'cashback_laari' => $transactions->sum('cashback_laari'),
                 'fee_laari' => $transactions->sum('fee_laari'),
+                'fee_forgone_laari' => $transactions->sum('fee_forgone_laari'),
                 'gst_laari' => $transactions->sum('gst_laari'),
                 'gross_due_laari' => $transactions->sum('gross_due_laari'),
                 'discount_laari' => $transactions->sum('discount_laari'),

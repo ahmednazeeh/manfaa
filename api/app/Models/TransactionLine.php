@@ -45,6 +45,10 @@ class TransactionLine extends Model
             'fee_laari' => 'integer',
             'fee_gst_bp' => 'integer',
             'fee_gst_laari' => 'integer',
+            // What the §4 tier would have charged this line, and the net fee
+            // revenue a platform fee promotion gave up on it (2026-08-25).
+            'list_fee_bp' => 'integer',
+            'fee_forgone_laari' => 'integer',
             'sort' => 'integer',
             'created_at' => 'immutable_datetime',
         ];

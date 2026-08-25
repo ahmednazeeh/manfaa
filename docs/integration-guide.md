@@ -914,6 +914,42 @@ While a published promotion is live and beating the standing rate, an
 }
 ```
 
+**If your till prints a platform fee, read `active_fee_promotion`.** Every
+`platform_fee_percent` above is the tier-schedule **list** price for a
+cashback rate. While a promotional platform fee is in force for the merchant
+— an *introductory* offer covering their first days on the platform, or a
+*platform-wide* campaign window — an `active_fee_promotion` block appears and
+the sale is billed the **lower** of the list price and the promotion:
+
+```json
+{
+  "cashback_rate_percent": "2.00",
+  "platform_fee_percent": "0.75",
+  "currency": "MVR",
+  "min_eligible_laari": 5000,
+  "pending_decrease": null,
+  "active_fee_promotion": {
+    "kind": "introductory",
+    "kind_label": "Introductory offer",
+    "platform_fee_percent": "0.00",
+    "effective_platform_fee_percent": "0.00",
+    "ends_at": "2026-09-19T00:00:00+05:00",
+    "days_remaining": 21,
+    "banner_en": "No platform fee for your first 30 days.",
+    "banner_dv": "ފުރަތަމަ 30 ދުވަހު ޕްލެޓްފޯމް ފީއެއް ނުނަގާނެ."
+  }
+}
+```
+
+Print `effective_platform_fee_percent` — that is the ceiling already applied
+to the headline rate's own tier fee, so it needs no arithmetic from you.
+`platform_fee_percent` inside the block is the ceiling itself, for a till
+that prices several rates. `ends_at` is **exclusive**: it is the first
+instant the promotion stops pricing sales, so a screen naming a last *day*
+should name the day before it — `days_remaining` counts only days the offer
+still prices, and reads 1 on the final one. The block is absent whenever no
+promotion is in force, so a till written before this existed is unaffected.
+
 What you display is **advisory** — the server always recomputes at
 `occurred_at`. Rate *decreases* take effect only at 00:00 UTC+5 the next day
 (that is what `pending_decrease` announces); increases apply immediately. A

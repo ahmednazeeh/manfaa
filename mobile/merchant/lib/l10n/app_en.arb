@@ -394,6 +394,24 @@
   },
   "queuedBannerBody": "They'll be sent automatically when you're back online.",
   "queuedBannerAction": "Sync now",
+  "feePromoIntroTitle": "Introductory offer",
+  "feePromoWideTitle": "Platform-wide offer",
+  "feePromoFee": "Platform fee {rate}",
+  "@feePromoFee": {
+    "placeholders": {
+      "rate": {
+        "type": "String"
+      }
+    }
+  },
+  "feePromoDaysLeft": "{days, plural, =0{Last day} =1{1 day left} other{{days} days left}}",
+  "@feePromoDaysLeft": {
+    "placeholders": {
+      "days": {
+        "type": "int"
+      }
+    }
+  },
   "queuedSnack": "No connection — the sale is saved and will sync automatically.",
   "attentionTitle": "Needs attention",
   "attentionBody": "These queued sales were refused when they synced — review each one.",

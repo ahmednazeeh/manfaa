@@ -88,7 +88,7 @@ final readonly class ClaimApprovalService
                 // plus any published promotion covering the purchase date,
                 // caps and floor included. Runs inside this DB transaction,
                 // as the cap advisory lock requires.
-                [$result, $promotionId] = $this->terms->resolve(
+                [$result, $promotionId, $pricedFee] = $this->terms->resolve(
                     $merchant->id,
                     null,
                     Laari::of($claim->claimed_amount_laari),
@@ -104,6 +104,14 @@ final readonly class ClaimApprovalService
                 // actually bills the fee, which is now.
                 $tax = $this->taxes->current();
                 [$feeLaari, $feeGstLaari] = $tax->split($result->feeLaari);
+
+                // The platform fee promotion the sale met, frozen the same
+                // way. Resolved against the PURCHASE DATE, like the rate and
+                // the fee tier beside it: an approval keyed in today prices a
+                // claim under the promotion that was running when the
+                // customer actually shopped, not the one running when an
+                // admin got to the queue.
+                $feePromo = $pricedFee->withFeeTax($tax);
 
                 $transaction = Transaction::query()->create([
                     'merchant_id' => $merchant->id,
@@ -122,6 +130,10 @@ final readonly class ClaimApprovalService
                     'fee_laari' => $feeLaari,
                     'fee_gst_laari' => $feeGstLaari,
                     ...$tax->stamp(),
+                    'fee_promo_kind' => $feePromo->kind()?->value,
+                    'fee_promo_fee_bp' => $feePromo->reduced() ? $feePromo->relief->feeBp : null,
+                    'list_fee_bp' => $feePromo->listFeeBp(),
+                    'fee_forgone_laari' => $feePromo->forgoneLaari(),
                     'state' => TransactionState::Tracked,
                     'occurred_at' => $occurredAt,
                     'received_at' => $now,

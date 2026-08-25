@@ -515,4 +515,12 @@ class _FakeApi extends MerchantApi {
       'staff_count': 1,
     }),
   ];
+
+  /// GET /merchant/fee-promotion. Defaults to NOTHING RUNNING — the state
+  /// every shipped assertion and golden was written against — and is
+  /// settable so a test can throw the switch the way a superadmin does.
+  MerchantFeePromotion promotion = MerchantFeePromotion.none;
+
+  @override
+  Future<MerchantFeePromotion> feePromotion() async => promotion;
 }

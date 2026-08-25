@@ -5,6 +5,10 @@ export {
   apiFetch,
   apiFetchBlob,
   apiFetchDownload,
+  // The credential-LESS GET, for endpoints that are unauthenticated by design
+  // and whose answer must not depend on who is asking (the public
+  // fee-promotion banner on the merchant landing page).
+  apiFetchPublic,
   apiFetchText,
   bootstrapCsrf,
   filenameFromContentDisposition,
@@ -65,6 +69,12 @@ export * from './holds';
 export * from './customer';
 // Public discovery: no auth, typed sections.
 export * from './discover';
+// Platform fee promotions (owner, 2026-08-25): the superadmin settings row
+// (both kinds — introductory and platform-wide), the authenticated merchant's
+// own banner, and the unauthenticated offer the merchant landing page shows a
+// stranger. A promotion lowers the fee MANFAA charges a merchant; it is NOT
+// the cashback promotion in ./resources.
+export * from './fee-promotions';
 // Store onboarding (Task #24): merchant self-signup OTP flow, the resumable
 // setup wizard (profile / logo / rate / submit), the admin store approval
 // queue, and curated store-category CRUD.

@@ -3067,8 +3067,12 @@ export type ReportPeriod = z.infer<typeof ReportPeriodSchema>;
  * The keys each report emits (all `_laari` values are integer laari):
  *
  *   cashback  transactions{count,eligible_laari,cashback_laari,fee_laari,
- *             gst_laari,gross_due_laari,discount_laari,forgiveness_laari,
- *             collected_laari}, by_state[] (state,count,…), settlements{…}
+ *             fee_forgone_laari,gst_laari,gross_due_laari,discount_laari,
+ *             forgiveness_laari,collected_laari}, by_state[] (state,count,…),
+ *             settlements{…}. `fee_forgone_laari` is the fee given away by
+ *             platform fee promotions — a memo figure alongside `fee_laari`,
+ *             deliberately NOT part of `gross_due_laari`, because nobody owes
+ *             it and no journal carries it.
  *   payouts   transactions{count,cashback_laari}, payout_items{count,
  *             amount_laari,paid_laari}, batches{…}, wallet_withdrawals{…},
  *             ties{transactions_cashback_laari,payout_items_paid_laari,
@@ -3632,7 +3636,7 @@ export type DashboardGrowth = z.infer<typeof DashboardGrowthSchema>;
 // ---------------------------------------------------------------------- money
 
 /**
- * THE FIVE MONEY FIGURES, all integer LAARI (formatLaari) — SUPERADMIN ONLY.
+ * THE SIX MONEY FIGURES, all integer LAARI (formatLaari) — SUPERADMIN ONLY.
  *
  * Not one of them is defined by the dashboard: each is read from the report
  * class that owns its definition, so this panel can never disagree with the
@@ -3647,6 +3651,10 @@ export type DashboardGrowth = z.infer<typeof DashboardGrowthSchema>;
  *   gst_collected_laari             the same ledger pass, kept SEPARATE
  *                                   because GST is a liability owed to MIRA,
  *                                   not income. Never add it to the fees.
+ *   fee_forgone_to_promotions_laari the platform fee those sales would have
+ *                                   paid at the merchant's §4 tier, less what
+ *                                   a fee promotion actually charged them —
+ *                                   the cashback report again
  *   collected_from_merchants_laari  what merchants actually paid on the
  *                                   batches the period raised
  *   paid_out_to_customers_laari     cashback whose PAID event landed in the
@@ -3657,12 +3665,25 @@ export type DashboardGrowth = z.infer<typeof DashboardGrowthSchema>;
  * `platform_fees_net` are therefore NOT two views of one month's trade and
  * will not tie — the field names carry their own basis, and a tile that
  * subtracts one from the other is stating a number nobody owns.
+ *
+ * `fee_forgone_to_promotions_laari` sits on the SALE clock with cashback, not
+ * on the journal clock with the fees, because it is not a ledger movement at
+ * all: a fee we never charged posts nothing. It is the acquisition spend —
+ * what the fee promotions cost the platform — and it is NOT part of
+ * `platform_fees_net_laari`; adding the two together states a revenue figure
+ * that never existed.
  */
 export const DashboardMoneyTotalsSchema = z.object({
   cashback_generated_laari: z.number().int(),
   platform_fees_net_laari: z.number().int(),
   /** A liability owed to MIRA, not income — show it apart from the fees. */
   gst_collected_laari: z.number().int(),
+  /**
+   * Fee given away by platform fee promotions, on the SALE clock. A memo
+   * figure with no journal behind it — never added to, or subtracted from,
+   * `platform_fees_net_laari`.
+   */
+  fee_forgone_to_promotions_laari: z.number().int(),
   collected_from_merchants_laari: z.number().int(),
   paid_out_to_customers_laari: z.number().int(),
 });

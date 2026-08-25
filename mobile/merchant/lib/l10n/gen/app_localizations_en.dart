@@ -819,6 +819,29 @@ class AppLocalizationsEn extends AppLocalizations {
   String get queuedBannerAction => 'Sync now';
 
   @override
+  String get feePromoIntroTitle => 'Introductory offer';
+
+  @override
+  String get feePromoWideTitle => 'Platform-wide offer';
+
+  @override
+  String feePromoFee(String rate) {
+    return 'Platform fee $rate';
+  }
+
+  @override
+  String feePromoDaysLeft(int days) {
+    String _temp0 = intl.Intl.pluralLogic(
+      days,
+      locale: localeName,
+      other: '$days days left',
+      one: '1 day left',
+      zero: 'Last day',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String get queuedSnack =>
       'No connection — the sale is saved and will sync automatically.';
 

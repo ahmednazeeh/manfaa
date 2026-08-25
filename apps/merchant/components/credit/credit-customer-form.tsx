@@ -76,6 +76,10 @@ import {
   TransactionReasonLine,
   TransactionStateBadge,
 } from '@/components/app/state-badge';
+import {
+  MerchantFeePromotionBanner,
+  useActiveFeePromotion,
+} from '@/components/fee-promotion/fee-promotion-banner';
 
 /**
  * The credit-entry experience, ONCE (§10, original-spec §8 manual credit
@@ -695,6 +699,36 @@ export function CreditCustomerForm({
   const currentRate = rate.data?.current ?? null;
 
   /**
+   * The PLATFORM FEE promotion pricing this store's new sales, if any — the
+   * fee MANFAA is charging, not a cashback promotion (that is `livePromo`
+   * below, and the two are unrelated).
+   *
+   * The quote uses it because the quote's job is to say what this sale will
+   * cost, and while a promotion runs the server charges
+   * min(promotion, tier) — see FeeRelief::chargedFeeBp. Quoting the tier fee
+   * beside a banner announcing a promotional one would put two different
+   * answers on one card.
+   *
+   * It shares the estimate's standing caveat, stated at the top of this
+   * file: the quote prices what a sale recorded NOW would cost. A heavily
+   * backdated sale can fall outside a window the store is inside today, and
+   * the server — which prices against the sale's own instant — is the
+   * authority either way. The result card afterwards shows what was actually
+   * charged.
+   */
+  const feePromotion = useActiveFeePromotion();
+  const feePromotionBp =
+    feePromotion === null
+      ? null
+      : percentToBp(feePromotion.platform_fee_percent);
+
+  /** min(promotion, tier), with null meaning "the fee is unknown". */
+  const chargedFeeBp = (tierFeeBp: number | null): number | null =>
+    tierFeeBp === null || feePromotionBp === null
+      ? tierFeeBp
+      : Math.min(tierFeeBp, feePromotionBp);
+
+  /**
    * Promo minimum purchase is evaluated against the WHOLE eligible amount
    * (never per line), exactly as the server applies it to the sale.
    */
@@ -717,18 +751,20 @@ export function CreditCustomerForm({
     currentRate === null
       ? null
       : percentToBp(currentRate.cashback_rate_percent);
-  const standingFeeBp =
+  const standingFeeBp = chargedFeeBp(
     currentRate === null || currentRate.platform_fee_percent === null
       ? null
-      : percentToBp(currentRate.platform_fee_percent);
+      : percentToBp(currentRate.platform_fee_percent),
+  );
   const promoRateBp =
     appliedPromo === null
       ? null
       : percentToBp(appliedPromo.cashback_rate_percent);
-  const promoFeeBp =
+  const promoFeeBp = chargedFeeBp(
     appliedPromo === null || appliedPromo.platform_fee_percent === null
       ? null
-      : percentToBp(appliedPromo.platform_fee_percent);
+      : percentToBp(appliedPromo.platform_fee_percent),
+  );
 
   /**
    * The rate this sale already earns — the floor a custom rate may not dip
@@ -772,7 +808,9 @@ export function CreditCustomerForm({
    */
   const baseRateBp = overrideBp ?? standingRateBp;
   const baseFeeBp =
-    overrideBp !== null ? estimateFeeBpFor(overrideBp) : standingFeeBp;
+    overrideBp !== null
+      ? chargedFeeBp(estimateFeeBpFor(overrideBp))
+      : standingFeeBp;
 
   const splitActive = splitEnabled && activeCategories.length > 0;
 
@@ -788,6 +826,11 @@ export function CreditCustomerForm({
         },
         { rateBp: promoRateBp, feeBp: promoFeeBp },
         eligibleLaari !== null && !eligibleInvalid ? eligibleLaari : null,
+        // Passed even though `baseFeeBp` / `promoFeeBp` are already capped:
+        // a line priced from a CATEGORY rate takes neither, and falls back
+        // to the §4 static bands inside analyzeSplit. The cap belongs where
+        // every line passes.
+        feePromotionBp,
       ),
     [
       splitRows,
@@ -799,6 +842,7 @@ export function CreditCustomerForm({
       promoFeeBp,
       eligibleLaari,
       eligibleInvalid,
+      feePromotionBp,
     ],
   );
 
@@ -1407,6 +1451,11 @@ export function CreditCustomerForm({
             <CardTitle>Cost preview</CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col gap-3 text-sm">
+            {/* Above the figures, because it explains them: while a fee
+                promotion runs the fee row below is quoted at the promotional
+                fee, and a merchant reading an unusually small number is owed
+                the reason next to it. Nothing renders when none is running. */}
+            <MerchantFeePromotionBanner variant="inline" />
             {rate.error ? (
               <span className="text-muted-foreground">
                 Your current rate is unavailable right now — the credit still

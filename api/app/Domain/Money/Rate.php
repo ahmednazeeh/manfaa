@@ -66,6 +66,33 @@ final readonly class Rate
         return new self($basisPoints);
     }
 
+    /**
+     * A fee AS CHARGED on one sale: 0–2000 bp.
+     *
+     * Identical to fee() but for the floor, and the floor is the whole
+     * point. `fee()` guards a fee somebody SETS — a tier band, a wire value
+     * — and a tier fee of zero would be a price list that charges nothing,
+     * which no schedule may express (TierSchedule requires every band's
+     * fee_bp >= 1). This guards a fee somebody PAYS, and since the platform
+     * fee promotions of 2026-08-25 a merchant may legitimately pay nothing:
+     * "0 fee during first X days" is the feature, not an error.
+     *
+     * Nothing else changes. A promotional fee still comes from a superadmin
+     * setting bounded by the same 20.00% ceiling, and the charged fee is
+     * always min(promotion, tier), so this can only ever widen the range
+     * DOWNWARD.
+     */
+    public static function chargedFee(int $basisPoints): self
+    {
+        if ($basisPoints < 0 || $basisPoints > self::MAX_CASHBACK_BP) {
+            throw new InvalidArgumentException(
+                sprintf('A charged fee must be 0-%d basis points, got %d.', self::MAX_CASHBACK_BP, $basisPoints)
+            );
+        }
+
+        return new self($basisPoints);
+    }
+
     public function basisPoints(): int
     {
         return $this->basisPoints;

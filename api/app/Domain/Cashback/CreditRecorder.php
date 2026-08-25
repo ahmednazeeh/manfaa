@@ -52,6 +52,16 @@ use Illuminate\Support\Facades\DB;
  * pays less than no promotion). A sale matching no candidate simply earns
  * the standing rate; it is never rejected.
  *
+ * Platform fee promotions (owner, 2026-08-25): TermsResolver also caps the
+ * §4 tier fee with whatever promotional fee is in force for this merchant at
+ * occurred_at — the introductory offer covering their first X days from
+ * `merchants.approved_at`, or a platform-wide window, whichever is cheaper.
+ * This class does not price any of that; it FREEZES the answer, stamping
+ * `fee_promo_kind`, `fee_promo_fee_bp`, `list_fee_bp` and
+ * `fee_forgone_laari` on the row (and the last two on each line) beside
+ * `fee_bp`, so a settlement, an invoice or a report can always say why this
+ * sale was cheaper — and so ending the promotion tomorrow re-prices nothing.
+ *
  * Line-item pricing (Task #25): when $lines is non-null the credit is a
  * LINED credit — TermsResolver::resolveLines prices each line (excluded →
  * 0, category override → its rate, default bucket → standing, live promo
@@ -123,6 +133,26 @@ final readonly class CreditRecorder
         );
     }
 
+    /**
+     * The stamp a row that no fee promotion touched carries — which is every
+     * row on the platform before 2026-08-25, every zeroed row, and every row
+     * priced while both switches are off. Spelled out once rather than
+     * written four times, because "no promotion" has to mean exactly one
+     * thing on this table.
+     *
+     * PUBLIC because AmendmentService writes the same shape: a correction
+     * that drops a sale below the store's minimum zeroes it, and a zeroed
+     * AMENDED row has to be byte-identical to a zeroed CREATED one.
+     *
+     * @var array{fee_promo_kind: null, fee_promo_fee_bp: null, list_fee_bp: null, fee_forgone_laari: int}
+     */
+    public const array NO_FEE_PROMOTION = [
+        'fee_promo_kind' => null,
+        'fee_promo_fee_bp' => null,
+        'list_fee_bp' => null,
+        'fee_forgone_laari' => 0,
+    ];
+
     public function __construct(
         private TransitionService $transitions,
         private Postings $postings,
@@ -133,6 +163,32 @@ final readonly class CreditRecorder
         private NotificationService $notifications,
         private TaxPolicy $taxes,
     ) {}
+
+    /**
+     * The four frozen fee-promotion columns for an UNLINED sale, from the
+     * PricedFee the seam produced (already re-expressed under the row's GST
+     * regime by the caller, so the forgone figure is a difference between
+     * two NET fees).
+     *
+     * Null in — a zeroed row, or a path that never consulted the seam —
+     * means the empty stamp: a sale that granted nothing was charged nothing
+     * and therefore gave up nothing.
+     *
+     * @return array{fee_promo_kind: string|null, fee_promo_fee_bp: int|null, list_fee_bp: int|null, fee_forgone_laari: int}
+     */
+    private function feePromotionStamp(?PricedFee $fee): array
+    {
+        if ($fee === null || ! $fee->reduced()) {
+            return self::NO_FEE_PROMOTION;
+        }
+
+        return [
+            'fee_promo_kind' => $fee->kind()?->value,
+            'fee_promo_fee_bp' => $fee->relief->feeBp,
+            'list_fee_bp' => $fee->listFeeBp(),
+            'fee_forgone_laari' => $fee->forgoneLaari(),
+        ];
+    }
 
     /**
      * @param  list<LineInput>|null  $lines  parsed line splits (LineSetParser) — null for a single-rate credit
@@ -222,8 +278,8 @@ final readonly class CreditRecorder
                     // Promo-aware terms at occurred_at (PLAN §12 Phase 3): only
                     // rows that actually accrue consult promotions — a zeroed row
                     // freezes the standing terms it failed against.
-                    [$result, $promotionId] = $zeroed
-                        ? [$this->calculator->calculate($eligible, Rate::cashback($baseBp)), null]
+                    [$result, $promotionId, $pricedFee] = $zeroed
+                        ? [$this->calculator->calculate($eligible, Rate::cashback($baseBp)), null, null]
                         : $this->terms->resolve($merchant->id, $branchId, $eligible, $baseBp, $customer->id, $occurredAt);
 
                     $rateBp = $result->rateBp;
@@ -237,6 +293,14 @@ final readonly class CreditRecorder
                     // same, our revenue drops). A zeroed row splits zero,
                     // which is zero both ways.
                     [$feeLaari, $feeGstLaari] = $tax->split($zeroed ? 0 : $result->feeLaari);
+
+                    // The platform fee promotion this sale was priced under
+                    // (owner, 2026-08-25), frozen beside fee_bp. The forgone
+                    // figure is taken AFTER the tax split so both fees sit on
+                    // the same side of GST — a difference between two NET
+                    // fees, which is the basis fee_laari and ledger account
+                    // 4100 already carry.
+                    $feePromo = $this->feePromotionStamp($zeroed ? null : $pricedFee?->withFeeTax($tax));
                 } else {
                     // Lined credit: per-line §4 pricing; totals = SUM of the
                     // stored line integers, never recomputed on aggregates.
@@ -266,6 +330,15 @@ final readonly class CreditRecorder
                     $cashbackLaari = $zeroed ? 0 : $priced->cashbackTotal();
                     $feeLaari = $zeroed ? 0 : $priced->feeTotal();
                     $feeGstLaari = $zeroed ? 0 : $priced->feeGstTotal();
+
+                    // The header's forgone fee is the SUM of the stored line
+                    // integers, like every other lined total (§4).
+                    $feePromo = $zeroed ? self::NO_FEE_PROMOTION : [
+                        'fee_promo_kind' => $priced->feePromoKind?->value,
+                        'fee_promo_fee_bp' => $priced->feePromoFeeBp,
+                        'list_fee_bp' => $priced->rowListFeeBp,
+                        'fee_forgone_laari' => $priced->feeForgoneTotal(),
+                    ];
                 }
 
                 $transaction = Transaction::query()->create([
@@ -291,6 +364,11 @@ final readonly class CreditRecorder
                     // treatment prices NEW sales only. Nothing ever reaches
                     // back into a row a merchant already holds a receipt for.
                     ...$tax->stamp(),
+                    // And, by the same law, WHY this sale was cheaper: which
+                    // fee promotion priced it, what it offered, the tier fee
+                    // it displaced, and the net fee revenue given up. Ending
+                    // or re-rating a promotion prices NEW sales only.
+                    ...$feePromo,
                     'state' => TransactionState::Tracked,
                     'reason_code' => $reason,
                     // Permanent property of the row, not a transient
@@ -318,6 +396,8 @@ final readonly class CreditRecorder
                             'fee_laari' => $zeroed ? 0 : $line->feeLaari,
                             'fee_gst_bp' => $line->feeGstBp,
                             'fee_gst_laari' => $zeroed ? 0 : $line->feeGstLaari,
+                            'list_fee_bp' => $zeroed ? null : $line->listFeeBp,
+                            'fee_forgone_laari' => $zeroed ? 0 : $line->forgoneFeeLaari(),
                             'priced_by' => $line->pricedBy,
                             'sort' => $line->sort,
                         ]);

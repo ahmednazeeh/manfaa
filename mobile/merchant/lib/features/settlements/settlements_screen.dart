@@ -9,6 +9,7 @@ import '../../app/providers.dart';
 import '../../widgets/adaptive.dart';
 import '../../widgets/merchant_brand.dart';
 import '../../widgets/tx_format.dart';
+import '../fee_promotion/fee_promotion_banner.dart';
 import '../money/money_providers.dart';
 import '../more/estate_widgets.dart' show PaneHint;
 import 'settlement_detail_screen.dart' show SettlementDetailBody;
@@ -147,6 +148,12 @@ class _SettlementsScreenState extends ConsumerState<SettlementsScreen> {
                       ),
                     ),
                     const SizedBox(height: Gap.lg),
+                    // Every fee figure below is a SERVER-PRICED integer and
+                    // already carries the promotion — the till never
+                    // discounts a bill itself. This says WHY the fee on the
+                    // board is what it is; without it a zero fee looks like
+                    // a bug at the moment the merchant is about to pay.
+                    const FeePromotionBanner(bottomGap: Gap.md),
                     if (!expanded)
                       ...board
                     else

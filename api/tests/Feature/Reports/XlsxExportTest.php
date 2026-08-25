@@ -91,8 +91,16 @@ it('writes money, percents and dates as NUMBERS a spreadsheet can add up', funct
         ->and($sheet->getCell('J1')->getValue())->toBe('Cashback')
         // The direction is in the label (owner, 2026-08-24): this column is
         // money the MERCHANT sent us, two columns from one naming the batch
-        // in which we paid the customer.
-        ->and($sheet->getCell('P1')->getValue())->toBe('Collected from merchant')
+        // in which we paid the customer. It sits one column further right
+        // since Fee forgone joined the sheet (owner, 2026-08-25).
+        ->and($sheet->getCell('K1')->getValue())->toBe('Fee')
+        ->and($sheet->getCell('L1')->getValue())->toBe('Fee forgone')
+        // ...and the two columns that say WHICH offer paid for it and what
+        // it displaced, so a cheap sale read months later can still name the
+        // campaign that priced it (owner, 2026-08-25).
+        ->and($sheet->getCell('M1')->getValue())->toBe('Fee promotion')
+        ->and($sheet->getCell('N1')->getValue())->toBe('Fee before promotion')
+        ->and($sheet->getCell('S1')->getValue())->toBe('Collected from merchant')
         ->and($sheet->getStyle('A1')->getFont()->getBold())->toBeTrue();
 
     // Money: laari over a hundred, as a number under a money format. A
@@ -116,7 +124,7 @@ it('writes money, percents and dates as NUMBERS a spreadsheet can add up', funct
     // The header is frozen and the data is filterable — but the filter stops
     // at the last data row, so a totals row can never be filtered away.
     expect($sheet->getFreezePane())->toBe('A2')
-        ->and($sheet->getAutoFilter()->getRange())->toBe('A1:V3');
+        ->and($sheet->getAutoFilter()->getRange())->toBe('A1:Y3');
 });
 
 it('closes each sheet with a totals row of real SUM formulas', function () {
@@ -129,19 +137,19 @@ it('closes each sheet with a totals row of real SUM formulas', function () {
     // Two data rows, so the totals row is row 4.
     expect($sheet->getCell('A4')->getValue())->toBe('Total')
         ->and($sheet->getCell('H4')->getValue())->toBe('=SUM(H2:H3)')
-        ->and($sheet->getCell('P4')->getValue())->toBe('=SUM(P2:P3)')
+        ->and($sheet->getCell('S4')->getValue())->toBe('=SUM(S2:S3)')
         ->and($sheet->getStyle('H4')->getNumberFormat()->getFormatCode())->toBe('#,##0.00')
         ->and($sheet->getStyle('A4')->getFont()->getBold())->toBeTrue();
 
     // A non-summable column carries no total — a summed date or state is
     // nonsense, and a spreadsheet full of nonsense totals is not read.
-    expect($sheet->getCell('Q4')->getValue())->toBeNull();
+    expect($sheet->getCell('T4')->getValue())->toBeNull();
 
     // The collected column adds up to the transfer, in the workbook itself.
     $collected = 0.0;
 
     foreach ([2, 3] as $row) {
-        $collected += (float) $sheet->getCell('P'.$row)->getValue();
+        $collected += (float) $sheet->getCell('S'.$row)->getValue();
     }
 
     expect((int) round($collected * 100))->toBe($settlement->amount_received_laari);

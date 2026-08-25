@@ -19,7 +19,11 @@ import {
   type TierBand,
   type TierRowInput,
 } from '@/lib/fee-tiers';
-import { formatDateTime } from '@/lib/format';
+import {
+  formatDateTime,
+  toIsoWithMaldivesOffset,
+  toMaldivesLocalInput,
+} from '@/lib/format';
 import {
   Alert,
   AlertContent,
@@ -41,24 +45,6 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Section4PreviewTable } from '@/components/settings/fee-tier-table';
-
-const MALDIVES_OFFSET_MS = 5 * 60 * 60 * 1000;
-
-/** "YYYY-MM-DDTHH:mm" in Maldives (UTC+5, no DST) for a datetime-local input. */
-function toMaldivesLocalInput(date: Date): string {
-  return new Date(date.getTime() + MALDIVES_OFFSET_MS)
-    .toISOString()
-    .slice(0, 16);
-}
-
-/** datetime-local value (Maldives wall clock) -> ISO with explicit +05:00. */
-function toIsoWithOffset(local: string): string | null {
-  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(local)) {
-    return null;
-  }
-  const iso = `${local}:00+05:00`;
-  return Number.isNaN(new Date(iso).getTime()) ? null : iso;
-}
 
 function bandsToRows(bands: TierBand[]): TierRowInput[] {
   return bands.map((band) => ({
@@ -108,7 +94,7 @@ export function ScheduleTiersDialog({
   const validation = useMemo(() => validateTierRows(rows), [rows]);
   const preview = validation.bands ? section4Preview(validation.bands) : null;
 
-  const effectiveIso = toIsoWithOffset(effectiveLocal);
+  const effectiveIso = toIsoWithMaldivesOffset(effectiveLocal);
   const effectiveError =
     effectiveIso === null
       ? 'Pick the date and time the new tiers take effect.'

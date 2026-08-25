@@ -52,6 +52,7 @@ import {
   LoadingBlock,
 } from '@/components/app/async-states';
 import { TransferWatch } from '@/components/app/transfer-watch';
+import { MerchantFeePromotionBanner } from '@/components/fee-promotion/fee-promotion-banner';
 import { PaymentInstructions } from '@/components/settlement/payment-instructions';
 import {
   isDiscountDisabled,
@@ -251,6 +252,14 @@ export function SettlementWizard() {
       <div className="mb-5">
         <StepIndicator current={step} />
       </div>
+
+      {/* The fee promotion, on the screen where the platform fee is a number
+          the merchant is about to transfer. It sits ABOVE the figures rather
+          than inside the summary card on purpose: the fees in that column
+          belong to sales that are already recorded and carry whatever fee
+          they were rung up under, so a promotional rate is not a discount on
+          this batch. The banner's own footnote says exactly that. */}
+      <MerchantFeePromotionBanner className="mb-5" />
 
       {step === 0 && (
         <Card className="mb-7.5">

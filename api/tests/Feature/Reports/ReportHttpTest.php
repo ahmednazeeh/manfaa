@@ -70,7 +70,15 @@ it('serves a preview with column meta, rows and the summary', function () {
         ->and($rows[0][0])->toContain('+05:00')
         ->and($rows[0][7])->toBe(100_000)
         ->and($rows[0][8])->toBe(200)
-        ->and($rows[0][16])->toBe('confirmed');
+        // Fee, then what a fee promotion cost us on this sale — zero here,
+        // because none is running (owner, 2026-08-25).
+        ->and($rows[0][10])->toBe(750)
+        ->and($rows[0][11])->toBe(0)
+        // ...then WHICH offer paid for it and what it displaced: both empty,
+        // for the same reason the figure above is zero.
+        ->and($rows[0][12])->toBe('')
+        ->and($rows[0][13])->toBeNull()
+        ->and($rows[0][19])->toBe('confirmed');
 });
 
 it('caps the preview at fifty rows and says so', function () {

@@ -901,7 +901,7 @@
       "lead": "Money you have sent that is not yet balance. Each transfer is matched against the bank's records — usually within the hour.",
       "submitted": "Submitted {{date}}",
       "noBank": "Bank not recorded",
-    "differs": "Your bank sent {{received}}, not the {{claimed}} you entered — your wallet was credited with what actually arrived.",
+      "differs": "Your bank sent {{received}}, not the {{claimed}} you entered — your wallet was credited with what actually arrived.",
       "reason": "Reason from Manfaa",
       "noReason": "No reason given."
     },
@@ -1017,6 +1017,22 @@
     "settleNow": "Settle now",
     "settleNowHint": "Pay the cashback and fees you owe on credited sales.",
     "settleNothingDue": "Nothing to settle right now."
+  },
+  "feePromotion": {
+    "kind": {
+      "introductory": "Introductory offer",
+      "platform_wide": "Platform-wide offer"
+    },
+    "merchantTitle": "You pay {{fee}} platform fee right now",
+    "endsOn": "Last day {{date}}",
+    "daysLeft_one": "{{count}} day left",
+    "daysLeft_other": "{{count}} days left",
+    "newSalesNote": "New sales are priced at this fee. Sales you have already recorded keep the fee they were recorded at.",
+    "offerKicker": "Limited offer",
+    "offerFee": "{{fee}} platform fee",
+    "offerIntroDays_one": "For your first {{count}} day on Manfaa",
+    "offerIntroDays_other": "For your first {{count}} days on Manfaa",
+    "offerEnds": "Last day of the offer: {{date}}"
   },
   "labels": {
     "state": {

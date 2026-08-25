@@ -105,7 +105,7 @@ function agreementMonth(): void
 }
 
 /**
- * The five figures as the REPORTS answer them — each from the report that
+ * The six figures as the REPORTS answer them — each from the report that
  * owns the definition, built the long way (every sheet, every row).
  *
  * @return array<string, int>
@@ -120,6 +120,10 @@ function reportedMoney(ReportPeriod $period): array
         'cashback_generated_laari' => $cashback['transactions']['cashback_laari'],
         'platform_fees_net_laari' => $earnings['net_fee_income_laari'],
         'gst_collected_laari' => $earnings['gst_collected_laari'],
+        // The acquisition spend (owner, 2026-08-25). On the SALE clock, with
+        // cashback and not with the fees: a fee we never charged posts no
+        // journal, so it is counted where its sale is counted — REPORT A.
+        'fee_forgone_to_promotions_laari' => $cashback['transactions']['fee_forgone_laari'],
         'collected_from_merchants_laari' => $cashback['settlements']['amount_received_laari'],
         'paid_out_to_customers_laari' => $payouts['transactions']['cashback_laari'],
     ];
@@ -131,11 +135,15 @@ it('states the same money the reports do, figure for figure', function (): void 
     $august = ReportPeriod::of('2026-08-01', '2026-08-31');
     $reported = reportedMoney($august);
 
-    // A test that passes on a row of zeroes proves nothing. GST is the one
-    // legitimate zero — it is not switched on anywhere yet — and it is
-    // asserted as zero rather than skipped.
+    // A test that passes on a row of zeroes proves nothing. Two figures are
+    // legitimately zero on this fixture — GST, which is not switched on
+    // anywhere yet, and the fee forgone to promotions, because no fee
+    // promotion is running here — and both are asserted as zero rather than
+    // skipped. FeePromotionMoneySurfacesTest asserts the forgone figure
+    // agrees on a month where it is NOT zero.
     expect(array_filter($reported))->toHaveCount(4)
-        ->and($reported['gst_collected_laari'])->toBe(0);
+        ->and($reported['gst_collected_laari'])->toBe(0)
+        ->and($reported['fee_forgone_to_promotions_laari'])->toBe(0);
 
     expect(app(MoneySnapshot::class)->forPeriod($august))->toBe($reported);
 });
@@ -198,6 +206,7 @@ it('agrees on an EMPTY period, where every figure is zero', function (): void {
             'cashback_generated_laari' => 0,
             'platform_fees_net_laari' => 0,
             'gst_collected_laari' => 0,
+            'fee_forgone_to_promotions_laari' => 0,
             'collected_from_merchants_laari' => 0,
             'paid_out_to_customers_laari' => 0,
         ]);

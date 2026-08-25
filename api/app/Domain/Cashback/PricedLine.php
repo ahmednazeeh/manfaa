@@ -15,6 +15,13 @@ use App\Domain\Tax\FeeTax;
  * it — the same meaning the columns carry on the transaction row. With GST
  * off (`feeGstBp = 0`, the platform today) the split is the identity and
  * these are exactly the integers TermsResolver produced.
+ *
+ * `listFeeBp` / `listFeeLaari` are the platform-fee-promotion stamp
+ * (2026-08-25): what the §4 TIER would have charged this line, when a
+ * promotion charged it less. NULL — the overwhelmingly common case — means
+ * no promotion touched this line and the charged fee IS the list fee, so
+ * `forgoneFeeLaari()` is 0. Both fee figures sit on the same side of GST
+ * (see withFeeTax), so the difference is a difference between two NET fees.
  */
 final readonly class PricedLine
 {
@@ -31,7 +38,15 @@ final readonly class PricedLine
         public int $sort,
         public int $feeGstBp = 0,
         public int $feeGstLaari = 0,
+        public ?int $listFeeBp = null,
+        public ?int $listFeeLaari = null,
     ) {}
+
+    /** The net fee revenue given up on this line. Never negative. */
+    public function forgoneFeeLaari(): int
+    {
+        return max(0, ($this->listFeeLaari ?? $this->feeLaari) - $this->feeLaari);
+    }
 
     /**
      * The same line, priced under a GST regime. Rounding happens HERE, per
@@ -58,6 +73,12 @@ final readonly class PricedLine
             // terms the line met, exactly as rate_bp does on a zeroed row.
             feeGstBp: $tax->rateBp,
             feeGstLaari: $gst,
+            listFeeBp: $this->listFeeBp,
+            // The list fee is split too, so the forgone figure stays a
+            // difference between two NET fees rather than a mix of the two
+            // sides of the tax — which would overstate what the promotion
+            // cost by exactly the tax on the discount.
+            listFeeLaari: $this->listFeeLaari === null ? null : $tax->netOf($this->listFeeLaari),
         );
     }
 }

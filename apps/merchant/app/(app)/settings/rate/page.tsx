@@ -46,6 +46,7 @@ import { Label } from '@/components/ui/label';
 import {
 } from '@/components/app-layout/toolbar';
 import { ErrorBlock, LoadingBlock } from '@/components/app/async-states';
+import { MerchantFeePromotionBanner } from '@/components/fee-promotion/fee-promotion-banner';
 
 /**
  * The standing-rate screen (owner only via the settings layout gate; the
@@ -124,6 +125,13 @@ function RateWindowCard({ rate }: { rate: MerchantRate }) {
             </div>
           </div>
         )}
+        {/* BESIDE the platform-fee figure above, never instead of it. That
+            figure is the store's standing §4 TIER fee — the price list their
+            cashback rate buys them, and the thing a rate change moves. A fee
+            promotion is a temporary reduction ON TOP of it and does not
+            change it, so the two are shown as the two facts they are: this
+            is your fee, and this is what you are being charged today. */}
+        <MerchantFeePromotionBanner variant="inline" />
         {current !== null && (
           <p className="text-xs text-muted-foreground">
             In force since{' '}

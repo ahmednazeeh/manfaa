@@ -202,9 +202,11 @@ it('agrees with itself: the summary sheet, the totals and the JSON summary are o
     $sheet = $report->sheet(CashbackReport::SUMMARY);
     $total = collect($sheet->rows())->firstWhere(0, 'Transactions — all states');
 
-    expect((int) $total[1])->toBe($transactions->count())
-        ->and((int) $total[3])->toBe($transactions->sum('cashback_laari'))
-        ->and((int) $total[7])->toBe($transactions->sum('collected_laari'));
+    // BY NAME: the summary sheet gained a Fee forgone column on 2026-08-25,
+    // and a positional assertion is exactly how such a change goes unnoticed.
+    expect((int) $total[$sheet->indexOf('count')])->toBe($transactions->count())
+        ->and((int) $total[$sheet->indexOf('cashback_laari')])->toBe($transactions->sum('cashback_laari'))
+        ->and((int) $total[$sheet->indexOf('collected_laari')])->toBe($transactions->sum('collected_laari'));
 
     // Summary first in the workbook, whatever order a reader thinks in.
     expect(array_map(fn ($each) => $each->title, $report->sheets()))

@@ -11,7 +11,7 @@ import { formatDate } from '@/lib/format';
 import { Card, CardContent } from '@/components/ui/card';
 
 /**
- * THE FIVE MONEY FIGURES — superadmin only, and rendered only where the API
+ * THE SIX MONEY FIGURES — superadmin only, and rendered only where the API
  * actually sent them. The gate REMOVES this panel; it never blanks it, because
  * "MVR 0.00 of platform revenue" is an answer, and it is the wrong one.
  *
@@ -23,6 +23,12 @@ import { Card, CardContent } from '@/components/ui/card';
  * therefore not two views of one month's trade and will not tie — which is
  * why nothing on this panel subtracts one from the other, and why the note
  * under the tiles says so out loud.
+ *
+ * FEE FORGONE sits on the SALE clock with cashback, not on the journal clock
+ * with the fees, because it is not a ledger movement at all: a fee we never
+ * charged posts nothing. It is what the platform fee promotions cost — the
+ * acquisition spend — and it is NOT part of platform fees earned. Adding the
+ * two together states a revenue figure that never existed.
  *
  * DELTAS CARRY DIRECTION, NOT JUDGEMENT. The arrow and the percentage are set
  * in ordinary secondary ink rather than green and red, because "up" is not
@@ -55,6 +61,11 @@ const FIGURES: MoneyFigure[] = [
     key: 'gst_collected_laari',
     label: 'GST collected',
     hint: 'A liability owed to MIRA — never part of the fees above.',
+  },
+  {
+    key: 'fee_forgone_to_promotions_laari',
+    label: 'Fee forgone',
+    hint: 'What fee promotions gave away on sales in this period. A memo figure: it is not part of the fees earned above.',
   },
   {
     key: 'collected_from_merchants_laari',
@@ -105,7 +116,7 @@ export function MoneyPanel({ money }: { money: DashboardMoney }) {
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-6">
         {FIGURES.map((figure) => (
           <Card key={figure.key}>
             <CardContent className="flex flex-col gap-2 py-4">

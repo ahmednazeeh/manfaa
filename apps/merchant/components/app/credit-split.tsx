@@ -142,6 +142,14 @@ function safeParseMvr(input: string): number | null {
  * per-sale override, and `promo.rateBp` is non-null only when a live
  * merchant-wide promotion applies to this SALE (its minimum purchase is met
  * by the WHOLE eligible amount).
+ *
+ * `platformFeePromotionBp` is the PLATFORM FEE promotion in force for this
+ * store, in basis points, or null — a different animal from `promo`, which
+ * is a cashback promotion. One lowers Manfaa's cut, the other raises the
+ * customer's reward, and they never meet. It caps every line's fee, whatever
+ * that line was priced from (a category rate, the standing rate, an override
+ * or the cashback promotion), because the server's own rule is a single
+ * min() applied at the point the tier answers: see FeeRelief::chargedFeeBp.
  */
 export function analyzeSplit(
   rows: SplitRow[],
@@ -149,6 +157,7 @@ export function analyzeSplit(
   base: SplitBaseTerms,
   promo: SplitPromoTerms,
   eligibleLaari: number | null,
+  platformFeePromotionBp: number | null,
 ): SplitAnalysis {
   const { rateBp: baseRateBp, feeBp: baseFeeBp, fromOverride } = base;
   const { rateBp: promoRateBp, feeBp: promoFeeBp } = promo;
@@ -209,12 +218,20 @@ export function analyzeSplit(
         feeEstimate = 0;
       } else {
         cashbackEstimate = estimateLaariAtBp(amountLaari, pricing.rateBp);
-        const feeBp =
+        const tierFeeBp =
           pricing.kind === 'standing' || pricing.kind === 'override'
             ? (baseFeeBp ?? estimateFeeBpFor(pricing.rateBp))
             : pricing.kind === 'promotion'
               ? (promoFeeBp ?? estimateFeeBpFor(pricing.rateBp))
               : estimateFeeBpFor(pricing.rateBp);
+        // min(promotion, tier) — the whole rule, and the only place a fee
+        // promotion touches this file. A promotion may only ever make a
+        // line cheaper, so a store whose own tier already charges less
+        // keeps its tier and prices exactly as it did before.
+        const feeBp =
+          platformFeePromotionBp === null
+            ? tierFeeBp
+            : Math.min(tierFeeBp, platformFeePromotionBp);
         feeEstimate = estimateLaariAtBp(amountLaari, feeBp);
       }
     }

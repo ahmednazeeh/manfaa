@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart' show visibleForTesting;
 
 import 'api_base.dart';
 import 'errors.dart';
+import 'fee_promotion_models.dart';
 import 'marketplace_merchant_models.dart';
 import 'merchant_models.dart';
 import 'models.dart';
@@ -395,6 +396,19 @@ class MerchantApi extends ManfaaApiBase<MerchantSession> {
   /// every role, so the cashier's preview never 403s.
   Future<MerchantRate> merchantRate() async =>
       MerchantRate.fromJson(await getJson('/merchant/rate'));
+
+  /// The platform fee promotion this store is trading under, or the
+  /// all-null "nothing running" answer (owner, 2026-08-25).
+  ///
+  /// NO PERMISSION GATE, server-side or here: every account that may log in
+  /// to a store may be told what that store is being charged. Note that
+  /// [merchantRate] still quotes the §4 TIER fee — the server's containment
+  /// rule keeps promotions out of the standing-terms endpoint — so the till
+  /// prices its preview at `min(promotion, tier)` itself
+  /// ([MerchantFeePromotion.chargedFeeBp]) and the banner is what tells the
+  /// merchant why the quote moved.
+  Future<MerchantFeePromotion> feePromotion() async =>
+      MerchantFeePromotion.fromJson(await getJson('/merchant/fee-promotion'));
 
   /// The split editor's category vocabulary, ordered by sort then id, and
   /// INCLUDING inactive rows (old lines still name them) — filter on

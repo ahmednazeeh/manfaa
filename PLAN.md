@@ -1750,6 +1750,52 @@ banner still quoting its pre-credit figure after a modal credit.
 10 findings, 1 blocker, all fixed. Same round: dashboard chart curves
 (monotone — shape preserving, cannot overshoot into money never earned).
 
+### Fee promotions — DONE (2026-08-25), SHIPS OFF
+
+For merchant acquisition. Two kinds on one settings row
+(`fee_promotions`, TaxSetting pattern, both switches OFF as shipped):
+INTRODUCTORY — every merchant's first N days from `approved_at` at a
+promotional or zero platform fee; PLATFORM-WIDE — a date window where
+everyone gets it. Both active → the MERCHANT wins (lower fee), with an
+exact tie going to introductory. Superadmin-only PATCH; refusals for a
+fee that is not set (NULL is never 0), an inverted window, missing en
+or dv copy, and a "promotion" that would cost more than the tier.
+
+ONE SEAM: TermsResolver::priceAt() in both resolve() and resolveLines()
+— charged = min(promo, tier). Rate::chargedFee() added because
+Rate::fee() floors at 1bp and a zero CHARGED fee is the whole feature.
+Only pricing lives there; CreditRecorder / ClaimApprovalService /
+AmendmentService merely stamp. FROZEN as always: fee_promo_kind,
+fee_promo_fee_bp, list_fee_bp and fee_forgone_laari on transactions
+(list + forgone per line), so ending a campaign never re-prices a sale,
+and an amendment re-prices from the row's OWN stamp.
+
+MARKETPLACE ORDER FEES ARE EXCLUDED, deliberately and tested
+(MarketplaceOrderFeeUnaffectedTest): a different price list on a
+different scale, no tier to check "never costs more" against, and it
+never posts to 4100 so a forgone figure there could not reconcile with
+the ledger-built earnings report. Per-shop lever already exists.
+
+FORGONE FEE is computed AT PRICING (each unit costed twice, both halves
+through the same GST split, nets subtracted) and STORED — re-deriving
+later from two basis points would redo §4 ceiling rounding and drift a
+laari, which would make the dashboard disagree with the reports. Shown
+on the cashback report (column + summary) and the dashboard money
+panel, so a campaign's cost is measurable while it runs.
+
+Banners: panel, till app and the PUBLIC landing, copy superadmin-edited
+in en+dv. The public shape carries the offer and never a merchant's own
+dates. Review: 11 findings, 0 blockers — best of them, the banner named
+the day AFTER the last chargeable day (windows are exclusive; it now
+says "Last day 12 Oct"), and the POS-vendor rate contract still
+advertised the tier fee the platform had stopped charging.
+
+Suite 2229 green; merchant app v1.0.29+30. KNOWN ASYMMETRY, documented
+and tested: promotions live on a mutable settings row, not an
+effective-dated history, so switching one off stops pricing further
+sales including backdated ones inside the old window. Conservative on
+purpose; rows already priced keep their stamp.
+
 ### Queue (updated 2026-08-17) — the mobile programme
 
 The mobile API round is DONE and reviewed (PLAN-mobile-api.md: M1–M5, two

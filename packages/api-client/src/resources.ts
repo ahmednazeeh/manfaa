@@ -549,6 +549,13 @@ export const TransactionSchema = z.object({
    * The rate and fee FROZEN on this row at occurred_at, as 2-decimal
    * percent strings. On a lined credit they are the base-rate snapshot —
    * the per-line truth lives in `lines`.
+   *
+   * `platform_fee_percent` is what the sale was ACTUALLY CHARGED, so a sale
+   * rung up under a platform fee promotion (see ./fee-promotions) carries
+   * the promotional fee — legitimately "0.00" on a free-for-X-days sale.
+   * The §4 tier fee it would otherwise have paid stays server-side; what
+   * the promotion cost the platform is reported in aggregate as
+   * `fee_forgone_laari`, never per row on the wire.
    */
   cashback_rate_percent: PercentSchema,
   platform_fee_percent: PercentSchema,

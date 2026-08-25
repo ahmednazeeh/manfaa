@@ -1514,6 +1514,30 @@ abstract class AppLocalizations {
   /// **'Sync now'**
   String get queuedBannerAction;
 
+  /// No description provided for @feePromoIntroTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Introductory offer'**
+  String get feePromoIntroTitle;
+
+  /// No description provided for @feePromoWideTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Platform-wide offer'**
+  String get feePromoWideTitle;
+
+  /// No description provided for @feePromoFee.
+  ///
+  /// In en, this message translates to:
+  /// **'Platform fee {rate}'**
+  String feePromoFee(String rate);
+
+  /// No description provided for @feePromoDaysLeft.
+  ///
+  /// In en, this message translates to:
+  /// **'{days, plural, =0{Last day} =1{1 day left} other{{days} days left}}'**
+  String feePromoDaysLeft(int days);
+
   /// No description provided for @queuedSnack.
   ///
   /// In en, this message translates to:

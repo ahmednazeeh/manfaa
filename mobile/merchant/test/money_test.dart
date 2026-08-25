@@ -951,6 +951,14 @@ class _MoneyApi extends MerchantApi {
     String? state,
     int? perPage,
   }) async => CursorPage(items: const [], nextCursor: null, hasMore: false);
+
+  /// GET /merchant/fee-promotion. Defaults to NOTHING RUNNING — the state
+  /// every shipped assertion and golden was written against — and is
+  /// settable so a test can throw the switch the way a superadmin does.
+  MerchantFeePromotion promotion = MerchantFeePromotion.none;
+
+  @override
+  Future<MerchantFeePromotion> feePromotion() async => promotion;
 }
 
 /// A 1×1 transparent PNG — a slip the image decoder accepts.

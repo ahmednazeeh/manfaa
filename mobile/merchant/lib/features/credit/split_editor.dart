@@ -30,12 +30,18 @@ class SplitRow {
 }
 
 /// A display estimate for the whole split at the sale's base terms.
+///
+/// [baseFeeBp] is the §4 TIER fee for lines with no category rate of their
+/// own; [promotion] is applied PER LINE (`min(promotion, tier)`), because a
+/// category rate gives its line its own tier fee and the server takes that
+/// minimum at each priced unit, not once over the sale.
 ({int cashback, int fee, int gst})? estimateSplit(
   List<SplitRow> rows,
   List<ProductCategory> categories, {
   required int? baseRateBp,
   required int? baseFeeBp,
   MerchantTaxTerms tax = const MerchantTaxTerms(),
+  MerchantFeePromotion promotion = MerchantFeePromotion.none,
 }) {
   var cashback = 0;
   var fee = 0;
@@ -56,9 +62,11 @@ class SplitRow {
         : parsePercentToBp(category!.cashbackRatePercent!);
     final rateBp = categoryBp ?? baseRateBp;
     if (rateBp == null) return null;
-    final feeBp = categoryBp != null
+    final tierFeeBp = categoryBp != null
         ? staticFeeBp(categoryBp)
         : (baseFeeBp ?? staticFeeBp(rateBp));
+    // Never null here: tierFeeBp is a concrete int by construction.
+    final feeBp = promotion.chargedFeeBp(tierFeeBp) ?? tierFeeBp;
     cashback += estimateLaariAtBp(row.amountLaari, rateBp);
 
     final lineFee = estimateLaariAtBp(row.amountLaari, feeBp);

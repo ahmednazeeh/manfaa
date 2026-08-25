@@ -105,13 +105,26 @@ function Figure({
   );
 }
 
+/**
+ * Widest row a breakdown card lays out on, spelled as whole class names so
+ * Tailwind can see them. Six covers every card but one — the cashback
+ * breakdown, which carries a seventh, memo figure and would otherwise wrap it
+ * onto a line of its own where it reads as a total rather than as an aside.
+ */
+const FIGURE_COLUMNS: Record<6 | 7, string> = {
+  6: 'xl:grid-cols-6',
+  7: 'xl:grid-cols-7',
+};
+
 function FigureCard({
   title,
   note,
+  columns = 6,
   children,
 }: {
   title: string;
   note?: ReactNode;
+  columns?: 6 | 7;
   children: ReactNode;
 }) {
   return (
@@ -120,7 +133,12 @@ function FigureCard({
         <CardTitle>{title}</CardTitle>
         {note}
       </CardHeader>
-      <CardContent className="grid grid-cols-2 gap-4 py-4 sm:grid-cols-3 xl:grid-cols-6">
+      <CardContent
+        className={cn(
+          'grid grid-cols-2 gap-4 py-4 sm:grid-cols-3',
+          FIGURE_COLUMNS[columns],
+        )}
+      >
         {children}
       </CardContent>
     </Card>
@@ -181,10 +199,27 @@ function CashbackSummary({ summary }: { summary: ReportSummary }) {
         />
       </TileRow>
 
-      <FigureCard title="What the stores owed">
+      <FigureCard
+        title="What the stores owed"
+        columns={7}
+        note={
+          <span className="text-xs text-muted-foreground">
+            Fee forgone is a MEMO figure and is deliberately not part of gross
+            due: it is fee the platform never charged, so nobody owes it and no
+            journal carries it. The other six are what the stores actually owed
+            and paid.
+          </span>
+        }
+      >
         <Figure
           label="Platform fee"
           value={money(summary, 'transactions', 'fee_laari')}
+          hint="What the stores were charged — the promotional fee, wherever a promotion priced the sale."
+        />
+        <Figure
+          label="Fee forgone"
+          value={money(summary, 'transactions', 'fee_forgone_laari')}
+          hint="Given away by fee promotions — not owed by anyone."
         />
         <Figure
           label="GST"
@@ -227,9 +262,9 @@ function CashbackSummary({ summary }: { summary: ReportSummary }) {
         note={
           <span className="text-xs text-muted-foreground">
             By submission date, so this need not match the collected figure
-            above — that one follows the sale date. Draft and cancelled
-            batches are left out: a draft is a basket nobody has committed
-            to, and a cancelled batch is money owed on a different row.
+            above — that one follows the sale date. Draft and cancelled batches
+            are left out: a draft is a basket nobody has committed to, and a
+            cancelled batch is money owed on a different row.
           </span>
         }
       >

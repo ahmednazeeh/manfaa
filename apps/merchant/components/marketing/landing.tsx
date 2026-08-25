@@ -6,6 +6,7 @@ import { BadgeCheck, Percent, TrendingUp } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { LanguageSwitcher } from '@/components/app/language-switcher';
+import { PublicFeePromotionOffers } from '@/components/fee-promotion/fee-promotion-banner';
 import { MerchantDevices, PitchPoints } from '@/components/marketing/pitch';
 
 /**
@@ -36,6 +37,16 @@ export function MerchantLanding() {
           </Button>
         </div>
       </header>
+
+      {/* The platform-fee offer, ABOVE the hero, when one is running (owner,
+          2026-08-25: "I intend to use this feature during initial merchant
+          acquisition"). This is the reason a shopkeeper who was only
+          browsing keeps reading, so it goes where the eye already is rather
+          than beside the footer — and it takes the whole width for the same
+          reason. Its wording is the superadmin's, fetched unauthenticated;
+          nothing at all renders when no offer is live, and the page is then
+          byte for byte what it was. */}
+      <PublicFeePromotionOffers />
 
       <main className="mx-auto grid w-full max-w-6xl grow items-center gap-10 px-5 py-10 sm:px-8 lg:grid-cols-2 lg:gap-12 lg:py-14">
         <div className="flex max-w-xl flex-col gap-6">

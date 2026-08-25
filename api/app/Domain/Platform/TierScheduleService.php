@@ -186,6 +186,26 @@ final class TierScheduleService
     }
 
     /**
+     * The cheapest platform fee the ACTIVE schedule charges anybody — the
+     * bound a platform fee promotion must sit at or below, because the
+     * merchant on that band is the one a too-expensive "promotion" would
+     * overcharge (FeePromotionsController, owner 2026-08-25).
+     *
+     * A schedule published LATER can introduce a cheaper band than the one a
+     * stored promotion was checked against; that is why the seam still takes
+     * min(promotion, tier) per sale (FeeRelief). This is the write-time
+     * refusal, not the only guard.
+     */
+    public function activeCheapestFeeBp(): int
+    {
+        $row = $this->current();
+
+        return $row === null
+            ? TierSchedule::default()->cheapestFeeBp()
+            : TierSchedule::fromArray($row->tiers)->cheapestFeeBp();
+    }
+
+    /**
      * Refuses a cashback rate the active schedule does not price.
      *
      * @throws RateNotPricedException

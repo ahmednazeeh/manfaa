@@ -108,6 +108,54 @@ export async function apiFetch<Schema extends z.ZodType>(
 }
 
 /**
+ * The SAME GET as apiFetch, deliberately WITHOUT the session: no cookies are
+ * sent (`credentials: 'omit'`) and no CSRF token is echoed.
+ *
+ * For the endpoints that are unauthenticated BY DESIGN and whose answer must
+ * not depend on who is asking — today the merchant landing page's fee-promotion
+ * banner (`/api/public/fee-promotion`), which is served from the same origin as
+ * the logged-in merchant panel and would otherwise carry that merchant's
+ * session cookie on every visit by a stranger. A public endpoint that receives
+ * a session invites a public endpoint that reads one; omitting the credentials
+ * at the client makes that impossible rather than merely unintended.
+ *
+ * It also keeps the answer cacheable: a request with no credentials is the same
+ * request for every visitor, which is what the server's 60-second cache assumes.
+ *
+ * Not a general replacement for apiFetch on public routes — `/api/discover*`
+ * keeps its existing credentialed path, because those responses are already
+ * built and shipped that way and switching them is a behaviour change with no
+ * caller asking for it.
+ */
+export async function apiFetchPublic<Schema extends z.ZodType>(
+  path: string,
+  schema: Schema,
+  options: Omit<ApiFetchOptions, 'body' | 'method'> = {},
+): Promise<z.output<Schema>> {
+  const { headers = {}, signal } = options;
+
+  const response = await fetch(`${apiBaseUrl()}${path}`, {
+    method: 'GET',
+    credentials: 'omit',
+    signal,
+    headers: {
+      Accept: 'application/json',
+      ...headers,
+    },
+  });
+
+  const payload =
+    response.status === 204
+      ? undefined
+      : await response.json().catch(() => undefined);
+
+  if (!response.ok) {
+    throw new ApiError(response.status, payload);
+  }
+  return schema.parse(payload);
+}
+
+/**
  * Like apiFetch but for endpoints that stream BINARY (e.g. the admin
  * settlement-slip route, whose file lives on a private disk with no URL):
  * performs the credentialed GET and returns the bytes as a Blob, which the

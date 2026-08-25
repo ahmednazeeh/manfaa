@@ -113,6 +113,40 @@ final readonly class AmendmentService
             // fixes what was rung up, not the terms it was rung up under.
             $tax = $locked->stampedFeeTax();
 
+            // Same law again for the platform fee promotion (owner,
+            // 2026-08-25): the relief STAMPED ON THIS ROW, never the one
+            // running today. `fee_bp` above already carries the promotional
+            // fee this sale was charged, so the unlined branch preserves it
+            // for free; what has to be recomputed is the FORGONE figure,
+            // because the amount changed and the money given up changed with
+            // it. The lined branch re-resolves per line and is handed the
+            // frozen relief so it cannot pick up a promotion that started
+            // after the sale — or lose one that has since ended.
+            //
+            // AN EMPTY STAMP IS A FROZEN "no promotion", and it is passed on
+            // as one — FeeRelief::none() rather than null, which suppresses
+            // the live lookup inside resolveLines entirely. That is the whole
+            // point: a correction made while a promotion is running must not
+            // hand that promotion to a sale rung up before it started
+            // (FrozenFeePromotionTest, "amends a sale that carried NO
+            // promotion without inventing one").
+            //
+            // THE ONE EDGE IT COSTS, stated so it is a decision rather than a
+            // surprise: the stamp is only written when a promotion actually
+            // made something CHEAPER, so a sale rung up while a promotion was
+            // in force that merely TIED the row's base tier fee carries
+            // nothing — and a line this correction ADDS at a dearer tier is
+            // then billed that full tier where a fresh sale at the same
+            // occurred_at would have billed min(promotion, tier). It needs
+            // the promotional fee to equal the base rate's tier fee exactly,
+            // which on the seeded schedule means a 0.25% campaign against a
+            // store on the 0.50–0.99% band. The alternative — falling back to
+            // the live policy on an empty stamp — is strictly worse: it lets
+            // a promotion switched on AFTER the sale reach back into it,
+            // which is the guarantee this whole feature is built on.
+            $relief = $locked->stampedFeeRelief();
+            $listFeeBp = $locked->list_fee_bp === null ? null : (int) $locked->list_fee_bp;
+
             if ($parsedLines === null) {
                 $priced = $this->calculator->calculate(
                     $eligible,
@@ -122,6 +156,13 @@ final readonly class AmendmentService
                 $cashbackLaari = $belowMinimum ? 0 : $priced->cashbackLaari;
                 [$feeLaari, $feeGstLaari] = $tax->split($belowMinimum ? 0 : $priced->feeLaari);
                 $pricedLines = null;
+
+                // What the tier would have charged on the NEW amount, netted
+                // exactly as the charged fee above was, so the difference
+                // stays a difference between two net fees.
+                $feeForgone = $belowMinimum || $listFeeBp === null ? 0 : max(0, $tax->netOf(
+                    $this->calculator->calculate($eligible, Rate::cashback($baseBp), $listFeeBp)->feeLaari,
+                ) - $feeLaari);
             } else {
                 $pricedLines = $this->terms->resolveLines(
                     $merchant->id,
@@ -134,12 +175,14 @@ final readonly class AmendmentService
                     // A sale that now earns nothing prices without
                     // promotions, exactly as creation does for a zeroed row.
                     consultPromotions: ! $belowMinimum,
+                    frozenFeeRelief: $relief,
                 );
                 // Per line, under the row's OWN stamped regime.
                 $pricedLines = $pricedLines->withFeeTax($tax);
                 $cashbackLaari = $belowMinimum ? 0 : $pricedLines->cashbackTotal();
                 $feeLaari = $belowMinimum ? 0 : $pricedLines->feeTotal();
                 $feeGstLaari = $belowMinimum ? 0 : $pricedLines->feeGstTotal();
+                $feeForgone = $belowMinimum ? 0 : $pricedLines->feeForgoneTotal();
             }
 
             $before = [
@@ -170,6 +213,21 @@ final readonly class AmendmentService
                 // recomputed from the row's own stamped rate and treatment,
                 // which this amendment deliberately does not touch.
                 'fee_gst_laari' => $feeGstLaari,
+                // The promotion this row was priced under is UNTOUCHED
+                // (kind, offered fee and displaced tier fee all stay put);
+                // only what it cost us moves, because the amount moved.
+                //
+                // UNLESS the correction zeroed the row. A sale below the
+                // store's minimum is charged nothing, so it gave up nothing
+                // and no promotion priced it — and CreditRecorder writes
+                // exactly that shape when creation zeroes a row. A zeroed
+                // AMENDED row has to be byte-identical to a zeroed CREATED
+                // one, or the partial index built for "show me every sale a
+                // promotion paid for" starts returning rows that cost the
+                // promotion nothing at all.
+                ...($belowMinimum
+                    ? CreditRecorder::NO_FEE_PROMOTION
+                    : ['fee_forgone_laari' => $feeForgone]),
                 'reason_code' => $belowMinimum ? 'below_minimum' : null,
             ])->save();
 
@@ -193,6 +251,8 @@ final readonly class AmendmentService
                         'fee_laari' => $belowMinimum ? 0 : $line->feeLaari,
                         'fee_gst_bp' => $line->feeGstBp,
                         'fee_gst_laari' => $belowMinimum ? 0 : $line->feeGstLaari,
+                        'list_fee_bp' => $belowMinimum ? null : $line->listFeeBp,
+                        'fee_forgone_laari' => $belowMinimum ? 0 : $line->forgoneFeeLaari(),
                         'priced_by' => $line->pricedBy,
                         'sort' => $line->sort,
                     ]);

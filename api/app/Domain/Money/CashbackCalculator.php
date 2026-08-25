@@ -15,9 +15,15 @@ use InvalidArgumentException;
 final class CashbackCalculator
 {
     /**
-     * $feeBpOverride carries a fee resolved from an effective-dated
-     * fee_tier_schedules row (TermsResolver's path); when null, the static
-     * §4 FeeTier map answers — identical behaviour for every existing caller.
+     * $feeBpOverride carries the fee this sale is actually CHARGED —
+     * resolved from an effective-dated fee_tier_schedules row and then, since
+     * 2026-08-25, possibly lowered by a platform fee promotion
+     * (TermsResolver's path). When null, the static §4 FeeTier map answers —
+     * identical behaviour for every existing caller.
+     *
+     * The override goes through Rate::chargedFee (0–2000 bp) rather than
+     * Rate::fee (1–2000): a tier fee may never be zero, but a merchant on a
+     * zero-fee promotion pays exactly nothing, and that is the feature.
      */
     public function calculate(Laari $eligible, Rate $cashbackRate, ?int $feeBpOverride = null): CashbackResult
     {
@@ -28,7 +34,7 @@ final class CashbackCalculator
         $rateBp = $cashbackRate->basisPoints();
         $feeBp = $feeBpOverride === null
             ? FeeTier::feeBpFor($rateBp)
-            : Rate::fee($feeBpOverride)->basisPoints();
+            : Rate::chargedFee($feeBpOverride)->basisPoints();
 
         return new CashbackResult(
             cashbackLaari: intdiv($eligible->value() * $rateBp + 9999, 10000),

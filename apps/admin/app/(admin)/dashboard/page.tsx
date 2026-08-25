@@ -46,7 +46,7 @@ import { DashboardPeriodControl } from '@/components/dashboard/period-control';
  *
  * THE HEADING IS READ OFF THE PAYLOAD, NOT OFF THE PICKER. Refetching holds
  * the previous window's frame on screen, so labelling the figures from the
- * local period state would caption five money tiles and two charts with a
+ * local period state would caption six money tiles and two charts with a
  * window they do not belong to for the whole of every period change. The
  * resolved-window line is driven by `dashboard.period` — which the server
  * echoes back for exactly this purpose — and the money panel's comparison
@@ -94,8 +94,8 @@ function DashboardSkeleton() {
         <Skeleton className="h-72 w-full" />
         <Skeleton className="h-72 w-full" />
       </div>
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
-        {Array.from({ length: 5 }).map((_, index) => (
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-6">
+        {Array.from({ length: 6 }).map((_, index) => (
           <Skeleton key={index} className="h-32 w-full" />
         ))}
       </div>

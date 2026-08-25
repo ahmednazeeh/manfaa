@@ -10,6 +10,8 @@ import '../../l10n/gen/app_localizations.dart';
 import '../../widgets/adaptive.dart';
 import '../../widgets/merchant_brand.dart';
 import '../../widgets/tx_format.dart';
+import '../fee_promotion/fee_promotion_banner.dart';
+import '../money/money_providers.dart';
 import '../setup/rate_step.dart'
     show
         bpToPercentString,
@@ -131,6 +133,10 @@ class _CreditScreenState extends ConsumerState<CreditScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) ref.read(creditQueueProvider.notifier).drain();
     });
+    // This screen QUOTES the promotional fee, so it has to notice a
+    // campaign ending — but it is not a money screen and must not drag the
+    // whole board's refetches along with it.
+    Future.microtask(() => refreshStaleFeePromotion(ref));
     _codeFocus.addListener(() => setState(() {}));
   }
 
@@ -391,6 +397,12 @@ class _CreditScreenState extends ConsumerState<CreditScreen> {
     ref.watch(sessionTickProvider);
     final queue = ref.watch(creditQueueProvider);
     final rateAsync = ref.watch(creditRateProvider);
+    // GET /merchant/rate quotes the §4 TIER fee — the server keeps
+    // promotions out of the standing-terms endpoint on purpose — so the
+    // quote is priced at min(promotion, tier) here, exactly as
+    // TermsResolver will a second later. "Nothing running" (and a failed
+    // read) leaves every figure below byte-identical to before.
+    final promotion = ref.watch(activeFeePromotionProvider);
     final categoriesAsync = ref.watch(creditCategoriesProvider);
     final categories = categoriesAsync.valueOrNull ?? const <ProductCategory>[];
     final activeCategories = [
@@ -422,6 +434,10 @@ class _CreditScreenState extends ConsumerState<CreditScreen> {
     ];
 
     List<Widget> act() => [
+      // Directly above the cost preview whose fee row it explains: the
+      // preview now quotes min(promotion, tier) — the server's own rule —
+      // and this is what stops that figure looking like a mistake.
+      const FeePromotionBanner(bottomGap: Gap.md),
       if (_splitEnabled) ...[
         SplitEditorCard(
           key: ValueKey('split-$_splitEpoch'),
@@ -434,7 +450,7 @@ class _CreditScreenState extends ConsumerState<CreditScreen> {
         ),
         const SizedBox(height: Gap.md),
       ],
-      _buildPreviewCard(l10n, theme, rateAsync, activeCategories),
+      _buildPreviewCard(l10n, theme, rateAsync, activeCategories, promotion),
       if (_backdatedWarning) ...[
         const SizedBox(height: Gap.md),
         _buildBackdatedNotice(l10n, theme),
@@ -1098,6 +1114,7 @@ class _CreditScreenState extends ConsumerState<CreditScreen> {
     ThemeData theme,
     AsyncValue<MerchantRate> rateAsync,
     List<ProductCategory> active,
+    MerchantFeePromotion promotion,
   ) {
     final muted = theme.colorScheme.onSurfaceVariant;
 
@@ -1131,6 +1148,7 @@ class _CreditScreenState extends ConsumerState<CreditScreen> {
           current,
           rateAsync.valueOrNull?.tax ?? const MerchantTaxTerms(),
           active,
+          promotion,
         );
       }
     }
@@ -1153,6 +1171,7 @@ class _CreditScreenState extends ConsumerState<CreditScreen> {
     RateWindow current,
     MerchantTaxTerms tax,
     List<ProductCategory> active,
+    MerchantFeePromotion promotion,
   ) {
     final muted = theme.colorScheme.onSurfaceVariant;
     final eligible = _eligibleInvalid ? null : _eligibleLaari;
@@ -1163,9 +1182,15 @@ class _CreditScreenState extends ConsumerState<CreditScreen> {
         : parsePercentToBp(current.platformFeePercent!);
     final overrideBp = _activeOverrideBp;
     final baseRateBp = overrideBp ?? standingBp;
-    final baseFeeBp = overrideBp != null
+    // The §4 tier fee this sale would carry with no promotion running —
+    // the standing one, or the band a per-sale override falls into.
+    final tierFeeBp = overrideBp != null
         ? staticFeeBp(overrideBp)
         : standingFeeBp;
+    // TermsResolver::priceAt(): charged fee bp = min(promotion, tier). The
+    // MERCHANT WINS — a store already on a cheaper tier keeps it — and an
+    // unpriced rate (null) stays unpriced rather than gaining a fee.
+    final baseFeeBp = promotion.chargedFeeBp(tierFeeBp);
 
     int? cashback;
     int? fee;
@@ -1187,8 +1212,12 @@ class _CreditScreenState extends ConsumerState<CreditScreen> {
         _splitRows,
         active,
         baseRateBp: baseRateBp,
-        baseFeeBp: baseFeeBp,
+        // The TIER fee, not the promoted one: a category rate gives a line
+        // its own tier fee, so the min() has to be taken PER LINE — inside
+        // estimateSplit — exactly as the server prices each priced unit.
+        baseFeeBp: tierFeeBp,
         tax: tax,
+        promotion: promotion,
       );
       cashback = estimate?.cashback;
       // Already split per line by estimateSplit — `fee` is gross under

@@ -5,6 +5,7 @@ import 'package:manfaa_ui/manfaa_ui.dart';
 
 import '../../app/app.dart';
 import '../../app/providers.dart';
+import '../fee_promotion/fee_promotion_banner.dart';
 import '../money/money_providers.dart';
 import '../money/transfer_progress_view.dart';
 import 'settlement_widgets.dart';
@@ -220,6 +221,11 @@ class _SettlementPayScreenState extends ConsumerState<SettlementPayScreen> {
                       ),
                       const SizedBox(height: Gap.md),
                     ],
+                    // Beside the itemised bill, for the same reason it sits
+                    // on the board: the fee line the merchant is reading is
+                    // the PROMOTIONAL one the server priced, and this is
+                    // the only thing on the screen that says so.
+                    const FeePromotionBanner(bottomGap: Gap.md),
                     ManfaaCard(
                       child: PaymentInstructionsCard(
                         instructions: preview.paymentInstructions,

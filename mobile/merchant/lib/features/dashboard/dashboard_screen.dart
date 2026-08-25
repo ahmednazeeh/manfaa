@@ -8,6 +8,7 @@ import '../../app/app.dart';
 import '../../app/providers.dart';
 import '../../widgets/adaptive.dart';
 import '../../widgets/merchant_brand.dart';
+import '../fee_promotion/fee_promotion_banner.dart';
 import '../money/money_providers.dart';
 import '../../widgets/tx_format.dart';
 import '../push/push_registrar.dart';
@@ -96,6 +97,12 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   children: [
                     MerchantTopBar(initials: initials),
                     const SizedBox(height: Gap.lg),
+                    // The fee promotion sits ABOVE the money blocks and
+                    // OUTSIDE home.when: it is the platform's announcement
+                    // to this store, and a /merchant/home that failed is no
+                    // reason to withhold it. Draws nothing at all when
+                    // nothing is running (FeePromotionBanner).
+                    const FeePromotionBanner(bottomGap: Gap.md),
                     ...home.when(
                       loading: () => const [
                         SkeletonBox(height: 108, radius: Corner.card),

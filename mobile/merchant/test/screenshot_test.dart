@@ -82,6 +82,25 @@ const _permissions = [
 // oldest clock starting 10 Aug → deadline 25 Aug 2026. All instants are
 // FIXED so the goldens render the same bytes on every run.
 
+/// The owner's acquisition campaign as the server serves it (owner,
+/// 2026-08-25): every new store's first 60 days at NO platform fee, this
+/// store 13 days from the end of its own window.
+///
+/// `days_remaining` is the SERVER's count and is what the banner prints —
+/// the app never derives days from a date. `ends_at` is only read to decide
+/// whether the window has closed, so it is parked far in the future to keep
+/// the shot deterministic rather than tied to the day it is regenerated.
+final _shotPromotion = MerchantFeePromotion.fromJson(const {
+  'active': true,
+  'kind': 'introductory',
+  'kind_label': 'Introductory offer',
+  'platform_fee_percent': '0.00',
+  'ends_at': '2099-09-30T18:59:59+00:00',
+  'days_remaining': 13,
+  'banner_en': 'No platform fee for your first 60 days on Manfaa.',
+  'banner_dv': 'މަންފާގައި ފުރަތަމަ 60 ދުވަހު ޕްލެޓްފޯމް ފީއެއް ނުނަގާނެއެވެ.',
+});
+
 const _shotOutstanding = {
   'as_of': '2026-08-16T14:07:00+05:00',
   'total': {
@@ -429,6 +448,7 @@ class _ShotApi extends MerchantApi {
     this.pendingProfileJson,
     this.pendingChanges,
     this.progressJson,
+    this.promotion = MerchantFeePromotion.none,
   });
 
   final String status;
@@ -1118,6 +1138,14 @@ class _ShotApi extends MerchantApi {
     required String password,
     required String deviceName,
   }) async {}
+
+  /// GET /merchant/fee-promotion. NOTHING RUNNING on every shipped shot —
+  /// which is why the goldens taken before this feature existed still match
+  /// byte for byte. The two promo shots pass a live offer instead.
+  final MerchantFeePromotion promotion;
+
+  @override
+  Future<MerchantFeePromotion> feePromotion() async => promotion;
 }
 
 /// The live transfer view's fixtures (owner, 2026-08-25) — one payload
@@ -1186,6 +1214,9 @@ void main() {
     List<MerchantChangeRequest>? pendingChanges,
     Map<String, dynamic>? progressJson,
     Future<void> Function(WidgetTester tester)? drive,
+    // The platform fee promotion the server is serving this store. Nothing
+    // running on every shipped shot; the promo shots pass a live offer.
+    MerchantFeePromotion promotion = MerchantFeePromotion.none,
     // The phone frame the app shipped on; tabletShot passes the MR7 slate.
     Size size = const Size(390, 844),
     double dpr = 3.0,
@@ -1229,6 +1260,7 @@ void main() {
               pendingProfileJson: pendingProfileJson,
               pendingChanges: pendingChanges,
               progressJson: progressJson,
+              promotion: promotion,
             ),
           ),
           configProvider.overrideWith(
@@ -1862,6 +1894,54 @@ void main() {
       drive: driveCreditSplit,
     ),
   );
+  // ---- The platform fee promotion (owner, 2026-08-25) ---------------------
+  // The SAME three fixtures as the shots above, with one thing different:
+  // the server is running an introductory offer. Separate names on purpose
+  // — the shipped goldens must keep showing the ordinary day, because that
+  // is what a store not on a promotion sees.
+  testWidgets(
+    'dashboard fee promotion light',
+    (t) => shot(
+      t,
+      'dashboard_promo_light',
+      Brightness.light,
+      promotion: _shotPromotion,
+    ),
+  );
+  // The till's own frame: the banner sits directly above the cost preview
+  // whose fee row it explains, so the shot scrolls down to where the two
+  // are read together rather than capturing the code boxes again.
+  Future<void> driveCreditPromo(WidgetTester tester) async {
+    await driveCredit(tester);
+    await tester.scrollUntilVisible(
+      find.text('Cost preview'),
+      160,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+  }
+
+  testWidgets(
+    'credit fee promotion light',
+    (t) => shot(
+      t,
+      'credit_promo_light',
+      Brightness.light,
+      drive: driveCreditPromo,
+      promotion: _shotPromotion,
+    ),
+  );
+  testWidgets(
+    'settlements fee promotion light',
+    (t) => shot(
+      t,
+      'settlements_promo_light',
+      Brightness.light,
+      drive: driveSettlements,
+      promotion: _shotPromotion,
+    ),
+  );
+
   testWidgets(
     'transactions light',
     (t) => shot(

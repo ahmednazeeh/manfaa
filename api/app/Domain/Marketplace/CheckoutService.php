@@ -143,6 +143,19 @@ final readonly class CheckoutService
 
         // The fee this store is on: its own override, or the platform's
         // default. Frozen onto the row either way.
+        //
+        // PLATFORM FEE PROMOTIONS DO NOT REACH HERE, deliberately (owner,
+        // 2026-08-25 — decision recorded in TermsResolver's docblock, which
+        // is the seam they DO reach). This is a separate price list: a
+        // percentage of an order's items rather than of a cashback reward, on
+        // a different scale (a 5% order fee against §4 tier fees of
+        // 0.25–1.00%), and it never posts to ledger account 4100 — so a
+        // promotional basis-point figure expressed against the cashback tier
+        // cannot honestly mean this price too, and the "a promotion may never
+        // cost the merchant more" refusal has no tier here to check against.
+        // The per-shop lever already exists and is the right one:
+        // `merchant_marketplace_profiles.order_fee_bp`, which a superadmin
+        // can set to zero for one merchant.
         $feeBp = $merchant->marketplace?->order_fee_bp ?? $this->config->marketplaceFeeBp();
 
         $items = (int) $subcart['items_laari'];

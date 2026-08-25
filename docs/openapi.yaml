@@ -1470,6 +1470,31 @@ paths:
                       branch_id: null
                       min_purchase_laari: 10000
                       ends_at: '2026-08-20T00:00:00+05:00'
+                liveFeePromotion:
+                  summary: A promotional platform fee in force
+                  description: |
+                    `active_fee_promotion` appears ONLY while a promotional
+                    platform fee is in force for this merchant. Every other
+                    `platform_fee_percent` here is the tier-schedule LIST
+                    price; while this block is present the sale is billed
+                    the lower of that price and the promotion's. Print
+                    `effective_platform_fee_percent`.
+                  value:
+                    cashback_rate_percent: '2.00'
+                    platform_fee_percent: '0.75'
+                    currency: MVR
+                    min_eligible_laari: 5000
+                    has_category_overrides: false
+                    pending_decrease: null
+                    active_fee_promotion:
+                      kind: introductory
+                      kind_label: Introductory offer
+                      platform_fee_percent: '0.00'
+                      effective_platform_fee_percent: '0.00'
+                      ends_at: '2026-09-19T00:00:00+05:00'
+                      days_remaining: 21
+                      banner_en: No platform fee for your first 30 days.
+                      banner_dv: ފުރަތަމަ 30 ދުވަހު ޕްލެޓްފޯމް ފީއެއް ނުނަގާނެ.
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -3499,6 +3524,80 @@ components:
             boosting (its rate above the standing rate) — the field is
             absent otherwise, so the base contract stays byte-stable for
             tills that predate promotions.
+        active_fee_promotion:
+          allOf:
+            - $ref: '#/components/schemas/ActiveFeePromotion'
+          description: |
+            Present ONLY while a platform FEE promotion is in force for this
+            merchant — absent otherwise, so the base contract stays
+            byte-stable for tills that predate the feature.
+
+            **Read this if you print a platform fee.** Every other
+            `platform_fee_percent` on this response is the tier-schedule
+            LIST price for a cashback rate. While this block is present the
+            platform bills `min(active_fee_promotion.platform_fee_percent,
+            that tier price)` on each sale.
+
+    ActiveFeePromotion:
+      type: object
+      description: |
+        A promotional platform fee in force for this merchant right now —
+        either the INTRODUCTORY offer covering a new merchant's first days on
+        the platform, or a PLATFORM-WIDE campaign window. Only one is ever
+        reported: when both apply the merchant gets the cheaper of the two.
+
+        Advisory, exactly like the standing rate — the server re-resolves
+        authoritatively at `occurred_at`, and every recorded sale keeps the
+        fee it was rung up under.
+      required:
+        - kind
+        - kind_label
+        - platform_fee_percent
+        - effective_platform_fee_percent
+        - ends_at
+        - days_remaining
+        - banner_en
+        - banner_dv
+      properties:
+        kind:
+          type: string
+          enum: [introductory, platform_wide]
+        kind_label:
+          type: string
+          description: The kind as a phrase, for a screen that shows one.
+        platform_fee_percent:
+          allOf:
+            - $ref: '#/components/schemas/PercentString'
+          description: |
+            The CEILING the promotion puts on this merchant's platform fee.
+            No sale of theirs is billed above it, whichever tier priced it —
+            but a merchant whose own tier is already cheaper keeps their
+            tier, so this is not by itself the billed figure.
+        effective_platform_fee_percent:
+          allOf:
+            - $ref: '#/components/schemas/PercentString'
+          description: |
+            The ceiling above already applied to the headline
+            `cashback_rate_percent`'s own tier fee — what a sale at the
+            store's standing rate is billed today. Print this one.
+        ends_at:
+          type: ['string', 'null']
+          format: date-time
+          description: |
+            EXCLUSIVE — the first instant the promotion stops pricing a
+            sale, in UTC+5. A screen naming a last DAY should name the day
+            before this instant. Null only where the offer has no end.
+        days_remaining:
+          type: ['integer', 'null']
+          description: |
+            Whole UTC+5 calendar days the offer still prices sales on,
+            today included. The final day reads 1, never 0.
+        banner_en:
+          type: ['string', 'null']
+          description: The campaign's own sentence, English. Display as sent.
+        banner_dv:
+          type: ['string', 'null']
+          description: The campaign's own sentence, Dhivehi.
 
     PendingRateDecrease:
       type: object

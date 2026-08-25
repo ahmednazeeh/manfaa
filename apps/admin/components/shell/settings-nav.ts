@@ -1,5 +1,6 @@
 import { ComponentType } from 'react';
 import {
+  BadgePercent,
   Coins,
   CreditCard,
   KeyRound,
@@ -57,6 +58,11 @@ export const SETTINGS_GROUPS: SettingsGroup[] = [
     icon: Coins,
     items: [
       { href: '/settings/fee-tiers', label: 'Fee tiers', icon: Percent },
+      {
+        href: '/settings/fee-promotions',
+        label: 'Fee promotions',
+        icon: BadgePercent,
+      },
       {
         href: '/settings/tax',
         label: 'GST',

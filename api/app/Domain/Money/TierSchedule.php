@@ -131,6 +131,19 @@ final readonly class TierSchedule
         return $this->tiers[count($this->tiers) - 1]['to_bp'];
     }
 
+    /**
+     * The LOWEST platform fee this schedule charges anybody — its cheapest
+     * band. The bound a platform fee PROMOTION is checked against
+     * (FeePromotionsController, owner 2026-08-25): a promotional fee above
+     * it would make some merchant — whoever sits on that cheapest band —
+     * pay MORE than their ordinary tier, and a promotion that costs the
+     * merchant more is a mistake, not a promotion.
+     */
+    public function cheapestFeeBp(): int
+    {
+        return min(array_column($this->tiers, 'fee_bp'));
+    }
+
     public function feeBpFor(int $cashbackBp): int
     {
         foreach ($this->tiers as $tier) {

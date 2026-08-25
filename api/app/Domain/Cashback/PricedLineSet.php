@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Domain\Cashback;
 
+use App\Domain\Platform\FeePromotionKind;
 use App\Domain\Tax\FeeTax;
 
 /**
@@ -12,6 +13,24 @@ use App\Domain\Tax\FeeTax;
  * (§4). rowRateBp/rowFeeBp are the STANDING resolution frozen onto the
  * transaction row exactly as the single-rate path freezes it: row-level bp
  * are the base-rate snapshot; per-line truth lives in the lines.
+ *
+ * `feePromoKind` / `feePromoFeeBp` are the platform fee promotion the SALE
+ * was priced under (2026-08-25) — a property of the sale, not of a line, in
+ * exactly the way `fee_treatment` is: a line belongs to one transaction, and
+ * a second copy could only ever disagree with the first. They are null
+ * unless the promotion actually made something cheaper, so a promotion
+ * running but beating nobody's tier leaves a row indistinguishable from one
+ * priced with no promotion at all — which is what it is.
+ *
+ * `rowListFeeBp` is the matched pair of `rowFeeBp` and of nothing else: the
+ * before-price of the BASE-RATE SNAPSHOT, null when the promotion did not
+ * beat that snapshot's own tier fee. It is deliberately NOT "the before
+ * price of this sale": on a lined sale where only a category line was
+ * reduced it reads null while `feePromoKind` and `feeForgoneTotal()` say a
+ * promotion priced the row — because the header's two fee columns have to be
+ * two numbers costed on the SAME rate (AmendmentService re-prices an unlined
+ * correction from exactly that pair), and each line already carries its own
+ * before-price. FrozenFeePromotionTest pins the shape.
  */
 final readonly class PricedLineSet
 {
@@ -23,6 +42,9 @@ final readonly class PricedLineSet
         public ?int $promotionId,
         public int $rowRateBp,
         public int $rowFeeBp,
+        public ?FeePromotionKind $feePromoKind = null,
+        public ?int $feePromoFeeBp = null,
+        public ?int $rowListFeeBp = null,
     ) {}
 
     public function cashbackTotal(): int
@@ -38,6 +60,16 @@ final readonly class PricedLineSet
     public function feeGstTotal(): int
     {
         return array_sum(array_map(fn (PricedLine $line): int => $line->feeGstLaari, $this->lines));
+    }
+
+    /**
+     * The header's forgone fee: the SUM of the stored line integers, like
+     * every other header total on a lined credit — never a second,
+     * differently rounded computation over the aggregate.
+     */
+    public function feeForgoneTotal(): int
+    {
+        return array_sum(array_map(fn (PricedLine $line): int => $line->forgoneFeeLaari(), $this->lines));
     }
 
     /**
@@ -62,6 +94,9 @@ final readonly class PricedLineSet
             $this->promotionId,
             $this->rowRateBp,
             $this->rowFeeBp,
+            $this->feePromoKind,
+            $this->feePromoFeeBp,
+            $this->rowListFeeBp,
         );
     }
 }

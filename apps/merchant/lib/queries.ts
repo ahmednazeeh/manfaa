@@ -22,8 +22,10 @@ import {
   enrolInMarketplace,
   getBranchDelivery,
   getMarketplaceEnrolment,
+  getMerchantFeePromotion,
   getMerchantOutstanding,
   getPosWaiver,
+  getPublicFeePromotion,
   getMerchantProfile,
   getMerchantSetup,
   getMerchantWallet,
@@ -135,6 +137,26 @@ export const queryKeys = {
   marketplaceProducts: ['merchant', 'marketplace', 'products'] as const,
   marketplaceOrders: ['merchant', 'marketplace', 'orders'] as const,
   outstanding: ['merchant', 'outstanding'] as const,
+  /**
+   * The platform-fee promotion pricing THIS store's new sales. Under
+   * 'merchant' with everything else that dies on logout — it is the
+   * authenticated answer, personal to the store (its own window end, its
+   * own days remaining).
+   */
+  feePromotion: ['merchant', 'fee-promotion'] as const,
+  /**
+   * The landing page's offer list. Deliberately NOT under 'merchant': it is
+   * unauthenticated and identical for every visitor, so it must stay out of
+   * the merchant-scoped invalidations that follow a write — nothing a store
+   * does to its own account changes what the platform is advertising.
+   *
+   * It does NOT survive logging out, and nothing here claims it does:
+   * useLogout calls queryClient.clear(), which empties the whole cache
+   * whatever the key. That is harmless — the signed-out landing simply
+   * refetches — and it is written down because a comment promising otherwise
+   * is a promise the next reader would build on.
+   */
+  publicFeePromotion: ['public', 'fee-promotion'] as const,
   wallet: ['merchant', 'wallet'] as const,
   rate: ['merchant', 'rate'] as const,
   customerLookup: (code: string) =>
@@ -224,6 +246,46 @@ export function usePosWaiver(enabled = true) {
     select: (response) => response.data,
     enabled,
     staleTime: 5 * 60 * 1000,
+  });
+}
+
+/**
+ * The platform-fee promotion pricing this store's new sales, or the "no
+ * promotion" answer. Loads quietly — every screen that shows it renders
+ * nothing while it is loading and nothing if it fails, because a banner is
+ * not something a merchant can be left waiting for.
+ *
+ * `staleTime` is deliberately short for a settings-shaped answer: a
+ * superadmin ending a campaign re-prices the NEXT sale immediately, and a
+ * banner that keeps promising a fee the till no longer charges is worse than
+ * one that flickers. Windows also close on their own, which the banner
+ * component watches for on the clock rather than by polling.
+ */
+export function useFeePromotion() {
+  return useQuery({
+    queryKey: queryKeys.feePromotion,
+    queryFn: ({ signal }) => getMerchantFeePromotion({ signal }),
+    select: (response) => response.data,
+    staleTime: 60_000,
+  });
+}
+
+/**
+ * What is on offer to whoever signs up next — the merchant landing page's
+ * own read. UNAUTHENTICATED: the api-client fetches this one without the
+ * session cookie and without a CSRF header, because the landing shares an
+ * origin with the signed-in panel.
+ *
+ * Answered from a 60-second server cache and throttled at 120/min per IP, so
+ * a stale-time in the same order costs the API nothing and a visitor who
+ * tabs away and back does not re-ask.
+ */
+export function usePublicFeePromotion() {
+  return useQuery({
+    queryKey: queryKeys.publicFeePromotion,
+    queryFn: ({ signal }) => getPublicFeePromotion({ signal }),
+    select: (response) => response.data,
+    staleTime: 60_000,
   });
 }
 

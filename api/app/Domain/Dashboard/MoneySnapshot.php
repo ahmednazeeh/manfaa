@@ -27,6 +27,11 @@ use App\Domain\Reports\ReportPeriod;
  *   gst_collected             the same ledger pass, account 2300, kept
  *                             SEPARATE because it is a liability owed to
  *                             MIRA and not income (zero everywhere today)
+ *   fee_forgone_to_promotions CashbackReport::moneyTotals() — the §4 tier
+ *                             fee those sales would have paid, less what
+ *                             they did pay, summed from the column frozen
+ *                             on each row. The acquisition spend the owner
+ *                             asked to be able to see (2026-08-25)
  *   collected_from_merchants  the Settlements sheet's own amount_received
  *                             total over the batches the period raised
  *   paid_out_to_customers     PayoutReport::paidTotals() — cashback whose
@@ -40,13 +45,21 @@ use App\Domain\Reports\ReportPeriod;
  * every month. The field names carry their own basis, and
  * DashboardReportsAgreementTest asserts each figure equals its report's.
  *
+ * `fee_forgone_to_promotions_laari` is on the SALE clock, with cashback, and
+ * not on the journal clock with the fees — because it is not a ledger
+ * movement at all. A discount we never charged posts nothing: 4100 is
+ * credited with the fee we DID charge, and there is no journal for the
+ * difference. It is a memo figure carried on each sale, so it is counted
+ * where that sale is counted, which is REPORT A. The field name says
+ * `forgone`, not `income`, for the same reason.
+ *
  * SUPERADMIN ONLY, matching the Reports gate: these five numbers cross every
  * merchant and every customer at once.
  */
 final class MoneySnapshot
 {
     /**
-     * @return array{cashback_generated_laari: int, platform_fees_net_laari: int, gst_collected_laari: int, collected_from_merchants_laari: int, paid_out_to_customers_laari: int}
+     * @return array{cashback_generated_laari: int, platform_fees_net_laari: int, gst_collected_laari: int, fee_forgone_to_promotions_laari: int, collected_from_merchants_laari: int, paid_out_to_customers_laari: int}
      */
     public function forPeriod(ReportPeriod $period): array
     {
@@ -58,6 +71,7 @@ final class MoneySnapshot
             'cashback_generated_laari' => $cashback['transactions']['cashback_laari'],
             'platform_fees_net_laari' => $ledger['net_fee_income_laari'],
             'gst_collected_laari' => $ledger['gst_collected_laari'],
+            'fee_forgone_to_promotions_laari' => $cashback['transactions']['fee_forgone_laari'],
             'collected_from_merchants_laari' => $cashback['settlements']['amount_received_laari'],
             'paid_out_to_customers_laari' => $payouts['cashback_laari'],
         ];
