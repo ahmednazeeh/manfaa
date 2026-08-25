@@ -32,6 +32,7 @@ use App\Http\Controllers\Merchant\SettlementController;
 use App\Http\Controllers\Merchant\SetupController;
 use App\Http\Controllers\Merchant\StaffController;
 use App\Http\Controllers\Merchant\TransactionCorrectionController;
+use App\Http\Controllers\Merchant\TransferProgressController;
 use App\Http\Controllers\Merchant\WalletTopUpController;
 use App\Http\Controllers\Mobile\ConfigController;
 use App\Http\Controllers\Mobile\CreditController;
@@ -514,6 +515,29 @@ Route::prefix('mobile/v1')
                 Route::post('settlements/{id}/receipts', [SettlementController::class, 'storeReceipt'])
                     ->whereNumber('id')
                     ->middleware(['merchant.can:settlements.receipt_add', EnsureMerchantApproved::class]);
+
+                /*
+                 * The bank watch the pay screen and the top-up screen
+                 * observe after a slip goes up (owner, 2026-08-25) — the
+                 * EXACT web routes (routes/api/settlements.php), same
+                 * controller, same permissions, same throttle.
+                 *
+                 * The app polls one of these every five seconds while the
+                 * verify window is open — 12 requests a minute against a
+                 * 120/min per-route bucket — and stops the moment `outcome`
+                 * arrives. `watching` is computed on the server from the
+                 * real poll state, so the app animates progress only while
+                 * the bank is genuinely being asked, and prints "our team
+                 * will confirm shortly" (worded from `reason`) whenever it
+                 * is not. Nothing here starts or stops the server's work.
+                 */
+                Route::get('settlements/{id}/payment-progress', [TransferProgressController::class, 'settlement'])
+                    ->whereNumber('id')
+                    ->middleware(['merchant.can:settlements.view', 'throttle:120,1']);
+
+                Route::get('wallet/top-ups/{id}/progress', [TransferProgressController::class, 'walletTopUp'])
+                    ->whereNumber('id')
+                    ->middleware(['merchant.can:wallet.view', 'throttle:120,1']);
 
                 Route::get('devices', [MerchantDevicesController::class, 'index']);
                 Route::delete('devices/{id}', [MerchantDevicesController::class, 'destroy'])->whereNumber('id');

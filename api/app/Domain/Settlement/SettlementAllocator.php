@@ -167,10 +167,24 @@ final class SettlementAllocator
      * mid-window resumes where it actually is rather than beginning the
      * fifteen minutes again. Dispatched after commit, because a job that
      * reads the row before its transaction lands finds nothing.
+     *
+     * THE WINDOW IS THE RECORD THAT A WATCH REALLY STARTED. It is written
+     * only when a poll is actually dispatched: an unstamped row is one
+     * nobody ever looked at, and {@see BankWatch} says exactly that. Stamping
+     * it while the switch is off left a live-looking fifteen minutes with no
+     * job behind it — and the moment an admin turned the switch on, the
+     * merchant's screen drew a progress bar over nothing.
      */
     private function watchTheBank(SettlementPayment $payment): void
     {
         $settings = TransferSetting::current();
+
+        if (! $settings->auto_verify_enabled) {
+            // The flag is the point: this ships dark until the tunnel is up.
+            // No job, and therefore no window on the row.
+            return;
+        }
+
         $now = CarbonImmutable::now();
 
         $payment->forceFill([
@@ -178,11 +192,6 @@ final class SettlementAllocator
             'poll_until' => $now->addMinutes((int) $settings->verify_window_minutes),
             'poll_attempts' => 0,
         ])->save();
-
-        if (! $settings->auto_verify_enabled) {
-            // The flag is the point: this ships dark until the tunnel is up.
-            return;
-        }
 
         DB::afterCommit(function () use ($payment): void {
             // The slip first: the poll asks whether the bank's payer and

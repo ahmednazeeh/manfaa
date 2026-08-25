@@ -1599,6 +1599,47 @@ receipt as a TIN-bearing document) are their own round; and the GST
 announcement has no per-merchant sent-stamp, so a partial fan-out
 failure is unrecoverable — flagged, not decided.
 
+### Live match progress — DONE (2026-08-25)
+
+The slip screen used to park on "Manfaa is verifying your transfer"
+while the server really was polling the bank. It now WATCHES: four
+progress endpoints (settlement payment + wallet top-up, on the web and
+mobile mounts, throttle:120,1 each — a 5s poll is 12/min, so 10x
+headroom) returning ONE shape built in one place
+(Domain\Transfers\TransferProgress::envelope), and the client shows a
+determinate bar against the real 15-minute window, then the real
+outcome: settled with its reference, honestly PARTIALLY settled with
+what remains, "MVR X added — balance now Y" (balance read at poll time,
+not snapshotted), or the rejection reason.
+
+The rule that governed the round: never animate progress when nothing
+is watching. `watching` is computed server-side only
+(Domain\Transfers\BankWatch) in the pollers' own short-circuit order —
+terminal / auto_verify_off / no_verify_profile / never_watched /
+window_expired — and the client is forbidden to infer it. Review caught
+that the window was STAMPED unconditionally while the poll job was
+dispatched only when the switch was on, so a transfer nobody ever
+watched would have animated a bar over nothing: the window is now
+written only when a poll is really dispatched, an unstamped row reports
+`never_watched`, and BankWatchResumer re-arms still-open windows when a
+superadmin switches auto-verify back on. Also caught: outstanding was
+`due − received`, which understated the remainder once a parked wallet
+remainder had been spent and could print "owed 0" on an unsettled
+batch — it now uses the allocator's own funds arithmetic.
+
+Polling gives up honestly on both clients (final 4xx, or 12 attempts),
+and the UI stops claiming to watch when the poll has stopped; the
+Flutter timer is cancelled on every exit path (a leaked one fails the
+whole suite), pauses when backgrounded and resumes on foreground.
+Push+SMS on an AUTO match already existed for both flows — verified
+with verifier-driven tests, not rebuilt; a partial settle deliberately
+announces nothing.
+
+12 findings, 0 blockers, all fixed. Suite 2082 green; merchant app
+v1.0.27+28. Noted, out of scope: Customer\OrderController stamps a
+window the same unconditional way, but no customer surface reads a
+watching flag, so it shows no false progress.
+
 ### Queue (updated 2026-08-17) — the mobile programme
 
 The mobile API round is DONE and reviewed (PLAN-mobile-api.md: M1–M5, two

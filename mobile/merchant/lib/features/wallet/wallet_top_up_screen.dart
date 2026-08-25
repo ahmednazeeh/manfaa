@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:manfaa_core/manfaa_core.dart';
 import 'package:manfaa_ui/manfaa_ui.dart';
 
@@ -8,6 +7,7 @@ import '../../app/app.dart';
 import '../../app/providers.dart';
 import '../../widgets/adaptive.dart';
 import '../money/money_providers.dart';
+import '../money/transfer_progress_view.dart';
 import '../settlements/settlement_widgets.dart';
 
 /// The domain's code for a claim under the platform floor. In practice the
@@ -179,7 +179,21 @@ class _WalletTopUpScreenState extends ConsumerState<WalletTopUpScreen> {
       ),
       body: SafeArea(
         child: created != null
-            ? _SuccessView(claim: created)
+            // The claim is filed; from here the screen OBSERVES the
+            // server's own bank watch and then says what actually
+            // happened — the amount credited and the balance NOW, or the
+            // refusal. It drives nothing: the poll and the push + SMS run
+            // whether this screen is open or not.
+            ? TransferProgressView.topUp(
+                topUpId: created.id,
+                amountLaari: created.amountLaari,
+                padding: EdgeInsets.fromLTRB(
+                  Gap.xl,
+                  Gap.xl,
+                  Gap.xl,
+                  bottomClearanceOf(context),
+                ),
+              )
             : ListView(
                 // The floating nav bar overlays this branch's screens: the
                 // submit button must scroll clear of it, not under it.
@@ -310,72 +324,6 @@ class _WalletTopUpScreenState extends ConsumerState<WalletTopUpScreen> {
                 ],
               ),
       ),
-    );
-  }
-}
-
-/// "Manfaa is verifying your transfer" — the claim is PENDING. Not
-/// "topped up": nothing is balance until the transfer matches, and this
-/// screen must not claim otherwise.
-class _SuccessView extends StatelessWidget {
-  const _SuccessView({required this.claim});
-
-  final WalletTopUpClaim claim;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final l10n = context.l10n;
-    final dhivehi = Localizations.localeOf(context).languageCode == 'dv';
-
-    return ListView(
-      padding: EdgeInsets.fromLTRB(
-        Gap.xl,
-        Gap.xl,
-        Gap.xl,
-        bottomClearanceOf(context),
-      ),
-      children: [
-        ManfaaCard(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  const IconTile(
-                    Icons.verified_user_outlined,
-                    tint: ManfaaTint.green,
-                    size: 48,
-                    iconSize: 24,
-                  ),
-                  const SizedBox(width: Gap.md),
-                  Expanded(
-                    child: Text(
-                      l10n.successVerifyingTitle,
-                      style: theme.textTheme.titleMedium,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: Gap.md),
-              Text(
-                l10n.topUpSuccessBody(
-                  formatMoney(claim.amountLaari, dhivehi: dhivehi),
-                ),
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
-              ),
-              const SizedBox(height: Gap.lg),
-              FilledButton(
-                onPressed: () =>
-                    context.canPop() ? context.pop() : context.go('/wallet'),
-                child: Text(l10n.doneCta),
-              ),
-            ],
-          ),
-        ),
-      ],
     );
   }
 }

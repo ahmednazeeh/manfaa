@@ -15,6 +15,13 @@ int _count(Object? v) => switch (v) {
   final int i => i,
   _ => 0,
 };
+
+/// Money that is genuinely OPTIONAL on the wire — a field the other flow
+/// simply does not send. Absent and unreadable both degrade to null (the
+/// honest "not applicable"), never to 0 and never to a thrown cast: a
+/// TypeError out of a parser is the one failure a polling screen cannot
+/// see, because it is not the exception its loop counts.
+int? _laariOrNull(Object? v) => v is int ? v : null;
 String _s(Object? v) => v?.toString() ?? '';
 
 /// GET /merchant/me — fresh identity AND fresh permissions.
@@ -1767,4 +1774,318 @@ class ClosureVerification {
   final String closureToken;
   final int expiresInMinutes;
   final List<ClosureStore> stores;
+}
+
+// ---------------------------------------------------------------------------
+// Transfer match progress (owner, 2026-08-25)
+//   GET /merchant/settlements/{id}/payment-progress   — `settlements.view`
+//   GET /merchant/wallet/top-ups/{id}/progress        — `wallet.view`
+// ---------------------------------------------------------------------------
+
+/// Which flow a [MatchProgress] describes. `unknown` is never on the wire —
+/// it is where an unrecognised value lands rather than throwing.
+enum MatchKind { settlementPayment, walletTopUp, unknown }
+
+/// The row's own lifecycle. `unknown` is never on the wire.
+enum MatchState { pending, matched, rejected, unknown }
+
+/// Why NOTHING is being watched, in the pollers' own short-circuit order —
+/// so this is the TRUE reason and not merely the last gate a row failed:
+///
+///  - [terminal] — already matched or rejected. There is an outcome, not a
+///    wait;
+///  - [autoVerifyOff] — the platform switch is off; nothing auto-verifies
+///    anywhere today;
+///  - [noVerifyProfile] — the platform account the merchant paid into has no
+///    active read profile. A bank nobody watches is never auto-verified;
+///  - [windowExpired] — the watch ran and lapsed; a person takes it now;
+///  - [unknown] — never on the wire. An unrecognised reason lands here, and
+///    it reads as NOT WATCHED, which is the safe side of the honesty rule.
+///
+/// Every one of these except [terminal] is the same sentence to a merchant:
+/// our team will confirm your transfer shortly. The app writes that sentence
+/// in en + dv; the server sends no prose.
+enum MatchWatchReason {
+  autoVerifyOff,
+  noVerifyProfile,
+
+  /// No watch was ever started on this transfer — it was uploaded while the
+  /// platform switch was down, so no poll job exists for it. NOT
+  /// [windowExpired]: nothing ran, and the copy must not say a check did.
+  neverWatched,
+  windowExpired,
+  terminal,
+  unknown,
+}
+
+/// What the transfer finally became — the settlement verdicts and the wallet
+/// verdicts in one enum, because one screen parser reads both.
+/// `unknown` is never on the wire.
+enum MatchResult { settled, partiallySettled, credited, rejected, unknown }
+
+MatchKind _matchKind(Object? v) => switch (_s(v)) {
+  'settlement_payment' => MatchKind.settlementPayment,
+  'wallet_top_up' => MatchKind.walletTopUp,
+  _ => MatchKind.unknown,
+};
+
+MatchState _matchState(Object? v) => switch (_s(v)) {
+  'pending' => MatchState.pending,
+  'matched' => MatchState.matched,
+  'rejected' => MatchState.rejected,
+  _ => MatchState.unknown,
+};
+
+MatchWatchReason _matchWatchReason(Object? v) => switch (_s(v)) {
+  'auto_verify_off' => MatchWatchReason.autoVerifyOff,
+  'no_verify_profile' => MatchWatchReason.noVerifyProfile,
+  'never_watched' => MatchWatchReason.neverWatched,
+  'window_expired' => MatchWatchReason.windowExpired,
+  'terminal' => MatchWatchReason.terminal,
+  _ => MatchWatchReason.unknown,
+};
+
+MatchResult _matchResult(Object? v) => switch (_s(v)) {
+  'settled' => MatchResult.settled,
+  'partially_settled' => MatchResult.partiallySettled,
+  'credited' => MatchResult.credited,
+  'rejected' => MatchResult.rejected,
+  _ => MatchResult.unknown,
+};
+
+/// "What is happening to the transfer I just uploaded?" — ONE model for both
+/// flows, because the server sends one shape for both.
+///
+/// A merchant sends money at the bank, uploads the slip, and the server
+/// starts reading the destination account's own history looking for it.
+/// [MatchProgress] is what the settle screen and the top-up screen OBSERVE
+/// while that happens, and where the real outcome then appears: settled (or
+/// partly settled, with what is still owed) for a batch, credited with the
+/// balance now for a wallet.
+///
+/// THE HONESTY RULE THIS CLASS SERVES. Never animate a progress bar over
+/// nothing. Whether a poll is genuinely running is a SERVER fact — it needs
+/// the platform switch on, the paid-into account routed to an active verify
+/// profile, and an unlapsed window — and it arrives as [watching]. The app
+/// does not infer it from a timestamp, a state, or the mere existence of a
+/// claim. When [watching] is false the screen stops the bar and says a
+/// person will confirm shortly, worded from [reason].
+///
+/// What this parser DOES do is refuse to believe a contradiction, and every
+/// refusal lands on the same safe side: not watching. An unknown state, an
+/// unrecognised reason, a payload claiming both a watch and an outcome, a
+/// missing `watching` key — all read as "not being watched right now".
+///
+/// NOTHING HERE DRIVES THE SERVER. The poll runs whether or not a screen is
+/// open; closing the app loses nothing, and the push + SMS on a match fire
+/// regardless. This is a window, not a trigger.
+///
+/// Polling: every 5s (the route allows 120/min, ten times that). Stop when
+/// [isWatching] goes false — a decided row and a never-started or lapsed
+/// watch both land there.
+class MatchProgress {
+  MatchProgress({
+    required this.kind,
+    required this.id,
+    this.settlementId,
+    required this.state,
+    required this.amountLaari,
+    required this.watching,
+    this.reason,
+    this.watchStartedAt,
+    this.watchUntil,
+    required this.attempts,
+    required this.autoMatched,
+    this.decidedAt,
+    this.checkedAt,
+    this.outcome,
+  });
+
+  factory MatchProgress.fromJson(Map<String, dynamic> json) {
+    final state = _matchState(json['state']);
+    final rawReason = json['reason'];
+    final reason = rawReason == null ? null : _matchWatchReason(rawReason);
+    final outcomeJson = (json['outcome'] as Map?)?.cast<String, dynamic>();
+    final outcome = outcomeJson == null
+        ? null
+        : MatchOutcome.fromJson(outcomeJson);
+
+    // The server TELLS us. The three extra conjuncts are not inference —
+    // they are disbelief of a self-contradictory payload, and they can only
+    // ever turn a watch OFF, never on.
+    final watching =
+        json['watching'] == true &&
+        state == MatchState.pending &&
+        reason == null &&
+        outcome == null;
+
+    return MatchProgress(
+      kind: _matchKind(json['kind']),
+      id: json['id'] as int? ?? 0,
+      settlementId: json['settlement_id'] as int?,
+      state: state,
+      amountLaari: _laari(json['amount_laari']),
+      watching: watching,
+      // Non-null EXACTLY when not watching — the mirror of the server's
+      // invariant, restored here so the copy layer always has a reason to
+      // word and never has to invent one.
+      reason: watching
+          ? null
+          : reason ??
+                (state == MatchState.pending
+                    ? MatchWatchReason.unknown
+                    : MatchWatchReason.terminal),
+      watchStartedAt: DateTime.tryParse(_s(json['watch_started_at'])),
+      watchUntil: DateTime.tryParse(_s(json['watch_until'])),
+      attempts: _count(json['attempts']),
+      autoMatched: json['auto_matched'] == true,
+      decidedAt: DateTime.tryParse(_s(json['decided_at'])),
+      checkedAt: DateTime.tryParse(_s(json['checked_at'])),
+      outcome: outcome,
+    );
+  }
+
+  final MatchKind kind;
+
+  /// The PAYMENT id on a settlement, the CLAIM id on a top-up — never the
+  /// batch id (that is [settlementId]).
+  final int id;
+
+  /// The batch a settlement payment belongs to; null on a wallet top-up.
+  final int? settlementId;
+
+  final MatchState state;
+
+  /// What the merchant said they transferred, integer laari.
+  final int amountLaari;
+
+  /// Is the bank being asked about THIS transfer right now? The one field
+  /// that may move a progress indicator.
+  final bool watching;
+
+  /// Why not — null exactly when [watching] is true.
+  final MatchWatchReason? reason;
+
+  final DateTime? watchStartedAt;
+
+  /// When the watch gives up. Count down against [checkedAt], never against
+  /// the handset's own now().
+  final DateTime? watchUntil;
+
+  /// How many times the bank has actually been asked. 0 while [watching] is
+  /// true is the ordinary first second — the job is queued and has not
+  /// looked yet — and is NOT a fault to report.
+  final int attempts;
+
+  /// True only when the BANK's own history matched this transfer. An admin's
+  /// reconciliation leaves it false, and the screen may say so differently.
+  final bool autoMatched;
+
+  final DateTime? decidedAt;
+
+  /// The SERVER's clock at the moment of this read, so a device whose clock
+  /// is minutes out cannot invent or eat time on the countdown.
+  final DateTime? checkedAt;
+
+  /// What happened. Null while still pending — an outcome that does not
+  /// exist yet is never invented.
+  final MatchOutcome? outcome;
+
+  /// May the screen run its progress indicator, and should the poll go on?
+  /// Both questions, one answer.
+  bool get isWatching => watching;
+
+  /// The transfer has been decided, one way or the other.
+  bool get isDecided => outcome != null;
+
+  /// Nothing is being watched and nothing has been decided: a person will
+  /// confirm this transfer. The screen must say so plainly instead of
+  /// animating.
+  bool get awaitsPerson => !watching && outcome == null;
+
+  /// Time left on the watch, measured on the SERVER's clock
+  /// ([watchUntil] − [checkedAt]). [Duration.zero] when nothing is being
+  /// watched, when either stamp is missing, or when the window has run out —
+  /// a countdown that cannot be computed honestly shows nothing rather than
+  /// a guess.
+  Duration get watchRemaining {
+    final until = watchUntil;
+    final checked = checkedAt;
+    if (!watching || until == null || checked == null) return Duration.zero;
+
+    final left = until.difference(checked);
+    return left.isNegative ? Duration.zero : left;
+  }
+}
+
+/// What the transfer became, once it stopped being pending. One class for
+/// both flows: the settlement fields are null on a top-up and the wallet
+/// fields are null on a settlement, which is exactly what the server sends
+/// — absent, not zero, because "received 0" and "not applicable" are
+/// different facts.
+class MatchOutcome {
+  MatchOutcome({
+    required this.result,
+    this.settlementState,
+    this.reference,
+    this.amountReceivedLaari,
+    this.amountOutstandingLaari,
+    this.creditedLaari,
+    this.balanceLaari,
+    this.rejectedReason,
+  });
+
+  factory MatchOutcome.fromJson(Map<String, dynamic> json) => MatchOutcome(
+    result: _matchResult(json['result']),
+    settlementState: _s(json['settlement_state']).isEmpty
+        ? null
+        : _s(json['settlement_state']),
+    reference: _s(json['reference']).isEmpty ? null : _s(json['reference']),
+    amountReceivedLaari: _laariOrNull(json['amount_received_laari']),
+    amountOutstandingLaari: _laariOrNull(json['amount_outstanding_laari']),
+    creditedLaari: _laariOrNull(json['credited_laari']),
+    balanceLaari: _laariOrNull(json['balance_laari']),
+    rejectedReason: _s(json['rejected_reason']).isEmpty
+        ? null
+        : _s(json['rejected_reason']),
+  );
+
+  final MatchResult result;
+
+  /// SETTLEMENT ONLY — the raw §6 batch state (`settled`,
+  /// `partially_settled`, `payment_review`, `cancelled`…), for a screen that
+  /// would rather branch on the batch than on this one payment. Never
+  /// rendered raw: the app owns the words.
+  final String? settlementState;
+
+  /// SETTLEMENT ONLY — the batch reference, the thing the merchant quotes.
+  final String? reference;
+
+  /// SETTLEMENT ONLY — the BATCH's running total, not this payment's amount
+  /// (that is [MatchProgress.amountLaari]).
+  final int? amountReceivedLaari;
+
+  /// SETTLEMENT ONLY — what is STILL OWED on the batch, and therefore the
+  /// exact further transfer that finishes it (already net of §7 credits and
+  /// the prompt-payment discount). 0 on a settled batch and on a cancelled
+  /// one. A partial match reports this rather than congratulating anybody.
+  final int? amountOutstandingLaari;
+
+  /// TOP-UP ONLY — what went into the wallet. 0 on a rejection.
+  final int? creditedLaari;
+
+  /// TOP-UP ONLY — the wallet balance AT READ TIME, not a snapshot from when
+  /// the credit landed: if the hourly auto-settle spent it in between,
+  /// "balance now" still has to be true.
+  final int? balanceLaari;
+
+  /// Why it was refused, verbatim from the admin who refused it. The wire
+  /// says `rejected_reason` on BOTH flows (settlement payments spell the
+  /// column `rejection_reason`), so this one parser serves both.
+  final String? rejectedReason;
+
+  bool get isSettled => result == MatchResult.settled;
+  bool get isPartiallySettled => result == MatchResult.partiallySettled;
+  bool get isCredited => result == MatchResult.credited;
+  bool get isRejected => result == MatchResult.rejected;
 }

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show FontLoader, rootBundle;
@@ -9,6 +10,8 @@ import 'package:manfaa_merchant/app/app.dart';
 import 'package:manfaa_merchant/app/providers.dart';
 import 'package:manfaa_merchant/features/credit/credit_screen.dart'
     show creditClock;
+import 'package:manfaa_merchant/features/settlements/settlement_widgets.dart'
+    show PickedSlip, defaultSlipPicker, slipPicker;
 
 /// Not a test — a screenshot harness. `flutter test test/screenshot_test.dart
 /// --update-goldens` writes real PNGs of the running screens so the UI can
@@ -425,6 +428,7 @@ class _ShotApi extends MerchantApi {
     this.categoriesJson,
     this.pendingProfileJson,
     this.pendingChanges,
+    this.progressJson,
   });
 
   final String status;
@@ -446,6 +450,13 @@ class _ShotApi extends MerchantApi {
   /// balance with movements.
   final Map<String, dynamic>? walletJson;
 
+  /// The live transfer-progress fixture (owner, 2026-08-25) the four
+  /// progress shots read: the SAME payload shape both routes answer, with
+  /// FIXED server stamps so the countdown and the bar's fill render the
+  /// same bytes on every run. Null everywhere else — no other shot submits
+  /// a slip, so no other shot reaches the route.
+  final Map<String, dynamic>? progressJson;
+
   // ---- MR3: money ---------------------------------------------------------
 
   @override
@@ -461,6 +472,46 @@ class _ShotApi extends MerchantApi {
           'transactions': <Object>[],
         },
   );
+
+  /// The two receipt-first WRITES the progress shots go through, and the
+  /// live route both then observe. Nothing here records anything: the shot
+  /// only needs the screen that follows the submit.
+  @override
+  Future<MerchantSettlement> createSettlement({
+    bool settleAll = false,
+    List<int>? transactionIds,
+    required int amountLaari,
+    String? bankRef,
+    required Uint8List slipBytes,
+    required String slipFilename,
+    int? platformBankAccountId,
+  }) async => MerchantSettlement.fromJson(
+    _shotSettlement(45, 'ST-2026-00045', 2712, '2026-08-25T10:00:00+05:00'),
+  );
+
+  @override
+  Future<WalletTopUpClaim> createWalletTopUp({
+    required int amountLaari,
+    required int platformBankAccountId,
+    required Uint8List slipBytes,
+    required String slipFilename,
+    String? bankRef,
+  }) async => WalletTopUpClaim.fromJson({
+    'id': 12,
+    'amount_laari': amountLaari,
+    'bank_ref': bankRef,
+    'platform_bank_account_id': platformBankAccountId,
+    'state': 'pending',
+    'created_at': '2026-08-25T10:00:00+05:00',
+  });
+
+  @override
+  Future<MatchProgress> settlementPaymentProgress(int settlementId) async =>
+      MatchProgress.fromJson(progressJson ?? const {});
+
+  @override
+  Future<MatchProgress> walletTopUpProgress(int topUpId) async =>
+      MatchProgress.fromJson(progressJson ?? const {});
 
   @override
   Future<SettlementPreviewData> settlementPreview({
@@ -1069,11 +1120,58 @@ class _ShotApi extends MerchantApi {
   }) async {}
 }
 
+/// The live transfer view's fixtures (owner, 2026-08-25) — one payload
+/// shape for both flows, exactly as the two progress routes answer it.
+///
+/// The stamps are FIXED (10:00 → 10:15, read at 10:03), so the bar sits at
+/// precisely one fifth of the window and the countdown says twelve minutes
+/// on every run: a golden of a live screen has to be reproducible, and a
+/// device clock never enters this arithmetic anyway.
+Map<String, dynamic> _shotProgress({
+  required String kind,
+  bool watching = true,
+  String? reason,
+  Map<String, dynamic>? outcome,
+  int amountLaari = 50000,
+}) => {
+  'kind': kind,
+  'id': kind == 'wallet_top_up' ? 12 : 91,
+  'settlement_id': kind == 'wallet_top_up' ? null : 45,
+  'state': outcome == null ? 'pending' : 'matched',
+  'amount_laari': amountLaari,
+  'amount_mvr': '500.00',
+  'watching': watching,
+  'reason': reason,
+  'watch_started_at': '2026-08-25T10:00:00+05:00',
+  'watch_until': '2026-08-25T10:15:00+05:00',
+  'attempts': 3,
+  'auto_matched': outcome != null,
+  'decided_at': outcome == null ? null : '2026-08-25T10:03:00+05:00',
+  'checked_at': '2026-08-25T10:03:00+05:00',
+  'outcome': outcome,
+};
+
+/// A 1×1 PNG: the shots need a slip to submit, not a picture.
+const _shotSlipPng = [
+  0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, //
+  0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52, //
+  0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, //
+  0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4, //
+  0x89, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x44, 0x41, //
+  0x54, 0x78, 0x9C, 0x62, 0x00, 0x01, 0x00, 0x00, //
+  0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00, //
+  0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE, //
+  0x42, 0x60, 0x82,
+];
+
 void main() {
   setUpAll(_loadFonts);
   // A stable wall clock: the sale-time row renders the same golden bytes on
   // every run (the ref's own date, for the eye-check too).
   setUp(() => creditClock = () => DateTime(2026, 8, 16, 14, 7));
+  // The progress shots hand the form a fabricated slip; every other shot
+  // must get the real picker back.
+  tearDown(() => slipPicker = defaultSlipPicker);
 
   Future<void> shot(
     WidgetTester tester,
@@ -1086,6 +1184,7 @@ void main() {
     List<Map<String, dynamic>>? categoriesJson,
     Map<String, dynamic>? pendingProfileJson,
     List<MerchantChangeRequest>? pendingChanges,
+    Map<String, dynamic>? progressJson,
     Future<void> Function(WidgetTester tester)? drive,
     // The phone frame the app shipped on; tabletShot passes the MR7 slate.
     Size size = const Size(390, 844),
@@ -1129,6 +1228,7 @@ void main() {
               categoriesJson: categoriesJson,
               pendingProfileJson: pendingProfileJson,
               pendingChanges: pendingChanges,
+              progressJson: progressJson,
             ),
           ),
           configProvider.overrideWith(
@@ -1418,6 +1518,147 @@ void main() {
       Brightness.light,
       walletJson: walletFixture,
       drive: driveWallet,
+    ),
+  );
+
+  // ---- The live transfer view (owner, 2026-08-25) -------------------------
+  // What replaced the static "Manfaa is verifying your transfer" on BOTH
+  // receipt-first flows: the server's own watch while it reads the bank,
+  // and then the real outcome on the same screen. The three things it can
+  // honestly say, plus the settlement verdict.
+  /// Attach a slip and submit it. The phone frame puts the form's buttons
+  /// under the floating nav bar, which would swallow the tap (and navigate
+  /// away), so the drive grows the frame while it works the form and puts
+  /// the phone back before the shot is taken.
+  Future<void> submitSlip(WidgetTester tester) async {
+    slipPicker = (camera) async => PickedSlip(
+      name: 'slip.jpg',
+      sizeBytes: _shotSlipPng.length,
+      bytes: Uint8List.fromList(_shotSlipPng),
+    );
+    await tester.binding.setSurfaceSize(const Size(390, 1800));
+    await tester.pumpAndSettle();
+
+    await tester.scrollUntilVisible(
+      find.text('Choose file'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.tap(find.text('Choose file'));
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.text('Submit slip'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.tap(find.text('Submit slip'));
+    await tester.pumpAndSettle();
+
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    await tester.pumpAndSettle();
+  }
+
+  Future<void> driveTopUpSubmitted(WidgetTester tester) async {
+    await driveTopUp(tester);
+    await submitSlip(tester);
+  }
+
+  Future<void> drivePaySubmitted(WidgetTester tester) async {
+    await drivePayScreen(tester);
+    await submitSlip(tester);
+  }
+
+  // WATCHED: the one state that may draw a bar — 3 of the 15 minutes gone,
+  // on the server's clock.
+  testWidgets(
+    'transfer watching light',
+    (t) => shot(
+      t,
+      'transfer_watching_light',
+      Brightness.light,
+      walletJson: walletFixture,
+      progressJson: _shotProgress(kind: 'wallet_top_up'),
+      drive: driveTopUpSubmitted,
+    ),
+  );
+  // The same watched state in DARK: the bar's own track has to stay
+  // visible on a dark card, and the tinted tile with it.
+  testWidgets(
+    'transfer watching dark',
+    (t) => shot(
+      t,
+      'transfer_watching_dark',
+      Brightness.dark,
+      walletJson: walletFixture,
+      progressJson: _shotProgress(kind: 'wallet_top_up'),
+      drive: driveTopUpSubmitted,
+    ),
+  );
+  // NOT WATCHED: auto-verification is off platform-wide. No bar, no
+  // countdown, no animation over nothing — a plain sentence instead.
+  testWidgets(
+    'transfer team light',
+    (t) => shot(
+      t,
+      'transfer_team_light',
+      Brightness.light,
+      walletJson: walletFixture,
+      progressJson: _shotProgress(
+        kind: 'wallet_top_up',
+        watching: false,
+        reason: 'auto_verify_off',
+      ),
+      drive: driveTopUpSubmitted,
+    ),
+  );
+  // The top-up OUTCOME: what went in, and the balance now.
+  testWidgets(
+    'transfer credited light',
+    (t) => shot(
+      t,
+      'transfer_credited_light',
+      Brightness.light,
+      walletJson: walletFixture,
+      progressJson: _shotProgress(
+        kind: 'wallet_top_up',
+        watching: false,
+        reason: 'terminal',
+        outcome: const {
+          'result': 'credited',
+          'credited_laari': 50000,
+          'credited_mvr': '500.00',
+          'balance_laari': 58175,
+          'balance_mvr': '581.75',
+          'rejected_reason': null,
+        },
+      ),
+      drive: driveTopUpSubmitted,
+    ),
+  );
+  // The settlement OUTCOME on the pay screen it was submitted from.
+  testWidgets(
+    'transfer settled light',
+    (t) => shot(
+      t,
+      'transfer_settled_light',
+      Brightness.light,
+      progressJson: _shotProgress(
+        kind: 'settlement_payment',
+        watching: false,
+        reason: 'terminal',
+        amountLaari: 2712,
+        outcome: const {
+          'result': 'settled',
+          'settlement_state': 'settled',
+          'reference': 'ST-2026-00045',
+          'amount_received_laari': 2712,
+          'amount_received_mvr': '27.12',
+          'amount_outstanding_laari': 0,
+          'amount_outstanding_mvr': '0.00',
+          'rejected_reason': null,
+        },
+      ),
+      drive: drivePaySubmitted,
     ),
   );
 

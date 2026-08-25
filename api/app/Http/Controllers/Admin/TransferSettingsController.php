@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Admin;
 
+use App\Domain\Transfers\BankWatchResumer;
 use App\Http\Controllers\Controller;
 use App\Models\AdminUser;
 use App\Models\PlatformBankAccount;
@@ -28,6 +29,8 @@ use Illuminate\Validation\Rule;
  */
 final class TransferSettingsController extends Controller
 {
+    public function __construct(private readonly BankWatchResumer $resumer) {}
+
     public function index(): JsonResponse
     {
         $settings = TransferSetting::current();
@@ -109,9 +112,20 @@ final class TransferSettingsController extends Controller
         $admin = $request->user('admin');
 
         $settings = TransferSetting::current();
+        $wasVerifying = (bool) $settings->auto_verify_enabled;
         $settings->fill($validated);
         $settings->updated_by = $admin->getKey();
         $settings->save();
+
+        // Switching auto-verification off does not pause the poll chains, it
+        // ENDS them (PollSettlementPayment returns without re-dispatching
+        // while the switch is down). Switching it back on therefore has to
+        // put the pollers back on the transfers whose window is still open —
+        // otherwise those merchants' screens are told a watch is running
+        // that no job is behind. See BankWatchResumer.
+        if (! $wasVerifying && (bool) $settings->auto_verify_enabled) {
+            $this->resumer->resume();
+        }
 
         return $this->index();
     }

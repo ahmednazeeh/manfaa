@@ -27,6 +27,10 @@ import {
   getMerchantProfile,
   getMerchantSetup,
   getMerchantWallet,
+  getSettlementPaymentProgress,
+  getWalletTopUpProgress,
+  isTransferWatched,
+  transferWatchSecondsLeft,
   listMarketplaceCategories,
   listMarketplaceProducts,
   listMerchantBranches,
@@ -81,6 +85,7 @@ import {
   type MerchantSignupRegisterRequest,
   type MerchantWalletResponse,
   type SettlementDestination,
+  type TransferProgress,
   type WalletTopUpInput,
   type MerchantSignupVerifyOtpRequest,
   type TransactionState,
@@ -94,6 +99,7 @@ import {
   type UpdateProductCategoryRequest,
 } from '@manfaa/api-client';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useEffect, useRef } from 'react';
 import type { AmendTransactionBody, CancelReason } from '@/lib/api';
 import {
   addSettlementReceipt,
@@ -404,6 +410,174 @@ export function useCreateWalletTopUp() {
       void queryClient.invalidateQueries({ queryKey: queryKeys.wallet });
     },
   });
+}
+
+/**
+ * Which transfer to watch: a settlement (whose NEWEST bank payment the route
+ * reports) or a wallet top-up claim.
+ */
+export type TransferProgressTarget =
+  | { kind: 'settlement'; settlementId: number }
+  | { kind: 'top_up'; topUpId: number };
+
+/**
+ * 5s — the cadence the routes are sized for (they allow 120/min, ten times
+ * this) and about as often as a human wants a screen to change under them.
+ */
+const TRANSFER_POLL_MS = 5_000;
+
+/**
+ * Consecutive failed ATTEMPTS after which the panel stops asking.
+ *
+ * The app's rule is four failed reads in a row
+ * (transfer_progress_view.dart `_giveUpAfter`), and this is the same
+ * patience counted in the unit TanStack actually exposes: `fetchFailureCount`
+ * counts attempts, and QueryProvider retries a non-4xx twice, so one failed
+ * poll round burns up to three of them. Twelve ≈ the app's four rounds — a
+ * connection has to be properly gone, not merely blink, before a live watch
+ * is given up on.
+ */
+const TRANSFER_GIVE_UP_AFTER = 12;
+
+/**
+ * A refusal that answers the question rather than failing to: the row is not
+ * ours (401/403) or there is no transfer on it (404). Asking again cannot
+ * change any of those, so the poll ends there. Everything else — 429, 5xx, a
+ * dropped connection — is a blip, and a blip must not end a live watch.
+ */
+function isFinalTransferError(error: unknown): boolean {
+  return (
+    error instanceof ApiError &&
+    (error.status === 401 || error.status === 403 || error.status === 404)
+  );
+}
+
+/**
+ * Has the poll given up? The card asks, because a screen that has stopped
+ * asking must stop drawing the live bar over its last payload — the bar is a
+ * claim that somebody is looking RIGHT NOW, and once the reads have stopped
+ * that claim is this client's own invention.
+ */
+export function transferPollStopped(
+  status: string,
+  error: unknown,
+  failureCount: number,
+): boolean {
+  if (status !== 'error') return false;
+  return isFinalTransferError(error) || failureCount >= TRANSFER_GIVE_UP_AFTER;
+}
+
+function transferProgressKey(target: TransferProgressTarget) {
+  return target.kind === 'settlement'
+    ? (['merchant', 'settlement-payment-progress', target.settlementId] as const)
+    : (['merchant', 'wallet-top-up-progress', target.topUpId] as const);
+}
+
+/**
+ * Watching one bank transfer land (owner, 2026-08-25) — a settlement receipt
+ * or a wallet top-up slip, through the one endpoint pair that answers both in
+ * the same shape.
+ *
+ * READ-ONLY, AND NOT A TRIGGER. The server polls the bank on its own
+ * schedule; this only looks. Closing the screen stops nothing and loses
+ * nothing — the push and SMS on a match fire either way.
+ *
+ * IT NEVER POLLS FOREVER. Three separate stops, any one of which ends it:
+ *
+ *  - the row is DECIDED, or was never being watched — `isTransferWatched`
+ *    covers both, and it is the SERVER's answer, never an inference here;
+ *  - the window has passed. The deadline is the server's own
+ *    `watch_until − checked_at` pinned to the local instant the response
+ *    landed, so it is a fixed local moment that each further read reproduces
+ *    identically — the poll cannot walk it forward by asking again;
+ *  - the read failed FINALLY. A 401/403 from a missing `settlements.view` /
+ *    `wallet.view` and a 404 for a batch with no bank payment are answers,
+ *    and asking again cannot change them. Anything else — a 429, a 5xx, a
+ *    tunnel dropping for three seconds — is NOT an answer: the poll keeps
+ *    its cadence over the last good payload until
+ *    {@link TRANSFER_GIVE_UP_AFTER} attempts in a row have failed, the same
+ *    patience the app's own loop has. Treating one blip as terminal used to end the
+ *    watch for the life of the mount, and the merchant then never saw the
+ *    outcome on the screen they were staring at.
+ *
+ * A HIDDEN TAB COSTS NOTHING. `refetchIntervalInBackground` stays false, so
+ * the timer fires only while the tab is actually being looked at; focus
+ * brings it straight back, and `staleTime: 0` means that first look is fresh.
+ *
+ * ON A DECISION IT DROPS THE SCREENS BEHIND IT. A matched settlement changes
+ * what is outstanding, what the batch shows and the wallet; a credited
+ * top-up moves the balance. Both are invalidated once — so whatever the
+ * merchant returns to is right — and never the progress read itself, whose
+ * key deliberately shares no prefix with either.
+ */
+export function useTransferProgress(target: TransferProgressTarget) {
+  const queryClient = useQueryClient();
+
+  const query = useQuery({
+    queryKey: transferProgressKey(target),
+    // Annotated rather than inferred: the two routes answer with different
+    // outcome shapes, and TS would otherwise pin the query to whichever
+    // branch it read first. Both are `{ data: … }` over the same union.
+    queryFn: ({ signal }): Promise<{ data: TransferProgress }> =>
+      target.kind === 'settlement'
+        ? getSettlementPaymentProgress(target.settlementId, { signal })
+        : getWalletTopUpProgress(target.topUpId, { signal }),
+    select: (response) => response.data,
+    staleTime: 0,
+    refetchIntervalInBackground: false,
+    // The same predicate the interval stops on. `outcome == null` alone kept
+    // firing a read on every tab focus, forever, for a row nobody is
+    // watching — window_expired, auto_verify_off, never_watched — whose
+    // answer cannot change what the card says.
+    refetchOnWindowFocus: (query) => {
+      const progress = query.state.data?.data;
+      return progress === undefined || isTransferWatched(progress);
+    },
+    refetchInterval: (query) => {
+      if (
+        isFinalTransferError(query.state.error) ||
+        query.state.fetchFailureCount >= TRANSFER_GIVE_UP_AFTER
+      ) {
+        return false;
+      }
+      const progress = query.state.data?.data;
+      // No payload yet — including a first read that failed with something
+      // retryable. Keep asking; the failure count above bounds it.
+      if (progress === undefined) return TRANSFER_POLL_MS;
+      if (!isTransferWatched(progress)) return false;
+      const deadline =
+        query.state.dataUpdatedAt + transferWatchSecondsLeft(progress) * 1000;
+      return Date.now() >= deadline ? false : TRANSFER_POLL_MS;
+    },
+  });
+
+  const decided = query.data?.outcome != null;
+  const rowId = query.data?.id ?? null;
+  const kind = target.kind;
+  const droppedFor = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!decided || rowId === null) return;
+    const stamp = `${kind}:${rowId}`;
+    if (droppedFor.current === stamp) return;
+    droppedFor.current = stamp;
+
+    void queryClient.invalidateQueries({ queryKey: queryKeys.wallet });
+    if (kind === 'settlement') {
+      void queryClient.invalidateQueries({
+        queryKey: ['merchant', 'settlements'],
+      });
+      void queryClient.invalidateQueries({
+        queryKey: ['merchant', 'settlement'],
+      });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.outstanding });
+      void queryClient.invalidateQueries({
+        queryKey: ['merchant', 'transactions'],
+      });
+    }
+  }, [decided, rowId, kind, queryClient]);
+
+  return query;
 }
 
 /**

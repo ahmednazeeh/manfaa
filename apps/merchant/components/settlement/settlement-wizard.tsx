@@ -10,7 +10,6 @@ import {
   CircleCheck,
   HandCoins,
   LoaderCircle,
-  ShieldCheck,
   TriangleAlert,
   Wallet as WalletIcon,
 } from 'lucide-react';
@@ -52,6 +51,7 @@ import {
   ErrorBlock,
   LoadingBlock,
 } from '@/components/app/async-states';
+import { TransferWatch } from '@/components/app/transfer-watch';
 import { PaymentInstructions } from '@/components/settlement/payment-instructions';
 import {
   isDiscountDisabled,
@@ -172,9 +172,10 @@ export function SettlementWizard() {
   const canContinue = selection !== null && selectedRows.length > 0;
 
   // ---------------------------------------------------------------------
-  // Done. Either the receipt landed the batch in payment_review — "Manfaa is
-  // verifying your transfer" — or the wallet route settled it outright,
-  // which is not something anybody is verifying and must not say so.
+  // Done. Either the receipt landed the batch in payment_review — where the
+  // live watch takes over and says what the bank actually answers — or the
+  // wallet route settled it outright, which is not something anybody is
+  // verifying and must not say so.
   // ---------------------------------------------------------------------
   if (created !== null) {
     const settledOutright = created.merchant_status.code === 'settled';
@@ -187,30 +188,28 @@ export function SettlementWizard() {
         </Toolbar>
         <Card className="mb-7.5 max-w-2xl">
           <CardContent className="flex flex-col items-start gap-4 p-7">
-            <div className="flex items-center gap-3">
-              <span className="flex size-10 items-center justify-center rounded-full bg-green-500/15">
-                {settledOutright ? (
-                  <CircleCheck className="size-5 text-green-600" />
-                ) : (
-                  <ShieldCheck className="size-5 text-green-600" />
-                )}
-              </span>
-              <h2 className="text-lg font-semibold">
-                {t(
-                  settledOutright
-                    ? 'settlement.settledTitle'
-                    : 'settlement.successTitle',
-                )}
-              </h2>
-            </div>
-            <p className="text-sm text-secondary-foreground">
-              {t(
-                settledOutright
-                  ? 'settlement.settledBody'
-                  : 'settlement.successBody',
-                { reference: created.reference },
-              )}
-            </p>
+            {settledOutright ? (
+              <>
+                <div className="flex items-center gap-3">
+                  <span className="flex size-10 items-center justify-center rounded-full bg-green-500/15">
+                    <CircleCheck className="size-5 text-green-600" />
+                  </span>
+                  <h2 className="text-lg font-semibold">
+                    {t('settlement.settledTitle')}
+                  </h2>
+                </div>
+                <p className="text-sm text-secondary-foreground">
+                  {t('settlement.settledBody', { reference: created.reference })}
+                </p>
+              </>
+            ) : (
+              // The receipt is in and the bank is being read — or is not, and
+              // says so. Same component the top-up dialog uses.
+              <TransferWatch
+                target={{ kind: 'settlement', settlementId: created.id }}
+                reference={created.reference}
+              />
+            )}
             {created.discount_laari > 0 && (
               <div className="flex flex-wrap items-center gap-1.5 text-sm text-primary">
                 <span>{t('settlement.discountSaved')}</span>

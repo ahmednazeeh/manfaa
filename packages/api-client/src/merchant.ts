@@ -21,6 +21,7 @@ import {
   SettlementDestinationSchema,
   SettlementFundingMethodSchema,
   SettlementSchema,
+  SettlementStateSchema,
   TransactionSchema,
   type PromotionStatus,
   WalletSchema,
@@ -684,6 +685,306 @@ export function createMerchantWalletTopUp(
     MerchantWalletTopUpResponseSchema,
     { method: "POST", body: topUpForm(input), signal: options.signal },
   );
+}
+
+// ---------------------------------------------------------------------------
+// GET /api/merchant/settlements/{id}/payment-progress — `settlements.view`
+// GET /api/merchant/wallet/top-ups/{id}/progress      — `wallet.view`
+// ---------------------------------------------------------------------------
+
+/**
+ * "What is happening to the transfer I just uploaded?" — one shape for both
+ * flows (owner, 2026-08-25). A merchant sends money at the bank, uploads the
+ * slip, and the server starts reading the destination account's own history
+ * looking for it. These two reads are how a screen WATCHES that happen and
+ * then shows the real outcome in the same place: `settled` for a settlement,
+ * "MVR X added, balance now Y" for a top-up.
+ *
+ * THE HONESTY RULE. Never animate a progress bar over nothing. The server
+ * only polls when the platform switch `auto_verify_enabled` is on, the
+ * platform bank account the merchant paid into is routed to an ACTIVE verify
+ * profile, and the row's poll window has not lapsed. Whether all three hold
+ * is a SERVER fact, delivered as `watching` — the client must never infer it
+ * from a timestamp, a state, or the mere existence of a claim. When
+ * `watching` is false the screen stops the bar and says a person will
+ * confirm the transfer shortly; `reason` says which of the four it is, so
+ * the sentence can be true rather than vague.
+ *
+ * `reason` is null exactly when `watching` is true, never both.
+ *
+ * NOTHING HERE DRIVES THE SERVER. The poll runs whether or not a screen is
+ * open; closing the app loses nothing, and the push + SMS on a match fire
+ * regardless. This is a window, not a trigger — and it is read-only.
+ *
+ * POLLING. Every 5s is the intended cadence (the route allows 120/min, ten
+ * times that). STOP when `watching` is false — a terminal row and a lapsed
+ * or never-started watch both land there, and `outcome` is non-null on every
+ * terminal one. See {@link isTransferWatched}.
+ *
+ * `attempts === 0` while `watching` is true is the ordinary first second:
+ * the job is queued and has not asked the bank yet. It is not a fault.
+ *
+ * NO SERVER PROSE. `reason` and `outcome.result` are machine values; this
+ * panel words them in its own en + dv copy, exactly as the two apps do.
+ */
+export const TransferProgressKindSchema = z.enum([
+  "settlement_payment",
+  "wallet_top_up",
+]);
+export type TransferProgressKind = z.infer<typeof TransferProgressKindSchema>;
+
+/**
+ * The row's own lifecycle. `unknown` is never on the wire — it is where an
+ * unrecognised value lands so a poll cannot be killed by a state this build
+ * has not heard of.
+ */
+export const TransferMatchStateSchema = z
+  .enum(["pending", "matched", "rejected", "unknown"])
+  .catch("unknown");
+export type TransferMatchState = z.infer<typeof TransferMatchStateSchema>;
+
+/**
+ * Why nothing is being watched — the pollers' own short-circuit order, so
+ * the reason is the TRUE one and not merely the last gate:
+ *  - `terminal` — already matched or rejected; there is an outcome, not a wait;
+ *  - `auto_verify_off` — the platform switch is off, so nothing auto-verifies
+ *    anywhere today;
+ *  - `no_verify_profile` — the account the merchant paid into has no active
+ *    read profile; a bank nobody watches is never auto-verified;
+ *  - `never_watched` — no watch was ever started on this transfer: it was
+ *    uploaded while the switch was down, so no poll job exists for it and
+ *    none ever will. NOT the same as `window_expired`, and it must never be
+ *    worded as a check that ran and found nothing;
+ *  - `window_expired` — the watch ran and lapsed; it belongs to the admin
+ *    queue now;
+ *  - `unknown` — never on the wire; an unrecognised reason degrades to here,
+ *    and it must read as "not watched", the SAFE side of the honesty rule.
+ *
+ * All of them except `terminal` mean the same sentence to a merchant: our
+ * team will confirm your transfer shortly.
+ */
+export const TRANSFER_WATCH_REASONS = [
+  "auto_verify_off",
+  "no_verify_profile",
+  "never_watched",
+  "window_expired",
+  "terminal",
+  "unknown",
+] as const;
+export const TransferWatchReasonSchema = z.enum(TRANSFER_WATCH_REASONS);
+export type TransferWatchReason = (typeof TRANSFER_WATCH_REASONS)[number];
+
+/**
+ * The half of the payload that is identical on both flows — one object
+ * literal, spread into both schemas, so the two screens share one parser and
+ * the shapes cannot drift apart. Only `kind` and `outcome` differ.
+ *
+ * Every tolerant `.catch` here degrades to the SAFE reading: not watching,
+ * nothing counted, nothing decided.
+ */
+const transferProgressShape = {
+  /** Payment id on a settlement, claim id on a top-up — not the batch id. */
+  id: z.number().int(),
+  /** The batch a settlement payment belongs to; null on a top-up. */
+  settlement_id: z.number().int().nullable(),
+  state: TransferMatchStateSchema,
+  /** What the merchant said they transferred. */
+  amount_laari: z.number().int(),
+  amount_mvr: z.string(),
+  /** THE server fact. Never infer this; a bad value reads as false. */
+  watching: z.boolean().catch(false),
+  /** Null exactly when `watching` is true. */
+  reason: TransferWatchReasonSchema.nullable().catch("unknown"),
+  watch_started_at: z.string().nullable().catch(null),
+  /** The instant the watch gives up. Count down against `checked_at`. */
+  watch_until: z.string().nullable().catch(null),
+  /** How many times the bank has actually been asked. */
+  attempts: z.number().int().catch(0),
+  /** True only when the BANK matched it. An admin's match leaves it false. */
+  auto_matched: z.boolean().catch(false),
+  decided_at: z.string().nullable().catch(null),
+  /**
+   * The SERVER's clock at the moment of this read. The countdown is
+   * `watch_until − checked_at`, never `watch_until − Date.now()`: a handset
+   * or a laptop whose clock is minutes out must not invent or eat time.
+   */
+  checked_at: z.string(),
+};
+
+/** `unknown` is never on the wire; an unrecognised result lands there. */
+export const SettlementProgressResultSchema = z
+  .enum(["settled", "partially_settled", "rejected", "unknown"])
+  .catch("unknown");
+export type SettlementProgressResult = z.infer<
+  typeof SettlementProgressResultSchema
+>;
+
+/**
+ * What the BATCH became once the payment stopped being pending.
+ *
+ * `partially_settled` is reported honestly with what is STILL OWED: §7
+ * allocates whole lines only, so a merchant who transferred less than the
+ * due has a real remainder to send and must be given the number rather than
+ * congratulated. `amount_outstanding_laari` is exactly that further transfer
+ * — `amount_due` is already net of §7 credits and the prompt-payment
+ * discount — and it is forced to 0 on a settled batch and on a cancelled one
+ * (a refused receipt releases the lines; nothing is owed on a dead
+ * reference).
+ *
+ * `amount_received_laari` is the BATCH's running total, not this payment's
+ * amount — that is `amount_laari` at the top level.
+ */
+export const SettlementPaymentOutcomeSchema = z.object({
+  result: SettlementProgressResultSchema,
+  /** The raw §6 state, for a panel that would rather branch on the batch. */
+  settlement_state: SettlementStateSchema,
+  reference: z.string(),
+  amount_received_laari: z.number().int(),
+  amount_received_mvr: z.string(),
+  amount_outstanding_laari: z.number().int(),
+  amount_outstanding_mvr: z.string(),
+  /**
+   * Why the receipt was refused, verbatim from the admin who refused it.
+   * The wire says `rejected_reason` on BOTH flows even though the settlement
+   * column is `rejection_reason`, so one parser serves both.
+   */
+  rejected_reason: z.string().nullable(),
+});
+export type SettlementPaymentOutcome = z.infer<
+  typeof SettlementPaymentOutcomeSchema
+>;
+
+/** `unknown` is never on the wire; an unrecognised result lands there. */
+export const WalletTopUpProgressResultSchema = z
+  .enum(["credited", "rejected", "unknown"])
+  .catch("unknown");
+export type WalletTopUpProgressResult = z.infer<
+  typeof WalletTopUpProgressResultSchema
+>;
+
+/**
+ * What the WALLET became. `credited_laari` is 0 on a rejection, and
+ * `balance_laari` is the balance AT READ TIME rather than a snapshot taken
+ * when the credit landed — if the hourly auto-settle spent it in between,
+ * "balance now" has to be true.
+ */
+export const WalletTopUpOutcomeSchema = z.object({
+  result: WalletTopUpProgressResultSchema,
+  credited_laari: z.number().int(),
+  credited_mvr: z.string(),
+  balance_laari: z.number().int(),
+  balance_mvr: z.string(),
+  rejected_reason: z.string().nullable(),
+});
+export type WalletTopUpOutcome = z.infer<typeof WalletTopUpOutcomeSchema>;
+
+export const SettlementPaymentProgressSchema = z.object({
+  kind: z.literal("settlement_payment"),
+  ...transferProgressShape,
+  /** Null while pending — an outcome that does not exist is never invented. */
+  outcome: SettlementPaymentOutcomeSchema.nullable(),
+});
+export type SettlementPaymentProgress = z.infer<
+  typeof SettlementPaymentProgressSchema
+>;
+
+export const WalletTopUpProgressSchema = z.object({
+  kind: z.literal("wallet_top_up"),
+  ...transferProgressShape,
+  /** Null while pending. */
+  outcome: WalletTopUpOutcomeSchema.nullable(),
+});
+export type WalletTopUpProgress = z.infer<typeof WalletTopUpProgressSchema>;
+
+/** Either flow, discriminated on `kind` — for code that handles both. */
+export const TransferProgressSchema = z.discriminatedUnion("kind", [
+  SettlementPaymentProgressSchema,
+  WalletTopUpProgressSchema,
+]);
+export type TransferProgress = z.infer<typeof TransferProgressSchema>;
+
+export const SettlementPaymentProgressResponseSchema = dataWrapped(
+  SettlementPaymentProgressSchema,
+);
+export type SettlementPaymentProgressResponse = z.infer<
+  typeof SettlementPaymentProgressResponseSchema
+>;
+
+export const WalletTopUpProgressResponseSchema = dataWrapped(
+  WalletTopUpProgressSchema,
+);
+export type WalletTopUpProgressResponse = z.infer<
+  typeof WalletTopUpProgressResponseSchema
+>;
+
+/**
+ * GET /api/merchant/settlements/{id}/payment-progress — `settlements.view`.
+ *
+ * Takes a SETTLEMENT id and reports the batch's NEWEST bank payment, which
+ * is the receipt the merchant just uploaded rather than the one that landed
+ * last week. A batch with no bank payment at all (settled from the wallet,
+ * or built by an admin and not yet paid) has no transfer to report on and
+ * answers 404 — the same 404 another store's batch answers, because a 403
+ * would confirm the row exists.
+ */
+export function getSettlementPaymentProgress(
+  settlementId: number,
+  options: RequestOptions = {},
+): Promise<SettlementPaymentProgressResponse> {
+  return apiFetch(
+    `/api/merchant/settlements/${settlementId}/payment-progress`,
+    SettlementPaymentProgressResponseSchema,
+    { signal: options.signal },
+  );
+}
+
+/**
+ * GET /api/merchant/wallet/top-ups/{id}/progress — `wallet.view`.
+ *
+ * Takes a TOP-UP CLAIM id (the `id` on the claim `createMerchantWalletTopUp`
+ * answered, or one from the wallet payload's `pending_top_ups`). Another
+ * store's claim is a plain 404.
+ */
+export function getWalletTopUpProgress(
+  topUpId: number,
+  options: RequestOptions = {},
+): Promise<WalletTopUpProgressResponse> {
+  return apiFetch(
+    `/api/merchant/wallet/top-ups/${topUpId}/progress`,
+    WalletTopUpProgressResponseSchema,
+    { signal: options.signal },
+  );
+}
+
+/**
+ * May the screen run a progress indicator, and should the poll continue?
+ * Both questions have the same answer, and it is the server's, not ours.
+ *
+ * The `outcome` guard is belt and braces: a decided transfer is never
+ * watched, so a payload claiming both is contradictory and the outcome —
+ * the thing that actually happened — wins.
+ */
+export function isTransferWatched(progress: TransferProgress): boolean {
+  return progress.watching && progress.outcome === null;
+}
+
+/**
+ * Whole seconds left on the watch, measured on the SERVER's clock
+ * (`watch_until − checked_at`) so a wrong local clock cannot invent or eat
+ * time. 0 when nothing is being watched, when the window has no end
+ * recorded, or when either stamp is unparseable — a countdown that cannot be
+ * computed honestly shows nothing rather than a guess.
+ */
+export function transferWatchSecondsLeft(progress: TransferProgress): number {
+  if (!isTransferWatched(progress) || progress.watch_until === null) {
+    return 0;
+  }
+  const until = Date.parse(progress.watch_until);
+  const checked = Date.parse(progress.checked_at);
+  if (Number.isNaN(until) || Number.isNaN(checked)) {
+    return 0;
+  }
+  return Math.max(0, Math.floor((until - checked) / 1000));
 }
 
 // ---------------------------------------------------------------------------

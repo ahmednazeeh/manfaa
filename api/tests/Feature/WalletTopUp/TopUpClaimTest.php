@@ -84,9 +84,14 @@ it('creates a pending claim with the slip stored under the top-up, and shows it 
         ->and($topUp->slip_path)->toStartWith("wallet-top-ups/{$this->merchant->id}/{$topUp->id}/")
         ->and($topUp->slip_path)->toEndWith('.jpg')
         ->and(Storage::disk('slips')->exists($topUp->slip_path))->toBeTrue()
-        // The bank-watching window opened on the row.
-        ->and($topUp->poll_started_at)->not->toBeNull()
-        ->and($topUp->poll_until)->not->toBeNull();
+        // No bank-watching window: auto-verification is off in this fixture,
+        // so no poll was dispatched and the row carries no clock. The window
+        // is the RECORD that a watch really started — stamping one with no
+        // job behind it is what made a merchant's screen animate progress
+        // over nothing. See "starts watching the bank only when auto-verify
+        // is on" below for the armed half.
+        ->and($topUp->poll_started_at)->toBeNull()
+        ->and($topUp->poll_until)->toBeNull();
 
     // Not money: nothing credited, no wallet row even needed yet.
     expect($this->merchant->wallet()->exists())->toBeFalse();

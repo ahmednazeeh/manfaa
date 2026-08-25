@@ -2857,4 +2857,80 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get slipAttached => 'Receipt attached';
+
+  @override
+  String transferWatchingBody(String amount) {
+    return 'We are reading your bank\'s own records for the $amount you transferred. It usually matches within a few minutes.';
+  }
+
+  @override
+  String transferWatchLeft(int minutes) {
+    String _temp0 = intl.Intl.pluralLogic(
+      minutes,
+      locale: localeName,
+      other: 'About $minutes minutes left',
+      one: 'About 1 minute left',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get transferWatchLeftShort => 'Less than a minute left';
+
+  @override
+  String get transferCloseHint =>
+      'You can close this screen — the check keeps running and we notify you the moment it is confirmed.';
+
+  @override
+  String get transferCloseHintTeam =>
+      'You can close this screen — nothing here needs to stay open, and we notify you the moment it is confirmed.';
+
+  @override
+  String get transferTeamTitle => 'Our team will confirm this shortly';
+
+  @override
+  String get transferTeamBody =>
+      'Your slip has reached us. Someone checks it against the bank and you are notified as soon as it is confirmed. Nothing more is needed from you.';
+
+  @override
+  String get transferTeamExpiredBody =>
+      'We watched the bank for this transfer and have not seen it arrive yet. Our team takes it from here and you are notified once it is confirmed.';
+
+  @override
+  String get transferSettledTitle => 'Settled — your transfer matched';
+
+  @override
+  String transferSettledBody(String amount, String reference) {
+    return 'We received $amount for settlement $reference. Your customers\' cashback is confirmed.';
+  }
+
+  @override
+  String get transferPartialTitle => 'Part of this settlement is paid';
+
+  @override
+  String transferPartialBody(String received, String outstanding) {
+    return 'We received $received. $outstanding is still owed on this settlement — transfer exactly that and upload the slip to finish it.';
+  }
+
+  @override
+  String transferCreditedTitle(String amount) {
+    return '$amount added to your wallet';
+  }
+
+  @override
+  String transferBalanceNow(String balance) {
+    return 'Your balance is now $balance.';
+  }
+
+  @override
+  String get transferRejectedTitle => 'This transfer was not matched';
+
+  @override
+  String get transferRejectedBody =>
+      'Our team could not match this transfer to the bank\'s records. Check the slip and try again, or contact us.';
+
+  @override
+  String transferSettlementRejectedBody(String reference) {
+    return 'Settlement $reference is cancelled and its transactions are payable again. Create a new settlement with the correct receipt.';
+  }
 }

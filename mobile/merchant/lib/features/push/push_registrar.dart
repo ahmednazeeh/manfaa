@@ -45,6 +45,14 @@ String? routeForPushData(Map<String, Object?> data) {
     // between Profile and Manage Branches: both are one tap from there, and
     // neither destination can be the wrong one.
     'store_change_approved' || 'store_change_rejected' => '/more',
+    // The wallet's own verdicts (owner, 2026-08-25). The live transfer view
+    // promises "we notify you the moment it is confirmed"; the tap on that
+    // notification must land where the new balance is, not nowhere. A REFUSED
+    // top-up lands there too — the wallet screen is where the refused claim
+    // and its reason are listed, and it is the settlement pair's own rule
+    // (both `settlement_accepted` and `settlement_rejected` are routed).
+    // Both are gated by `wallet.view` in the router's own redirect.
+    'wallet_top_up_received' || 'wallet_top_up_rejected' => '/wallet',
     _ => null,
   };
 }

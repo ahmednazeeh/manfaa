@@ -871,6 +871,40 @@ class MerchantApi extends ManfaaApiBase<MerchantSession> {
     );
   }
 
+  // ------------------------------------ transfer match progress (2026-08-25)
+
+  /// What is happening to the transfer on a SETTLEMENT, right now.
+  ///
+  /// [settlementId] is the BATCH's id; the answer describes its NEWEST bank
+  /// payment — the receipt just uploaded, not the one that landed last week.
+  /// A batch settled from the wallet, or built by an admin and not yet paid,
+  /// has no transfer to report on and answers a plain 404, exactly as
+  /// another store's batch does.
+  ///
+  /// Poll every 5s while [MatchProgress.isWatching] and stop the moment it
+  /// goes false — the route allows 120/min, ten times that cadence. The
+  /// server polls the bank whether or not this is being called; closing the
+  /// screen loses nothing, and the push + SMS on a match fire regardless.
+  /// Gate: `settlements.view`.
+  Future<MatchProgress> settlementPaymentProgress(int settlementId) async =>
+      MatchProgress.fromJson(
+        await getJson('/merchant/settlements/$settlementId/payment-progress'),
+      );
+
+  /// What is happening to a WALLET TOP-UP claim, right now.
+  ///
+  /// [topUpId] is the claim's own id — the `id` on the [WalletTopUpClaim]
+  /// [createWalletTopUp] answered, or one from the wallet payload's
+  /// `pending_top_ups`. Another store's claim is a plain 404.
+  ///
+  /// Same shape, same polling law and same honesty rule as
+  /// [settlementPaymentProgress]; only [MatchOutcome] differs, because only
+  /// the outcomes differ. Gate: `wallet.view`.
+  Future<MatchProgress> walletTopUpProgress(int topUpId) async =>
+      MatchProgress.fromJson(
+        await getJson('/merchant/wallet/top-ups/$topUpId/progress'),
+      );
+
   /// Create a per-store product category rule. [mode] is `rate` (carries
   /// [cashbackRatePercent], the exact string) or `excluded` (the percent key
   /// must be ABSENT — the server prohibits it). The Dhivehi name is REQUIRED

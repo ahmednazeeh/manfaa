@@ -2896,4 +2896,82 @@ class AppLocalizationsDv extends AppLocalizations {
 
   @override
   String get slipAttached => 'ރަސީދު އެޓޭޗްކުރެވިއްޖެ';
+
+  @override
+  String transferWatchingBody(String amount) {
+    return 'ތިޔަބޭފުޅާ ޓްރާންސްފަރކުރެއްވި $amount ބޭންކުގެ އަމިއްލަ ރެކޯޑުތަކުން ދަނީ ބަލަމުންނެވެ. އާންމުކޮށް މަދު މިނެޓްކޮޅެއްގެ ތެރޭގައި ދިމާވެއެވެ.';
+  }
+
+  @override
+  String transferWatchLeft(int minutes) {
+    String _temp0 = intl.Intl.pluralLogic(
+      minutes,
+      locale: localeName,
+      other: 'ގާތްގަނޑަކަށް $minutes މިނެޓް ބާކީ',
+      one: 'ގާތްގަނޑަކަށް 1 މިނެޓް ބާކީ',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get transferWatchLeftShort => 'މިނެޓަކަށްވުރެ މަދު ވަގުތު ބާކީ';
+
+  @override
+  String get transferCloseHint =>
+      'މި ސްކްރީން ބަންދުކުރެއްވިޔަސް ރަނގަޅުވާނެ — ބެލުން ކުރިއަށްދާނެ، އަދި ކަށަވަރުވުމާއެކު ތިޔަބޭފުޅާއަށް އަންގާލެވޭނެއެވެ.';
+
+  @override
+  String get transferCloseHintTeam =>
+      'މި ސްކްރީން ބަންދުކުރެއްވިޔަސް ރަނގަޅުވާނެ — މިތާ ހުޅުވާފައި ބަހައްޓަވަން ނުޖެހޭނެ، އަދި ކަށަވަރުވުމާއެކު ތިޔަބޭފުޅާއަށް އަންގާލެވޭނެއެވެ.';
+
+  @override
+  String get transferTeamTitle =>
+      'އަޅުގަނޑުމެންގެ ޓީމުން އަވަހަށް މިކަން ކަށަވަރުކުރާނެ';
+
+  @override
+  String get transferTeamBody =>
+      'ތިޔަ ސްލިޕް އަޅުގަނޑުމެންނަށް ލިބިއްޖެ. ޓީމުގެ މުވައްޒަފަކު ބޭންކާ ދިމާކޮށް ބަލާނެ، އަދި ކަށަވަރުވުމާއެކު ތިޔަބޭފުޅާއަށް އަންގާލެވޭނެއެވެ. ތިޔަބޭފުޅާ އިތުރު ކަމެއް ކުރައްވާކަށް ނުޖެހޭނެއެވެ.';
+
+  @override
+  String get transferTeamExpiredBody =>
+      'މި ޓްރާންސްފަރ ހޯދުމަށް ބޭންކުގެ ރެކޯޑުތައް ބެލިއިރު އަދި ނުފެނެއެވެ. ދެން މިކަން ބައްލަވާނީ އަޅުގަނޑުމެންގެ ޓީމުން، އަދި ކަށަވަރުވުމާއެކު ތިޔަބޭފުޅާއަށް އަންގާލެވޭނެއެވެ.';
+
+  @override
+  String get transferSettledTitle =>
+      'ސެޓްލްވެއްޖެ — ތިޔަ ޓްރާންސްފަރ ދިމާވެއްޖެ';
+
+  @override
+  String transferSettledBody(String amount, String reference) {
+    return 'ސެޓްލްމަންޓް $reference އަށް $amount ލިބިއްޖެ. ކަސްޓަމަރުންގެ ކޭޝްބެކް ކަށަވަރުވެއްޖެއެވެ.';
+  }
+
+  @override
+  String get transferPartialTitle => 'މި ސެޓްލްމަންޓްގެ ބައެއް ދެއްކިއްޖެ';
+
+  @override
+  String transferPartialBody(String received, String outstanding) {
+    return '$received ލިބިއްޖެ. މި ސެޓްލްމަންޓުން އަދިވެސް $outstanding ދައްކަންޖެހެއެވެ — ހަމަ އެ އަދަދު ޓްރާންސްފަރކުރައްވާފައި އެ ސްލިޕް އަޕްލޯޑްކުރައްވާ.';
+  }
+
+  @override
+  String transferCreditedTitle(String amount) {
+    return '$amount ވޮލެޓަށް އިތުރުކުރެވިއްޖެ';
+  }
+
+  @override
+  String transferBalanceNow(String balance) {
+    return 'މިހާރު ބެލެންސަކީ $balance.';
+  }
+
+  @override
+  String get transferRejectedTitle => 'މި ޓްރާންސްފަރ ދިމައެއް ނުވި';
+
+  @override
+  String get transferRejectedBody =>
+      'ބޭންކުގެ ރެކޯޑުތަކާ މި ޓްރާންސްފަރ ދިމާކުރެވޭގޮތެއް ނުވި. ސްލިޕް ބައްލަވާފައި އަލުން މަސައްކަތްކުރައްވާ، ނުވަތަ އަޅުގަނޑުމެންނާ ގުޅުއްވާ.';
+
+  @override
+  String transferSettlementRejectedBody(String reference) {
+    return 'ސެޓްލްމަންޓް $reference ކެންސަލްވެފައި، އޭގެ މުޢާމަލާތްތައް އަލުން ދައްކަންޖެހޭ ގޮތުގައި ހުރީއެވެ. ރަނގަޅު ސްލިޕާއެކު އައު ސެޓްލްމަންޓެއް ހައްދަވާ.';
+  }
 }

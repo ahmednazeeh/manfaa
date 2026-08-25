@@ -63,6 +63,22 @@ void main() {
       );
     });
 
+    test('either top-up verdict lands on the wallet, where the claim is', () {
+      // The transfer view says we notify you the moment it is confirmed —
+      // and `wallet_top_up_received` is that notification. The refusal is
+      // the same flow's other verdict, and the wallet is where the refused
+      // claim and its reason are listed; both settlement verdicts are
+      // routed for exactly this reason.
+      expect(
+        routeForPushData({'template': 'wallet_top_up_received'}),
+        '/wallet',
+      );
+      expect(
+        routeForPushData({'template': 'wallet_top_up_rejected'}),
+        '/wallet',
+      );
+    });
+
     test('a store-change verdict lands on the estate hub (MR9)', () {
       // Profile and Manage Branches both live one tap from /more, and the
       // push carries no kind key to choose between them.

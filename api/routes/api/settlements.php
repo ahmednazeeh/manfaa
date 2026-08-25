@@ -6,6 +6,7 @@ use App\Http\Controllers\Admin\WalletController;
 use App\Http\Controllers\Admin\WalletTopUpController as AdminWalletTopUpController;
 use App\Http\Controllers\Merchant\PosWaiverController;
 use App\Http\Controllers\Merchant\SettlementController as MerchantSettlementController;
+use App\Http\Controllers\Merchant\TransferProgressController;
 use App\Http\Controllers\Merchant\WalletTopUpController as MerchantWalletTopUpController;
 use App\Http\Middleware\EnsureMerchantApproved;
 use Illuminate\Support\Facades\Route;
@@ -51,6 +52,38 @@ Route::prefix('merchant')->middleware('auth:merchant')->group(function () {
     Route::get('settlements/{id}', [MerchantSettlementController::class, 'show'])
         ->whereNumber('id')
         ->middleware('merchant.can:settlements.view');
+
+    /*
+     * The bank watch, as the screen that just uploaded a slip observes it
+     * (owner, 2026-08-25). A pair, one per flow, answering the SAME shape
+     * (App\Domain\Transfers\TransferProgress) so the settlement screen and
+     * the wallet screen share one parser and cannot drift apart.
+     *
+     * They report `watching` as a FACT the server computes — auto-verify
+     * on, the destination bank actually routed to a read profile, the
+     * window still open, the row still pending — and a machine `reason`
+     * when it is false, so a client never has to guess and never animates
+     * progress over a transfer nobody is watching.
+     *
+     * Permissioned exactly like the parent read each one belongs to:
+     * settlements.view for a batch's payment, wallet.view for a top-up.
+     *
+     * throttle:120,1, per route (ThrottlePerRoute gives each declaration
+     * its own bucket): the client polls every 5 seconds for a 15-minute
+     * verify window, which is 12 requests a minute. 120 leaves an order of
+     * magnitude of headroom — a merchant with the panel and the app open at
+     * once, a retry storm after a dropped connection, or a shortened poll
+     * interval — while still bounding a runaway client. Both reads are a
+     * handful of primary-key lookups, so the ceiling is about protecting
+     * the merchant from their own client, not the database from the read.
+     */
+    Route::get('settlements/{id}/payment-progress', [TransferProgressController::class, 'settlement'])
+        ->whereNumber('id')
+        ->middleware(['merchant.can:settlements.view', 'throttle:120,1']);
+
+    Route::get('wallet/top-ups/{id}/progress', [TransferProgressController::class, 'walletTopUp'])
+        ->whereNumber('id')
+        ->middleware(['merchant.can:wallet.view', 'throttle:120,1']);
 
     Route::post('settlements', [MerchantSettlementController::class, 'store'])
         ->middleware(['merchant.can:settlements.create', EnsureMerchantApproved::class]);

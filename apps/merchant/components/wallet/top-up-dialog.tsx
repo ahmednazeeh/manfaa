@@ -8,7 +8,7 @@ import {
   type WalletTopUp,
 } from '@manfaa/api-client';
 import { useFormatMoney } from '@manfaa/ui';
-import { LoaderCircle, ShieldCheck, TriangleAlert, Upload } from 'lucide-react';
+import { LoaderCircle, TriangleAlert, Upload } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import {
   apiErrorCode,
@@ -35,6 +35,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input, InputAddon, InputGroup } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { TransferWatch } from '@/components/app/transfer-watch';
 import { TransferDestination } from '@/components/settlement/payment-instructions';
 import { SlipDropzone } from '@/components/settlement/receipt-form';
 
@@ -145,32 +146,25 @@ function TopUpBody({
   };
 
   // -----------------------------------------------------------------------
-  // Done: the claim is in and the bank is being read. Not "topped up" — the
-  // balance has not moved, and the merchant must not go looking for it.
+  // Done: the claim is in and the bank is being read — live, on this screen,
+  // for as long as the server is actually reading it, and then the real
+  // answer: credited with the new balance, or refused with the reason. Not
+  // "topped up" until the server says so; the balance has not moved, and the
+  // merchant must not go looking for it.
+  //
+  // The heading IS the dialog's accessible name (titleAs={DialogTitle}), so
+  // a screen reader hears the live answer rather than a stale static one.
   // -----------------------------------------------------------------------
   if (created !== null) {
     const bank = created.platform_bank_account ?? null;
     return (
       <>
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-3">
-            <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-green-500/15">
-              <ShieldCheck className="size-5 text-green-600" />
-            </span>
-            {t('wallet.topUpDialog.successTitle')}
-          </DialogTitle>
-        </DialogHeader>
-        <DialogBody>
-          <p className="text-sm text-secondary-foreground">
-            {bank
-              ? t('wallet.topUpDialog.successBody', {
-                  amount: formatMoney(created.amount_laari, created.currency),
-                  bank: bankLabel(bank.bank_name),
-                })
-              : t('wallet.topUpDialog.successBodyNoBank', {
-                  amount: formatMoney(created.amount_laari, created.currency),
-                })}
-          </p>
+        <DialogBody className="pt-1">
+          <TransferWatch
+            target={{ kind: 'top_up', topUpId: created.id }}
+            titleAs={DialogTitle}
+            bankName={bank === null ? null : bankLabel(bank.bank_name)}
+          />
         </DialogBody>
         <DialogFooter>
           <Button onClick={onClose}>{t('wallet.topUpDialog.done')}</Button>

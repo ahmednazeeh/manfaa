@@ -4999,6 +4999,108 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Receipt attached'**
   String get slipAttached;
+
+  /// No description provided for @transferWatchingBody.
+  ///
+  /// In en, this message translates to:
+  /// **'We are reading your bank\'s own records for the {amount} you transferred. It usually matches within a few minutes.'**
+  String transferWatchingBody(String amount);
+
+  /// No description provided for @transferWatchLeft.
+  ///
+  /// In en, this message translates to:
+  /// **'{minutes, plural, =1{About 1 minute left} other{About {minutes} minutes left}}'**
+  String transferWatchLeft(int minutes);
+
+  /// No description provided for @transferWatchLeftShort.
+  ///
+  /// In en, this message translates to:
+  /// **'Less than a minute left'**
+  String get transferWatchLeftShort;
+
+  /// No description provided for @transferCloseHint.
+  ///
+  /// In en, this message translates to:
+  /// **'You can close this screen — the check keeps running and we notify you the moment it is confirmed.'**
+  String get transferCloseHint;
+
+  /// No description provided for @transferCloseHintTeam.
+  ///
+  /// In en, this message translates to:
+  /// **'You can close this screen — nothing here needs to stay open, and we notify you the moment it is confirmed.'**
+  String get transferCloseHintTeam;
+
+  /// No description provided for @transferTeamTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Our team will confirm this shortly'**
+  String get transferTeamTitle;
+
+  /// No description provided for @transferTeamBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Your slip has reached us. Someone checks it against the bank and you are notified as soon as it is confirmed. Nothing more is needed from you.'**
+  String get transferTeamBody;
+
+  /// No description provided for @transferTeamExpiredBody.
+  ///
+  /// In en, this message translates to:
+  /// **'We watched the bank for this transfer and have not seen it arrive yet. Our team takes it from here and you are notified once it is confirmed.'**
+  String get transferTeamExpiredBody;
+
+  /// No description provided for @transferSettledTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Settled — your transfer matched'**
+  String get transferSettledTitle;
+
+  /// No description provided for @transferSettledBody.
+  ///
+  /// In en, this message translates to:
+  /// **'We received {amount} for settlement {reference}. Your customers\' cashback is confirmed.'**
+  String transferSettledBody(String amount, String reference);
+
+  /// No description provided for @transferPartialTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Part of this settlement is paid'**
+  String get transferPartialTitle;
+
+  /// No description provided for @transferPartialBody.
+  ///
+  /// In en, this message translates to:
+  /// **'We received {received}. {outstanding} is still owed on this settlement — transfer exactly that and upload the slip to finish it.'**
+  String transferPartialBody(String received, String outstanding);
+
+  /// No description provided for @transferCreditedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'{amount} added to your wallet'**
+  String transferCreditedTitle(String amount);
+
+  /// No description provided for @transferBalanceNow.
+  ///
+  /// In en, this message translates to:
+  /// **'Your balance is now {balance}.'**
+  String transferBalanceNow(String balance);
+
+  /// No description provided for @transferRejectedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'This transfer was not matched'**
+  String get transferRejectedTitle;
+
+  /// No description provided for @transferRejectedBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Our team could not match this transfer to the bank\'s records. Check the slip and try again, or contact us.'**
+  String get transferRejectedBody;
+
+  /// No description provided for @transferSettlementRejectedBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Settlement {reference} is cancelled and its transactions are payable again. Create a new settlement with the correct receipt.'**
+  String transferSettlementRejectedBody(String reference);
 }
 
 class _AppLocalizationsDelegate

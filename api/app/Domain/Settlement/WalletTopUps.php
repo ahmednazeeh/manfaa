@@ -158,10 +158,19 @@ final class WalletTopUps
      * ({@see SettlementAllocator::watchTheBank}). Dispatched after commit,
      * because a job that reads the row before its transaction lands finds
      * nothing.
+     *
+     * The window is written only when a poll is really dispatched — an
+     * unstamped row is one nobody ever watched, and the merchant's screen is
+     * told that rather than shown a bar over nothing.
      */
     private function watchTheBank(WalletTopUp $topUp): void
     {
         $settings = TransferSetting::current();
+
+        if (! $settings->auto_verify_enabled) {
+            return;
+        }
+
         $now = CarbonImmutable::now();
 
         $topUp->forceFill([
@@ -169,10 +178,6 @@ final class WalletTopUps
             'poll_until' => $now->addMinutes((int) $settings->verify_window_minutes),
             'poll_attempts' => 0,
         ])->save();
-
-        if (! $settings->auto_verify_enabled) {
-            return;
-        }
 
         DB::afterCommit(function () use ($topUp): void {
             // The slip first: the poll asks whether the bank's payer and
