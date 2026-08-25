@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:manfaa_core/manfaa_core.dart';
 
 import '../../app/providers.dart';
+import '../onboarding/onboarding_providers.dart';
 
 /// How long a cached money answer may serve before a screen entry quietly
 /// refreshes it in the background (owner report 2026-08-23: the Dashboard
@@ -182,4 +183,8 @@ void invalidateMoney(WidgetRef ref) {
   ref.invalidate(walletProvider);
   ref.invalidate(settleAllPreviewProvider);
   ref.invalidate(settlementsPageProvider);
+  // A landed settlement is also the guided setup's "settle your first bill"
+  // becoming true. Same rule as the credit path: the tasklist reads real
+  // state, so the read is repeated when the state moves.
+  refreshOnboardingGuideFrom(ref);
 }

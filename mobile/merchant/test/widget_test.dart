@@ -163,6 +163,14 @@ class _FakeApi extends MerchantApi {
     this.status = 'active',
   });
 
+  // The guided setup is not live in this fixture, so the shell's chip and
+  // the Dashboard's tour prompt draw nothing and every assertion below is
+  // about the screen it is about. Overridden rather than inherited because
+  // the base class would reach the NETWORK from a unit test.
+  @override
+  Future<MerchantOnboardingGuide> onboarding() async =>
+      MerchantOnboardingGuide.hidden;
+
   // Tear-off-friendly factory with the defaults.
   // ignore: prefer_constructors_over_static_methods
   static _FakeApi new_(MerchantSession session) => _FakeApi(session: session);

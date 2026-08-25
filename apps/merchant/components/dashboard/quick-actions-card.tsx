@@ -15,6 +15,7 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { useLayout } from '@/components/app-layout/context';
+import { TOUR_ANCHORS, tourAnchor } from '@/components/onboarding/anchors';
 import { CreditCustomerDialog } from '@/components/credit/credit-customer-dialog';
 import {
   CreditResultCard,
@@ -62,7 +63,9 @@ export function QuickActionsCard() {
 
   return (
     <>
-      <Card>
+      {/* Anchored for the guided tours: both walkthroughs start here,
+          because both journeys start here. */}
+      <Card {...tourAnchor(TOUR_ANCHORS.quickActions)}>
         <CardHeader>
           <CardHeading>
             <CardTitle>{t('dashboard.quickActionsTitle')}</CardTitle>
@@ -70,7 +73,10 @@ export function QuickActionsCard() {
         </CardHeader>
         <CardContent className="grid grid-cols-1 gap-5 sm:grid-cols-2">
           {canCredit && (
-            <div className="flex flex-col gap-2">
+            <div
+              {...tourAnchor(TOUR_ANCHORS.quickActionsCredit)}
+              className="flex flex-col gap-2"
+            >
               <Button
                 ref={creditButtonRef}
                 size="lg"
@@ -85,7 +91,10 @@ export function QuickActionsCard() {
             </div>
           )}
           {canSettle && (
-            <div className="flex flex-col gap-2">
+            <div
+              {...tourAnchor(TOUR_ANCHORS.quickActionsSettle)}
+              className="flex flex-col gap-2"
+            >
               {/* A dimmed LINK is still a link: `disabled` on an anchor is
                   not a thing, so it would stay tabbable and openable with
                   Enter while reading "Nothing to settle right now." With

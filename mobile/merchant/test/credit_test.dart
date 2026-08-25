@@ -623,6 +623,14 @@ class _TillApi extends MerchantApi {
     this.gst = false,
   });
 
+  // The guided setup is not live in this fixture, so the shell's chip and
+  // the Dashboard's tour prompt draw nothing and every assertion below is
+  // about the screen it is about. Overridden rather than inherited because
+  // the base class would reach the NETWORK from a unit test.
+  @override
+  Future<MerchantOnboardingGuide> onboarding() async =>
+      MerchantOnboardingGuide.hidden;
+
   final List<String> permissions;
 
   /// GST switched on at the platform, 8% on top of the fee: a 1,000.00 sale

@@ -13,6 +13,13 @@ use Illuminate\Support\Facades\Route;
 // merchant-scoped keys) inside the controller; these route throttles are a
 // coarse backstop, mirroring the customer OTP routes.
 Route::prefix('merchant/signup')->group(function () {
+    // What the form must know before it is submitted: the validation-window
+    // range the platform currently allows, so the field renders its own
+    // limit instead of a hardcoded guess that goes stale the day an admin
+    // moves the ceiling. Public like the rest of signup, and it discloses
+    // nothing about any store.
+    Route::get('options', [SignupController::class, 'options'])->middleware('throttle:60,1');
+
     Route::post('request-otp', [SignupController::class, 'requestOtp'])->middleware('throttle:30,1');
     Route::post('verify-otp', [SignupController::class, 'verifyOtp'])->middleware('throttle:10,1');
     Route::post('register', [SignupController::class, 'register'])->middleware('throttle:10,1');

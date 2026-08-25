@@ -98,6 +98,15 @@
       animation: none !important;
     }
 
+    /* The guided-setup tasklist is words, and an 80px rail has nowhere to
+       put words — the same reason the menu titles and labels below are
+       hidden. It comes back with the rest of the sidebar on hover. */
+    .demo1.sidebar-collapse
+      .sidebar:not(:hover)
+      [data-slot='onboarding-tasklist'] {
+      display: none !important;
+    }
+
     .demo1.sidebar-collapse
       .sidebar:not(:hover)
       [data-slot='accordion-menu-sub-content'] {

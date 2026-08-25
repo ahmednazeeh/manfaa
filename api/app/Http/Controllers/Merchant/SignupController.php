@@ -10,9 +10,11 @@ use App\Domain\Customers\Msisdn;
 use App\Domain\Customers\TooManyOtpAttemptsException;
 use App\Domain\Onboarding\EmailAlreadyRegisteredException;
 use App\Domain\Onboarding\MerchantOtpService;
+use App\Domain\Onboarding\SignupOptions;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\MerchantUserResource;
 use App\Http\Support\MerchantOtpRequestLimiter;
+use App\Rules\ValidationWindowDays;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -84,6 +86,17 @@ class SignupController extends Controller
         ]);
     }
 
+    /**
+     * What the form needs BEFORE it is filled in — today's validation-window
+     * range, so the field can show its own limit rather than guessing.
+     * Public, like every other signup step, and identical to the mobile
+     * door's (Mobile\MerchantSignupController::options).
+     */
+    public function options(): JsonResponse
+    {
+        return response()->json(['data' => SignupOptions::payload()]);
+    }
+
     public function register(Request $request): JsonResponse
     {
         $validated = $request->validate([
@@ -92,6 +105,13 @@ class SignupController extends Controller
             'business_name_dv' => ['sometimes', 'nullable', 'string', 'max:120'],
             'email' => ['required', 'string', 'email', 'max:255'],
             'password' => ['required', 'string', 'min:8', 'max:255'],
+            // How long the new store holds a sale before its cashback
+            // validates. The SAME rule object the preferences screen uses,
+            // reading the SAME admin-governed ceiling — a store must never
+            // be signed up on a window that screen would then refuse.
+            // Omitted (or null) means "no opinion": the store is created on
+            // the platform default exactly as before this field existed.
+            'validation_window_days' => ['sometimes', 'nullable', new ValidationWindowDays],
         ]);
 
         try {
@@ -101,6 +121,7 @@ class SignupController extends Controller
                 $validated['email'],
                 $validated['password'],
                 blank($validated['business_name_dv'] ?? null) ? null : trim((string) $validated['business_name_dv']),
+                isset($validated['validation_window_days']) ? (int) $validated['validation_window_days'] : null,
             );
         } catch (InvalidSignupTokenException) {
             throw ValidationException::withMessages(['signup_token' => 'signup_token_invalid']);

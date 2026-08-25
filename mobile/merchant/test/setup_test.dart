@@ -265,6 +265,105 @@ void main() {
     expect(find.text('Grocery'), findsOneWidget);
   });
 
+  // ---- the validation window at signup (owner, 2026-08-25) ---------------
+  //
+  // The field is the SERVER's: its label, its explanation and its ceiling
+  // all come from GET /merchant/signup/options, read before the form is
+  // submitted. The two tests below are the two halves of that contract —
+  // the range is offered and travels, and a read that failed leaves signup
+  // byte-identical to how it behaved before the field existed.
+
+  testWidgets('the validation window is offered up to the platform ceiling '
+      'and travels with register', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(420, 1800));
+    final store = MemorySecretStore();
+    late _SetupFakeApi api;
+    await tester.pumpWidget(app(
+      store,
+      (s) => api = _SetupFakeApi(session: s, setup: setupJson()),
+    ));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Register your store'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), '7712345');
+    await tester.tap(find.text('Continue'));
+    await tester.pump(const Duration(milliseconds: 50));
+    await tester.enterText(find.byType(TextField), '123456');
+    await tester.tap(find.text('Verify'));
+    await tester.pumpAndSettle();
+
+    // The server's own label and its plain-language sentence, verbatim.
+    expect(find.text('Validation window'), findsOneWidget);
+    expect(
+      find.textContaining('Choose between 0 and 3 days'),
+      findsOneWidget,
+    );
+
+    // The served default is preselected.
+    expect(find.byKey(const Key('signup-validation-window')), findsOneWidget);
+    expect(find.text('2 days'), findsOneWidget);
+
+    // The list stops AT the platform ceiling: 3 exists, 4 does not.
+    await tester.tap(find.byKey(const Key('signup-validation-window')));
+    await tester.pumpAndSettle();
+    expect(find.text('3 days'), findsWidgets);
+    expect(find.text('4 days'), findsNothing);
+    expect(find.text('Same day — no wait'), findsWidgets);
+    await tester.tap(find.text('3 days').last);
+    await tester.pumpAndSettle();
+
+    final fields = find.byType(TextField);
+    await tester.enterText(fields.at(0), 'Fresh Mart');
+    await tester.enterText(fields.at(2), 'owner@freshmart.mv');
+    await tester.enterText(fields.at(3), 'hunter22');
+    await tester.tap(find.text('Create my store'));
+    await tester.pumpAndSettle();
+
+    expect(api.registered, isTrue);
+    expect(api.registeredWindowDays, 3);
+  });
+
+  testWidgets('a failed options read draws no field and sends nothing',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(420, 1800));
+    final store = MemorySecretStore();
+    late _SetupFakeApi api;
+    await tester.pumpWidget(app(
+      store,
+      (s) => api = _SetupFakeApi(
+        session: s,
+        setup: setupJson(),
+        signupOptionsJson: null,
+      ),
+    ));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Register your store'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), '7712345');
+    await tester.tap(find.text('Continue'));
+    await tester.pump(const Duration(milliseconds: 50));
+    await tester.enterText(find.byType(TextField), '123456');
+    await tester.tap(find.text('Verify'));
+    await tester.pumpAndSettle();
+
+    // No field at all — never a guessed ceiling. A hard-coded 3 here would
+    // keep offering 3 on the afternoon an admin lowered the platform to 1.
+    expect(find.text('Validation window'), findsNothing);
+    expect(find.byKey(const Key('signup-validation-window')), findsNothing);
+
+    final fields = find.byType(TextField);
+    await tester.enterText(fields.at(0), 'Fresh Mart');
+    await tester.enterText(fields.at(2), 'owner@freshmart.mv');
+    await tester.enterText(fields.at(3), 'hunter22');
+    await tester.tap(find.text('Create my store'));
+    await tester.pumpAndSettle();
+
+    // Registered with the key omitted: the store gets the platform default,
+    // exactly as signup behaved before this field existed.
+    expect(api.registered, isTrue);
+    expect(api.registeredWindowDays, isNull);
+  });
+
   testWidgets('a short password is refused client-side before the wire',
       (tester) async {
     await tester.binding.setSurfaceSize(const Size(420, 1800));
@@ -611,13 +710,52 @@ void main() {
   });
 }
 
+/// `GET /merchant/signup/options` exactly as production answers it today:
+/// a 0–3 day window defaulting to 2, with the server's own label and its
+/// plain-language explanation carrying the live numbers.
+const _liveSignupOptions = <String, dynamic>{
+  'validation_window': {
+    'min_days': 0,
+    'max_days': 3,
+    'default_days': 2,
+    'label_en': 'Validation window',
+    'label_dv': 'ވެލިޑޭޝަން މުއްދަތު',
+    'help_en': 'How many days a sale stays open for returns before its '
+        'cashback is confirmed. Cashback stays pending until the window '
+        'ends. Choose between 0 and 3 days — 2 if you are not sure.',
+    'help_dv': 'ވިޔަފާރި ރިޓަރންކުރުމަށް ދޭ މުއްދަތު.',
+    'invalid_en':
+        'The validation window must be a whole number of days between 0 and 3.',
+    'invalid_dv': '0 އާއި 3 އާ ދެމެދުގެ ދުވަހުގެ އަދަދެއް ލިޔުއްވާ.',
+  },
+};
+
 /// Fake MerchantApi over the REAL session store: the wizard endpoints
 /// mutate one in-memory setup map the way the server would.
 class _SetupFakeApi extends MerchantApi {
+
+  // Signed in as a draft store, the wizard is the only surface — no shell,
+  // so no guide chip. Overridden anyway because the base class would reach
+  // the NETWORK from a unit test.
+  @override
+  Future<MerchantOnboardingGuide> onboarding() async =>
+      MerchantOnboardingGuide.hidden;
+
+  /// The validation-window range the platform allows, as the live server
+  /// serves it today. `signupOptionsJson: null` answers `unknown`, which is
+  /// what a FAILED read looks like: no field drawn, nothing sent.
+  final Map<String, dynamic>? signupOptionsJson;
+
+  @override
+  Future<MerchantSignupOptions> signupOptions() async =>
+      signupOptionsJson == null
+          ? MerchantSignupOptions.unknown
+          : MerchantSignupOptions.fromJson(signupOptionsJson!);
   _SetupFakeApi({
     required super.session,
     required this.setup,
     this.missingOnSubmit = const [],
+    this.signupOptionsJson = _liveSignupOptions,
     this.permissions = const [
       'setup.view',
       'setup.edit',
@@ -674,6 +812,10 @@ class _SetupFakeApi extends MerchantApi {
   }) async =>
       'signup-token-1';
 
+  /// What the last register carried, so a test can assert the validation
+  /// window actually travelled (or deliberately did not).
+  int? registeredWindowDays;
+
   @override
   Future<void> registerMerchant({
     required String signupToken,
@@ -682,8 +824,10 @@ class _SetupFakeApi extends MerchantApi {
     required String email,
     required String password,
     required String deviceName,
+    int? validationWindowDays,
   }) async {
     registered = true;
+    registeredWindowDays = validationWindowDays;
     await session.saveSession(
       token: 't-new',
       userName: businessName,

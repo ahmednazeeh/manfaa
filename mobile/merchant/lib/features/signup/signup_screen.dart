@@ -13,6 +13,7 @@ import '../../app/app.dart';
 import '../../app/providers.dart';
 import '../../app/router.dart';
 import '../../widgets/merchant_brand.dart';
+import '../onboarding/onboarding_providers.dart';
 
 /// Merchant signup (MR1): phone → 6-digit code → store details → signed in
 /// as a DRAFT store, straight into the setup wizard.
@@ -46,6 +47,11 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
   var _busy = false;
   var _obscure = true;
   String? _signupToken;
+
+  /// The validation window this store is being created with, or null for
+  /// "whatever the platform's default is". Only ever set from the field the
+  /// server described, and only ever sent when the server would accept it.
+  int? _window;
 
   /// Client-side resend cooldown. The REAL budget is server-side (3/hour a
   /// phone, SHARED with the web signup); this just keeps an impatient thumb
@@ -114,6 +120,12 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
     final l10n = context.l10n;
 
     if (error is! MobileApiException) return l10n.errorGeneric;
+
+    // A refused validation window is a FIELD refusal, and the server's own
+    // sentence names the live range ("...between 0 and 3."). Show that, not
+    // the envelope's generic line — the numbers in it are the whole point.
+    final field = error.fieldMessages('validation_window_days');
+    if (field.isNotEmpty) return field.first;
 
     return switch (error.code) {
       ApiCode.otpInvalid => l10n.errOtpInvalid,
@@ -184,6 +196,16 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
           return;
         }
 
+        // Belt and braces over the dropdown, which cannot produce anything
+        // out of range: `accepts` is the client mirror of the server's own
+        // rule, so a value it refuses is omitted and the platform default
+        // applies rather than the signup dying on a 422.
+        final window = ref
+            .read(signupOptionsProvider)
+            .valueOrNull
+            ?.validationWindow;
+        final chosen = _window ?? window?.defaultDays;
+
         try {
           await ref.read(apiProvider).registerMerchant(
                 signupToken: _signupToken ?? '',
@@ -192,6 +214,9 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                 email: email,
                 password: password,
                 deviceName: await _deviceName(),
+                validationWindowDays: (window?.accepts(chosen) ?? false)
+                    ? chosen
+                    : null,
               );
         } on MobileApiException catch (e) {
           // A dead signup token can only earn the same 422 forever — the
@@ -213,16 +238,27 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
   /// surface, whatever the app's chosen locale is. The override is scoped to
   /// this screen — the wizard and the rest of the app stay bilingual.
   @override
-  Widget build(BuildContext context) => Localizations.override(
-        context: context,
-        locale: const Locale('en'),
-        child: Directionality(
-          textDirection: TextDirection.ltr,
-          child: Builder(builder: _form),
-        ),
-      );
+  Widget build(BuildContext context) {
+    // Read at the TOP of build rather than inside the nested Builder: the
+    // watch belongs to this element, and starting it the moment the screen
+    // mounts means the answer has landed long before the details step
+    // needs it. An unanswered or failed read is `unknown` — no field, and
+    // nothing sent.
+    final window =
+        ref.watch(signupOptionsProvider).valueOrNull?.validationWindow ??
+            ValidationWindowOption.unknown;
 
-  Widget _form(BuildContext context) {
+    return Localizations.override(
+      context: context,
+      locale: const Locale('en'),
+      child: Directionality(
+        textDirection: TextDirection.ltr,
+        child: Builder(builder: (context) => _form(context, window)),
+      ),
+    );
+  }
+
+  Widget _form(BuildContext context, ValidationWindowOption window) {
     final l10n = context.l10n;
     final theme = Theme.of(context);
 
@@ -255,7 +291,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                 children: switch (_step) {
                   _Step.phone => _phoneStep(l10n, theme),
                   _Step.code => _codeStep(l10n, theme),
-                  _Step.details => _detailsStep(l10n, theme),
+                  _Step.details => _detailsStep(l10n, theme, window),
                 },
               ),
             ),
@@ -389,7 +425,11 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
         ),
       ];
 
-  List<Widget> _detailsStep(dynamic l10n, ThemeData theme) => [
+  List<Widget> _detailsStep(
+    dynamic l10n,
+    ThemeData theme,
+    ValidationWindowOption window,
+  ) => [
         Text(l10n.businessNameLabel, style: theme.textTheme.labelLarge),
         const SizedBox(height: Gap.sm),
         TextField(
@@ -454,7 +494,69 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
         Text(l10n.passwordRule,
             style: theme.textTheme.bodySmall
                 ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+        ..._validationWindowField(l10n, theme, window),
         const SizedBox(height: Gap.xl),
         _primary(l10n.createStore, _busy ? null : _register),
       ];
+
+  /// The validation window (owner, 2026-08-25): how many days a sale stays
+  /// open for returns before its cashback is confirmed.
+  ///
+  /// EVERY WORD HERE IS THE SERVER'S — the label, the plain-language
+  /// explanation and the numbers inside it are served by
+  /// `GET /merchant/signup/options`, which is the same text the web signup
+  /// renders, so the two surfaces cannot drift into explaining the same
+  /// setting differently. The only local string is the name of a duration
+  /// ("2 days"), which is not a policy.
+  ///
+  /// A DROPDOWN RATHER THAN A NUMBER FIELD, so the platform ceiling is not
+  /// merely stated but structurally unreachable: the list runs from the
+  /// served floor to the served ceiling and stops. `accepts()` still guards
+  /// the submit — the ceiling is admin policy and could move between this
+  /// screen loading and the form being sent.
+  ///
+  /// Absent entirely when the options read has not landed or failed: the
+  /// field is omitted from register and the store is created with the
+  /// platform default, exactly as it was before this existed.
+  List<Widget> _validationWindowField(
+    dynamic l10n,
+    ThemeData theme,
+    ValidationWindowOption window,
+  ) {
+    final max = window.maxDays;
+    if (!window.ready || max == null) return const [];
+
+    return [
+      const SizedBox(height: Gap.lg),
+      Text(window.label(dhivehi: false), style: theme.textTheme.labelLarge),
+      const SizedBox(height: Gap.sm),
+      DropdownButtonFormField<int>(
+        key: const Key('signup-validation-window'),
+        initialValue: _window ?? window.defaultDays ?? window.floor,
+        // isExpanded, because the button sizes itself to the WIDEST item and
+        // "Same day — no wait" is wider than the field on a narrow phone —
+        // it overflowed the decorator's row without this.
+        isExpanded: true,
+        decoration: const InputDecoration(
+          prefixIcon: Icon(Icons.event_repeat_rounded),
+        ),
+        items: [
+          for (var days = window.floor; days <= max; days++)
+            DropdownMenuItem<int>(
+              value: days,
+              child: Text(
+                l10n.windowDaysOption(days),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+        ],
+        onChanged: _busy ? null : (value) => setState(() => _window = value),
+      ),
+      const SizedBox(height: Gap.xs),
+      Text(window.help(dhivehi: false),
+          style: theme.textTheme.bodySmall
+              ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+    ];
+  }
 }

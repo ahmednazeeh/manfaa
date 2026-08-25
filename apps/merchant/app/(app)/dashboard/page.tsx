@@ -28,6 +28,12 @@ import { ErrorBlock } from '@/components/app/async-states';
 import { PosWaiverCard } from '@/components/dashboard/pos-waiver-card';
 import { MerchantFeePromotionBanner } from '@/components/fee-promotion/fee-promotion-banner';
 import { QuickActionsCard } from '@/components/dashboard/quick-actions-card';
+import {
+  TOUR_ANCHORS,
+  tourAnchor,
+  type TourAnchor,
+} from '@/components/onboarding/anchors';
+import { TourPrompt } from '@/components/onboarding/tour-prompt';
 import { PromptDiscountDeadline } from '@/components/settlement/prompt-discount';
 
 const BUCKETS: { key: '0_5' | '6_10' | '11_15' | 'overdue'; label: string }[] = [
@@ -41,13 +47,19 @@ function BucketCard({
   label,
   bucket,
   overdue,
+  anchor,
 }: {
   label: string;
   bucket: OutstandingBucket;
   overdue?: boolean;
+  /** Set on the Overdue card alone — the guided tour points at it. */
+  anchor?: TourAnchor;
 }) {
   return (
-    <Card className={cn(overdue && bucket.count > 0 && 'border-destructive/50')}>
+    <Card
+      data-tour={anchor}
+      className={cn(overdue && bucket.count > 0 && 'border-destructive/50')}
+    >
       <CardContent className="flex flex-col gap-1.5 p-5">
         <span
           className={cn(
@@ -127,6 +139,10 @@ export default function DashboardPage() {
             outstanding figures. Renders nothing the rest of the time. */}
         <MerchantFeePromotionBanner />
 
+        {/* The offer of a walkthrough, above the card the walkthrough
+            starts at, and only for the first five days. */}
+        <TourPrompt />
+
         {/* First, and OUTSIDE the ageing's error branch: crediting a
             customer is what a till reaches for, and it neither needs the
             outstanding figures nor should disappear with them. */}
@@ -145,7 +161,10 @@ export default function DashboardPage() {
 
             <PosWaiverCard />
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5">
+            <div
+              {...tourAnchor(TOUR_ANCHORS.ageingBuckets)}
+              className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5"
+            >
               {BUCKETS.map(({ key, label }) =>
                 outstanding.data ? (
                   <BucketCard
@@ -153,6 +172,9 @@ export default function DashboardPage() {
                     label={label}
                     bucket={outstanding.data.buckets[key]}
                     overdue={key === 'overdue'}
+                    anchor={
+                      key === 'overdue' ? TOUR_ANCHORS.overdueBucket : undefined
+                    }
                   />
                 ) : (
                   <Skeleton key={key} className="h-28 rounded-xl" />
@@ -161,7 +183,7 @@ export default function DashboardPage() {
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-              <Card>
+              <Card {...tourAnchor(TOUR_ANCHORS.totalPayable)}>
                 <CardHeader>
                   <CardTitle>Total payable</CardTitle>
                 </CardHeader>
@@ -226,7 +248,7 @@ export default function DashboardPage() {
                   the wallet is unavailable, which reads as an outage when the
                   truth is that this account was never given the wallet. */}
               {canSeeWallet && (
-                <Card>
+                <Card {...tourAnchor(TOUR_ANCHORS.wallet)}>
                   <CardHeader>
                     <CardTitle>Wallet</CardTitle>
                     <Button asChild variant="outline" size="sm">

@@ -153,14 +153,25 @@ final readonly class MerchantOtpService
      *
      * @param  string|null  $businessNameDv  the store's own name in Thaana,
      *                                       shown to Dhivehi visitors
+     * @param  int|null  $validationWindowDays  how long the store holds a
+     *                                          sale before its cashback
+     *                                          validates. NULL means "say
+     *                                          nothing", and the store is
+     *                                          created on the platform
+     *                                          default exactly as before
+     *                                          this field existed. The
+     *                                          CEILING is enforced at the
+     *                                          HTTP edge by the rule the
+     *                                          preferences screen shares
+     *                                          (App\Rules\ValidationWindowDays).
      * @return MerchantUser the owner account, merchant relation loaded
      */
-    public function register(string $signupToken, string $businessName, string $email, string $password, ?string $businessNameDv = null): MerchantUser
+    public function register(string $signupToken, string $businessName, string $email, string $password, ?string $businessNameDv = null, ?int $validationWindowDays = null): MerchantUser
     {
         $now = CarbonImmutable::now('UTC');
         $tokenHash = hash('sha256', $signupToken);
 
-        return DB::transaction(function () use ($tokenHash, $businessName, $businessNameDv, $email, $password, $now): MerchantUser {
+        return DB::transaction(function () use ($tokenHash, $businessName, $businessNameDv, $email, $password, $validationWindowDays, $now): MerchantUser {
             // Lock the code row and re-assert the token INSIDE the lock: a
             // double-submitted register would otherwise have both requests
             // read the same live token and mint two stores (two different
@@ -183,7 +194,7 @@ final readonly class MerchantOtpService
                 'signup_token_expires_at' => null,
             ])->save();
 
-            $merchant = $this->createMerchant($businessName, $email, (string) $otp->phone, $businessNameDv);
+            $merchant = $this->createMerchant($businessName, $email, (string) $otp->phone, $businessNameDv, $validationWindowDays);
 
             // The store's Owner / Manager / Staff roles, inside the SAME
             // transaction as the store and its first account: a signup that
@@ -230,10 +241,16 @@ final readonly class MerchantOtpService
      * random suffix so a pathological loop still terminates with a usable
      * store rather than a 500.
      */
-    private function createMerchant(string $businessName, string $email, string $phone, ?string $businessNameDv = null): Merchant
+    private function createMerchant(string $businessName, string $email, string $phone, ?string $businessNameDv = null, ?int $validationWindowDays = null): Merchant
     {
         $base = $this->slugBase($businessName);
         $attempt = 1;
+
+        // The key is OMITTED when the merchant said nothing, never sent as
+        // null: PlatformServiceProvider fills the platform default only for
+        // an attribute that is absent, and a null would land as a null in a
+        // NOT NULL column.
+        $window = $validationWindowDays === null ? [] : ['validation_window_days' => $validationWindowDays];
 
         while (true) {
             $slug = $attempt < self::SLUG_ATTEMPTS
@@ -241,7 +258,7 @@ final readonly class MerchantOtpService
                 : $base.'-'.Str::lower(Str::random(6));
 
             try {
-                return DB::transaction(fn (): Merchant => Merchant::query()->create([
+                return DB::transaction(fn (): Merchant => Merchant::query()->create($window + [
                     'name' => $businessName,
                     'name_dv' => $businessNameDv,
                     // The slug stays derived from the LATIN name only, so

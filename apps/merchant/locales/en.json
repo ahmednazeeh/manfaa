@@ -83,7 +83,87 @@
     "afterSignupNote": "Next you'll set up your store profile — it goes live once Manfaa approves it.",
     "businessNameDvLabel": "Store name in Dhivehi",
     "businessNameDvPlaceholder": "ފިހާރައިގެ ނަން",
-    "businessNameDvHint": "Shown to shoppers reading Manfaa in Dhivehi. Leave it blank and they see the name above."
+    "businessNameDvHint": "Shown to shoppers reading Manfaa in Dhivehi. Leave it blank and they see the name above.",
+    "validationWindowUnit": "days"
+  },
+  "onboarding": {
+    "tasklist": {
+      "progress": "{{done}} of {{total}}",
+      "daysLeft_one": "{{count}} day left",
+      "daysLeft_other": "{{count}} days left",
+      "showMe": "Show me how",
+      "skip": "Skip — don't show this again",
+      "skipConfirmTitle": "Skip the setup guide?",
+      "skipConfirmBody": "The checklist and the walkthroughs leave your sidebar now, and they do not come back — not here, and not in the Manfaa app. Nothing about your store changes: everything on the list is still in the menu.",
+      "skipKeep": "Keep the guide",
+      "skipConfirm": "Skip for good",
+      "skipFailed": "Could not hide the guide. Check your connection and try again."
+    },
+    "prompt": {
+      "title": "New here? Take a quick tour.",
+      "body": "Two short walkthroughs of this screen: how to credit a customer, and how to settle what you owe.",
+      "decline": "No thanks"
+    },
+    "tour": {
+      "progress": "Step {{current}} of {{total}}",
+      "next": "Next",
+      "done": "Done",
+      "end": "End tour",
+      "credit": {
+        "name": "How to credit a customer",
+        "steps": {
+          "quickActions": {
+            "title": "Start here",
+            "body": "Quick actions is the till's front door. Everything a cashier does in a shift starts on this card, so nobody has to hunt through the menu with a customer waiting at the counter."
+          },
+          "button": {
+            "title": "Credit customer",
+            "body": "Press this while the customer is still at the counter. A form opens on top of this page — ask for their 6-digit Manfaa code, or scan the QR in their app, then type the bill amount. Manfaa works out the cashback from your rate."
+          },
+          "buckets": {
+            "title": "Where the sale goes",
+            "body": "The sale you just credited lands in 0–5 days. These four boxes are everything you owe, sorted by age: the cashback your customers earned, plus Manfaa's fee."
+          },
+          "transactions": {
+            "title": "Every sale you credited",
+            "body": "Transactions is the full list — what you credited, to whom, and for how much. If something was keyed wrong, a sale can be corrected or cancelled from there while it is still inside your validation window."
+          },
+          "nav": {
+            "title": "The full credit screen",
+            "body": "The dialog is the quick way. This menu row opens the same form as a whole screen. Same result, more space."
+          }
+        }
+      },
+      "settle": {
+        "name": "How to settle due bills",
+        "steps": {
+          "quickActions": {
+            "title": "Both jobs live here",
+            "body": "The card you credit from is the card you pay from. Settling is sending Manfaa what a credited sale cost: the customer's cashback, plus the platform fee."
+          },
+          "totalPayable": {
+            "title": "What you owe today",
+            "body": "The whole bill: the cashback your customers earned, Manfaa's fee, and GST on that fee when it applies. This is the number your transfer has to match."
+          },
+          "overdue": {
+            "title": "Settle within 15 days",
+            "body": "Every sale gets 15 days from the day its validation window closes. Anything past that sits here in red — clear these first."
+          },
+          "button": {
+            "title": "Settle now",
+            "body": "Two steps: tick the sales you are paying for (or take the lot), then transfer that exact amount to the bank details shown and upload the receipt. Nothing is settled until the receipt is in."
+          },
+          "wallet": {
+            "title": "Or pay from your wallet",
+            "body": "If you keep a balance in your Manfaa wallet, a settlement can come out of it instead of a bank transfer — no slip to upload. Same batches, same deadlines."
+          },
+          "nav": {
+            "title": "Your settlement history",
+            "body": "Settlements keeps every batch you have paid, with its reference and its receipt. It is where you look when your accountant asks what went to Manfaa last month."
+          }
+        }
+      }
+    }
   },
   "setup": {
     "title": "Set up your store",

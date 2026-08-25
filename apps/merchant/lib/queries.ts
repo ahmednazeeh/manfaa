@@ -7,6 +7,7 @@ import {
   bootstrapCsrf,
   bpToPercentString,
   cancelMerchantPromotion,
+  completeMerchantOnboardingTour,
   createMarketplaceProduct,
   createMerchantBranch,
   createMerchantCredential,
@@ -23,11 +24,13 @@ import {
   getBranchDelivery,
   getMarketplaceEnrolment,
   getMerchantFeePromotion,
+  getMerchantOnboarding,
   getMerchantOutstanding,
   getPosWaiver,
   getPublicFeePromotion,
   getMerchantProfile,
   getMerchantSetup,
+  getMerchantSignupOptions,
   getMerchantWallet,
   getSettlementPaymentProgress,
   getWalletTopUpProgress,
@@ -59,6 +62,7 @@ import {
   setBranchDelivery,
   setMerchantPublication,
   setProductListing,
+  skipMerchantOnboarding,
   submitMarketplaceApplication,
   submitMerchantSetup,
   updateMarketplaceProduct,
@@ -191,6 +195,19 @@ export const queryKeys = {
   promotions: ['merchant', 'promotions'] as const,
   productCategories: ['merchant', 'product-categories'] as const,
   setup: ['merchant', 'setup'] as const,
+  /**
+   * The signed-in PERSON's guided-setup state, not the store's — a cashier
+   * added in three months gets their own five days. It is keyed like every
+   * other merchant read all the same, because logging out clears the whole
+   * cache and the next person to sign in must not inherit this one's list.
+   */
+  onboarding: ['merchant', 'onboarding'] as const,
+  /**
+   * Public, like the fee-promotion banner: the signup form asks it before
+   * anybody has a session, and the answer is platform policy rather than
+   * anything about a store.
+   */
+  signupOptions: ['public', 'merchant-signup-options'] as const,
 };
 
 export function isUnauthorized(error: unknown): boolean {
@@ -1569,6 +1586,32 @@ export function hasFieldError(error: unknown, field: string): boolean {
 }
 
 /**
+ * The first 422 message the server put on one FIELD, or null.
+ *
+ * The counterpart to validationErrorKeys below, for the handful of rules
+ * whose message is prose meant to be READ rather than a stable key meant to
+ * be translated — `validation_window_days` is one: the API composes it
+ * around bounds only the API knows ("…a whole number of days between 0 and
+ * 3"), and a panel that translated it would have to keep its own copy of a
+ * ceiling an admin can move this afternoon.
+ */
+export function fieldErrorMessage(
+  error: unknown,
+  field: string,
+): string | null {
+  if (!(error instanceof ApiError) || error.status !== 422) {
+    return null;
+  }
+  const body = error.body as { errors?: Record<string, unknown> } | undefined;
+  const messages = body?.errors?.[field];
+  if (Array.isArray(messages)) {
+    const first = messages.find((message) => typeof message === 'string');
+    return typeof first === 'string' ? first : null;
+  }
+  return typeof messages === 'string' ? messages : null;
+}
+
+/**
  * The API's 422 validation messages are stable error KEYS (e.g.
  * `otp_invalid`, `email_already_registered`) — collect them so the UI can
  * translate rather than echo raw identifiers.
@@ -1763,4 +1806,88 @@ export function setupMissingKeys(error: unknown): string[] {
   return Array.isArray(body?.missing)
     ? body.missing.filter((key): key is string => typeof key === 'string')
     : [];
+}
+
+// ---------------------------------------------------------------------------
+// Guided setup — the five-day tasklist and the dashboard tour (owner,
+// 2026-08-25)
+// ---------------------------------------------------------------------------
+
+/**
+ * This person's guided-setup state: whether to draw the sidebar tasklist at
+ * all, which of the five tasks are already done (derived from real data
+ * server-side — nothing here is tickable), how many days are left, and
+ * whether they have already watched the tour.
+ *
+ * Hung off every panel page load by design: the API answers it in one query
+ * while the guide is live and in none at all once it is skipped or past its
+ * five days, which is the state every account is in after week one.
+ *
+ * `retry: false` on purpose. A guide is a courtesy; if it cannot be read the
+ * panel simply has no guide, and spending a merchant's connection on three
+ * attempts at a sidebar decoration is the wrong trade.
+ */
+export function useOnboardingGuide() {
+  return useQuery({
+    queryKey: queryKeys.onboarding,
+    queryFn: ({ signal }) => getMerchantOnboarding({ signal }),
+    select: (response) => response.data,
+    // The window only ever closes, and it closes on a five-day boundary —
+    // a minute-old answer cannot be wrong in a way a reader could notice.
+    staleTime: 60 * 1000,
+    retry: false,
+  });
+}
+
+/**
+ * Skip: permanent and immediate, and the button that calls it says so.
+ *
+ * Both writes answer the FULL state, so the response is written straight
+ * into the cache rather than invalidated — a refetch here would be a second
+ * request for an answer already in hand, and it would blink the tasklist
+ * out through a loading state on its way to disappearing anyway.
+ */
+export function useSkipOnboarding() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => skipMerchantOnboarding(),
+    onSuccess: (response) => {
+      queryClient.setQueryData(queryKeys.onboarding, response);
+    },
+  });
+}
+
+/**
+ * The walkthrough was finished, so stop offering it. Deliberately NOT a
+ * skip: the tasklist stays until it is skipped or the five days run out,
+ * because watching the tour is not the same as having credited anybody.
+ */
+export function useCompleteOnboardingTour() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => completeMerchantOnboardingTour(),
+    onSuccess: (response) => {
+      queryClient.setQueryData(queryKeys.onboarding, response);
+    },
+  });
+}
+
+/**
+ * What the signup form may offer for the validation window — the live
+ * platform range, the default to preselect, and the server's own wording
+ * for the field and its refusal.
+ *
+ * There is deliberately NO fallback ceiling anywhere in the panel: if this
+ * read fails the field is not drawn and register omits the key, so the store
+ * is created with the platform default. A hard-coded 3 would keep offering 3
+ * on the afternoon an admin lowered the platform to 1, and every merchant
+ * who took it would be refused at submit by a rule they were never shown.
+ */
+export function useSignupOptions() {
+  return useQuery({
+    queryKey: queryKeys.signupOptions,
+    queryFn: ({ signal }) => getMerchantSignupOptions({ signal }),
+    select: (response) => response.data,
+    staleTime: 5 * 60 * 1000,
+  });
 }

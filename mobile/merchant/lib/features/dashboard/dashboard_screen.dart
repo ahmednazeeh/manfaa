@@ -10,6 +10,8 @@ import '../../widgets/adaptive.dart';
 import '../../widgets/merchant_brand.dart';
 import '../fee_promotion/fee_promotion_banner.dart';
 import '../money/money_providers.dart';
+import '../onboarding/coach_marks.dart';
+import '../onboarding/dashboard_tour.dart';
 import '../../widgets/tx_format.dart';
 import '../push/push_registrar.dart';
 
@@ -97,6 +99,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   children: [
                     MerchantTopBar(initials: initials),
                     const SizedBox(height: Gap.lg),
+                    // The walkthrough's offer (owner, 2026-08-25). Draws
+                    // nothing once it has been watched, waved away, or the
+                    // person's five days are up — and nothing at all for a
+                    // merchant past their first week.
+                    const TourPromptCard(bottomGap: Gap.md),
                     // The fee promotion sits ABOVE the money blocks and
                     // OUTSIDE home.when: it is the platform's announcement
                     // to this store, and a /merchant/home that failed is no
@@ -217,44 +224,49 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     ];
   }
 
+  /// The till's way in — and the guided tour's second stop, hence the
+  /// anchor: the walkthrough lights up THIS card, not a picture of it.
   Widget _creditCta(BuildContext context) {
     final l10n = context.l10n;
 
-    return ManfaaCard(
-      onTap: () => context.go('/credit'),
-      gradient: cardWash(context, ManfaaTint.green),
-      child: Row(
-        children: [
-          const IconTile(
-            Icons.person_add_alt_rounded,
-            tint: ManfaaTint.green,
-            size: 48,
-            iconSize: 24,
-          ),
-          const SizedBox(width: Gap.md),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  l10n.creditCtaTitle,
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  l10n.creditCtaBody,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
-                ),
-              ],
+    return CoachAnchor(
+      id: kCoachDashCredit,
+      child: ManfaaCard(
+        onTap: () => context.go('/credit'),
+        gradient: cardWash(context, ManfaaTint.green),
+        child: Row(
+          children: [
+            const IconTile(
+              Icons.person_add_alt_rounded,
+              tint: ManfaaTint.green,
+              size: 48,
+              iconSize: 24,
             ),
-          ),
-          Icon(
-            Icons.chevron_right_rounded,
-            color: Theme.of(context).colorScheme.onSurfaceVariant,
-          ),
-        ],
+            const SizedBox(width: Gap.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    l10n.creditCtaTitle,
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    l10n.creditCtaBody,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(
+              Icons.chevron_right_rounded,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -458,90 +470,95 @@ class _SettlementCardState extends ConsumerState<_SettlementCard> {
     final muted = theme.colorScheme.onSurfaceVariant;
     final total = widget.outstanding.total;
 
-    return ManfaaCard(
-      gradient: cardWash(context, ManfaaTint.violet),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // ── the amount, and the one button that clears it ──────────────
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+    // Anchored for the guided tour (owner, 2026-08-25): the walkthrough's
+    // "what you owe Manfaa" step lights up THIS card.
+    return CoachAnchor(
+      id: kCoachDashOutstanding,
+      child: ManfaaCard(
+        gradient: cardWash(context, ManfaaTint.violet),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // ── the amount, and the one button that clears it ──────────────
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        l10n.dashOutstandingTitle,
+                        style: theme.textTheme.bodyMedium?.copyWith(color: muted),
+                      ),
+                      const SizedBox(height: 2),
+                      MoneyText(
+                        total.payableLaari,
+                        style: theme.textTheme.headlineMedium?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        l10n.bucketTransactions(total.count),
+                        style: theme.textTheme.bodySmall?.copyWith(color: muted),
+                      ),
+                    ],
+                  ),
+                ),
+                if (widget.canSettle)
+                  FilledButton(
+                    onPressed: () => context.go('/settlements'),
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size(0, 44),
+                      padding: const EdgeInsets.symmetric(horizontal: Gap.lg),
+                    ),
+                    child: Text(l10n.settleNow),
+                  ),
+              ],
+            ),
+
+            // ── the saving, as an action ──────────────────────────────────
+            if (widget.canPreview && total.count > 0) ...[
+              const SizedBox(height: Gap.md),
+              const _SavingLine(),
+            ],
+
+            // ── the accounting, on request ────────────────────────────────
+            // (MR11, owner: "Remove ageing bucket from outstanding to settle
+            // card" — the ageing story lives in Settlements, where the age
+            // presets actually change what gets paid.)
+            const SizedBox(height: Gap.sm),
+            InkWell(
+              borderRadius: BorderRadius.circular(Corner.tile),
+              onTap: () => setState(() => _open = !_open),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: Gap.sm),
+                child: Row(
                   children: [
                     Text(
-                      l10n.dashOutstandingTitle,
-                      style: theme.textTheme.bodyMedium?.copyWith(color: muted),
-                    ),
-                    const SizedBox(height: 2),
-                    MoneyText(
-                      total.payableLaari,
-                      style: theme.textTheme.headlineMedium?.copyWith(
-                        fontWeight: FontWeight.w800,
+                      l10n.viewBreakdown,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: theme.colorScheme.secondary,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
-                    const SizedBox(height: 2),
-                    Text(
-                      l10n.bucketTransactions(total.count),
-                      style: theme.textTheme.bodySmall?.copyWith(color: muted),
+                    const SizedBox(width: Gap.xs),
+                    Icon(
+                      _open
+                          ? Icons.keyboard_arrow_up_rounded
+                          : Icons.keyboard_arrow_right_rounded,
+                      size: 20,
+                      color: theme.colorScheme.secondary,
                     ),
                   ],
                 ),
               ),
-              if (widget.canSettle)
-                FilledButton(
-                  onPressed: () => context.go('/settlements'),
-                  style: FilledButton.styleFrom(
-                    minimumSize: const Size(0, 44),
-                    padding: const EdgeInsets.symmetric(horizontal: Gap.lg),
-                  ),
-                  child: Text(l10n.settleNow),
-                ),
-            ],
-          ),
-
-          // ── the saving, as an action ──────────────────────────────────
-          if (widget.canPreview && total.count > 0) ...[
-            const SizedBox(height: Gap.md),
-            const _SavingLine(),
-          ],
-
-          // ── the accounting, on request ────────────────────────────────
-          // (MR11, owner: "Remove ageing bucket from outstanding to settle
-          // card" — the ageing story lives in Settlements, where the age
-          // presets actually change what gets paid.)
-          const SizedBox(height: Gap.sm),
-          InkWell(
-            borderRadius: BorderRadius.circular(Corner.tile),
-            onTap: () => setState(() => _open = !_open),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: Gap.sm),
-              child: Row(
-                children: [
-                  Text(
-                    l10n.viewBreakdown,
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: theme.colorScheme.secondary,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(width: Gap.xs),
-                  Icon(
-                    _open
-                        ? Icons.keyboard_arrow_up_rounded
-                        : Icons.keyboard_arrow_right_rounded,
-                    size: 20,
-                    color: theme.colorScheme.secondary,
-                  ),
-                ],
-              ),
             ),
-          ),
-          if (_open) _BreakdownRows(outstanding: widget.outstanding),
-          if (dhivehi) const SizedBox.shrink(),
-        ],
+            if (_open) _BreakdownRows(outstanding: widget.outstanding),
+            if (dhivehi) const SizedBox.shrink(),
+          ],
+        ),
       ),
     );
   }

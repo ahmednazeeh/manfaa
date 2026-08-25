@@ -1634,5 +1634,78 @@
         "type": "String"
       }
     }
+  },
+  "guideChipLabel": "Setup guide",
+  "guideTitleFallback": "Getting started",
+  "guideProgress": "{done} of {total} done",
+  "@guideProgress": {
+    "placeholders": {
+      "done": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "guideDaysLeft": "{days, plural, =1{1 day left} other{{days} days left}}",
+  "@guideDaysLeft": {
+    "placeholders": {
+      "days": {
+        "type": "int"
+      }
+    }
+  },
+  "guideWindowNote": "This guide shows for your first {window} days and then puts itself away.",
+  "@guideWindowNote": {
+    "placeholders": {
+      "window": {
+        "type": "int"
+      }
+    }
+  },
+  "guideSkip": "Hide this guide",
+  "guideSkipTitle": "Hide the setup guide?",
+  "guideSkipBody": "It will not come back — not on this phone and not on the Manfaa website. Everything on the list stays where it is in the app.",
+  "guideSkipConfirm": "Hide it",
+  "guideSkipFailed": "Could not hide the guide. Check your connection and try again.",
+  "guideTaskDone": "Done",
+  "guideTaskOpen": "Open",
+  "guideTaskOnWeb": "Open on the website",
+  "guideTourCta": "Show me how",
+  "guideTourPromptTitle": "New to Manfaa?",
+  "guideTourPromptBody": "A short walkthrough of crediting a customer and settling your bill.",
+  "guideTourStart": "Start",
+  "guideTourDismiss": "Not now",
+  "tourStepOf": "Step {step} of {total}",
+  "@tourStepOf": {
+    "placeholders": {
+      "step": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "tourNext": "Next",
+  "tourBack": "Back",
+  "tourDone": "Got it",
+  "tourSkip": "Skip tour",
+  "tourCreditTabTitle": "Every sale starts here",
+  "tourCreditTabBody": "Tap Credit at the counter. Ask for the customer's 6-digit Manfaa code, or scan the QR in their app, then key in what they spent — Manfaa works out the cashback and tells them it is coming.",
+  "tourCreditCardTitle": "The same door from here",
+  "tourCreditCardBody": "This card opens the same till screen. Nothing is charged to the customer — you are recording a sale so their cashback can be earned.",
+  "tourOutstandingTitle": "What you owe Manfaa",
+  "tourOutstandingBody": "Every cashback you credit is added up here with the platform fee. This is the bill: it grows as you credit and clears when you settle.",
+  "tourSettleTabTitle": "Settle your due bills here",
+  "tourSettleTabBody": "Open Settlements, check what is due, transfer that amount to the Manfaa bank account shown and upload the slip. Settling early keeps the prompt-payment discount.",
+  "windowDaysOption": "{days, plural, =0{Same day — no wait} =1{1 day} other{{days} days}}",
+  "@windowDaysOption": {
+    "placeholders": {
+      "days": {
+        "type": "int"
+      }
+    }
   }
 }

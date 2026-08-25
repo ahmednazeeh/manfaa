@@ -5,6 +5,7 @@ import { BrandMark } from '@manfaa/ui';
 import { ChevronFirst } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { OnboardingTasklist } from '@/components/onboarding/onboarding-tasklist';
 import { useLayout } from './context';
 import { SidebarMenu } from './sidebar-menu';
 
@@ -48,9 +49,22 @@ export function Sidebar() {
   return (
     <div className="sidebar bg-background lg:border-e lg:border-border lg:fixed lg:top-0 lg:bottom-0 lg:z-20 lg:flex flex-col items-stretch shrink-0">
       <SidebarHeader />
-      <div className="overflow-hidden">
-        <div className="w-(--sidebar-default-width)">
-          <SidebarMenu />
+      {/* THE NAV IS THE PRIMARY THING; THE TASKLIST IS THE GUEST.
+          A column of two: the menu takes what is left (`grow min-h-0`, so it
+          shrinks and scrolls inside its own ScrollArea) and the guided-setup
+          list sits under it at its natural height, capped at 40vh. That
+          ordering is what stops a five-row checklist from pushing Wallet and
+          Settings off the bottom of a 13-inch laptop — before this the menu
+          had a fixed `h-[calc(100vh-5.5rem)]` and anything added below it
+          simply went past the edge of the screen. */}
+      <div className="overflow-hidden flex flex-col grow min-h-0">
+        <div className="w-(--sidebar-default-width) flex flex-col grow min-h-0">
+          {/* basis-0 + grow, not h-auto alone: a flex item sized entirely by
+              grow has a definite height, which is what the ScrollArea's own
+              `h-full` viewport needs in order to scroll instead of running
+              past the bottom of the column. */}
+          <SidebarMenu className="lg:h-auto basis-0 grow shrink min-h-0" />
+          <OnboardingTasklist />
         </div>
       </div>
     </div>

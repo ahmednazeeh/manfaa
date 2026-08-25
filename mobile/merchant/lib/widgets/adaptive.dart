@@ -33,13 +33,46 @@ const double kWideContentWidth = 1040;
 bool railShell(BuildContext context) =>
     MediaQuery.sizeOf(context).width >= kExpandedMinWidth;
 
+/// Extra bottom clearance published BY the shell TO its tab screens, for
+/// chrome the shell grew that the fixed [Gap.navClearance] does not cover —
+/// today, the guided-setup chip riding above the floating nav bar.
+///
+/// An InheritedWidget rather than another constant, because the chip is only
+/// there for a merchant's first five days: every screen's padding has to
+/// follow it appearing and disappearing, and none of them should have to
+/// know it exists. Zero when nothing extra is showing, which is what keeps
+/// every shipped golden byte-identical.
+class BottomInsetExtra extends InheritedWidget {
+  const BottomInsetExtra({
+    super.key,
+    required this.extra,
+    required super.child,
+  });
+
+  final double extra;
+
+  static double of(BuildContext context) =>
+      context
+          .dependOnInheritedWidgetOfExactType<BottomInsetExtra>()
+          ?.extra ??
+      0;
+
+  @override
+  bool updateShouldNotify(BottomInsetExtra oldWidget) =>
+      oldWidget.extra != extra;
+}
+
 /// Bottom padding for a tab screen's scroll view. On phones the floating
 /// bottom bar overlays content (`extendBody`), so the last card needs
 /// [Gap.navClearance] to scroll clear of it; with the rail shell there is no
 /// bar to clear and the same 104dp would be dead space — a normal end-of-page
 /// breath is enough.
+///
+/// Plus whatever the shell says it has stacked above that bar
+/// ([BottomInsetExtra]) — normally nothing.
 double bottomClearanceOf(BuildContext context) =>
-    railShell(context) ? Gap.xxl : Gap.navClearance;
+    (railShell(context) ? Gap.xxl : Gap.navClearance) +
+    BottomInsetExtra.of(context);
 
 /// Centers its child in a rail of at most [maxWidth] — the shared width cap
 /// every tab screen adopts around its scroll view. Below the cap it is a

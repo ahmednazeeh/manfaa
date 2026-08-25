@@ -3,6 +3,8 @@
 import { ReactNode, useEffect } from 'react';
 import type { MerchantAuthUser } from '@/lib/api';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { GuidedTour } from '@/components/onboarding/guided-tour';
+import { TourProvider } from '@/components/onboarding/tour-provider';
 import { LayoutProvider, useLayout } from './context';
 import { Footer } from './footer';
 import { Header } from './header';
@@ -61,6 +63,12 @@ function Main({ children }: { children: ReactNode }) {
 
         <Footer />
       </div>
+
+      {/* Mounted at the shell rather than on the dashboard: a tour started
+          from the sidebar has to survive the route change to the dashboard,
+          and an overlay that unmounted with the page it was launched from
+          would end itself on the way there. */}
+      <GuidedTour />
     </>
   );
 }
@@ -74,7 +82,9 @@ export function AppLayout({
 }) {
   return (
     <LayoutProvider me={me}>
-      <Main>{children}</Main>
+      <TourProvider>
+        <Main>{children}</Main>
+      </TourProvider>
     </LayoutProvider>
   );
 }

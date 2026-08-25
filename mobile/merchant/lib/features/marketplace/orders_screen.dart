@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:manfaa_core/manfaa_core.dart';
 import 'package:manfaa_ui/manfaa_ui.dart';
 
+import '../../widgets/adaptive.dart';
 import 'marketplace_providers.dart';
 import 'marketplace_widgets.dart';
 
@@ -43,13 +44,16 @@ class ShopOrdersScreen extends ConsumerWidget {
             ref.invalidate(shopOrdersProvider);
           },
           child: ListView(
-            padding: const EdgeInsets.fromLTRB(
+            padding: EdgeInsets.fromLTRB(
               Gap.lg,
               Gap.lg,
               Gap.lg,
               // The floating nav bar overlays content, so the last card has
-              // to scroll clear of it rather than sit under it.
-              Gap.navClearance,
+              // to scroll clear of it rather than sit under it — and of
+              // whatever the shell has stacked above the bar (the
+              // guided-setup chip), which is what bottomClearanceOf adds.
+              // The only tab screen that was still hard-coding the constant.
+              bottomClearanceOf(context),
             ),
             children: [
               Text('Orders', style: theme.textTheme.headlineMedium),

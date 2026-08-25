@@ -8,6 +8,10 @@ import 'app.dart';
 import 'providers.dart';
 import 'router.dart';
 import '../features/marketplace/marketplace_providers.dart';
+import '../features/onboarding/coach_marks.dart';
+import '../features/onboarding/dashboard_tour.dart';
+import '../features/onboarding/guide_chip.dart';
+import '../features/onboarding/onboarding_providers.dart';
 
 /// The floating white pill nav from the refs — same bar as the customer app,
 /// with the merchant's five slots: Dashboard · Credit · Transactions ·
@@ -23,6 +27,13 @@ import '../features/marketplace/marketplace_providers.dart';
 /// [_NavRail] — the SAME items list (so the same permission gating), the
 /// same branches, restyled to the house system. Below that, phones and
 /// small tablets keep the shipped stadium bar untouched.
+///
+/// The shell is also where the guided-setup chip lives (owner, 2026-08-25):
+/// above the stadium bar on a phone, at the bottom of the rail on a slate.
+/// It is chrome rather than a Dashboard card because the Dashboard tab is
+/// gated on `settlements.view` — a cashier does not have one, and "credit
+/// your first customer" is written for exactly that person. See
+/// [OnboardingChipBar].
 class MerchantShell extends ConsumerWidget {
   const MerchantShell({super.key, required this.shell});
 
@@ -35,6 +46,10 @@ class MerchantShell extends ConsumerWidget {
     // Keep the offline credit queue's drain triggers (foreground resume,
     // connectivity regained) alive exactly while a merchant is in the shell.
     ref.watch(queueDrainDriverProvider);
+    // And re-read the guided setup when the app comes back to the
+    // foreground — one query while it is live, none once it is over, and
+    // never at all on the login screen (nothing watches this from there).
+    ref.watch(onboardingResumeDriverProvider);
     final session = ref.watch(sessionProvider);
     final l10n = context.l10n;
 
@@ -95,6 +110,25 @@ class MerchantShell extends ConsumerWidget {
     // can never be what a returning tap restores.
     void select(int branch) => shell.goBranch(branch, initialLocation: true);
 
+    // The walkthrough points at Dashboard widgets and at nav slots, so it
+    // runs on the Dashboard. Asked for from another tab, switch first and
+    // give the branch a frame to mount; a card still loading behind a
+    // skeleton simply has its step skipped, which is the engine's rule for
+    // every absent target.
+    Future<void> startTour() async {
+      final dashboard = kTabs.indexWhere((tab) => tab.path == '/dashboard');
+
+      if (dashboard >= 0 &&
+          items.any((item) => item.branch == dashboard) &&
+          shell.currentIndex != dashboard) {
+        select(dashboard);
+        await WidgetsBinding.instance.endOfFrame;
+        if (!context.mounted) return;
+      }
+
+      await startMerchantTour(context, ref);
+    }
+
     if (railShell(context)) {
       // Expanded: the rail sits at the leading edge (start — it mirrors to
       // the right in dv exactly like the rest of the app), the branch
@@ -106,6 +140,7 @@ class MerchantShell extends ConsumerWidget {
               items: items,
               currentBranch: shell.currentIndex,
               onSelected: select,
+              onTour: startTour,
             ),
             Expanded(child: shell),
           ],
@@ -113,13 +148,28 @@ class MerchantShell extends ConsumerWidget {
       );
     }
 
+    // The chip stacks ABOVE the floating bar, so every tab screen's scroll
+    // view has to end that much higher. Published here rather than guessed
+    // at by each screen — see [BottomInsetExtra]; zero whenever the guide is
+    // not live, which is every merchant from day six onwards.
+    final chip = ref.watch(onboardingChecklistProvider).show;
+
     return Scaffold(
       extendBody: true,
-      body: shell,
-      bottomNavigationBar: _FloatingNavBar(
-        items: items,
-        currentBranch: shell.currentIndex,
-        onSelected: select,
+      body: BottomInsetExtra(
+        extra: chip ? kGuideChipBarHeight : 0,
+        child: shell,
+      ),
+      bottomNavigationBar: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          OnboardingChipBar(onTour: startTour),
+          _FloatingNavBar(
+            items: items,
+            currentBranch: shell.currentIndex,
+            onSelected: select,
+          ),
+        ],
       ),
     );
   }
@@ -128,6 +178,21 @@ class MerchantShell extends ConsumerWidget {
 /// The floating phone nav bar's container — the thing screen content must
 /// scroll clear of ([bottomClearanceOf]).
 const kFloatingNavBarKey = Key('merchant-floating-nav');
+
+/// The nav slots the guided tour points at, by branch. Keyed off the tab's
+/// PATH rather than its index, so re-ordering [kTabs] cannot silently move
+/// the spotlight onto the wrong tab.
+String? _coachAnchorFor(int branch) => switch (kTabs[branch].path) {
+  '/credit' => kCoachNavCredit,
+  '/settlements' => kCoachNavSettlements,
+  _ => null,
+};
+
+/// Wrap a nav slot in its tour anchor, or hand it back untouched.
+Widget _anchored(int branch, Widget child) {
+  final id = _coachAnchorFor(branch);
+  return id == null ? child : CoachAnchor(id: id, child: child);
+}
 
 class _NavItem {
   const _NavItem(this.branch, this.icon, this.selectedIcon, this.label);
@@ -185,10 +250,13 @@ class _FloatingNavBar extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               for (final item in items)
-                _NavButton(
-                  item: item,
-                  selected: item.branch == currentBranch,
-                  onTap: () => onSelected(item.branch),
+                _anchored(
+                  item.branch,
+                  _NavButton(
+                    item: item,
+                    selected: item.branch == currentBranch,
+                    onTap: () => onSelected(item.branch),
+                  ),
                 ),
             ],
           ),
@@ -207,11 +275,13 @@ class _NavRail extends StatelessWidget {
     required this.items,
     required this.currentBranch,
     required this.onSelected,
+    required this.onTour,
   });
 
   final List<_NavItem> items;
   final int currentBranch;
   final ValueChanged<int> onSelected;
+  final VoidCallback onTour;
 
   @override
   Widget build(BuildContext context) {
@@ -228,23 +298,48 @@ class _NavRail extends StatelessWidget {
       child: SafeArea(
         child: Column(
           children: [
-            const SizedBox(height: Gap.xl),
-            // Square in a 96px rail: the landscape mark is ~2.75:1, so at
-            // any readable height it is wider than the rail itself.
-            const BrandLogo(
-              shape: BrandLogoShape.square,
-              height: 48,
-              semanticLabel: 'Manfaa',
-            ),
-            const SizedBox(height: Gap.huge),
-            for (final item in items) ...[
-              _RailButton(
-                item: item,
-                selected: item.branch == currentBranch,
-                onTap: () => onSelected(item.branch),
+            // The mark and the six tabs SCROLL, and the chip does not.
+            //
+            // A Spacer here used to hold the chip down, which is right on a
+            // tall slate and a lie on a short one: the rail appears at
+            // ≥840dp WIDE, and a 844×390 phone in landscape is exactly that
+            // — six tabs and a 48dp mark do not fit 390dp of height, so the
+            // Column overflowed and the last tabs were clipped away with no
+            // way to reach them. (85px of that predates the guided setup;
+            // the chip made it 153.) Expanded + a scroll view keeps every
+            // tab reachable at any height and leaves the chip where the
+            // owner asked for it, at the bottom of the rail.
+            Expanded(
+              child: SingleChildScrollView(
+                child: Column(
+                  children: [
+                    const SizedBox(height: Gap.xl),
+                    // Square in a 96px rail: the landscape mark is ~2.75:1,
+                    // so at any readable height it is wider than the rail.
+                    const BrandLogo(
+                      shape: BrandLogoShape.square,
+                      height: 48,
+                      semanticLabel: 'Manfaa',
+                    ),
+                    const SizedBox(height: Gap.huge),
+                    for (final item in items) ...[
+                      _anchored(
+                        item.branch,
+                        _RailButton(
+                          item: item,
+                          selected: item.branch == currentBranch,
+                          onTap: () => onSelected(item.branch),
+                        ),
+                      ),
+                      const SizedBox(height: Gap.sm),
+                    ],
+                  ],
+                ),
               ),
-              const SizedBox(height: Gap.sm),
-            ],
+            ),
+            // The owner's "left bottom", on the one surface that has a
+            // left: the guided-setup chip closes the rail.
+            OnboardingRailChip(onTour: onTour),
           ],
         ),
       ),

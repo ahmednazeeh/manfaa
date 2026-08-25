@@ -8,8 +8,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:manfaa_core/manfaa_core.dart';
 import 'package:manfaa_merchant/app/app.dart';
 import 'package:manfaa_merchant/app/providers.dart';
+import 'package:manfaa_merchant/features/settlements/settlements_screen.dart';
 import 'package:manfaa_merchant/features/credit/credit_screen.dart'
     show creditClock;
+import 'package:manfaa_merchant/features/onboarding/guide_chip.dart'
+    show kGuideChipKey;
 import 'package:manfaa_merchant/features/settlements/settlement_widgets.dart'
     show PickedSlip, defaultSlipPicker, slipPicker;
 
@@ -377,11 +380,7 @@ const _shotPendingProfile = <String, dynamic>{
     'category': 'dining',
     'logo_url': 'https://manfaa.app/logo?side=1',
   },
-  'current': {
-    'name': 'Tropical Mart',
-    'category': 'grocery',
-    'logo_url': null,
-  },
+  'current': {'name': 'Tropical Mart', 'category': 'grocery', 'logo_url': null},
   'submitted_at': '2026-08-17T09:41:00+00:00',
   'reviewed_at': null,
   'reviewed_by': null,
@@ -448,8 +447,34 @@ class _ShotApi extends MerchantApi {
     this.pendingProfileJson,
     this.pendingChanges,
     this.progressJson,
+    this.guideJson,
     this.promotion = MerchantFeePromotion.none,
   });
+
+  /// The guided setup (owner, 2026-08-25). NOT LIVE on every shipped shot,
+  /// which is why the goldens taken before this feature existed still match
+  /// byte for byte; the guide shots pass a live tasklist instead.
+  final Map<String, dynamic>? guideJson;
+
+  @override
+  Future<MerchantOnboardingGuide> onboarding() async => guideJson == null
+      ? MerchantOnboardingGuide.hidden
+      : MerchantOnboardingGuide.fromJson(guideJson!);
+
+  @override
+  Future<MerchantOnboardingGuide> skipOnboarding() async =>
+      MerchantOnboardingGuide.hidden;
+
+  @override
+  Future<MerchantOnboardingGuide> completeOnboardingTour() async =>
+      onboarding();
+
+  /// The public signup options — live on every shot, because the signup
+  /// details step legitimately grew the validation-window field and the
+  /// golden should show it.
+  @override
+  Future<MerchantSignupOptions> signupOptions() async =>
+      MerchantSignupOptions.fromJson(_shotSignupOptions);
 
   final String status;
   final Map<String, dynamic>? setup;
@@ -959,44 +984,44 @@ class _ShotApi extends MerchantApi {
   Future<MerchantBranchEstate> branches() async => MerchantBranchEstate(
     pendingChanges: pendingChanges ?? const [],
     branches: [
-    for (final json in [
-      {
-        'id': 3,
-        'name': 'Tropical Mart — Main Branch',
-        'address': 'Boduthakurufaanu Magu, Malé',
-        'lat': 4.1755354,
-        'lng': 73.5093474,
-      },
-      {
-        'id': 4,
-        'name': 'Tropical Mart — Hulhumalé',
-        'address': 'Nirolhu Magu, Hulhumalé',
-        'lat': 4.2105091,
-        'lng': 73.5407121,
-      },
-      {
-        'id': 5,
-        'name': 'Tropical Mart — Villimalé',
-        'address': 'Ameenee Magu, Villimalé',
-        'lat': 4.1725071,
-        'lng': 73.4882079,
-      },
-      {
-        'id': 6,
-        'name': 'Tropical Mart — Velana Airport',
-        'address': 'Velana International Airport, Hulhulé',
-        'lat': 4.1917701,
-        'lng': 73.5290022,
-      },
-      {
-        'id': 7,
-        'name': 'Tropical Mart — Maamigili',
-        'address': 'Maamigili, Raa Atoll',
-        'lat': null,
-        'lng': null,
-      },
-    ])
-      MerchantBranch.fromJson(json),
+      for (final json in [
+        {
+          'id': 3,
+          'name': 'Tropical Mart — Main Branch',
+          'address': 'Boduthakurufaanu Magu, Malé',
+          'lat': 4.1755354,
+          'lng': 73.5093474,
+        },
+        {
+          'id': 4,
+          'name': 'Tropical Mart — Hulhumalé',
+          'address': 'Nirolhu Magu, Hulhumalé',
+          'lat': 4.2105091,
+          'lng': 73.5407121,
+        },
+        {
+          'id': 5,
+          'name': 'Tropical Mart — Villimalé',
+          'address': 'Ameenee Magu, Villimalé',
+          'lat': 4.1725071,
+          'lng': 73.4882079,
+        },
+        {
+          'id': 6,
+          'name': 'Tropical Mart — Velana Airport',
+          'address': 'Velana International Airport, Hulhulé',
+          'lat': 4.1917701,
+          'lng': 73.5290022,
+        },
+        {
+          'id': 7,
+          'name': 'Tropical Mart — Maamigili',
+          'address': 'Maamigili, Raa Atoll',
+          'lat': null,
+          'lng': null,
+        },
+      ])
+        MerchantBranch.fromJson(json),
     ],
   );
 
@@ -1137,6 +1162,7 @@ class _ShotApi extends MerchantApi {
     required String email,
     required String password,
     required String deviceName,
+    int? validationWindowDays,
   }) async {}
 
   /// GET /merchant/fee-promotion. NOTHING RUNNING on every shipped shot —
@@ -1179,6 +1205,128 @@ Map<String, dynamic> _shotProgress({
   'outcome': outcome,
 };
 
+/// `GET /merchant/signup/options` as production answers it today: a 0–3 day
+/// window defaulting to 2, with the server's own label and its explanation
+/// carrying the live numbers. The signup shot renders the field from THIS —
+/// there is no client-side ceiling anywhere in the app.
+const _shotSignupOptions = <String, dynamic>{
+  'validation_window': {
+    'min_days': 0,
+    'max_days': 3,
+    'default_days': 2,
+    'label_en': 'Validation window',
+    'label_dv': 'ވެލިޑޭޝަން މުއްދަތު',
+    'help_en':
+        'How many days a sale stays open for returns before its '
+        'cashback is confirmed. Cashback stays pending until the window '
+        'ends. Choose between 0 and 3 days — 2 if you are not sure.',
+    'help_dv':
+        'ވިޔަފާރި ރިޓަރންކުރުމަށް ދޭ މުއްދަތު — މި މުއްދަތު ނިމެންދެން '
+        'ކޭޝްބެކް ހުންނާނީ ޕެންޑިން ގޮތުގައެވެ.',
+    'invalid_en':
+        'The validation window must be a whole number of days between 0 and 3.',
+    'invalid_dv': '0 އާއި 3 އާ ދެމެދުގެ ދުވަހުގެ އަދަދެއް ލިޔުއްވާ.',
+  },
+};
+
+/// The guided-setup tasklist on a store's second day: the wizard is behind
+/// them, nothing else is done yet, three of the five days left. Every field
+/// is the server's own (OnboardingGuide::tasks), with fixed counts so the
+/// golden renders the same bytes on every run.
+Map<String, dynamic> _shotGuide({
+  int daysRemaining = 3,
+  bool tourCompleted = false,
+}) => {
+  'show': true,
+  'skipped': false,
+  'expired': false,
+  'tour_completed': tourCompleted,
+  'started_at': '2026-08-23T06:00:00+00:00',
+  'expires_at': '2026-08-28T06:00:00+00:00',
+  'days_remaining': daysRemaining,
+  'window_days': 5,
+  'title_en': 'Getting started',
+  'title_dv': 'ފެށުމުގެ ފިޔަވަޅުތައް',
+  'tasks_done': 1,
+  'tasks_total': 5,
+  'all_done': false,
+  'tasks': [
+    {
+      'key': 'finish_setup',
+      'label_en': 'Finish setup and submit your store',
+      'label_dv': 'ސެޓަޕް ފުރިހަމަކުރައްވައި ފިހާރަ ހުށަހަޅުއްވާ',
+      'help_en':
+          'Fill in your store details, pin your shop on the map and '
+          'pick your cashback rate, then submit for review.',
+      'help_dv':
+          'ފިހާރައިގެ ތަފްޞީލުތައް ފުރިހަމަކުރައްވައި ރިވިއުއަށް '
+          'ހުށަހަޅުއްވާ.',
+      'done': true,
+      'permission': 'setup.submit',
+      'target': 'setup',
+      'web_path': '/setup',
+    },
+    {
+      'key': 'bank_account',
+      'label_en': 'Add your bank account',
+      'label_dv': 'ބޭންކް އެކައުންޓް އިތުރުކުރައްވާ',
+      'help_en':
+          'Your settlement transfers are matched against this '
+          'account, and anything Manfaa returns to you goes back to it.',
+      'help_dv': 'ސެޓްލްމަންޓަށް ފޮނުއްވާ ފައިސާ ދިމާކުރަނީ މި އެކައުންޓާއެވެ.',
+      'done': false,
+      'permission': 'bank_account.update',
+      'target': 'bank_account',
+      'web_path': '/settings/bank-account',
+    },
+    {
+      'key': 'credit_customer',
+      'label_en': 'Credit your first customer',
+      'label_dv': 'ފުރަތަމަ ކަސްޓަމަރަށް ކްރެޑިޓްކުރައްވާ',
+      'help_en':
+          "At the counter, open Credit customer, key in the "
+          "customer's phone number and what they spent.",
+      'help_dv':
+          'ކައުންޓަރުގައި ކްރެޑިޓް ހުޅުއްވައި، ފޯނު ނަންބަރާއި އަދަދު '
+          'ލިޔުއްވާ.',
+      'done': false,
+      'permission': 'credits.create',
+      'target': 'credit',
+      'web_path': '/credit',
+    },
+    {
+      'key': 'settle_bill',
+      'label_en': 'Settle your first bill',
+      'label_dv': 'ފުރަތަމަ ބިލް ސެޓްލްކުރައްވާ',
+      'help_en':
+          'The cashback your customers earned, plus the platform '
+          'fee, is collected as one bill. Open Settlements and pay it.',
+      'help_dv':
+          'ކޭޝްބެކާއި ޕްލެޓްފޯމް ފީ އެއްކޮށްލައިގެން ދައްކަވަން '
+          'ޖެހޭނެއެވެ.',
+      'done': false,
+      'permission': 'settlements.create',
+      'target': 'settlements',
+      'web_path': '/settlements',
+    },
+    {
+      'key': 'add_staff',
+      'label_en': 'Add the people who work your till',
+      'label_dv':
+          'ކައުންޓަރުގައި މަސައްކަތްކުރައްވާ މުވައްޒަފުން '
+          'އިތުރުކުރައްވާ',
+      'help_en':
+          'Everyone at the counter needs their own account — never '
+          'share yours.',
+      'help_dv': 'ކޮންމެ ބޭފުޅަކަށް ވަކި އެކައުންޓެއް ބޭނުންވާނެއެވެ.',
+      'done': false,
+      'permission': 'staff.invite',
+      'target': 'staff',
+      'web_path': '/settings/staff',
+    },
+  ],
+};
+
 /// A 1×1 PNG: the shots need a slip to submit, not a picture.
 const _shotSlipPng = [
   0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, //
@@ -1213,6 +1361,9 @@ void main() {
     Map<String, dynamic>? pendingProfileJson,
     List<MerchantChangeRequest>? pendingChanges,
     Map<String, dynamic>? progressJson,
+    // The guided setup this person is inside. Null (nothing live) on every
+    // shipped shot; the guide shots pass a tasklist.
+    Map<String, dynamic>? guideJson,
     Future<void> Function(WidgetTester tester)? drive,
     // The platform fee promotion the server is serving this store. Nothing
     // running on every shipped shot; the promo shots pass a live offer.
@@ -1260,6 +1411,7 @@ void main() {
               pendingProfileJson: pendingProfileJson,
               pendingChanges: pendingChanges,
               progressJson: progressJson,
+              guideJson: guideJson,
               promotion: promotion,
             ),
           ),
@@ -1386,6 +1538,78 @@ void main() {
   testWidgets(
     'dashboard dark',
     (t) => shot(t, 'dashboard_dark', Brightness.dark),
+  );
+
+  // ---- the guided setup (owner, 2026-08-25) -------------------------------
+  // Three shots of a store on its second day: the chip riding above the nav
+  // bar with the tour's offer under the header, the tasklist sheet the chip
+  // opens, and the walkthrough lighting up a real widget.
+  testWidgets(
+    'guide dashboard light',
+    (t) => shot(
+      t,
+      'guide_dashboard_light',
+      Brightness.light,
+      guideJson: _shotGuide(),
+    ),
+  );
+  testWidgets(
+    'guide tasklist light',
+    (t) => shot(
+      t,
+      'guide_tasklist_light',
+      Brightness.light,
+      guideJson: _shotGuide(),
+      drive: (tester) async {
+        await tester.tap(find.byKey(kGuideChipKey));
+        await tester.pumpAndSettle();
+      },
+    ),
+  );
+  testWidgets(
+    'guide tasklist dark',
+    (t) => shot(
+      t,
+      'guide_tasklist_dark',
+      Brightness.dark,
+      guideJson: _shotGuide(daysRemaining: 1),
+      drive: (tester) async {
+        await tester.tap(find.byKey(kGuideChipKey));
+        await tester.pumpAndSettle();
+      },
+    ),
+  );
+  // The spotlight itself: the dim, the hole cut round the real Credit slot
+  // in the nav bar, and the step bubble above it.
+  testWidgets(
+    'guide tour light',
+    (t) => shot(
+      t,
+      'guide_tour_light',
+      Brightness.light,
+      guideJson: _shotGuide(),
+      drive: (tester) async {
+        await tester.tap(find.byKey(const Key('tour-prompt-start')));
+        await tester.pumpAndSettle();
+      },
+    ),
+  );
+  // Step two, on the Dashboard's own Credit card — the proof that the hole
+  // follows a card as well as a nav slot, and that the bubble flips side.
+  testWidgets(
+    'guide tour card light',
+    (t) => shot(
+      t,
+      'guide_tour_card_light',
+      Brightness.light,
+      guideJson: _shotGuide(),
+      drive: (tester) async {
+        await tester.tap(find.byKey(const Key('tour-prompt-start')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Next'));
+        await tester.pumpAndSettle();
+      },
+    ),
   );
 
   // ---- WL marketing renderer ------------------------------------------------
@@ -2142,6 +2366,7 @@ void main() {
     Brightness b, {
     Future<void> Function(WidgetTester tester)? drive,
     List<MerchantChangeRequest>? pendingChanges,
+    Map<String, dynamic>? guideJson,
   }) => shot(
     tester,
     name,
@@ -2149,12 +2374,24 @@ void main() {
     size: const Size(1280, 800),
     dpr: 2.0,
     pendingChanges: pendingChanges,
+    guideJson: guideJson,
     drive: drive,
   );
 
   testWidgets(
     'tablet dashboard light',
     (t) => tabletShot(t, 'tablet_dashboard_light', Brightness.light),
+  );
+  // The owner's "left bottom", on the one surface that has a left: the
+  // guided-setup chip closing the rail.
+  testWidgets(
+    'tablet guide rail light',
+    (t) => tabletShot(
+      t,
+      'tablet_guide_rail_light',
+      Brightness.light,
+      guideJson: _shotGuide(),
+    ),
   );
 
   // The landing hero's tablet: the two-column Dashboard at the 10" slate
@@ -2230,18 +2467,22 @@ void main() {
         // The recent list sits below the fold on the 800dp slate — reach
         // it, select, then jump back so the shot leads with the hero and
         // the pane's status story side by side.
+        // The PAGE's scroll view, named rather than guessed at: the slate's
+        // nav rail scrolls too (so its own tabs stay reachable on a short
+        // landscape window), and it comes first in the tree.
+        final page = find.descendant(
+          of: find.byType(SettlementsScreen),
+          matching: find.byType(Scrollable),
+        );
         await tester.scrollUntilVisible(
           find.text('ST-2026-00041'),
           160,
-          scrollable: find.byType(Scrollable).first,
+          scrollable: page.first,
         );
         await tester.pumpAndSettle();
         await tester.tap(find.text('ST-2026-00041').first);
         await tester.pumpAndSettle();
-        tester
-            .state<ScrollableState>(find.byType(Scrollable).first)
-            .position
-            .jumpTo(0);
+        tester.state<ScrollableState>(page.first).position.jumpTo(0);
         await tester.pumpAndSettle();
       },
     ),

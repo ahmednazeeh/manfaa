@@ -187,6 +187,14 @@ void main() {
 class _DetailApi extends MerchantApi {
   _DetailApi({required super.session, required this.settlementJson});
 
+  // The guided setup is not live in this fixture, so the shell's chip and
+  // the Dashboard's tour prompt draw nothing and every assertion below is
+  // about the screen it is about. Overridden rather than inherited because
+  // the base class would reach the NETWORK from a unit test.
+  @override
+  Future<MerchantOnboardingGuide> onboarding() async =>
+      MerchantOnboardingGuide.hidden;
+
   final Map<String, dynamic> settlementJson;
 
   @override

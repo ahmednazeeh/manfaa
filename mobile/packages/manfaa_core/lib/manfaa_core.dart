@@ -20,6 +20,7 @@ export 'src/merchant_api.dart';
 export 'src/merchant_models.dart';
 export 'src/models.dart';
 export 'src/money.dart';
+export 'src/onboarding_models.dart';
 export 'src/session.dart';
 export 'src/settlement_models.dart';
 export 'src/market_models.dart';

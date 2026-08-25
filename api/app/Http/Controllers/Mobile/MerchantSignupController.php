@@ -12,8 +12,10 @@ use App\Domain\Mobile\MobileAudience;
 use App\Domain\Mobile\MobileTokenService;
 use App\Domain\Onboarding\EmailAlreadyRegisteredException;
 use App\Domain\Onboarding\MerchantOtpService;
+use App\Domain\Onboarding\SignupOptions;
 use App\Http\Controllers\Controller;
 use App\Http\Support\MerchantOtpRequestLimiter;
+use App\Rules\ValidationWindowDays;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -106,6 +108,18 @@ final class MerchantSignupController extends Controller
         ]);
     }
 
+    /**
+     * The pre-submit facts the signup form needs — today's validation-window
+     * range. Byte-identical to the web door's
+     * (Merchant\SignupController::options): one source
+     * (Onboarding\SignupOptions), two surfaces, so the till app and the
+     * website can never offer different limits.
+     */
+    public function options(): JsonResponse
+    {
+        return new JsonResponse(['data' => SignupOptions::payload()]);
+    }
+
     public function register(Request $request): JsonResponse
     {
         $validated = $request->validate([
@@ -115,6 +129,10 @@ final class MerchantSignupController extends Controller
             'email' => ['required', 'string', 'email', 'max:255'],
             'password' => ['required', 'string', 'min:8', 'max:255'],
             'device_name' => ['required', 'string', 'max:120'],
+            // The same window field, the same shared rule and the same
+            // admin-governed ceiling as the web door and the preferences
+            // screen. Omitted means the platform default, unchanged.
+            'validation_window_days' => ['sometimes', 'nullable', new ValidationWindowDays],
         ]);
 
         try {
@@ -124,6 +142,7 @@ final class MerchantSignupController extends Controller
                 $validated['email'],
                 $validated['password'],
                 blank($validated['business_name_dv'] ?? null) ? null : trim((string) $validated['business_name_dv']),
+                isset($validated['validation_window_days']) ? (int) $validated['validation_window_days'] : null,
             );
         } catch (InvalidSignupTokenException) {
             return self::refusal(

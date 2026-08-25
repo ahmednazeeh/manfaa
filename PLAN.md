@@ -1796,6 +1796,45 @@ effective-dated history, so switching one off stops pricing further
 sales including backdated ones inside the old window. Conservative on
 purpose; rows already priced keep their stamp.
 
+### Merchant onboarding — DONE (2026-08-25)
+
+VALIDATION WINDOW AT SIGNUP, both doors, against ONE rule object
+(App\Rules\ValidationWindowDays) that the preferences screen now shares
+— a merchant can never set a window at signup that preferences would
+later refuse, and the ceiling is READABLE before submit via a public
+GET /merchant/signup/options (also mobile), whose help copy interpolates
+the live bounds so moving the platform ceiling changes both forms with
+no deploy. Omitted → platform default, byte-identical to before.
+
+TASKLIST, per merchant USER, anchored on the first request that needs it
+(a conditional UPDATE, so parallel first requests agree on one anchor —
+no login side effect that could fail a sign-in). Five whole 24h days
+from that instant, NOT five business dates: an anchor at 23:00 would
+otherwise get a thirty-minute "day one". Expiry derived on every read,
+no cron, no flag. Existing rows backfilled to created_at so no
+long-trading shop woke to "credit your first customer".
+Five tasks, every one derived from REAL state and none tickable:
+finish_setup, bank_account (all three fields — half an identity matches
+no payment), credit_customer, settle_bill, add_staff. ONE query while
+live, ZERO once skipped or expired.
+
+GUIDED TOUR on both surfaces — "how to credit a customer" and "how to
+settle due bills" — highlighting the real dashboard regions (Quick
+Actions is where both journeys now start), skippable at every step,
+skipping steps whose target is absent for that person's permissions.
+
+Review: 9 findings, 0 blockers. The one that mattered was PROSE, which
+is exactly where instructional features rot: the copy told merchants to
+credit by PHONE NUMBER when every till requires the 6-digit Manfaa code
+— it would have taught new shops something the API cannot do. Also: the
+till app's tour bubble left the screen at accessibility text sizes and
+never re-measured after a rotation, and ending a tour persisted
+different state on web than on phone.
+
+Suite 2243 green; merchant app v1.0.30+31. NOTE for future rounds:
+`artisan test --parallel` cannot run on this box (the manfaa postgres
+role lacks CREATEDB) — a parallel run's red is not a regression.
+
 ### Queue (updated 2026-08-17) — the mobile programme
 
 The mobile API round is DONE and reviewed (PLAN-mobile-api.md: M1–M5, two

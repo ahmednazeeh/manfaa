@@ -1,10 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { ApiError } from '@manfaa/api-client';
+import { ApiError, isValidValidationWindowDays } from '@manfaa/api-client';
 import { BrandMark } from '@manfaa/ui';
 import { Eye, EyeOff, LoaderCircle, TriangleAlert } from 'lucide-react';
 import { useForm } from 'react-hook-form';
@@ -12,6 +12,8 @@ import { useTranslation } from 'react-i18next';
 import { z } from 'zod';
 import { normalizeMaldivesPhone } from '@/lib/phone';
 import {
+  fieldErrorMessage,
+  useSignupOptions,
   useSignupRegister,
   useSignupRequestOtp,
   useSignupVerifyOtp,
@@ -29,7 +31,7 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form';
-import { Input } from '@/components/ui/input';
+import { Input, InputAddon, InputGroup } from '@/components/ui/input';
 import {
   InputOTP,
   InputOTPGroup,
@@ -63,6 +65,17 @@ export default function SignupPage() {
   const requestOtpMutation = useSignupRequestOtp();
   const verifyOtpMutation = useSignupVerifyOtp();
   const registerMutation = useSignupRegister();
+
+  /**
+   * What the platform currently allows for the validation window, read
+   * before anything is submitted. The ceiling is admin policy and it moves,
+   * so it is asked for rather than remembered: there is NO fallback bound
+   * anywhere in this file. If the read fails the field is not drawn and the
+   * key is left out of register, and the store is created with the platform
+   * default — which is exactly how signup behaved before this field existed.
+   */
+  const signupOptions = useSignupOptions();
+  const windowOption = signupOptions.data?.validation_window ?? null;
 
   // -------------------------------------------------------------------- phone
   const PhoneSchema = z.object({
@@ -143,6 +156,21 @@ export default function SignupPage() {
     business_name_dv: z.string().trim().max(120),
     email: z.email(t('auth.emailInvalid')).max(255),
     password: z.string().min(8, t('signup.passwordTooShort')).max(255),
+    /**
+     * Held as text because that is what the input hands back, and checked
+     * with the api-client's mirror of the server's own rule — same whole
+     * numbers, same live bounds, so the field goes red on exactly the text
+     * the server would refuse and on nothing else. The refusal shown is the
+     * server's own sentence, which names the range it is enforcing.
+     */
+    validation_window_days: z
+      .string()
+      .refine(
+        (value) =>
+          windowOption === null ||
+          isValidValidationWindowDays(value.trim(), windowOption),
+        { message: windowOption?.invalid_en ?? '' },
+      ),
   });
   const detailsForm = useForm<z.infer<typeof DetailsSchema>>({
     resolver: zodResolver(DetailsSchema),
@@ -151,24 +179,66 @@ export default function SignupPage() {
       business_name_dv: '',
       email: '',
       password: '',
+      validation_window_days: '',
     },
   });
   const [showPassword, setShowPassword] = useState(false);
 
+  // Preselect the platform default the moment the options land — and only
+  // while the field is still untouched, so an answer already typed is never
+  // overwritten by a late response.
+  useEffect(() => {
+    if (
+      windowOption !== null &&
+      detailsForm.getValues('validation_window_days') === ''
+    ) {
+      detailsForm.setValue(
+        'validation_window_days',
+        String(windowOption.default_days),
+      );
+    }
+  }, [windowOption, detailsForm]);
+
   const finishSignup = (values: z.infer<typeof DetailsSchema>) => {
     setErrorMessage(null);
+
+    const typedWindow = values.validation_window_days.trim();
+    const windowDays =
+      windowOption !== null && /^\d+$/.test(typedWindow)
+        ? Number(typedWindow)
+        : null;
+
     registerMutation.mutate(
       {
         signup_token: signupToken,
-        ...values,
+        business_name: values.business_name,
         business_name_dv:
           values.business_name_dv === '' ? null : values.business_name_dv,
+        email: values.email,
+        password: values.password,
+        // OMITTED, not nulled, when the options never loaded: an absent key
+        // is how the API says "use the platform default", and it is the one
+        // shape that is byte-identical to signup before this field existed.
+        ...(windowDays === null ? {} : { validation_window_days: windowDays }),
       },
       {
         onSuccess: () => {
           router.replace('/setup');
         },
         onError: (error) => {
+          // A refusal on the window belongs ON the window, in the server's
+          // own words — it is the only party that knows today's ceiling.
+          const windowMessage = fieldErrorMessage(
+            error,
+            'validation_window_days',
+          );
+          if (windowMessage !== null) {
+            detailsForm.setError('validation_window_days', {
+              message: windowMessage,
+            });
+            return;
+          }
+
           const keys = validationErrorKeys(error);
           if (keys.includes('signup_token_invalid')) {
             setErrorMessage(t('signup.verificationExpired'));
@@ -463,6 +533,46 @@ export default function SignupPage() {
                       </FormItem>
                     )}
                   />
+                  {/* THE VALIDATION WINDOW (owner, 2026-08-25). Drawn only
+                      once the platform's live range is known — there is no
+                      hard-coded ceiling to fall back on, because a form that
+                      kept offering 3 on the afternoon an admin lowered the
+                      platform to 1 would be refused at submit by a rule it
+                      never showed anybody. */}
+                  {windowOption !== null && (
+                    <FormField
+                      control={detailsForm.control}
+                      name="validation_window_days"
+                      render={({ field }) => (
+                        <FormItem>
+                          {/* The server's own words, not a copy of them.
+                              SignupOptions publishes label/help so this form
+                              and the till app's signup explain the setting
+                              with ONE sentence; a locale key here would be a
+                              second sentence free to drift from it. English
+                              only, like the rest of this page. */}
+                          <FormLabel>{windowOption.label_en}</FormLabel>
+                          <FormControl>
+                            <InputGroup className="w-44">
+                              <Input
+                                inputMode="numeric"
+                                autoComplete="off"
+                                {...field}
+                              />
+                              <InputAddon>
+                                {t('signup.validationWindowUnit')}
+                              </InputAddon>
+                            </InputGroup>
+                          </FormControl>
+                          <FormDescription>
+                            {windowOption.help_en}
+                          </FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  )}
+
                   <p className="text-xs text-muted-foreground">
                     {t('signup.afterSignupNote')}
                   </p>

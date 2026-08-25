@@ -20,6 +20,7 @@ use App\Http\Controllers\Merchant\BranchesController;
 use App\Http\Controllers\Merchant\CustomerLookupController;
 use App\Http\Controllers\Merchant\FeePromotionBannerController;
 use App\Http\Controllers\Merchant\MarketplaceEnrolmentController;
+use App\Http\Controllers\Merchant\OnboardingGuideController;
 use App\Http\Controllers\Merchant\OrderController as MerchantOrderController;
 use App\Http\Controllers\Merchant\PreferencesController;
 use App\Http\Controllers\Merchant\ProductCategoriesController;
@@ -127,6 +128,14 @@ Route::prefix('mobile/v1')
          * session — the app lands signed in as the draft store's owner.
          */
         Route::prefix('merchant/signup')->group(function (): void {
+            // The web door's /merchant/signup/options, unchanged: the
+            // validation-window range the platform allows today, read
+            // BEFORE the form is submitted so the till app's field can show
+            // its own limit. One source (Onboarding\SignupOptions) so the
+            // two doors cannot drift.
+            Route::get('options', [MerchantSignupController::class, 'options'])
+                ->middleware('throttle:60,1,mobile-merchant-signup-options');
+
             Route::post('request-otp', [MerchantSignupController::class, 'requestOtp'])
                 ->middleware('throttle:30,1,mobile-merchant-otp-request');
             Route::post('verify-otp', [MerchantSignupController::class, 'verifyOtp'])
@@ -314,6 +323,26 @@ Route::prefix('mobile/v1')
                 // account that may log in to a store may be told what that
                 // store is being charged.
                 Route::get('fee-promotion', FeePromotionBannerController::class);
+
+                /*
+                 * The guided-setup tasklist (owner, 2026-08-25) — the SAME
+                 * controller the panel mounts
+                 * (routes/api/merchant-onboarding.php): one person's own
+                 * five days, whichever surface they read them on, so
+                 * skipping it on the phone puts it away on the website too.
+                 *
+                 * Ungated for the same reason as there: it names no account
+                 * but the signed-in one, and the staff who most need to be
+                 * told how the till works are the ones a permission gate
+                 * would hide it from.
+                 */
+                Route::get('onboarding', [OnboardingGuideController::class, 'show']);
+
+                Route::post('onboarding/skip', [OnboardingGuideController::class, 'skip'])
+                    ->middleware('throttle:20,1,mobile-onboarding-writes');
+
+                Route::post('onboarding/tour', [OnboardingGuideController::class, 'completeTour'])
+                    ->middleware('throttle:20,1,mobile-onboarding-writes');
 
                 /*
                  * MARKETPLACE — the shop's order queue and shelf

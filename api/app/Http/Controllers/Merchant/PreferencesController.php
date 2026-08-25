@@ -10,6 +10,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Middleware\EnsureMerchantPermission;
 use App\Http\Resources\MerchantPreferencesResource;
 use App\Models\MerchantUser;
+use App\Rules\ValidationWindowDays;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -39,7 +40,12 @@ class PreferencesController extends Controller
             // PATCH is its ONE write path — the wallet payload only reads it.
             'auto_settle_from_wallet' => ['sometimes', 'boolean'],
             'min_eligible_laari' => ['sometimes', 'integer', 'min:0', 'max:100000'],
-            'validation_window_days' => ['sometimes', 'integer', 'min:0', 'max:'.$config->defaultValidationWindowDays()],
+            // The SAME rule object both signup doors use (App\Rules\
+            // ValidationWindowDays): one ceiling, read from platform
+            // settings at request time, so a window a store was allowed to
+            // pick at signup is never one this screen turns round and
+            // refuses.
+            'validation_window_days' => ['sometimes', new ValidationWindowDays($config)],
         ]);
 
         /** @var MerchantUser $user */

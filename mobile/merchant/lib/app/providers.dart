@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:manfaa_core/manfaa_core.dart';
 
 import '../features/money/money_providers.dart';
+import '../features/onboarding/onboarding_providers.dart';
 
 /// The build number the version gate compares against `minimum_build`.
 /// Injected at build time (`--dart-define=BUILD_NUMBER=`) so CI stamps it;
@@ -126,6 +127,10 @@ final creditQueueProvider = ChangeNotifierProvider<CreditQueue>((ref) {
       // the ETag layer still answers 304 when nothing actually moved.
       ref.invalidate(homeProvider);
       ref.invalidate(settleAllPreviewProvider);
+      // "Credit your first customer" is a fact about the data, not a
+      // checkbox — so the moment the fact changes, re-ask. One query while
+      // the guide is live, none once it is over.
+      refreshOnboardingGuide(ref);
       return result;
     },
   );

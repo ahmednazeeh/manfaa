@@ -141,6 +141,13 @@ class MerchantUser extends Authenticatable implements MobileTokenSubject
             'merchant_role_id' => 'integer',
             'password' => 'hashed',
             'is_active' => 'boolean',
+            // The guided-setup tasklist is anchored per PERSON (owner,
+            // 2026-08-25): when their five days started, whether they put
+            // it away, whether they finished the walkthrough. Expiry is
+            // derived from the anchor on every read — see OnboardingGuide.
+            'onboarding_started_at' => 'immutable_datetime',
+            'onboarding_skipped_at' => 'immutable_datetime',
+            'onboarding_tour_completed_at' => 'immutable_datetime',
         ];
     }
 

@@ -9,6 +9,7 @@ import 'fee_promotion_models.dart';
 import 'marketplace_merchant_models.dart';
 import 'merchant_models.dart';
 import 'models.dart';
+import 'onboarding_models.dart';
 import 'session.dart';
 import 'settlement_models.dart';
 
@@ -103,6 +104,23 @@ class MerchantApi extends ManfaaApiBase<MerchantSession> {
 
   // ------------------------------------------------------------- signup
 
+  /// What the signup form must know BEFORE it is submitted (owner,
+  /// 2026-08-25): the validation-window range the platform allows today,
+  /// with its label, its instructional help and its exact refusal, in both
+  /// languages.
+  ///
+  /// PUBLIC — call it before anyone signs in; the AuthInterceptor simply
+  /// sends no bearer. It names no store.
+  ///
+  /// The ceiling is read at request time from admin policy, which is why
+  /// this is a call and not a constant: a form that hard-coded 3 would keep
+  /// offering 3 on the afternoon an admin lowered the platform to 1. If this
+  /// read FAILS, do not guess — leave the field out and let
+  /// [registerMerchant] omit `validationWindowDays`, which is byte-identical
+  /// to how signup behaved before the field existed.
+  Future<MerchantSignupOptions> signupOptions() async =>
+      MerchantSignupOptions.fromJson(await getJson('/merchant/signup/options'));
+
   /// Ask for a signup code. Enumeration-safe server-side: the answer is
   /// identical for known and unknown phones. The SMS budget is 3/hour per
   /// phone (SHARED with the web signup) — a 429 here still leaves an
@@ -138,6 +156,14 @@ class MerchantApi extends ManfaaApiBase<MerchantSession> {
   /// Refusals: `signup_token_invalid` (expired/consumed — restart from the
   /// phone step), `email_already_registered` (route to sign-in; only sent
   /// after the OTP proved phone possession).
+  ///
+  /// [validationWindowDays] is the days a sale stays open for returns before
+  /// its cashback is confirmed (owner, 2026-08-25). OPTIONAL, and omitted
+  /// from the body when null so the store is created with the platform
+  /// default. Offer it only from [signupOptions] and pre-validate with
+  /// `ValidationWindowOption.accepts` — the ceiling is admin policy, and a
+  /// value above it is refused as a 422 on `validation_window_days` whose
+  /// message names the whole allowed range.
   Future<void> registerMerchant({
     required String signupToken,
     required String businessName,
@@ -145,6 +171,7 @@ class MerchantApi extends ManfaaApiBase<MerchantSession> {
     required String email,
     required String password,
     required String deviceName,
+    int? validationWindowDays,
   }) async {
     final data = await run(
       () => dio.post<Map<String, dynamic>>('/merchant/signup/register', data: {
@@ -154,11 +181,56 @@ class MerchantApi extends ManfaaApiBase<MerchantSession> {
         'email': email,
         'password': password,
         'device_name': deviceName,
+        'validation_window_days': ?validationWindowDays,
       }),
     );
 
     await _saveAuthPayload(data, statusOverride: 'draft');
   }
+
+  // ------------------------------------------------------- guided setup
+
+  MerchantOnboardingGuide _guide(Map<String, dynamic>? data) =>
+      MerchantOnboardingGuide.fromJson(
+        (data?['data'] as Map?)?.cast<String, dynamic>() ?? {},
+      );
+
+  /// The signed-in person's own five-day tasklist and tour prompt.
+  ///
+  /// Ungated — no permission is needed to be told how the till works, and
+  /// gating it would hide it from exactly the staff who most need it. The
+  /// five days are anchored on this account's FIRST call to this endpoint,
+  /// so a cashier added in three months gets their own five days rather than
+  /// inheriting an owner's expired ones.
+  ///
+  /// Cheap enough to refresh on resume: one query while the guide is live,
+  /// none once it is skipped or over. Read
+  /// [MerchantOnboardingGuide.show] before drawing anything, and
+  /// `checklistFor(session.permissions)` before drawing the rows.
+  Future<MerchantOnboardingGuide> onboarding() async =>
+      MerchantOnboardingGuide.fromJson(await getJson('/merchant/onboarding'));
+
+  /// Put it away, for this person only and for good. Nothing un-skips it,
+  /// and a second call is the same as the first.
+  ///
+  /// The state is SHARED across surfaces: skipping here puts it away on the
+  /// website too. Answers the FULL state, so never follow this with
+  /// [onboarding].
+  Future<MerchantOnboardingGuide> skipOnboarding() async => _guide(
+        await run(
+          () => dio.post<Map<String, dynamic>>('/merchant/onboarding/skip'),
+        ),
+      );
+
+  /// The walkthrough was finished, so stop offering it. Deliberately NOT a
+  /// skip: the tasklist stays until it is skipped or the five days run out,
+  /// because watching the tour is not the same as having credited anybody.
+  /// Answers the FULL state, like [skipOnboarding].
+  Future<MerchantOnboardingGuide> completeOnboardingTour() async => _guide(
+        await run(
+          () => dio.post<Map<String, dynamic>>('/merchant/onboarding/tour'),
+        ),
+      );
 
   // ------------------------------------------------------- setup wizard
 

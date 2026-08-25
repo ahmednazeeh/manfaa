@@ -3017,4 +3017,130 @@ class AppLocalizationsDv extends AppLocalizations {
   String paymentDiffers(String received, String claimed) {
     return 'ބޭންކުން ފޮނުވާފައިވަނީ $received — ތިޔަބޭފުޅާ ޖެއްސެވި $claimed އެއް ނޫނެވެ. މި ސެޓްލްމަންޓަށް ޖަމާކުރެވުނީ ހަގީގަތުގައި ލިބުނު އަދަދެވެ.';
   }
+
+  @override
+  String get guideChipLabel => 'ސެޓަޕް ގައިޑް';
+
+  @override
+  String get guideTitleFallback => 'ފެށުމުގެ ފިޔަވަޅުތައް';
+
+  @override
+  String guideProgress(int done, int total) {
+    return '$total ކަމުން $done ކަން ނިމިއްޖެ';
+  }
+
+  @override
+  String guideDaysLeft(int days) {
+    String _temp0 = intl.Intl.pluralLogic(
+      days,
+      locale: localeName,
+      other: '$days ދުވަސް ބާކީ',
+      one: '1 ދުވަސް ބާކީ',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String guideWindowNote(int window) {
+    return 'މި ގައިޑް ފެންނާނީ ފުރަތަމަ $window ދުވަހުއެވެ. އެއަށްފަހު އަމިއްލައަށް ފޮރުވޭނެއެވެ.';
+  }
+
+  @override
+  String get guideSkip => 'މި ގައިޑް ފޮރުވާ';
+
+  @override
+  String get guideSkipTitle => 'ސެޓަޕް ގައިޑް ފޮރުވަންތޯ؟';
+
+  @override
+  String get guideSkipBody =>
+      'އަލުން ނުފެންނާނެއެވެ — މި ފޯނުންވެސް، މަންފާގެ ވެބްސައިޓުންވެސް. ލިސްޓުގައިވާ ހުރިހާ ކަމެއް އެޕުގައި ހަމަ އެގޮތުގައި ހުންނާނެއެވެ.';
+
+  @override
+  String get guideSkipConfirm => 'ފޮރުވާ';
+
+  @override
+  String get guideSkipFailed =>
+      'ގައިޑް ފޮރުވޭގޮތެއް ނުވި. ކަނެކްޝަން ބައްލަވާފައި އަލުން މަސައްކަތްކުރައްވާ.';
+
+  @override
+  String get guideTaskDone => 'ނިމިއްޖެ';
+
+  @override
+  String get guideTaskOpen => 'ހުޅުވާ';
+
+  @override
+  String get guideTaskOnWeb => 'ވެބްސައިޓުގައި ހުޅުވާ';
+
+  @override
+  String get guideTourCta => 'ދައްކާލަދީ';
+
+  @override
+  String get guideTourPromptTitle => 'މަންފާއަށް އަލަށްތޯ؟';
+
+  @override
+  String get guideTourPromptBody =>
+      'ކަސްޓަމަރަށް ކްރެޑިޓްކުރާނެ ގޮތާއި ބިލް ސެޓްލްކުރާނެ ގޮތުގެ ކުރު ތަޢާރަފެއް.';
+
+  @override
+  String get guideTourStart => 'ފަށާ';
+
+  @override
+  String get guideTourDismiss => 'މިހާރަކު ނޫން';
+
+  @override
+  String tourStepOf(int step, int total) {
+    return '$total ފިޔަވަޅުން $step ވަނަ ފިޔަވަޅު';
+  }
+
+  @override
+  String get tourNext => 'ދެން';
+
+  @override
+  String get tourBack => 'ފަހަތަށް';
+
+  @override
+  String get tourDone => 'ރަނގަޅު';
+
+  @override
+  String get tourSkip => 'ތަޢާރަފް ހުއްޓާލާ';
+
+  @override
+  String get tourCreditTabTitle => 'ކޮންމެ ވިޔަފާރިއެއް ފަށަނީ މިތަނުން';
+
+  @override
+  String get tourCreditTabBody =>
+      'ކައުންޓަރުގައި ‘ކްރެޑިޓް’ އަށް ފިތާލައްވާ. ކަސްޓަމަރުގެ 6 ނަންބަރުގެ މަންފާ ކޯޑު ހޯއްދަވާ، ނުވަތަ އެޕުގައިވާ QR ސްކޭންކުރައްވާ. އެއަށްފަހު ވިޔަފާރިކުރެއްވި އަދަދު ލިޔުއްވުމުން، ކޭޝްބެކް ހިސާބުކޮށް ކަސްޓަމަރަށް އަންގާނީ މަންފާއިންނެވެ.';
+
+  @override
+  String get tourCreditCardTitle => 'މިތަނުންވެސް ހުޅުވެނީ ހަމަ އެ ދޮރު';
+
+  @override
+  String get tourCreditCardBody =>
+      'މި ކާޑުން ހުޅުވެނީ ހަމަ އެ ސްކްރީނެވެ. ކަސްޓަމަރު އަތުން އެއްވެސް އެއްޗެއް ނުނަގައެވެ — ކުރައްވަނީ ވިޔަފާރި ރެކޯޑްކުރެއްވުމެވެ. އެއީ ކޭޝްބެކް ލިބޭނެ ގޮތަށެވެ.';
+
+  @override
+  String get tourOutstandingTitle => 'މަންފާއަށް ދައްކަންޖެހޭ އަދަދު';
+
+  @override
+  String get tourOutstandingBody =>
+      'ކްރެޑިޓްކުރައްވާ ކޮންމެ ކޭޝްބެކަކާއި ޕްލެޓްފޯމް ފީ އެއްކޮށްލައިގެން ދައްކާނީ މިތާއެވެ. މިއީ ބިލެވެ — ކްރެޑިޓްކުރައްވާ ވަރަކަށް ބޮޑުވެ، ސެޓްލްކުރެއްވުމުން ސުމަކަށް ދާނެއެވެ.';
+
+  @override
+  String get tourSettleTabTitle => 'ބިލް ސެޓްލްކުރައްވަނީ މިތަނުން';
+
+  @override
+  String get tourSettleTabBody =>
+      '‘ސެޓްލްމަންޓްތައް’ ހުޅުއްވައި، ދައްކަންޖެހޭ އަދަދު ބައްލަވައި، ދައްކާފައިވާ މަންފާގެ ބޭންކް އެކައުންޓަށް އެ އަދަދު ފޮނުއްވުމަށްފަހު ސްލިޕް އަޕްލޯޑްކުރައްވާ. އަވަހަށް ދެއްކެވުމުން ޕްރޮމްޓް-ޕޭމަންޓް ޑިސްކައުންޓް ލިބޭނެއެވެ.';
+
+  @override
+  String windowDaysOption(int days) {
+    String _temp0 = intl.Intl.pluralLogic(
+      days,
+      locale: localeName,
+      other: '$days ދުވަސް',
+      one: '1 ދުވަސް',
+      zero: 'އެ ދުވަހު — މަޑުކުރުމެއް ނެތި',
+    );
+    return '$_temp0';
+  }
 }

@@ -2976,4 +2976,130 @@ class AppLocalizationsEn extends AppLocalizations {
   String paymentDiffers(String received, String claimed) {
     return 'Your bank sent $received, not the $claimed you entered — this settlement was credited with what actually arrived.';
   }
+
+  @override
+  String get guideChipLabel => 'Setup guide';
+
+  @override
+  String get guideTitleFallback => 'Getting started';
+
+  @override
+  String guideProgress(int done, int total) {
+    return '$done of $total done';
+  }
+
+  @override
+  String guideDaysLeft(int days) {
+    String _temp0 = intl.Intl.pluralLogic(
+      days,
+      locale: localeName,
+      other: '$days days left',
+      one: '1 day left',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String guideWindowNote(int window) {
+    return 'This guide shows for your first $window days and then puts itself away.';
+  }
+
+  @override
+  String get guideSkip => 'Hide this guide';
+
+  @override
+  String get guideSkipTitle => 'Hide the setup guide?';
+
+  @override
+  String get guideSkipBody =>
+      'It will not come back — not on this phone and not on the Manfaa website. Everything on the list stays where it is in the app.';
+
+  @override
+  String get guideSkipConfirm => 'Hide it';
+
+  @override
+  String get guideSkipFailed =>
+      'Could not hide the guide. Check your connection and try again.';
+
+  @override
+  String get guideTaskDone => 'Done';
+
+  @override
+  String get guideTaskOpen => 'Open';
+
+  @override
+  String get guideTaskOnWeb => 'Open on the website';
+
+  @override
+  String get guideTourCta => 'Show me how';
+
+  @override
+  String get guideTourPromptTitle => 'New to Manfaa?';
+
+  @override
+  String get guideTourPromptBody =>
+      'A short walkthrough of crediting a customer and settling your bill.';
+
+  @override
+  String get guideTourStart => 'Start';
+
+  @override
+  String get guideTourDismiss => 'Not now';
+
+  @override
+  String tourStepOf(int step, int total) {
+    return 'Step $step of $total';
+  }
+
+  @override
+  String get tourNext => 'Next';
+
+  @override
+  String get tourBack => 'Back';
+
+  @override
+  String get tourDone => 'Got it';
+
+  @override
+  String get tourSkip => 'Skip tour';
+
+  @override
+  String get tourCreditTabTitle => 'Every sale starts here';
+
+  @override
+  String get tourCreditTabBody =>
+      'Tap Credit at the counter. Ask for the customer\'s 6-digit Manfaa code, or scan the QR in their app, then key in what they spent — Manfaa works out the cashback and tells them it is coming.';
+
+  @override
+  String get tourCreditCardTitle => 'The same door from here';
+
+  @override
+  String get tourCreditCardBody =>
+      'This card opens the same till screen. Nothing is charged to the customer — you are recording a sale so their cashback can be earned.';
+
+  @override
+  String get tourOutstandingTitle => 'What you owe Manfaa';
+
+  @override
+  String get tourOutstandingBody =>
+      'Every cashback you credit is added up here with the platform fee. This is the bill: it grows as you credit and clears when you settle.';
+
+  @override
+  String get tourSettleTabTitle => 'Settle your due bills here';
+
+  @override
+  String get tourSettleTabBody =>
+      'Open Settlements, check what is due, transfer that amount to the Manfaa bank account shown and upload the slip. Settling early keeps the prompt-payment discount.';
+
+  @override
+  String windowDaysOption(int days) {
+    String _temp0 = intl.Intl.pluralLogic(
+      days,
+      locale: localeName,
+      other: '$days days',
+      one: '1 day',
+      zero: 'Same day — no wait',
+    );
+    return '$_temp0';
+  }
 }

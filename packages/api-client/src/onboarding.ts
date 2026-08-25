@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { apiFetch } from "./client";
+import { apiFetch, apiFetchPublic } from "./client";
 import { MerchantBranchSchema, MerchantRoleSummarySchema } from "./merchant";
 import {
   CashbackPercentInputSchema,
@@ -21,7 +21,12 @@ import {
  *    channel, terms, contact), the primary branch's map pin, optional logo
  *    (FormData), initial cashback rate, then submit → pending_review;
  *  - the ADMIN approval queue (approve → active / reject with a reason) and
- *    CRUD over the superadmin-curated store categories.
+ *    CRUD over the superadmin-curated store categories;
+ *  - the PUBLIC signup-options read (owner, 2026-08-25), which is how the
+ *    signup form learns the validation-window range it may offer instead of
+ *    hard-coding one that goes stale the day an admin moves the ceiling;
+ *  - the GUIDED-SETUP tasklist (owner, 2026-08-25) — the sidebar checklist
+ *    and tour prompt a new merchant user sees for their first five days.
  *
  * Every rate here travels as a 2-decimal percent string (PLAN §1 wire
  * format) — `cashback_rate_percent`, `rate_bounds.min_percent` /
@@ -32,6 +37,107 @@ import {
 
 interface RequestOptions {
   signal?: AbortSignal;
+}
+
+// ---------------------------------------------------------------------------
+// Signup options (PUBLIC) — what the form must know before it is submitted
+// ---------------------------------------------------------------------------
+
+/**
+ * The floor of the validation-window range, mirroring
+ * `App\Rules\ValidationWindowDays::MIN_DAYS`. Zero means "validate
+ * immediately" and a merchant may always tighten to it.
+ *
+ * THE CEILING IS DELIBERATELY NOT A CONSTANT HERE. It is admin policy
+ * (the platform's `default_validation_window_days`), read at request time
+ * by the one server rule that enforces it, and published as
+ * `validation_window.max_days` on the signup-options endpoint below. A form
+ * that hard-coded 3 would keep offering 3 on the afternoon an admin lowered
+ * the platform to 1, and every merchant who took it would be refused at
+ * submit by a rule they were never shown.
+ */
+export const VALIDATION_WINDOW_MIN_DAYS = 0;
+
+/**
+ * The validation-window field, described by the server that validates it:
+ * the live range, the default to preselect, and the merchant-facing copy in
+ * both languages — including the exact refusal (`invalid_en` / `invalid_dv`)
+ * so a form can say the same sentence the server would, before anyone waits
+ * for a round trip. Every number inside the prose is interpolated from these
+ * same bounds, so an admin moving the ceiling moves the help text too.
+ */
+export const ValidationWindowOptionSchema = z.object({
+  /** Always `VALIDATION_WINDOW_MIN_DAYS`; served so the copy can name it. */
+  min_days: z.number().int(),
+  /** The live admin ceiling. Render THIS as the field's bound. */
+  max_days: z.number().int(),
+  /** What a store that says nothing at signup is created with. */
+  default_days: z.number().int(),
+  label_en: z.string(),
+  label_dv: z.string(),
+  help_en: z.string(),
+  help_dv: z.string(),
+  invalid_en: z.string(),
+  invalid_dv: z.string(),
+});
+export type ValidationWindowOption = z.infer<
+  typeof ValidationWindowOptionSchema
+>;
+
+export const MerchantSignupOptionsSchema = z.object({
+  validation_window: ValidationWindowOptionSchema,
+});
+export type MerchantSignupOptions = z.infer<typeof MerchantSignupOptionsSchema>;
+
+export const MerchantSignupOptionsResponseSchema = dataWrapped(
+  MerchantSignupOptionsSchema,
+);
+export type MerchantSignupOptionsResponse = z.infer<
+  typeof MerchantSignupOptionsResponseSchema
+>;
+
+/**
+ * GET /api/merchant/signup/options — public and unauthenticated, like the
+ * signup steps themselves, and it discloses nothing about any store: only
+ * what the platform currently allows.
+ *
+ * Fetched WITHOUT the session (`apiFetchPublic`) for the same reason as the
+ * public fee-promotion banner: the answer must not depend on who is asking,
+ * and the visitor filling in this form has no session yet.
+ */
+export function getMerchantSignupOptions(
+  options: RequestOptions = {},
+): Promise<MerchantSignupOptionsResponse> {
+  return apiFetchPublic(
+    "/api/merchant/signup/options",
+    MerchantSignupOptionsResponseSchema,
+    { signal: options.signal },
+  );
+}
+
+/**
+ * The client mirror of `App\Rules\ValidationWindowDays` — whole days inside
+ * the published range — so a field can go red on exactly the text the
+ * server would refuse, and only on that text.
+ *
+ * Accepts the numeric STRING a text input hands back ("3") exactly as the
+ * server's rule does, and refuses `2.5`, `"2.5"`, `""` and `" 3"` exactly as
+ * it does — the untrimmed string is the point: this answers "would the
+ * server take this?", not "could this be tidied into something it would
+ * take". Trim before asking if trimming is what the form intends to submit.
+ */
+export function isValidValidationWindowDays(
+  value: unknown,
+  bounds: Pick<ValidationWindowOption, "min_days" | "max_days">,
+): boolean {
+  const days =
+    typeof value === "number" && Number.isInteger(value)
+      ? value
+      : typeof value === "string" && /^-?\d+$/.test(value)
+        ? Number(value)
+        : null;
+
+  return days !== null && days >= bounds.min_days && days <= bounds.max_days;
 }
 
 // ---------------------------------------------------------------------------
@@ -120,6 +226,28 @@ export const MerchantSignupRegisterRequestSchema = z.object({
   business_name_dv: z.string().max(120).nullish(),
   email: z.email().max(255),
   password: z.string().min(8).max(255),
+  /**
+   * How many days a sale stays open for returns before its cashback is
+   * confirmed (owner, 2026-08-25). OPTIONAL: omit it — or send null — and
+   * the store is created with the platform default, byte-identical to how
+   * signup behaved before this field existed.
+   *
+   * The real bound is `validation_window.max_days` from
+   * `getMerchantSignupOptions()`, read at request time from admin policy.
+   * The 30 here is only the absolute platform range, the same guard the
+   * preferences PATCH carries — pre-validate with
+   * `isValidValidationWindowDays()` against the live bounds instead of
+   * trusting this ceiling.
+   *
+   * A refusal is a 422 on `validation_window_days`, whose message names the
+   * whole allowed range.
+   */
+  validation_window_days: z
+    .number()
+    .int()
+    .min(VALIDATION_WINDOW_MIN_DAYS)
+    .max(30)
+    .nullish(),
 });
 export type MerchantSignupRegisterRequest = z.infer<
   typeof MerchantSignupRegisterRequestSchema
@@ -479,6 +607,221 @@ export function submitMerchantSetup(
     MerchantSetupStateResponseSchema,
     { method: "POST", signal: options.signal },
   );
+}
+
+// ---------------------------------------------------------------------------
+// Guided setup — the sidebar tasklist and the tour prompt (owner 2026-08-25)
+// ---------------------------------------------------------------------------
+
+/**
+ * The tasklist a new merchant sees in the sidebar for their first five days.
+ *
+ * THREE RULES, ALL SERVER-SIDE, and a client that fights any of them is
+ * wrong:
+ *
+ *  1. PER PERSON, not per store. The five days are anchored on the
+ *     signed-in account's own first read of this endpoint, so a cashier
+ *     added in three months gets their own five days rather than inheriting
+ *     an owner's expired ones. There is no id in any of these routes: the
+ *     only account any of them can reach is the authenticated one.
+ *  2. FIVE DAYS IS A HARD STOP. `show` goes false five whole days after
+ *     that anchor whether or not anything was completed, and skipping is
+ *     permanent and immediate. Never persist a local "dismissed" flag
+ *     beside this — `show` is the whole answer, and it is shared across
+ *     surfaces (skip on the phone, gone on the website).
+ *  3. EVERY TASK IS DERIVED FROM REAL STATE. `done` on "credit your first
+ *     customer" means a transaction exists. Nothing here is tickable, and
+ *     a client that offered a tick would be offering a lie.
+ *
+ * The GET is cheap enough to hang off every page load by design: one query
+ * while the guide is live, none once it is skipped or over.
+ */
+
+/**
+ * The task keys this build knows how to talk about.
+ *
+ * `key` is parsed as a plain string rather than an enum ON PURPOSE: the API
+ * can ship a sixth task before a cached panel bundle has heard of it, and a
+ * strict enum would fail the whole payload's parse and blank the sidebar
+ * over one unknown row. Route on `web_path`, which the server supplies for
+ * exactly this reason, and use `isKnownMerchantOnboardingTaskKey` only when
+ * you want to special-case a task you recognise.
+ */
+export const MERCHANT_ONBOARDING_TASK_KEYS = [
+  "finish_setup",
+  "bank_account",
+  "credit_customer",
+  "settle_bill",
+  "add_staff",
+] as const;
+export type MerchantOnboardingTaskKey =
+  (typeof MERCHANT_ONBOARDING_TASK_KEYS)[number];
+
+export function isKnownMerchantOnboardingTaskKey(
+  key: string,
+): key is MerchantOnboardingTaskKey {
+  return (MERCHANT_ONBOARDING_TASK_KEYS as readonly string[]).includes(key);
+}
+
+/**
+ * One row of the tasklist. `help_en` / `help_dv` are the instructional prose
+ * — full sentences telling a merchant how to credit a customer and how to
+ * settle a bill — written to be reused verbatim in a highlight bubble.
+ */
+export const MerchantOnboardingTaskSchema = z.object({
+  /** See MERCHANT_ONBOARDING_TASK_KEYS: a string, tolerantly. */
+  key: z.string(),
+  label_en: z.string(),
+  label_dv: z.string(),
+  help_en: z.string(),
+  help_dv: z.string(),
+  /** Derived from real data every read; never a stored checkbox. */
+  done: z.boolean(),
+  /**
+   * The permission slug that makes this task THIS person's to do. The API
+   * publishes it rather than filtering on it, because the client already
+   * holds the resolved set from `/merchant/auth/me`. A cashier must not be
+   * shown "add your bank account" — filter with
+   * `merchantOnboardingChecklist()` rather than rendering `tasks` raw.
+   */
+  permission: z.string(),
+  /** The mobile app's screen hint; the panel routes on `web_path`. */
+  target: z.string(),
+  /** Where the panel sends someone who taps the row. */
+  web_path: z.string(),
+});
+export type MerchantOnboardingTask = z.infer<
+  typeof MerchantOnboardingTaskSchema
+>;
+
+export const MerchantOnboardingGuideSchema = z.object({
+  /** The only thing a sidebar consults: false means draw nothing at all. */
+  show: z.boolean(),
+  skipped: z.boolean(),
+  expired: z.boolean(),
+  /** The walkthrough was finished. NOT the same as skipping the tasklist. */
+  tour_completed: z.boolean(),
+  /** This person's own anchor, stamped on their first read. */
+  started_at: z.string(),
+  expires_at: z.string(),
+  /** Whole days left, rounded UP: 5 on arrival, 1 through the last 24h. */
+  days_remaining: z.number().int(),
+  /** The hard rule, served rather than assumed. 5 today. */
+  window_days: z.number().int(),
+  title_en: z.string(),
+  title_dv: z.string(),
+  /** Empty whenever `show` is false — nothing is computed then. */
+  tasks: z.array(MerchantOnboardingTaskSchema),
+  tasks_done: z.number().int(),
+  tasks_total: z.number().int(),
+  all_done: z.boolean(),
+});
+export type MerchantOnboardingGuide = z.infer<
+  typeof MerchantOnboardingGuideSchema
+>;
+
+export const MerchantOnboardingGuideResponseSchema = dataWrapped(
+  MerchantOnboardingGuideSchema,
+);
+export type MerchantOnboardingGuideResponse = z.infer<
+  typeof MerchantOnboardingGuideResponseSchema
+>;
+
+/**
+ * GET /api/merchant/onboarding — the signed-in person's own guided-setup
+ * state. No permission gate: gating it would hide the tasklist from exactly
+ * the staff who most need telling how the till works.
+ */
+export function getMerchantOnboarding(
+  options: RequestOptions = {},
+): Promise<MerchantOnboardingGuideResponse> {
+  return apiFetch(
+    "/api/merchant/onboarding",
+    MerchantOnboardingGuideResponseSchema,
+    { signal: options.signal },
+  );
+}
+
+/**
+ * POST /api/merchant/onboarding/skip — permanent and immediate. Nothing
+ * un-skips it, and a second call is the same as the first.
+ *
+ * Answers the FULL state, so never follow this with `getMerchantOnboarding`.
+ */
+export function skipMerchantOnboarding(
+  options: RequestOptions = {},
+): Promise<MerchantOnboardingGuideResponse> {
+  return apiFetch(
+    "/api/merchant/onboarding/skip",
+    MerchantOnboardingGuideResponseSchema,
+    { method: "POST", signal: options.signal },
+  );
+}
+
+/**
+ * POST /api/merchant/onboarding/tour — the walkthrough was finished, so
+ * stop offering it. Deliberately NOT a skip: the tasklist stays until it is
+ * skipped or the five days run out, because watching the tour is not the
+ * same as having credited anybody.
+ *
+ * Answers the FULL state, like skip.
+ */
+export function completeMerchantOnboardingTour(
+  options: RequestOptions = {},
+): Promise<MerchantOnboardingGuideResponse> {
+  return apiFetch(
+    "/api/merchant/onboarding/tour",
+    MerchantOnboardingGuideResponseSchema,
+    { method: "POST", signal: options.signal },
+  );
+}
+
+/** The tasklist as ONE person may actually see it. */
+export interface MerchantOnboardingChecklist {
+  /** `show` AND something left to draw after the permission filter. */
+  show: boolean;
+  tasks: MerchantOnboardingTask[];
+  done: number;
+  total: number;
+  allDone: boolean;
+}
+
+/**
+ * The tasklist narrowed to what this account may actually do, with counts
+ * over THAT list.
+ *
+ * Two things this fixes, and both are visible to a merchant:
+ *
+ *  - a cashier must not be told to add the shop's bank account, so tasks
+ *    whose `permission` they do not hold are dropped;
+ *  - the counts must then describe the rows on screen. Rendering four rows
+ *    under "2 of 5 done" is a bug a reader can see, so `done` / `total`
+ *    here are recomputed over the filtered list rather than taken from the
+ *    server's `tasks_done` / `tasks_total`, which describe the whole store's
+ *    list. Use those two only if you want the unfiltered picture.
+ *
+ * `show` goes false when the filter empties the list: a person with nothing
+ * to do is shown nothing, not an empty box.
+ *
+ * @param permissions the resolved slugs from `/api/merchant/auth/me`.
+ */
+export function merchantOnboardingChecklist(
+  guide: MerchantOnboardingGuide,
+  permissions: Iterable<string>,
+): MerchantOnboardingChecklist {
+  const held = new Set(permissions);
+  const tasks = guide.show
+    ? guide.tasks.filter((task) => held.has(task.permission))
+    : [];
+  const done = tasks.filter((task) => task.done).length;
+
+  return {
+    show: tasks.length > 0,
+    tasks,
+    done,
+    total: tasks.length,
+    allDone: tasks.length > 0 && done === tasks.length,
+  };
 }
 
 // ---------------------------------------------------------------------------

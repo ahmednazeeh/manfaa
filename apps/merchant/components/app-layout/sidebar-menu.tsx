@@ -14,7 +14,20 @@ import {
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useLayout } from './context';
 import { useMarketplaceEnrolment } from '@/lib/queries';
+import { TOUR_ANCHORS, type TourAnchor } from '@/components/onboarding/anchors';
 import { APP_MENU, menuItemAllowed } from './menu';
+
+/**
+ * The three nav rows a guided tour points at. Keyed by path so the anchor
+ * follows the entry wherever the menu is reordered, and absent for every
+ * other row — a tour step is only ever added here alongside the words that
+ * explain it.
+ */
+const TOUR_ANCHOR_BY_PATH: Record<string, TourAnchor> = {
+  '/credit': TOUR_ANCHORS.navCredit,
+  '/transactions': TOUR_ANCHORS.navTransactions,
+  '/settlements': TOUR_ANCHORS.navSettlements,
+};
 
 const classNames: AccordionMenuClassNames = {
   root: 'lg:ps-1 space-y-3',
@@ -101,7 +114,11 @@ export function SidebarMenu({ className }: { className?: string }) {
                 value={item.path}
                 className="text-sm font-medium"
               >
-                <Link href={item.path} className="flex items-center grow gap-2">
+                <Link
+                  href={item.path}
+                  data-tour={TOUR_ANCHOR_BY_PATH[item.path]}
+                  className="flex items-center grow gap-2"
+                >
                   <item.icon data-slot="accordion-menu-icon" />
                   <span data-slot="accordion-menu-title">{item.title}</span>
                 </Link>

@@ -27,6 +27,8 @@ import {
   SheetTrigger,
 } from '@/components/ui/sheet';
 import { LanguageSwitcher } from '@/components/app/language-switcher';
+import { OnboardingTasklist } from '@/components/onboarding/onboarding-tasklist';
+import { useTour } from '@/components/onboarding/tour-provider';
 import { useLayout } from './context';
 import { SidebarMenu } from './sidebar-menu';
 
@@ -103,11 +105,22 @@ export function Header() {
   const mobileMode = useIsMobile();
   const scrollPosition = useScrollPosition();
   const headerSticky: boolean = scrollPosition > 0;
+  const { activeTour } = useTour();
 
   // Close the mobile menu when the route changes.
   useEffect(() => {
     setIsSidebarSheetOpen(false);
   }, [pathname]);
+
+  // …and when a tour starts, which on a phone is started from inside this
+  // very drawer. The sheet is a modal with its own focus trap: leaving it
+  // open would put a highlight of the dashboard behind a panel covering the
+  // dashboard, with the keyboard locked into the wrong one of the two.
+  useEffect(() => {
+    if (activeTour !== null) {
+      setIsSidebarSheetOpen(false);
+    }
+  }, [activeTour]);
 
   return (
     <header
@@ -141,8 +154,12 @@ export function Header() {
                 close={false}
               >
                 <SheetHeader className="p-0 space-y-0" />
-                <SheetBody className="p-0 overflow-y-auto">
+                {/* Same order as the desktop sidebar — navigation first,
+                    guided setup underneath it — so "bottom of the menu"
+                    means the same thing on a phone as on a laptop. */}
+                <SheetBody className="p-0 overflow-y-auto flex flex-col">
                   <SidebarMenu className="lg:h-auto" />
+                  <OnboardingTasklist className="mt-auto" />
                 </SheetBody>
               </SheetContent>
             </Sheet>

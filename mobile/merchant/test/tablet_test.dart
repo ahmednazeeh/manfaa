@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:manfaa_core/manfaa_core.dart';
 import 'package:manfaa_merchant/app/app.dart';
 import 'package:manfaa_merchant/app/providers.dart';
+import 'package:manfaa_merchant/features/settlements/settlements_screen.dart';
 
 /// MR7 contract tests — the estates half of the tablet round, at an
 /// expanded (≥840dp content) window:
@@ -144,18 +145,22 @@ void main() {
 
       expect(find.text('Select a settlement'), findsOneWidget);
 
+      // The PAGE's scroll view, named rather than guessed at: the slate's
+      // nav rail scrolls too (so its own tabs stay reachable on a short
+      // landscape window), and it comes first in the tree.
+      final page = find.descendant(
+        of: find.byType(SettlementsScreen),
+        matching: find.byType(Scrollable),
+      );
       await tester.scrollUntilVisible(
         find.text('ST-2026-00041'),
         160,
-        scrollable: find.byType(Scrollable).first,
+        scrollable: page.first,
       );
       await tester.pumpAndSettle();
       await tester.tap(find.text('ST-2026-00041').first);
       await tester.pumpAndSettle();
-      tester
-          .state<ScrollableState>(find.byType(Scrollable).first)
-          .position
-          .jumpTo(0);
+      tester.state<ScrollableState>(page.first).position.jumpTo(0);
       await tester.pumpAndSettle();
 
       // The pane carries the detail's summary WITHOUT leaving the tab (the
@@ -255,6 +260,14 @@ Map<String, dynamic> _staffRow(
 
 class _FakeApi extends MerchantApi {
   _FakeApi({required super.session, required this.permissions});
+
+  // The guided setup is not live in this fixture, so the shell's chip and
+  // the Dashboard's tour prompt draw nothing and every assertion below is
+  // about the screen it is about. Overridden rather than inherited because
+  // the base class would reach the NETWORK from a unit test.
+  @override
+  Future<MerchantOnboardingGuide> onboarding() async =>
+      MerchantOnboardingGuide.hidden;
 
   final List<String> permissions;
 

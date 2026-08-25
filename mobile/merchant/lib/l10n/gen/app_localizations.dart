@@ -5149,6 +5149,198 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Your bank sent {received}, not the {claimed} you entered — this settlement was credited with what actually arrived.'**
   String paymentDiffers(String received, String claimed);
+
+  /// No description provided for @guideChipLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Setup guide'**
+  String get guideChipLabel;
+
+  /// No description provided for @guideTitleFallback.
+  ///
+  /// In en, this message translates to:
+  /// **'Getting started'**
+  String get guideTitleFallback;
+
+  /// No description provided for @guideProgress.
+  ///
+  /// In en, this message translates to:
+  /// **'{done} of {total} done'**
+  String guideProgress(int done, int total);
+
+  /// No description provided for @guideDaysLeft.
+  ///
+  /// In en, this message translates to:
+  /// **'{days, plural, =1{1 day left} other{{days} days left}}'**
+  String guideDaysLeft(int days);
+
+  /// No description provided for @guideWindowNote.
+  ///
+  /// In en, this message translates to:
+  /// **'This guide shows for your first {window} days and then puts itself away.'**
+  String guideWindowNote(int window);
+
+  /// No description provided for @guideSkip.
+  ///
+  /// In en, this message translates to:
+  /// **'Hide this guide'**
+  String get guideSkip;
+
+  /// No description provided for @guideSkipTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Hide the setup guide?'**
+  String get guideSkipTitle;
+
+  /// No description provided for @guideSkipBody.
+  ///
+  /// In en, this message translates to:
+  /// **'It will not come back — not on this phone and not on the Manfaa website. Everything on the list stays where it is in the app.'**
+  String get guideSkipBody;
+
+  /// No description provided for @guideSkipConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Hide it'**
+  String get guideSkipConfirm;
+
+  /// No description provided for @guideSkipFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not hide the guide. Check your connection and try again.'**
+  String get guideSkipFailed;
+
+  /// No description provided for @guideTaskDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Done'**
+  String get guideTaskDone;
+
+  /// No description provided for @guideTaskOpen.
+  ///
+  /// In en, this message translates to:
+  /// **'Open'**
+  String get guideTaskOpen;
+
+  /// No description provided for @guideTaskOnWeb.
+  ///
+  /// In en, this message translates to:
+  /// **'Open on the website'**
+  String get guideTaskOnWeb;
+
+  /// No description provided for @guideTourCta.
+  ///
+  /// In en, this message translates to:
+  /// **'Show me how'**
+  String get guideTourCta;
+
+  /// No description provided for @guideTourPromptTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'New to Manfaa?'**
+  String get guideTourPromptTitle;
+
+  /// No description provided for @guideTourPromptBody.
+  ///
+  /// In en, this message translates to:
+  /// **'A short walkthrough of crediting a customer and settling your bill.'**
+  String get guideTourPromptBody;
+
+  /// No description provided for @guideTourStart.
+  ///
+  /// In en, this message translates to:
+  /// **'Start'**
+  String get guideTourStart;
+
+  /// No description provided for @guideTourDismiss.
+  ///
+  /// In en, this message translates to:
+  /// **'Not now'**
+  String get guideTourDismiss;
+
+  /// No description provided for @tourStepOf.
+  ///
+  /// In en, this message translates to:
+  /// **'Step {step} of {total}'**
+  String tourStepOf(int step, int total);
+
+  /// No description provided for @tourNext.
+  ///
+  /// In en, this message translates to:
+  /// **'Next'**
+  String get tourNext;
+
+  /// No description provided for @tourBack.
+  ///
+  /// In en, this message translates to:
+  /// **'Back'**
+  String get tourBack;
+
+  /// No description provided for @tourDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Got it'**
+  String get tourDone;
+
+  /// No description provided for @tourSkip.
+  ///
+  /// In en, this message translates to:
+  /// **'Skip tour'**
+  String get tourSkip;
+
+  /// No description provided for @tourCreditTabTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Every sale starts here'**
+  String get tourCreditTabTitle;
+
+  /// No description provided for @tourCreditTabBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Tap Credit at the counter. Ask for the customer\'s 6-digit Manfaa code, or scan the QR in their app, then key in what they spent — Manfaa works out the cashback and tells them it is coming.'**
+  String get tourCreditTabBody;
+
+  /// No description provided for @tourCreditCardTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'The same door from here'**
+  String get tourCreditCardTitle;
+
+  /// No description provided for @tourCreditCardBody.
+  ///
+  /// In en, this message translates to:
+  /// **'This card opens the same till screen. Nothing is charged to the customer — you are recording a sale so their cashback can be earned.'**
+  String get tourCreditCardBody;
+
+  /// No description provided for @tourOutstandingTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'What you owe Manfaa'**
+  String get tourOutstandingTitle;
+
+  /// No description provided for @tourOutstandingBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Every cashback you credit is added up here with the platform fee. This is the bill: it grows as you credit and clears when you settle.'**
+  String get tourOutstandingBody;
+
+  /// No description provided for @tourSettleTabTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Settle your due bills here'**
+  String get tourSettleTabTitle;
+
+  /// No description provided for @tourSettleTabBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Open Settlements, check what is due, transfer that amount to the Manfaa bank account shown and upload the slip. Settling early keeps the prompt-payment discount.'**
+  String get tourSettleTabBody;
+
+  /// No description provided for @windowDaysOption.
+  ///
+  /// In en, this message translates to:
+  /// **'{days, plural, =0{Same day — no wait} =1{1 day} other{{days} days}}'**
+  String windowDaysOption(int days);
 }
 
 class _AppLocalizationsDelegate
