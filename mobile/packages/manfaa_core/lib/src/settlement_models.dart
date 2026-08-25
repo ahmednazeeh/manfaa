@@ -321,6 +321,9 @@ class SettlementInstructions {
   SettlementInstructions({
     this.reference,
     required this.amountDueLaari,
+    this.cashbackTotalLaari = 0,
+    this.feeTotalLaari = 0,
+    this.feeGstTotalLaari = 0,
     this.bankAccount,
     required this.bankAccounts,
     required this.needsConfiguration,
@@ -330,6 +333,9 @@ class SettlementInstructions {
       SettlementInstructions(
         reference: json['reference'] == null ? null : _s(json['reference']),
         amountDueLaari: _laari(json['amount_due_laari']),
+        cashbackTotalLaari: _laari(json['cashback_total_laari']),
+        feeTotalLaari: _laari(json['fee_total_laari']),
+        feeGstTotalLaari: _laari(json['fee_gst_total_laari']),
         bankAccount: json['bank_account'] is Map
             ? PlatformBankAccount.fromJson(_map(json['bank_account']))
             : null,
@@ -343,6 +349,24 @@ class SettlementInstructions {
   /// Null before the settlement exists — see the class doc.
   final String? reference;
   final int amountDueLaari;
+
+  /// The bill ITEMISED, as the preview publishes it (2026-08-24): what the
+  /// customers earned, what Manfaa charged, and the GST on that charge —
+  /// three separate integers, never one blended number. They are the totals
+  /// BEFORE the §7 credit and the prompt-payment discount, so
+  /// cashback + fee + GST = the preview's `line_total_laari`, not
+  /// [amountDueLaari].
+  ///
+  /// Zero on a created settlement's instructions: SettlementResource does
+  /// not repeat the split there (the settlement itself carries it), and a
+  /// remainder is a part-payment no split describes.
+  final int cashbackTotalLaari;
+  final int feeTotalLaari;
+
+  /// Zero whenever GST does not apply — the platform has it switched off,
+  /// or every row in the batch was priced before it did. A UI shows the
+  /// line only when this is positive.
+  final int feeGstTotalLaari;
 
   /// The default account to show — null ONLY when nothing is configured
   /// (needsConfiguration true): details are never invented.

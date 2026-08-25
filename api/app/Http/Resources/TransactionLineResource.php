@@ -35,6 +35,10 @@ class TransactionLineResource extends JsonResource
             'platform_fee_percent' => Percent::format($this->fee_bp),
             'cashback_laari' => $this->cashback_laari,
             'fee_laari' => $this->fee_laari,
+            // Per line, because the fee is per line: the header figures are
+            // the SUM of these, so a receipt that itemises adds up exactly.
+            'fee_gst_laari' => $this->fee_gst_laari,
+            'fee_gst_percent' => Percent::format((int) $this->fee_gst_bp),
             'priced_by' => $this->priced_by,
             'sort' => $this->sort,
         ];

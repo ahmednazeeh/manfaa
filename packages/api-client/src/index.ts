@@ -50,7 +50,8 @@ export * from './resources';
 export * from './merchant';
 // Admin surface: settlement queue, merchants, reconciliation, payout batches,
 // claims queue, promotions listing, platform bank accounts, fee tier
-// schedules, platform settings, admin users, and the superadmin reports
+// schedules, platform settings, the GST tax-settings switch (read by any
+// admin, written by a superadmin), admin users, and the superadmin reports
 // (preview + .xlsx export).
 export * from './admin';
 // Admin hold-review queue (Task #22): the on_hold list with its filters and

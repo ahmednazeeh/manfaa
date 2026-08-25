@@ -9,6 +9,7 @@ import { MoneyText } from '@manfaa/ui';
 import { format } from 'date-fns';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { anyGst } from '@/lib/gst';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -95,6 +96,10 @@ export function TransactionPicker({
   }, [rows, buckets, preset]);
 
   const lastPage = Math.max(1, Math.ceil(visible.length / ROWS_PER_PAGE));
+
+  // Over the WHOLE eligible board, not the filtered page: the column must
+  // not appear and disappear as the merchant flips presets or pages.
+  const showGst = anyGst(rows.map((row) => row.fee_gst_laari));
 
   // A preset that empties out (or a settled batch shrinking the list) must
   // never strand the merchant on a page that no longer exists.
@@ -199,8 +204,13 @@ export function TransactionPicker({
                   {t('settlement.colCashback')}
                 </TableHead>
                 <TableHead className="text-end">
-                  {t('settlement.colFees')}
+                  {t('settlement.colFee')}
                 </TableHead>
+                {showGst && (
+                  <TableHead className="text-end">
+                    {t('settlement.colGst')}
+                  </TableHead>
+                )}
                 <TableHead className="text-end">
                   {t('settlement.colDue')}
                 </TableHead>
@@ -262,10 +272,17 @@ export function TransactionPicker({
                     <TableCell className="text-end">
                       <MoneyText laari={row.cashback_laari} />
                     </TableCell>
+                    {/* Manfaa's charge and the tax on it, side by side —
+                        each the row's own stored integer, never a fee
+                        recomputed and never the two added together. */}
                     <TableCell className="text-end">
-                      {/* Two stored integers added, never a fee recomputed. */}
-                      <MoneyText laari={row.fee_laari + row.fee_gst_laari} />
+                      <MoneyText laari={row.fee_laari} />
                     </TableCell>
+                    {showGst && (
+                      <TableCell className="text-end">
+                        <MoneyText laari={row.fee_gst_laari} />
+                      </TableCell>
+                    )}
                     <TableCell className="text-end font-medium">
                       <MoneyText laari={row.due_laari} />
                     </TableCell>

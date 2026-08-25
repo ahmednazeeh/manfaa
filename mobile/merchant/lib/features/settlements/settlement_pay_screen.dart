@@ -200,6 +200,11 @@ class _SettlementPayScreenState extends ConsumerState<SettlementPayScreen> {
                       child: PaymentInstructionsCard(
                         instructions: preview.paymentInstructions,
                         amountDueLaari: preview.amountDueLaari,
+                        // The bill itemised on the screen the merchant
+                        // reads before walking to the bank: the cashback,
+                        // Manfaa's fee, and the GST on that fee as its own
+                        // line whenever GST applies.
+                        breakdown: OwedBreakdown.fromPreview(preview),
                         selectedAccountId: _destinationId,
                         onSelectAccount: (id) =>
                             setState(() => _destinationId = id),

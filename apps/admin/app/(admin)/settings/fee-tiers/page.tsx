@@ -21,6 +21,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { PageHeader } from '@/components/admin/page-header';
 import { FeeTierTable } from '@/components/settings/fee-tier-table';
+import { GstOnFeesNote } from '@/components/settings/gst-on-fees-note';
 import { ScheduleTiersDialog } from '@/components/settings/schedule-tiers-dialog';
 
 function scheduleStatus(
@@ -71,6 +72,8 @@ export default function FeeTiersPage() {
         description="The §4 schedule: the platform fee charged on each cashback rate band. Rates and fees are frozen onto every sale at its occurred_at — schedule changes only ever touch the future."
         actions={<ScheduleTiersDialog currentBands={currentBands} />}
       />
+
+      <GstOnFeesNote />
 
       {query.isError ? (
         <Alert variant="destructive" appearance="light">

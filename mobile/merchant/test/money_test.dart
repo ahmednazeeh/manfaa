@@ -56,6 +56,7 @@ void main() {
     int walletBalanceLaari = 0,
     bool includeDiscount = true,
     bool secondRow = false,
+    bool gst = false,
   }) async {
     await tester.binding.setSurfaceSize(const Size(600, 3200));
     final store = await seededStore(permissions);
@@ -71,6 +72,7 @@ void main() {
               walletBalanceLaari: walletBalanceLaari,
               includeDiscount: includeDiscount,
               secondRow: secondRow,
+              gst: gst,
             ),
           ),
           configProvider.overrideWith((ref) async => config()),
@@ -415,6 +417,148 @@ void main() {
     expect(find.text('MVR 27.50'), findsWidgets);
     expect(find.text('Pay MVR 27.50'), findsOneWidget);
   });
+
+  // ---- GST: two lines when it applies, no line at all when it does not ----
+  //
+  // The doctrine the server ships (2026-08-24): fee_laari is ALWAYS Manfaa's
+  // NET charge and fee_gst_laari is ALWAYS the tax on it, so the till never
+  // blends them into one number. While the platform has GST switched off
+  // every one of those integers is 0 — which is the only reason a tax line
+  // ever disappears from a screen.
+
+  testWidgets('GST off: no tax line anywhere the bill is shown', (
+    tester,
+  ) async {
+    await pumpMoney(tester);
+
+    await tester.tap(find.text('View breakdown'));
+    await tester.pumpAndSettle();
+    expect(find.text('GST on fee'), findsNothing);
+
+    await goSettlements(tester);
+    await tester.tap(find.text('View breakdown'));
+    await tester.pumpAndSettle();
+    expect(find.text('GST on fee'), findsNothing);
+    // Nor the short label the included-transactions card would use.
+    expect(find.text('GST'), findsNothing);
+
+    await tester.tap(find.text('Pay now'));
+    await tester.pumpAndSettle();
+    // The transfer screen still itemises the bill — it simply has no tax
+    // line, because there is no tax.
+    expect(find.text('THIS AMOUNT COVERS'), findsOneWidget);
+    expect(find.text('Customer cashback'), findsOneWidget);
+    expect(find.text('Platform fee'), findsOneWidget);
+    expect(find.text('GST on fee'), findsNothing);
+  });
+
+  testWidgets('GST on: the dashboard breakdown gives the tax its own row', (
+    tester,
+  ) async {
+    await pumpMoney(tester, gst: true);
+
+    // Outstanding is the PRE-relief liability: 20.00 + 7.50 + 0.60.
+    expect(find.text('MVR 28.10'), findsOneWidget);
+
+    await tester.tap(find.text('View breakdown'));
+    await tester.pumpAndSettle();
+    expect(find.text('Customer cashback'), findsOneWidget);
+    expect(find.text('MVR 20.00'), findsOneWidget);
+    expect(find.text('Platform fee'), findsOneWidget);
+    expect(find.text('MVR 7.50'), findsOneWidget);
+    // The tax stands alone — never folded into the fee above it.
+    expect(find.text('GST on fee'), findsOneWidget);
+    expect(find.text('MVR 0.60'), findsOneWidget);
+  });
+
+  testWidgets('GST on: the settlements board splits the fee from its tax', (
+    tester,
+  ) async {
+    await pumpMoney(tester, gst: true);
+    await goSettlements(tester);
+
+    // 2810 priced, 42 of relief (38 off the fee + 4 off its GST) → 2768.
+    expect(find.text('Pay MVR 27.68'), findsOneWidget);
+
+    await tester.tap(find.text('View breakdown'));
+    await tester.pumpAndSettle();
+    expect(find.text('Platform fee'), findsOneWidget);
+    expect(find.text('GST on fee'), findsOneWidget);
+    // Each carries the relief it earned, struck through: 7.50 → 7.12 and
+    // 0.60 → 0.56. Every figure a server integer, subtracted by the server.
+    expect(find.text('MVR 7.12'), findsOneWidget);
+    expect(find.text('MVR 0.56'), findsOneWidget);
+
+    // The included-transactions card names Fee and GST as two figures. The
+    // blended one it used to print (750 + 60 = MVR 8.10) is gone.
+    expect(find.text('Fee'), findsOneWidget);
+    expect(find.text('GST'), findsOneWidget);
+    expect(find.text('MVR 8.10'), findsNothing);
+  });
+
+  testWidgets('GST on: the transfer screen itemises cashback, fee and tax', (
+    tester,
+  ) async {
+    await pumpMoney(tester, gst: true);
+    await goSettlements(tester);
+    await tester.tap(find.text('Pay now'));
+    await tester.pumpAndSettle();
+
+    // One figure to transfer, and under it what that figure is made of —
+    // the three components as priced, then the relief, so the lines
+    // reconcile to the amount above them: 20.00 + 7.50 + 0.60 − 0.42.
+    expect(find.text('THIS AMOUNT COVERS'), findsOneWidget);
+    expect(find.text('Customer cashback'), findsOneWidget);
+    expect(find.text('MVR 20.00'), findsOneWidget);
+    expect(find.text('Platform fee'), findsOneWidget);
+    expect(find.text('MVR 7.50'), findsOneWidget);
+    expect(find.text('GST on fee'), findsOneWidget);
+    expect(find.text('MVR 0.60'), findsOneWidget);
+    expect(find.text('Prompt payment discount (5%)'), findsOneWidget);
+    expect(find.text('MVR -0.42'), findsOneWidget);
+    expect(find.text('MVR 27.68'), findsOneWidget);
+  });
+
+  testWidgets('GST on: a settled batch keeps the tax it was priced with', (
+    tester,
+  ) async {
+    await pumpMoney(tester, gst: true, walletBalanceLaari: 500000);
+    await goSettlements(tester);
+
+    await tester.tap(find.text('Wallet balance'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Pay MVR 27.68'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Settle from wallet'));
+    await tester.pumpAndSettle();
+
+    // The batch's own summary keeps Manfaa's charge and the tax apart…
+    expect(find.text('Platform fee'), findsOneWidget);
+    expect(find.text('GST on fee'), findsOneWidget);
+    // Twice on this screen on purpose: the batch total, and the one
+    // frozen line that carries it.
+    expect(find.text('MVR 0.60'), findsNWidgets(2));
+    // …and every frozen line of it carries a third figure, labelled.
+    expect(find.text('Customer cashback · Fee · GST'), findsOneWidget);
+  });
+
+  testWidgets('GST off: a settled batch has no tax row and no tax column', (
+    tester,
+  ) async {
+    await pumpMoney(tester, walletBalanceLaari: 500000);
+    await goSettlements(tester);
+
+    await tester.tap(find.text('Wallet balance'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Pay MVR 27.12'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Settle from wallet'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Platform fee'), findsOneWidget);
+    expect(find.text('GST on fee'), findsNothing);
+    expect(find.text('Customer cashback · Fee'), findsOneWidget);
+  });
 }
 
 /// The selection a money call carried, exactly as the API method got it.
@@ -427,6 +571,7 @@ class _MoneyApi extends MerchantApi {
     required this.walletBalanceLaari,
     required this.includeDiscount,
     this.secondRow = false,
+    this.gst = false,
   });
 
   final List<String> permissions;
@@ -435,6 +580,21 @@ class _MoneyApi extends MerchantApi {
 
   /// A second payable sale on the board — what MR11's picker narrows from.
   final bool secondRow;
+
+  /// GST switched ON at the platform, 8% on top of the fee — every figure
+  /// below is then the server's own ceiling arithmetic, written out:
+  ///   fee 750 → GST ceil(750 × 800 / 10000) = 60, so the merchant owes
+  ///   2000 + 750 + 60 = 2810 before relief. The 5% prompt discount takes
+  ///   ceil(750 × 500 / 10000) = 38 off the fee and
+  ///   ceil(60 × 38 / 750) = 4 off its GST → 42, leaving 2768 due.
+  /// The second row prices the same way: fee 375 → GST 30, due 1405.
+  final bool gst;
+
+  int get _gstTotal => gst ? 60 : 0;
+  int get _gstRelief => gst && includeDiscount ? 4 : 0;
+  int get _lineTotal => 2750 + _gstTotal;
+  int get _discount => includeDiscount ? 38 + _gstRelief : 0;
+  int get _due => _lineTotal - _discount;
 
   final previews = <_Selection>[];
   final walletSettles = <_Selection>[];
@@ -489,16 +649,16 @@ class _MoneyApi extends MerchantApi {
               'count': 1,
               'cashback_laari': 2000,
               'fee_laari': 750,
-              'fee_gst_laari': 0,
-              'payable_laari': 2750,
+              'fee_gst_laari': _gstTotal,
+              'payable_laari': _lineTotal,
             },
             'buckets': {
               '0_5': {
                 'count': 1,
                 'cashback_laari': 2000,
                 'fee_laari': 750,
-                'fee_gst_laari': 0,
-                'payable_laari': 2750,
+                'fee_gst_laari': _gstTotal,
+                'payable_laari': _lineTotal,
               },
               '6_10': {
                 'count': 0,
@@ -542,12 +702,12 @@ class _MoneyApi extends MerchantApi {
     'sale_total_laari': 100000,
     'cashback_total_laari': 2000,
     'fee_total_laari': 750,
-    'fee_gst_total_laari': 0,
-    'line_total_laari': 2750,
+    'fee_gst_total_laari': _gstTotal,
+    'line_total_laari': _lineTotal,
     'credit_applied_laari': 0,
-    'discount_laari': includeDiscount ? 38 : 0,
-    'amount_due_before_discount_laari': 2750,
-    'amount_due_laari': includeDiscount ? 2712 : 2750,
+    'discount_laari': _discount,
+    'amount_due_before_discount_laari': _lineTotal,
+    'amount_due_laari': _due,
     'due_at': '2026-08-25T00:00:00+00:00',
     if (includeDiscount)
       'discount': {
@@ -555,9 +715,9 @@ class _MoneyApi extends MerchantApi {
         'reason_code': 'eligible',
         'rate_percent': '5.00',
         'max_age_days': 15,
-        'discount_laari': 38,
+        'discount_laari': _discount,
         'fee_discount_laari': 38,
-        'gst_relief_laari': 0,
+        'gst_relief_laari': _gstRelief,
       },
     'transactions': [
       {
@@ -570,8 +730,8 @@ class _MoneyApi extends MerchantApi {
         'overdue': false,
         'cashback_laari': 2000,
         'fee_laari': 750,
-        'fee_gst_laari': 0,
-        'due_laari': 2750,
+        'fee_gst_laari': _gstTotal,
+        'due_laari': _lineTotal,
         // Membership is the SERVER's: a subset preview flags which of the
         // payable rows this priced answer covers.
         'selected': ids.contains(61),
@@ -589,8 +749,8 @@ class _MoneyApi extends MerchantApi {
           'overdue': false,
           'cashback_laari': 1000,
           'fee_laari': 375,
-          'fee_gst_laari': 0,
-          'due_laari': 1375,
+          'fee_gst_laari': gst ? 30 : 0,
+          'due_laari': gst ? 1405 : 1375,
           'selected': ids.contains(62),
         },
     ],
@@ -599,16 +759,16 @@ class _MoneyApi extends MerchantApi {
         'count': secondRow ? 2 : 1,
         'cashback_laari': 2000,
         'fee_laari': 750,
-        'fee_gst_laari': 0,
-        'due_laari': 2750,
+        'fee_gst_laari': _gstTotal,
+        'due_laari': _lineTotal,
         'transaction_ids': secondRow ? [61, 62] : [61],
       },
       'older_than_5': {
         'count': 1,
         'cashback_laari': 2000,
         'fee_laari': 750,
-        'fee_gst_laari': 0,
-        'due_laari': 2750,
+        'fee_gst_laari': _gstTotal,
+        'due_laari': _lineTotal,
         'transaction_ids': [61],
       },
       'older_than_10': {
@@ -629,7 +789,12 @@ class _MoneyApi extends MerchantApi {
       },
     },
     'payment_instructions': {
-      'amount_due_laari': 2712,
+      'amount_due_laari': _due,
+      // The bill itemised, exactly as SettlementPreview publishes it: the
+      // three components BEFORE credit and discount.
+      'cashback_total_laari': 2000,
+      'fee_total_laari': 750,
+      'fee_gst_total_laari': _gstTotal,
       'bank_account': {
         'bank_name': 'bml',
         'account_no': '7730000123456',
@@ -664,7 +829,11 @@ class _MoneyApi extends MerchantApi {
     );
   }
 
-  Map<String, dynamic> _settlement(int id, {String state = 'settled'}) => {
+  Map<String, dynamic> _settlement(
+    int id, {
+    String state = 'settled',
+    bool lines = false,
+  }) => {
     'id': id,
     'reference': 'ST-2026-000$id',
     'state': state,
@@ -673,17 +842,17 @@ class _MoneyApi extends MerchantApi {
     'sale_total_laari': 100000,
     'cashback_total_laari': 2000,
     'fee_total_laari': 750,
-    'fee_gst_total_laari': 0,
-    'discount_laari': 38,
+    'fee_gst_total_laari': _gstTotal,
+    'discount_laari': _discount,
     'discount_rate_percent': '5.00',
     'discount_reason': 'eligible',
-    'amount_due_laari': 2712,
-    'amount_received_laari': 2712,
+    'amount_due_laari': _due,
+    'amount_received_laari': _due,
     'due_at': null,
     'created_at': '2026-08-16T09:45:00+00:00',
     'payment_instructions': {
       'reference': 'ST-2026-000$id',
-      'amount_due_laari': 2712,
+      'amount_due_laari': _due,
       'bank_account': null,
       'bank_accounts': <Object>[],
       'needs_configuration': true,
@@ -693,6 +862,25 @@ class _MoneyApi extends MerchantApi {
       'message': 'Settled — the rewards on this batch are confirmed.',
       'rejection': null,
     },
+    // whenLoaded on the server: the list read omits lines, the detail read
+    // carries them with their transaction.
+    if (lines)
+      'lines': [
+        {
+          'id': 1,
+          'transaction_id': 61,
+          'currency': 'MVR',
+          'cashback_laari': 2000,
+          'fee_laari': 750,
+          'fee_gst_laari': _gstTotal,
+          'due_laari': _lineTotal,
+          'allocated_at': '2026-08-16T09:45:00+00:00',
+          'transaction': {
+            'invoice_no': 'INV-2107',
+            'occurred_at': '2026-08-15T10:00:00+05:00',
+          },
+        },
+      ],
   };
 
   @override
@@ -704,7 +892,7 @@ class _MoneyApi extends MerchantApi {
 
   @override
   Future<MerchantSettlement> settlement(int id) async =>
-      MerchantSettlement.fromJson(_settlement(id));
+      MerchantSettlement.fromJson(_settlement(id, lines: true));
 
   @override
   Future<MerchantSettlement> walletSettle({

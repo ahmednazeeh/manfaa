@@ -318,6 +318,8 @@ class MerchantTransaction {
     required this.cashbackLaari,
     required this.feeLaari,
     required this.feeGstLaari,
+    this.feeGstPercent = '0.00',
+    this.feeTreatment = 'on_top',
     required this.occurredAt,
     required this.receivedAt,
     required this.lines,
@@ -342,6 +344,14 @@ class MerchantTransaction {
     cashbackLaari: _laari(json['cashback_laari']),
     feeLaari: _laari(json['fee_laari']),
     feeGstLaari: _laari(json['fee_gst_laari']),
+    // Absent on a build older than the tax round: "0.00" reads the same
+    // way a GST-free row does, which is exactly what those rows were.
+    feeGstPercent: json['fee_gst_percent'] == null
+        ? '0.00'
+        : _s(json['fee_gst_percent']),
+    feeTreatment: json['fee_treatment'] == null
+        ? 'on_top'
+        : _s(json['fee_treatment']),
     occurredAt: _s(json['occurred_at']),
     receivedAt: _s(json['received_at']),
     lines: [
@@ -373,7 +383,21 @@ class MerchantTransaction {
   final String effectivePlatformFeePercent;
   final int cashbackLaari;
   final int feeLaari;
+
+  /// GST on Manfaa's fee, in laari — ALWAYS the tax and never part of
+  /// [feeLaari], whichever treatment priced it. Zero when GST does not
+  /// apply, which is the only reason a UI ever hides the line.
   final int feeGstLaari;
+
+  /// The GST rate STAMPED on this row, as the exact 2-decimal percent
+  /// string ("8.00"). Frozen at pricing time: a later rate change never
+  /// re-reads an old sale.
+  final String feeGstPercent;
+
+  /// on_top | inclusive — how the stamped fee and GST were derived. The
+  /// merchant owes cashback + fee + GST either way, so this changes no
+  /// figure on screen; it is carried because the wire carries it.
+  final String feeTreatment;
   final String occurredAt;
   final String receivedAt;
 
@@ -392,6 +416,8 @@ class MerchantTransactionLine {
     required this.platformFeePercent,
     required this.cashbackLaari,
     required this.feeLaari,
+    this.feeGstLaari = 0,
+    this.feeGstPercent = '0.00',
     required this.pricedBy,
     required this.sort,
   });
@@ -405,6 +431,10 @@ class MerchantTransactionLine {
         platformFeePercent: _s(json['platform_fee_percent']),
         cashbackLaari: _laari(json['cashback_laari']),
         feeLaari: _laari(json['fee_laari']),
+        feeGstLaari: _laari(json['fee_gst_laari']),
+        feeGstPercent: json['fee_gst_percent'] == null
+            ? '0.00'
+            : _s(json['fee_gst_percent']),
         pricedBy: _s(json['priced_by']),
         sort: _count(json['sort']),
       );
@@ -421,6 +451,12 @@ class MerchantTransactionLine {
   final String platformFeePercent;
   final int cashbackLaari;
   final int feeLaari;
+
+  /// The GST this LINE carries, and the rate it was stamped at. The server
+  /// taxes per line (ceiling per line), so the lines sum to the header —
+  /// a header-level re-derivation would disagree by a laari.
+  final int feeGstLaari;
+  final String feeGstPercent;
   final String pricedBy;
   final int sort;
 }
@@ -710,9 +746,66 @@ class RateWindow {
   final String? effectiveTo;
 }
 
+/// The GST terms a sale recorded RIGHT NOW would be stamped with — the one
+/// FORWARD-LOOKING thing GET /merchant/rate publishes, and the only reason
+/// the till can quote a cost before the sale exists.
+///
+/// Every other GST figure the app reads is the tax STAMPED on a row that
+/// already happened, which is right for a receipt and useless for a quote.
+///
+/// `split` is `App\Domain\Tax\FeeTax::split()`, laari for laari:
+///
+///   on_top     net = fee                   gst = ceil(fee × bp / 10000)
+///   inclusive  gst = ceil(fee × bp / (10000 + bp))   net = fee − gst
+///
+/// A rate of "0.00" — the platform today, and the default when an older
+/// server omits the block — is the identity under both treatments, so the
+/// quote is byte-identical to what it was before this existed.
+class MerchantTaxTerms {
+  const MerchantTaxTerms({
+    this.gstRatePercent = '0.00',
+    this.feeTreatment = 'on_top',
+  });
+
+  factory MerchantTaxTerms.fromJson(Map<String, dynamic> json) =>
+      MerchantTaxTerms(
+        gstRatePercent: json['gst_rate_percent'] == null
+            ? '0.00'
+            : _s(json['gst_rate_percent']),
+        feeTreatment: json['fee_treatment'] == null
+            ? 'on_top'
+            : _s(json['fee_treatment']),
+      );
+
+  /// PLAN §1 wire format: a 2-decimal percent string, never basis points.
+  final String gstRatePercent;
+
+  /// `on_top` | `inclusive`.
+  final String feeTreatment;
+
+  bool get inclusive => feeTreatment == 'inclusive';
+
+  /// [net fee revenue, tax owed to MIRA] for a priced fee.
+  (int, int) split(int feeLaari, int rateBp) {
+    if (rateBp <= 0 || feeLaari <= 0) {
+      return (feeLaari, 0);
+    }
+    if (!inclusive) {
+      return (feeLaari, (feeLaari * rateBp + 9999) ~/ 10000);
+    }
+    final divisor = 10000 + rateBp;
+    final gst = (feeLaari * rateBp + divisor - 1) ~/ divisor;
+    return (feeLaari - gst, gst);
+  }
+}
+
 /// GET /merchant/rate — the standing terms the cost preview estimates from.
 class MerchantRate {
-  MerchantRate({this.current, this.pending});
+  MerchantRate({
+    this.current,
+    this.pending,
+    this.tax = const MerchantTaxTerms(),
+  });
 
   factory MerchantRate.fromJson(Map<String, dynamic> json) => MerchantRate(
     current: json['current'] is Map
@@ -721,6 +814,13 @@ class MerchantRate {
     pending: json['pending'] is Map
         ? RateWindow.fromJson((json['pending'] as Map).cast<String, dynamic>())
         : null,
+    // Absent on a server older than this build: no tax, which is what the
+    // platform charged before the field existed.
+    tax: json['tax'] is Map
+        ? MerchantTaxTerms.fromJson(
+            (json['tax'] as Map).cast<String, dynamic>(),
+          )
+        : const MerchantTaxTerms(),
   );
 
   /// Null when the store has no effective rate at all — the server refuses
@@ -730,6 +830,9 @@ class MerchantRate {
   /// The §7 scheduled decrease window (effective next business midnight);
   /// null when nothing is scheduled.
   final RateWindow? pending;
+
+  /// The GST terms a sale priced RIGHT NOW would freeze onto itself.
+  final MerchantTaxTerms tax;
 }
 
 /// One product category on GET /merchant/product-categories — the split

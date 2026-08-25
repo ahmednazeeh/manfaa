@@ -22,6 +22,7 @@ import {
 } from '@/lib/labels';
 import { toast } from 'sonner';
 import type { MerchantSettlement, ReceiptPayment } from '@/lib/api';
+import { anyGst, hasGst } from '@/lib/gst';
 import { useAddSettlementReceipt, useSettlement } from '@/lib/queries';
 import { can } from '@/lib/roles';
 import {
@@ -266,6 +267,13 @@ export default function SettlementDetailPage({
 
   const status = settlement.merchant_status;
   const owes = remainingLaari(settlement);
+  // Whether this batch carries any tax at all — the batch total, OR'd with
+  // the lines so a taxed line could never be hidden behind a total that
+  // somehow read zero. Drives both the summary row and the table column;
+  // the two must agree, or the footer would not tie to the summary.
+  const showGst =
+    hasGst(settlement.fee_gst_total_laari) ||
+    anyGst((settlement.lines ?? []).map((line) => line.fee_gst_laari));
   // A further receipt is accepted on an unsettled, submitted batch
   // (awaiting_payment or partially_settled). While one is already under
   // review, the honest answer is "we are checking it", not "pay again".
@@ -381,9 +389,11 @@ export default function SettlementDetailPage({
                       <TableHead className="text-end">
                         {t('settlement.colFee')}
                       </TableHead>
-                      <TableHead className="text-end">
-                        {t('settlement.colGst')}
-                      </TableHead>
+                      {showGst && (
+                        <TableHead className="text-end">
+                          {t('settlement.colGst')}
+                        </TableHead>
+                      )}
                       <TableHead className="text-end">
                         {t('settlement.colDue')}
                       </TableHead>
@@ -410,9 +420,11 @@ export default function SettlementDetailPage({
                         <TableCell className="text-end">
                           <MoneyText laari={line.fee_laari} />
                         </TableCell>
-                        <TableCell className="text-end">
-                          <MoneyText laari={line.fee_gst_laari} />
-                        </TableCell>
+                        {showGst && (
+                          <TableCell className="text-end">
+                            <MoneyText laari={line.fee_gst_laari} />
+                          </TableCell>
+                        )}
                         <TableCell className="text-end font-medium">
                           <MoneyText laari={line.due_laari} />
                         </TableCell>
@@ -430,9 +442,11 @@ export default function SettlementDetailPage({
                       <TableCell className="text-end font-medium">
                         <MoneyText laari={settlement.fee_total_laari} />
                       </TableCell>
-                      <TableCell className="text-end font-medium">
-                        <MoneyText laari={settlement.fee_gst_total_laari} />
-                      </TableCell>
+                      {showGst && (
+                        <TableCell className="text-end font-medium">
+                          <MoneyText laari={settlement.fee_gst_total_laari} />
+                        </TableCell>
+                      )}
                       <TableCell className="text-end font-semibold">
                         <MoneyText laari={settlement.amount_due_laari} />
                       </TableCell>
@@ -462,12 +476,17 @@ export default function SettlementDetailPage({
                 </span>
                 <MoneyText laari={settlement.fee_total_laari} />
               </div>
-              <div className="flex justify-between gap-3">
-                <span className="text-muted-foreground">
-                  {t('settlement.summaryGst')}
-                </span>
-                <MoneyText laari={settlement.fee_gst_total_laari} />
-              </div>
+              {/* The tax stands beside Manfaa's fee, never folded into it —
+                  and while this batch carries none, the line is absent
+                  rather than a row of MVR 0.00 (see lib/gst.ts). */}
+              {showGst && (
+                <div className="flex justify-between gap-3">
+                  <span className="text-muted-foreground">
+                    {t('settlement.summaryGst')}
+                  </span>
+                  <MoneyText laari={settlement.fee_gst_total_laari} />
+                </div>
+              )}
               {/*
                 PLAN §1: the prompt-payment discount this batch was GRANTED at
                 submit — 5% off the platform fee, never off the customer's

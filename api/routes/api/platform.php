@@ -6,6 +6,7 @@ use App\Http\Controllers\Admin\BrandThemeController;
 use App\Http\Controllers\Admin\PlatformBankAccountsController;
 use App\Http\Controllers\Admin\PlatformFeeTiersController;
 use App\Http\Controllers\Admin\PlatformSettingsController;
+use App\Http\Controllers\Admin\TaxSettingsController;
 use App\Http\Middleware\EnsureSuperadmin;
 use Illuminate\Support\Facades\Route;
 
@@ -29,6 +30,19 @@ Route::prefix('admin')->middleware('auth:admin')->group(function () {
 
     Route::get('platform/settings', [PlatformSettingsController::class, 'index']);
     Route::patch('platform/settings/{key}', [PlatformSettingsController::class, 'update']);
+
+    // GST on the platform fee (owner, 2026-08-24). Its own table rather
+    // than a typed setting: PlatformConfig stores integers, and a TIN, a
+    // business name and an activity number are strings. Readable by any
+    // admin; only a superadmin may write — the same gating as the
+    // platform's own bank accounts, and for a stronger reason: this switch
+    // changes what every merchant owes on every sale from the moment it is
+    // thrown.
+    Route::get('platform/tax-settings', [TaxSettingsController::class, 'index']);
+
+    Route::middleware(EnsureSuperadmin::class)->group(function () {
+        Route::patch('platform/tax-settings', [TaxSettingsController::class, 'updateSettings']);
+    });
 
     // Mobile release gates (min/latest build, store URL per app+platform),
     // served to the apps by the public /api/mobile/v1/config endpoint.

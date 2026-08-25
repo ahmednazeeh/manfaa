@@ -6,6 +6,8 @@ namespace App\Domain\Marketplace;
 
 use App\Domain\Money\Percent;
 use App\Domain\Platform\PlatformConfig;
+use App\Domain\Tax\FeeTax;
+use App\Domain\Tax\TaxPolicy;
 use App\Models\Cart;
 use App\Models\Customer;
 use App\Models\CustomerAddress;
@@ -37,6 +39,7 @@ final readonly class CheckoutService
     public function __construct(
         private CartPricer $pricer,
         private PlatformConfig $config,
+        private TaxPolicy $taxes,
     ) {}
 
     public function place(
@@ -49,7 +52,17 @@ final readonly class CheckoutService
 
         $this->assertPlaceable($priced, $address);
 
-        return DB::transaction(function () use ($customer, $cart, $address, $paymentMethod, $priced): Order {
+        // The GST terms IN FORCE NOW, read ONCE for the whole order and
+        // frozen onto every suborder, exactly as CreditRecorder freezes them
+        // onto a till sale. One basket must not be priced half each way
+        // because a superadmin threw the switch between two shops.
+        //
+        // OFF today, and off is the identity — split() at 0 bp returns the
+        // fee untouched with no tax — so every figure below is unchanged
+        // from what it was before this parameter existed.
+        $tax = $this->taxes->current();
+
+        return DB::transaction(function () use ($customer, $cart, $address, $paymentMethod, $priced, $tax): Order {
             $now = CarbonImmutable::now();
 
             $order = Order::query()->create([
@@ -82,7 +95,7 @@ final readonly class CheckoutService
             ]);
 
             foreach (array_values($priced['subcarts']) as $index => $subcart) {
-                $this->createSuborder($order, $subcart, $index + 1);
+                $this->createSuborder($order, $subcart, $index + 1, $tax);
             }
 
             // Only now. A failure above rolls the basket back intact.
@@ -124,7 +137,7 @@ final readonly class CheckoutService
     /**
      * @param  array<string, mixed>  $subcart
      */
-    private function createSuborder(Order $order, array $subcart, int $position): void
+    private function createSuborder(Order $order, array $subcart, int $position, FeeTax $tax): void
     {
         $merchant = Merchant::query()->findOrFail($subcart['merchant_id']);
 
@@ -139,10 +152,13 @@ final readonly class CheckoutService
         // Items only, never delivery (§5.1) — a merchant recovering a
         // courier's cost should not be charged for the privilege.
         $fee = intdiv($items * $feeBp + 9999, 10000);
-        // The column exists and the arithmetic is wired; the platform's GST
-        // treatment is currently zero everywhere (CreditRecorder does the
-        // same), so this stays 0 until that decision is made.
-        $gst = 0;
+
+        // The order fee is a Manfaa charge on the merchant, so it carries
+        // GST exactly as the till fee does (CreditRecorder). On_top leaves
+        // the fee alone and adds the tax — the shop is paid less; inclusive
+        // carves the tax out of the fee — the shop is paid the same and our
+        // revenue drops. Off today, and off is the identity.
+        [$fee, $gst] = $tax->split($fee);
 
         $suborder = Suborder::query()->create([
             'order_id' => $order->id,
@@ -158,8 +174,15 @@ final readonly class CheckoutService
             'cashback_min_laari' => (int) ($subcart['cashback_min_laari'] ?? 0),
             'cashback_laari' => $cashback,
             'order_fee_bp' => $feeBp,
+            // NET of GST, always — the tax rides in order_fee_gst_laari and
+            // the shop is paid the subtotal less cashback less both.
             'order_fee_laari' => $fee,
             'order_fee_gst_laari' => $gst,
+            // FROZEN AT PLACEMENT, like every rate beside it: an amendment
+            // re-prices this suborder from its OWN stamp, never from the
+            // live setting (§5.4c).
+            'order_fee_gst_bp' => $tax->rateBp,
+            'order_fee_treatment' => $tax->treatment->value,
             'payable_to_merchant_laari' => $items + $delivery - $cashback - $fee - $gst,
             'state' => 'new',
         ]);

@@ -43,6 +43,8 @@ class TransactionLine extends Model
             'fee_bp' => 'integer',
             'cashback_laari' => 'integer',
             'fee_laari' => 'integer',
+            'fee_gst_bp' => 'integer',
+            'fee_gst_laari' => 'integer',
             'sort' => 'integer',
             'created_at' => 'immutable_datetime',
         ];

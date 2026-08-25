@@ -725,6 +725,16 @@ class AppLocalizationsDv extends AppLocalizations {
   }
 
   @override
+  String previewGst(String rate) {
+    return 'ފީގެ ޖީއެސްޓީ ($rate)';
+  }
+
+  @override
+  String previewGstIncluded(String rate) {
+    return 'ފީގައި ހިމެނޭ ޖީއެސްޓީ ($rate)';
+  }
+
+  @override
   String previewYouPay(String rate) {
     return 'ތިޔަ ދައްކަވާ ($rate)';
   }
@@ -1272,6 +1282,9 @@ class AppLocalizationsDv extends AppLocalizations {
   String get feeShort => 'ފީ';
 
   @override
+  String get gstShort => 'ޖީއެސްޓީ';
+
+  @override
   String discountRow(String rate) {
     return 'އަވަހަށް ދެއްކުމުގެ ޑިސްކައުންޓް ($rate)';
   }
@@ -1334,6 +1347,9 @@ class AppLocalizationsDv extends AppLocalizations {
 
   @override
   String get amountToTransfer => 'ޓްރާންސްފަރކުރައްވަންވީ އަދަދު';
+
+  @override
+  String get amountCoversTitle => 'މި އަދަދުގައި ހިމެނެނީ';
 
   @override
   String get referenceLabel => 'ޕޭމަންޓް ރެފަރެންސް';

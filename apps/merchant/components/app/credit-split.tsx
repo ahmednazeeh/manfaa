@@ -16,6 +16,7 @@ import {
   formatBp,
   formatRate,
 } from '@/lib/estimate';
+import { anyGst } from '@/lib/gst';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input, InputAddon, InputGroup } from '@/components/ui/input';
@@ -526,6 +527,11 @@ export function ResultLines({
     return line.category_name_en ?? line.category;
   };
 
+  // Every line of one sale is taxed at the same stamped rate, so this is in
+  // practice all-or-nothing — but it is read off the stored per-line
+  // integers all the same, never off a rate. See lib/gst.ts.
+  const showGst = anyGst(lines.map((line) => line.fee_gst_laari));
+
   return (
     <div className="overflow-x-auto">
       <Table>
@@ -542,6 +548,11 @@ export function ResultLines({
             <TableHead className="text-end">
               {t('creditSplit.colFee')}
             </TableHead>
+            {showGst && (
+              <TableHead className="text-end">
+                {t('settlement.colGst')}
+              </TableHead>
+            )}
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -574,6 +585,11 @@ export function ResultLines({
               <TableCell className="text-end">
                 <MoneyText laari={line.fee_laari} />
               </TableCell>
+              {showGst && (
+                <TableCell className="text-end">
+                  <MoneyText laari={line.fee_gst_laari} />
+                </TableCell>
+              )}
             </TableRow>
           ))}
         </TableBody>

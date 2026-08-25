@@ -1358,6 +1358,18 @@ abstract class AppLocalizations {
   /// **'Platform fee ({rate})'**
   String previewFee(String rate);
 
+  /// No description provided for @previewGst.
+  ///
+  /// In en, this message translates to:
+  /// **'GST on fee ({rate})'**
+  String previewGst(String rate);
+
+  /// No description provided for @previewGstIncluded.
+  ///
+  /// In en, this message translates to:
+  /// **'GST included in fee ({rate})'**
+  String previewGstIncluded(String rate);
+
   /// No description provided for @previewYouPay.
   ///
   /// In en, this message translates to:
@@ -2258,6 +2270,12 @@ abstract class AppLocalizations {
   /// **'Fee'**
   String get feeShort;
 
+  /// No description provided for @gstShort.
+  ///
+  /// In en, this message translates to:
+  /// **'GST'**
+  String get gstShort;
+
   /// No description provided for @discountRow.
   ///
   /// In en, this message translates to:
@@ -2365,6 +2383,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Amount to transfer'**
   String get amountToTransfer;
+
+  /// No description provided for @amountCoversTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'This amount covers'**
+  String get amountCoversTitle;
 
   /// No description provided for @referenceLabel.
   ///

@@ -66,6 +66,12 @@ class TransactionResource extends JsonResource
             'cashback_laari' => $this->cashback_laari,
             'fee_laari' => $this->fee_laari,
             'fee_gst_laari' => $this->fee_gst_laari,
+            // The GST terms FROZEN on this sale, never the platform's
+            // current ones. `fee_laari` is Manfaa's net charge and
+            // `fee_gst_laari` the tax on it; the store owes both plus the
+            // cashback.
+            'fee_gst_percent' => Percent::format($this->resource->stampedFeeTax()->rateBp),
+            'fee_treatment' => $this->resource->stampedFeeTax()->treatment->value,
             'occurred_at' => $this->occurred_at->toIso8601String(),
             'received_at' => $this->received_at->toIso8601String(),
             // Present only when the caller loaded the pricing split (lined

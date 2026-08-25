@@ -15,6 +15,7 @@ import { ArrowLeft, CircleCheck, Paperclip, TriangleAlert } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiErrorMessage } from '@/lib/api-error';
 import { formatDateTime } from '@/lib/format';
+import { anyGst, hasGst } from '@/lib/gst';
 import { fundingMethodLabel, settlementStateLabel } from '@/lib/labels';
 import { cn } from '@/lib/utils';
 import {
@@ -228,6 +229,15 @@ export default function SettlementDetailPage() {
   const price = batchPrice(settlement);
   const discountLaari = settlement.discount_laari;
   const creditLaari = price?.creditAppliedLaari ?? 0;
+  /**
+   * Does anything here carry tax? Judged over the batch total AND every
+   * line it can draw, exactly as the merchant panel judges it — a column
+   * that vanished while a line still carried tax would hide real money.
+   */
+  const showGst =
+    hasGst(settlement.fee_gst_total_laari) ||
+    anyGst(lines.map((line) => line.fee_gst_laari));
+
   const lineTotals = lines.reduce(
     (totals, line) => ({
       cashback: totals.cashback + line.cashback_laari,
@@ -329,10 +339,18 @@ export default function SettlementDetailPage() {
           laari={settlement.cashback_total_laari}
           hint={discountLaari > 0 ? 'Never discounted' : undefined}
         />
+        {/* The tax is a fact about the batch only when the batch carries
+            one. While every stored figure is zero the tile is the fee, full
+            stop — not "excl. GST" with a hint of MVR 0.00 under it, which
+            is noise about a tax that does not exist (lib/gst.ts). */}
         <SummaryStat
-          label="Fee total (excl. GST)"
+          label={showGst ? 'Fee total (excl. GST)' : 'Fee total'}
           laari={settlement.fee_total_laari}
-          hint={`GST ${formatMoney(settlement.fee_gst_total_laari)}`}
+          hint={
+            showGst
+              ? `GST ${formatMoney(settlement.fee_gst_total_laari)}`
+              : undefined
+          }
         />
         {discountLaari > 0 ? (
           <SummaryStat
@@ -508,7 +526,9 @@ export default function SettlementDetailPage() {
                   <TableHead>Occurred</TableHead>
                   <TableHead className="text-end">Cashback</TableHead>
                   <TableHead className="text-end">Fee</TableHead>
-                  <TableHead className="text-end">GST</TableHead>
+                  {showGst ? (
+                    <TableHead className="text-end">GST</TableHead>
+                  ) : null}
                   <TableHead className="text-end">Due</TableHead>
                   <TableHead>Allocation</TableHead>
                 </TableRow>
@@ -517,7 +537,7 @@ export default function SettlementDetailPage() {
                 {lines.length === 0 ? (
                   <TableRow>
                     <TableCell
-                      colSpan={8}
+                      colSpan={showGst ? 8 : 7}
                       className="py-8 text-center text-muted-foreground"
                     >
                       No lines on this batch.
@@ -554,9 +574,11 @@ export default function SettlementDetailPage() {
                       <TableCell className="text-end">
                         <MoneyText laari={line.fee_laari} />
                       </TableCell>
-                      <TableCell className="text-end">
-                        <MoneyText laari={line.fee_gst_laari} />
-                      </TableCell>
+                      {showGst ? (
+                        <TableCell className="text-end">
+                          <MoneyText laari={line.fee_gst_laari} />
+                        </TableCell>
+                      ) : null}
                       <TableCell className="text-end font-medium">
                         <MoneyText laari={line.due_laari} />
                       </TableCell>
@@ -589,9 +611,11 @@ export default function SettlementDetailPage() {
                     <TableCell className="text-end">
                       <MoneyText laari={lineTotals.fee} />
                     </TableCell>
-                    <TableCell className="text-end">
-                      <MoneyText laari={lineTotals.gst} />
-                    </TableCell>
+                    {showGst ? (
+                      <TableCell className="text-end">
+                        <MoneyText laari={lineTotals.gst} />
+                      </TableCell>
+                    ) : null}
                     <TableCell className="text-end">
                       <MoneyText laari={lineTotals.due} />
                     </TableCell>
@@ -599,7 +623,7 @@ export default function SettlementDetailPage() {
                   </TableRow>
                   {creditLaari > 0 ? (
                     <TableRow>
-                      <TableCell colSpan={6} className="font-normal">
+                      <TableCell colSpan={showGst ? 6 : 5} className="font-normal">
                         Less credit adjustments netted onto the batch at draft
                       </TableCell>
                       <TableCell className="text-end">
@@ -610,7 +634,7 @@ export default function SettlementDetailPage() {
                   ) : null}
                   {discountLaari > 0 ? (
                     <TableRow>
-                      <TableCell colSpan={6} className="font-normal">
+                      <TableCell colSpan={showGst ? 6 : 5} className="font-normal">
                         Less prompt-payment discount
                         {settlement.discount_rate_percent === null
                           ? ''
@@ -625,7 +649,7 @@ export default function SettlementDetailPage() {
                   ) : null}
                   {creditLaari > 0 || discountLaari > 0 ? (
                     <TableRow>
-                      <TableCell colSpan={6}>Amount due</TableCell>
+                      <TableCell colSpan={showGst ? 6 : 5}>Amount due</TableCell>
                       <TableCell className="text-end">
                         <MoneyText laari={settlement.amount_due_laari} />
                       </TableCell>

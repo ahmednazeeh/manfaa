@@ -86,9 +86,18 @@ export const OutstandingBucketSchema = z.object({
 });
 export type OutstandingBucket = z.infer<typeof OutstandingBucketSchema>;
 
+/**
+ * The all-buckets total, with the three legs spelled out as display strings.
+ * `payable_mvr` is cashback + fee + GST — the tax is broken out BESIDE the
+ * fee rather than folded into it (owner, 2026-08-24): the fee is Manfaa's
+ * charge and the GST is a tax on that charge, and a merchant reading one
+ * blended number cannot reconcile either. `fee_gst_mvr` is "0.00" while GST
+ * is switched off; the per-bucket rows carry `fee_gst_laari` only.
+ */
 export const OutstandingTotalSchema = OutstandingBucketSchema.extend({
   cashback_mvr: z.string(),
   fee_mvr: z.string(),
+  fee_gst_mvr: z.string(),
 });
 export type OutstandingTotal = z.infer<typeof OutstandingTotalSchema>;
 
@@ -220,6 +229,17 @@ export const SettlementPreviewInstructionsSchema = z.object({
   // be taken by whoever submits first.
   amount_due_laari: z.number().int(),
   amount_due_mvr: z.string(),
+  /**
+   * The bill, ITEMISED, on the screen the merchant reads before walking to
+   * the bank (owner, 2026-08-24): what the customers earned, what Manfaa
+   * charged, and the tax on that charge. The three are the batch before
+   * credits and the prompt-payment discount — they do NOT sum to
+   * `amount_due_laari`, which is net of both; read the preview's
+   * `line_total_laari` for the gross.
+   */
+  cashback_total_laari: z.number().int(),
+  fee_total_laari: z.number().int(),
+  fee_gst_total_laari: z.number().int(),
   bank_account: SettlementBankAccountSchema.nullable(),
   /** Every account the merchant may pick, one per bank. See the settled twin. */
   bank_accounts: z.array(SettlementDestinationSchema).catch([]),
@@ -312,7 +332,12 @@ export const SettlementPreviewDiscountSchema = z.object({
   discount_mvr: z.string(),
   /** The fee leg alone; equal to discount_laari while fee GST is zero. */
   fee_discount_laari: z.number().int(),
-  /** GST recomputed proportionally on the discounted fee — zero today. */
+  /**
+   * The GST relief that rides along with the fee discount, recomputed
+   * proportionally on the discounted fee — zero while GST is switched off,
+   * and `discount_laari` is the two added up. Show the merchant the total;
+   * this split exists so the accounting can credit 4100 and 2300 apart.
+   */
   gst_relief_laari: z.number().int(),
 });
 export type SettlementPreviewDiscount = z.infer<
@@ -342,8 +367,18 @@ export const SettlementPreviewSchema = z.object({
   transaction_count: z.number().int(),
   sale_total_laari: z.number().int(),
   cashback_total_laari: z.number().int(),
+  /**
+   * Manfaa's own charge and the tax on it, as SEPARATE figures (owner,
+   * 2026-08-24) — never one blended number. The merchant owes cashback +
+   * fee + GST, which is `line_total_laari` before credits and the discount.
+   * Both are sums of stored per-row integers, each row taxed at the rate
+   * STAMPED on it, so a batch spanning two GST regimes still totals
+   * exactly; that is also why no single rate is quoted here.
+   */
   fee_total_laari: z.number().int(),
+  fee_total_mvr: z.string(),
   fee_gst_total_laari: z.number().int(),
+  fee_gst_total_mvr: z.string(),
   line_total_laari: z.number().int(),
   credit_applied_laari: z.number().int(),
   credit_applied_mvr: z.string(),

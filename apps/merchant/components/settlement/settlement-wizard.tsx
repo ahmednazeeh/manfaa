@@ -30,6 +30,7 @@ import {
   useWallet,
   useWalletSettleSelection,
 } from '@/lib/queries';
+import { hasGst } from '@/lib/gst';
 import { cn } from '@/lib/utils';
 import { Alert, AlertIcon, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -53,7 +54,6 @@ import {
 } from '@/components/app/async-states';
 import { PaymentInstructions } from '@/components/settlement/payment-instructions';
 import {
-  DiscountedFeeAmount,
   isDiscountDisabled,
   PromptDiscountNotice,
   PromptDiscountRow,
@@ -622,24 +622,33 @@ function ReviewStep({
               {/* Never discounted: the customer's reward is untouched (§1). */}
               <MoneyText laari={data.cashback_total_laari} />
             </div>
+            {/* GROSS, and the discount subtracted ONCE below.
+
+                The alternative — printing each fee row already net of its
+                share of the discount AND keeping the discount row — makes
+                the visible column add up to less than the stated amount to
+                transfer by exactly the discount, and the gap grows by the
+                GST relief the moment tax is switched on. The mobile app's
+                `_OwedLines` uses this same idiom, so the two merchant
+                surfaces describe one card the same way. */}
             <div className="flex justify-between gap-3">
               <span className="text-muted-foreground">
                 {t('settlement.summaryFee')}
               </span>
-              <DiscountedFeeAmount
-                feeLaari={data.fee_total_laari}
-                feeDiscountLaari={data.discount.fee_discount_laari}
-              />
+              <MoneyText laari={data.fee_total_laari} />
             </div>
-            <div className="flex justify-between gap-3">
-              <span className="text-muted-foreground">
-                {t('settlement.summaryGst')}
-              </span>
-              <DiscountedFeeAmount
-                feeLaari={data.fee_gst_total_laari}
-                feeDiscountLaari={data.discount.gst_relief_laari}
-              />
-            </div>
+            {/* Manfaa's charge and the tax on that charge, never blended
+                into one "fees" figure. The GST row is absent — not shown as
+                MVR 0.00 — until a batch actually carries tax; see
+                lib/gst.ts. */}
+            {hasGst(data.fee_gst_total_laari) && (
+              <div className="flex justify-between gap-3">
+                <span className="text-muted-foreground">
+                  {t('settlement.summaryGst')}
+                </span>
+                <MoneyText laari={data.fee_gst_total_laari} />
+              </div>
+            )}
             {discounted && (
               <div className="flex flex-col gap-0.5 border-t border-border pt-1.5">
                 <PromptDiscountRow

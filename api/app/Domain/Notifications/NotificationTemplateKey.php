@@ -109,6 +109,15 @@ enum NotificationTemplateKey: string
     // per line — a batch is news, forty lines are a nuisance.
     case WalletAutoSettled = 'wallet_auto_settled';
 
+    // GST switched on (owner, 2026-08-24). Manfaa was not registered for
+    // GST; the day it is, the platform fee starts carrying tax, and the
+    // merchant's bill changes shape — a fee line and a GST line where there
+    // was one number. Fired ONCE, by the superadmin action that enables it,
+    // and never on a later rate edit: the rate is on every settlement
+    // screen, where a correction belongs, and a push per correction is a
+    // nuisance about a number nobody typed.
+    case GstNowApplies = 'gst_now_applies';
+
     // Marketplace enrolment outcomes (PLAN-marketplace.md §9). The merchant
     // handed us identity documents and waited on a human; silence after
     // that is the one thing this must not be.
@@ -150,6 +159,7 @@ enum NotificationTemplateKey: string
             self::WalletTopUpReceived => 'Wallet top-up received',
             self::WalletTopUpRejected => 'Wallet top-up refused',
             self::WalletAutoSettled => 'Settled from wallet',
+            self::GstNowApplies => 'GST now applies',
             self::MarketplaceApproved => 'Marketplace approved',
             self::MarketplaceRejected => 'Marketplace not approved',
             self::OrderPlaced => 'New order',
@@ -196,6 +206,7 @@ enum NotificationTemplateKey: string
             self::WalletTopUpReceived => 'When a store\'s wallet top-up transfer is found in the bank and the wallet is credited — automatically or by an admin. One per top-up.',
             self::WalletTopUpRejected => 'When a wallet top-up claim is refused, with the reason. The store has to act, so this one earns an interruption.',
             self::WalletAutoSettled => 'When the hourly run settles validated cashback from the store\'s wallet balance. One message per run, never one per sale.',
+            self::GstNowApplies => 'The one time a superadmin switches GST on: the platform fee starts carrying tax, and every settlement from then on shows the fee and the GST as separate figures. Sent once, to every approved store, and never again when the rate is edited.',
         };
     }
 
@@ -251,6 +262,11 @@ enum NotificationTemplateKey: string
                 'amount' => 'What the run drew from the wallet, formatted with its currency',
                 'count' => 'How many sales the run settled',
                 'balance' => 'The wallet balance left after the run, formatted with its currency',
+            ],
+            self::GstNowApplies => [
+                'rate' => 'The GST rate now charged on the platform fee, e.g. "8.00%"',
+                'date' => 'The business-timezone date it started applying',
+                'effect' => 'How the tax lands on the bill: "added to your platform fee" (on-top) or "already included in your platform fee" (inclusive)',
             ],
             self::SettlementAccepted => [
                 'reference' => 'The settlement reference',
@@ -332,6 +348,9 @@ enum NotificationTemplateKey: string
             self::CustomersPaid, self::PosWaiverEarned => true,
             self::WalletTopUpReceived, self::WalletTopUpRejected,
             self::WalletAutoSettled => true,
+            // The shop's own bill changes shape — merchant staff, never a
+            // shopper: a customer's cashback is untouched by our tax.
+            self::GstNowApplies => true,
         };
     }
 
@@ -465,6 +484,7 @@ enum NotificationTemplateKey: string
             self::WalletTopUpReceived => ['en' => 'Wallet topped up', 'dv' => 'ވޮލެޓަށް ފައިސާ ޖަމާވެއްޖެ'],
             self::WalletTopUpRejected => ['en' => 'Top-up refused', 'dv' => 'ޓޮޕް-އަޕް ބަލައިނުގަނެވުނު'],
             self::WalletAutoSettled => ['en' => 'Settled from wallet', 'dv' => 'ވޮލެޓުން ސެޓްލްކުރެވިއްޖެ'],
+            self::GstNowApplies => ['en' => 'GST now applies', 'dv' => 'ޖީއެސްޓީ ނަގަން ފަށައިފި'],
             self::MarketplaceApproved => ['en' => 'Marketplace approved', 'dv' => 'މާކެޓްޕްލޭސް ފާސްވެއްޖެ'],
             self::MarketplaceRejected => ['en' => 'Application refused', 'dv' => 'ހުށަހެޅުން ބަލައިނުގަނެވުނު'],
             self::OrderPlaced => ['en' => 'New order', 'dv' => 'އައު އޯޑަރެއް'],

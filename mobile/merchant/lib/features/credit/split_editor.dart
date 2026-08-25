@@ -30,14 +30,20 @@ class SplitRow {
 }
 
 /// A display estimate for the whole split at the sale's base terms.
-({int cashback, int fee})? estimateSplit(
+({int cashback, int fee, int gst})? estimateSplit(
   List<SplitRow> rows,
   List<ProductCategory> categories, {
   required int? baseRateBp,
   required int? baseFeeBp,
+  MerchantTaxTerms tax = const MerchantTaxTerms(),
 }) {
   var cashback = 0;
   var fee = 0;
+  var gst = 0;
+  // GST is applied PER LINE and the header is the SUM of the line integers
+  // (§4: round at the line, then sum) — splitting the aggregate instead
+  // would round differently and disagree with the recorded receipt.
+  final gstRateBp = parsePercentToBp(tax.gstRatePercent) ?? 0;
   for (final row in rows) {
     final category = categories
         .where((c) => c.slug == row.category)
@@ -54,9 +60,15 @@ class SplitRow {
         ? staticFeeBp(categoryBp)
         : (baseFeeBp ?? staticFeeBp(rateBp));
     cashback += estimateLaariAtBp(row.amountLaari, rateBp);
-    fee += estimateLaariAtBp(row.amountLaari, feeBp);
+
+    final lineFee = estimateLaariAtBp(row.amountLaari, feeBp);
+    final (net, lineGst) = tax.split(lineFee, gstRateBp);
+    // Printed GROSS under `inclusive` — the quoted rate produces that
+    // figure, and the tax is disclosed as a component of it.
+    fee += tax.inclusive ? net + lineGst : net;
+    gst += lineGst;
   }
-  return (cashback: cashback, fee: fee);
+  return (cashback: cashback, fee: fee, gst: gst);
 }
 
 /// Sentinel key for the Everything-else bucket inside the editor.

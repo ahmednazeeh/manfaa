@@ -567,6 +567,9 @@ class CreditResultCard extends StatelessWidget {
     final feeSuffix = lined
         ? l10n.previewPerLine
         : formatBp(parsePercentToBp(tx.platformFeePercent) ?? 0);
+    // The treatment STAMPED on this sale, never the live setting — and only
+    // meaningful while the row actually carries tax.
+    final feeInclusive = tx.feeTreatment == 'inclusive' && tx.feeGstLaari > 0;
 
     String lineName(MerchantTransactionLine line) {
       if (line.category == null) return l10n.splitEverythingElse;
@@ -650,10 +653,31 @@ class CreditResultCard extends StatelessWidget {
             label: l10n.previewCashback(rateSuffix),
             child: MoneyText(tx.cashbackLaari),
           ),
+          // THE RATE AND THE MONEY ON A ROW MUST DESCRIBE THE SAME NUMBER.
+          // `platformFeePercent` is the GROSS quoted rate under both
+          // treatments, while `feeLaari` is Manfaa's NET revenue — equal
+          // under `on_top`, short by the tax under `inclusive`, where the
+          // tax was carved OUT of the quoted fee. So under `inclusive` this
+          // row prints the gross figure its rate actually produces and the
+          // tax below is disclosed as a COMPONENT of it. Either way the two
+          // rows sum to what the merchant owes.
           _ResultRow(
             label: l10n.previewFee(feeSuffix),
-            child: MoneyText(tx.feeLaari),
+            child: MoneyText(
+              feeInclusive ? tx.feeLaari + tx.feeGstLaari : tx.feeLaari,
+            ),
           ),
+          // The GST on that fee is its own line — the "You pay" total below
+          // has always included it, and never said so. Absent entirely when
+          // the sale carries no GST (the platform has it off, or the row
+          // was priced before it came in).
+          if (tx.feeGstLaari > 0)
+            _ResultRow(
+              label: feeInclusive
+                  ? l10n.previewGstIncluded(trimRatePercent(tx.feeGstPercent))
+                  : l10n.previewGst(trimRatePercent(tx.feeGstPercent)),
+              child: MoneyText(tx.feeGstLaari),
+            ),
           const Divider(height: Gap.xl),
           _ResultRow(
             label: l10n.resultYouPay,

@@ -53,7 +53,10 @@ const TRANSACTION_STATES: Record<TransactionState, string> = {
 
 const TRANSACTION_ORIGINS: Record<TransactionOrigin, string> = {
   pos: 'Till (POS)',
-  manual: 'Merchant panel',
+  // The merchant-facing name for the app a shopkeeper records a sale in, so
+  // an admin reading a row and the merchant who created it are looking at
+  // the same word (owner, 2026-08-24). Matches ReportLabels::origin.
+  manual: 'Manfaa App',
   online_link: 'Online checkout',
   api_phone: 'Phone lookup (API)',
   card_linked: 'Linked card',

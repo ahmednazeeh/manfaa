@@ -4,6 +4,7 @@ import { type OutstandingBucket } from '@manfaa/api-client';
 import { MoneyText } from '@manfaa/ui';
 import { HandCoins } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { hasGst } from '@/lib/gst';
 import { useOutstanding, useSettlementPreview, useWallet } from '@/lib/queries';
 import { can } from '@/lib/roles';
 import { useLayout } from '@/components/app-layout/context';
@@ -175,15 +176,21 @@ export default function DashboardPage() {
                           className="text-secondary-foreground"
                         />
                       </div>
-                      <div className="flex justify-between gap-3">
-                        <span className="text-muted-foreground">
-                          GST on fee
-                        </span>
-                        <MoneyText
-                          laari={outstanding.data.total.fee_gst_laari}
-                          className="text-secondary-foreground"
-                        />
-                      </div>
+                      {/* Absent, not zeroed, while GST is switched off —
+                          see lib/gst.ts. The fee above is Manfaa's own
+                          charge either way, so the two lines still add up
+                          to the payable total. */}
+                      {hasGst(outstanding.data.total.fee_gst_laari) && (
+                        <div className="flex justify-between gap-3">
+                          <span className="text-muted-foreground">
+                            GST on fee
+                          </span>
+                          <MoneyText
+                            laari={outstanding.data.total.fee_gst_laari}
+                            className="text-secondary-foreground"
+                          />
+                        </div>
+                      )}
                       <div className="flex justify-between gap-3 border-t border-border pt-1.5">
                         <span className="text-muted-foreground">
                           Outstanding transactions

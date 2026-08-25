@@ -30,6 +30,7 @@ import {
   formatRate,
   formatRateOrDash,
 } from '@/lib/estimate';
+import { hasGst, splitFeeForGst } from '@/lib/gst';
 import {
   advertisedRatePercent,
   apiErrorMessage,
@@ -258,6 +259,14 @@ function ResultCard({
    * the merchant's POS.
    */
   const backdatedFinal = transaction.reason_code === BACKDATED_REASON;
+  /**
+   * The treatment STAMPED on this sale (never the live setting), and only
+   * meaningful while the row actually carries tax: under `inclusive` the
+   * quoted fee already contained the GST, so the fee row prints gross and
+   * the tax is disclosed as a component of it.
+   */
+  const feeInclusive =
+    transaction.fee_treatment === 'inclusive' && hasGst(transaction.fee_gst_laari);
 
   return (
     <Card className="mb-5">
@@ -356,7 +365,7 @@ function ResultCard({
             className="sm:col-span-2"
           />
           <span className="text-muted-foreground">
-            Customer cashback{' '}
+            {t('settlement.summaryCashback')}{' '}
             {transaction.lines === undefined || transaction.lines.length === 0
               ? `(${formatRate(transaction.cashback_rate_percent)})`
               : `(${t('creditSplit.perLine')})`}
@@ -365,13 +374,53 @@ function ResultCard({
             laari={transaction.cashback_laari}
             className="sm:col-span-2"
           />
+          {/* Manfaa's charge, and the tax on that charge, as two lines that
+              add up to "You pay" below. The GST line is absent, not MVR
+              0.00, while there is no tax; see lib/gst.ts. Every rate shown
+              is the one STAMPED on this sale, never the platform's current
+              setting.
+
+              THE RATE AND THE MONEY ON A ROW MUST DESCRIBE THE SAME NUMBER.
+              `platform_fee_percent` is the GROSS quoted rate under both
+              treatments, while `fee_laari` is Manfaa's NET revenue — equal
+              under `on_top`, and short by the tax under `inclusive`, where
+              the tax was carved OUT of the quoted fee. So under `inclusive`
+              the fee row carries the GROSS figure the rate actually
+              produces, and the tax below it is disclosed as a COMPONENT of
+              that fee ("GST included in fee") rather than an addition. The
+              two rows still sum to what the merchant owes either way. */}
           <span className="text-muted-foreground">
-            Platform fee{' '}
+            {t('settlement.summaryFee')}{' '}
             {transaction.lines === undefined || transaction.lines.length === 0
               ? `(${formatRate(transaction.platform_fee_percent)})`
               : `(${t('creditSplit.perLine')})`}
           </span>
-          <MoneyText laari={transaction.fee_laari} className="sm:col-span-2" />
+          <MoneyText
+            laari={
+              feeInclusive
+                ? transaction.fee_laari + transaction.fee_gst_laari
+                : transaction.fee_laari
+            }
+            className="sm:col-span-2"
+          />
+          {hasGst(transaction.fee_gst_laari) && (
+            <>
+              <span className="text-muted-foreground">
+                {feeInclusive
+                  ? t('settlement.summaryGstIncluded')
+                  : t('settlement.summaryGst')}{' '}
+                {`(${formatRate(transaction.fee_gst_percent)})`}
+              </span>
+              <MoneyText
+                laari={transaction.fee_gst_laari}
+                className={
+                  feeInclusive
+                    ? 'sm:col-span-2 text-muted-foreground'
+                    : 'sm:col-span-2'
+                }
+              />
+            </>
+          )}
           <span className="text-muted-foreground">You pay</span>
           <MoneyText
             laari={
@@ -662,18 +711,68 @@ export default function CreditPage() {
     ],
   );
 
+  /**
+   * The GST terms a sale recorded RIGHT NOW would be stamped with, published
+   * by the rate endpoint. The quote below has no row to read a stamp off —
+   * it prices what is ABOUT to happen — so it prices from the live policy,
+   * exactly as the server will a second later. "0.00" (today) is the
+   * identity under both treatments and leaves every figure unchanged.
+   */
+  const taxTerms = rate.data?.tax ?? null;
+  const gstRateBp = taxTerms === null ? 0 : percentToBp(taxTerms.gst_rate_percent);
+  const feeTreatment = taxTerms?.fee_treatment ?? 'on_top';
+
+  /**
+   * A LINED sale is taxed PER LINE and the header is the sum of the line
+   * integers (§4: round at the line, then sum) — so the quote sums the
+   * per-line splits rather than splitting the aggregate, which would round
+   * differently and disagree with the recorded receipt.
+   */
+  const splitTax =
+    splitAnalysis.feeTotal === null
+      ? null
+      : splitAnalysis.lines.reduce(
+          (totals, line) => {
+            const { fee, gst } = splitFeeForGst(
+              line.feeEstimate ?? 0,
+              gstRateBp,
+              feeTreatment,
+            );
+            return { fee: totals.fee + fee, gst: totals.gst + gst };
+          },
+          { fee: 0, gst: 0 },
+        );
+
   // No fee preview when the applied rate has no priced fee (a stranded
   // legacy rate — the server refuses credits in that state anyway).
-  const preview =
-    eligibleLaari !== null &&
-    !eligibleInvalid &&
-    baseRateBp !== null &&
-    baseFeeBp !== null
-      ? {
-          cashback: estimateLaariAtBp(eligibleLaari, baseRateBp),
-          fee: estimateLaariAtBp(eligibleLaari, baseFeeBp),
-        }
-      : null;
+  //
+  // The quoted fee is GROSS under both treatments — it is `fee_bp` × the
+  // sale, which is what the rate on the row beside it says. `on_top` ADDS
+  // the tax to it (the merchant owes more); `inclusive` carves the tax out
+  // of it (the merchant owes the same, and the split only says how much of
+  // the fee was tax). "You pay" is cashback + fee + GST either way, and
+  // matches the recorded result card laari for laari.
+  const preview = (() => {
+    if (
+      eligibleLaari === null ||
+      eligibleInvalid ||
+      baseRateBp === null ||
+      baseFeeBp === null
+    ) {
+      return null;
+    }
+
+    const quotedFee = estimateLaariAtBp(eligibleLaari, baseFeeBp);
+    const { fee, gst } = splitFeeForGst(quotedFee, gstRateBp, feeTreatment);
+
+    return {
+      cashback: estimateLaariAtBp(eligibleLaari, baseRateBp),
+      // What the fee row prints: the gross figure the quoted rate produces.
+      fee: feeTreatment === 'inclusive' ? fee + gst : fee,
+      gst,
+      youPay: estimateLaariAtBp(eligibleLaari, baseRateBp) + fee + gst,
+    };
+  })();
 
   const canSubmit =
     lookup.data?.valid === true &&
@@ -1191,13 +1290,38 @@ export default function CreditPage() {
                     <span className="text-muted-foreground">—</span>
                   )}
                 </div>
+                {/* Per-line tax, summed — absent while the platform charges
+                    none. Under `inclusive` the fee row above is already the
+                    gross quoted figure, so this only says how much of it was
+                    tax and is not added again below. */}
+                {splitTax !== null && hasGst(splitTax.gst) && (
+                  <div className="flex justify-between gap-3">
+                    <span className="text-muted-foreground">
+                      {feeTreatment === 'inclusive'
+                        ? t('settlement.summaryGstIncluded')
+                        : t('settlement.summaryGst')}{' '}
+                      ({formatBp(gstRateBp)})
+                    </span>
+                    <MoneyText
+                      laari={splitTax.gst}
+                      className={
+                        feeTreatment === 'inclusive'
+                          ? 'text-muted-foreground'
+                          : undefined
+                      }
+                    />
+                  </div>
+                )}
                 <div className="flex justify-between gap-3 border-t border-border pt-2 font-medium">
                   <span>{t('creditSplit.previewYouPay')}</span>
                   {splitAnalysis.cashbackTotal !== null &&
-                  splitAnalysis.feeTotal !== null ? (
+                  splitAnalysis.feeTotal !== null &&
+                  splitTax !== null ? (
                     <MoneyText
                       laari={
-                        splitAnalysis.cashbackTotal + splitAnalysis.feeTotal
+                        splitAnalysis.cashbackTotal +
+                        splitTax.fee +
+                        splitTax.gst
                       }
                     />
                   ) : (
@@ -1238,23 +1362,55 @@ export default function CreditPage() {
                     <span className="text-muted-foreground">—</span>
                   )}
                 </div>
+                {/* The tax on that fee, quoted from the LIVE policy — the
+                    sale does not exist yet, so there is no stamp to read.
+                    Absent, not MVR 0.00, while the platform charges none.
+                    Under `inclusive` the fee row above is already gross and
+                    this only says how much of it was tax, so it is greyed
+                    and it is not added again below. */}
+                {preview !== null && hasGst(preview.gst) && (
+                  <div className="flex justify-between gap-3">
+                    <span className="text-muted-foreground">
+                      {feeTreatment === 'inclusive'
+                        ? t('settlement.summaryGstIncluded')
+                        : t('settlement.summaryGst')}{' '}
+                      ({formatBp(gstRateBp)})
+                    </span>
+                    <MoneyText
+                      laari={preview.gst}
+                      className={
+                        feeTreatment === 'inclusive'
+                          ? 'text-muted-foreground'
+                          : undefined
+                      }
+                    />
+                  </div>
+                )}
                 <div className="flex justify-between gap-3 border-t border-border pt-2 font-medium">
                   <span>
-                    You pay (
-                    {overrideBp !== null
-                      ? formatBp(overrideBp + estimateFeeBpFor(overrideBp))
-                      : formatRateOrDash(currentRate.all_in_percent)}
-                    )
+                    {/* The all-in percentage covers cashback + fee. Under
+                        `on_top` the bill also carries the tax, which no
+                        single rate on this screen describes — so the
+                        parenthetical goes rather than label a total it no
+                        longer adds up to. */}
+                    You pay
+                    {gstRateBp > 0 && feeTreatment === 'on_top'
+                      ? ''
+                      : ` (${
+                          overrideBp !== null
+                            ? formatBp(overrideBp + estimateFeeBpFor(overrideBp))
+                            : formatRateOrDash(currentRate.all_in_percent)
+                        })`}
                   </span>
                   {preview ? (
-                    <MoneyText laari={preview.cashback + preview.fee} />
+                    <MoneyText laari={preview.youPay} />
                   ) : (
                     <span className="text-muted-foreground">—</span>
                   )}
                 </div>
                 <p className="text-xs text-muted-foreground">
                   {overrideBp === null
-                    ? 'Estimate — final amounts use the rate at the sale time.'
+                    ? 'Estimate — final amounts use the rate and the tax in force at the sale time.'
                     : t('credit.customRatePreviewNote')}
                 </p>
               </>

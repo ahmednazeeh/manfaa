@@ -105,6 +105,14 @@ final readonly class AmendmentService
             $baseBp = $locked->rate_bp;
             $feeBp = $locked->fee_bp;
 
+            // GST follows the same law as the rate: the terms STAMPED ON
+            // THIS ROW, never the terms in force today. A platform that
+            // switched GST on (or moved the rate, or changed the treatment)
+            // between the sale and its correction must not be able to
+            // re-tax a sale the merchant was already quoted — a correction
+            // fixes what was rung up, not the terms it was rung up under.
+            $tax = $locked->stampedFeeTax();
+
             if ($parsedLines === null) {
                 $priced = $this->calculator->calculate(
                     $eligible,
@@ -112,7 +120,7 @@ final readonly class AmendmentService
                     $feeBp,
                 );
                 $cashbackLaari = $belowMinimum ? 0 : $priced->cashbackLaari;
-                $feeLaari = $belowMinimum ? 0 : $priced->feeLaari;
+                [$feeLaari, $feeGstLaari] = $tax->split($belowMinimum ? 0 : $priced->feeLaari);
                 $pricedLines = null;
             } else {
                 $pricedLines = $this->terms->resolveLines(
@@ -127,8 +135,11 @@ final readonly class AmendmentService
                     // promotions, exactly as creation does for a zeroed row.
                     consultPromotions: ! $belowMinimum,
                 );
+                // Per line, under the row's OWN stamped regime.
+                $pricedLines = $pricedLines->withFeeTax($tax);
                 $cashbackLaari = $belowMinimum ? 0 : $pricedLines->cashbackTotal();
                 $feeLaari = $belowMinimum ? 0 : $pricedLines->feeTotal();
+                $feeGstLaari = $belowMinimum ? 0 : $pricedLines->feeGstTotal();
             }
 
             $before = [
@@ -155,8 +166,10 @@ final readonly class AmendmentService
                 'sale_laari' => $saleAmount?->value(),
                 'cashback_laari' => $cashbackLaari,
                 'fee_laari' => $feeLaari,
-                // GST on the fee follows the same rule it did at creation.
-                'fee_gst_laari' => 0,
+                // GST on the fee follows the same rule it did at creation —
+                // recomputed from the row's own stamped rate and treatment,
+                // which this amendment deliberately does not touch.
+                'fee_gst_laari' => $feeGstLaari,
                 'reason_code' => $belowMinimum ? 'below_minimum' : null,
             ])->save();
 
@@ -178,18 +191,22 @@ final readonly class AmendmentService
                         'fee_bp' => $line->feeBp,
                         'cashback_laari' => $belowMinimum ? 0 : $line->cashbackLaari,
                         'fee_laari' => $belowMinimum ? 0 : $line->feeLaari,
+                        'fee_gst_bp' => $line->feeGstBp,
+                        'fee_gst_laari' => $belowMinimum ? 0 : $line->feeGstLaari,
                         'priced_by' => $line->pricedBy,
                         'sort' => $line->sort,
                     ]);
                 }
             }
 
-            // ...and back on at exactly what is now recorded.
-            if ($cashbackLaari !== 0 || $feeLaari !== 0) {
+            // ...and back on at exactly what is now recorded, GST included:
+            // posting the fee without its tax would leave the accrual
+            // unbalanced against the receivable the row now carries.
+            if ($cashbackLaari !== 0 || $feeLaari !== 0 || $feeGstLaari !== 0) {
                 $this->postings->accrue(
                     $cashbackLaari,
                     $feeLaari,
-                    0,
+                    $feeGstLaari,
                     'transaction',
                     $locked->id,
                 );

@@ -652,10 +652,13 @@ class _BreakdownRows extends StatelessWidget {
           l10n.payableFee,
           MoneyText(total.feeLaari, style: theme.textTheme.bodyMedium),
         ),
-        row(
-          l10n.payableGst,
-          MoneyText(total.feeGstLaari, style: theme.textTheme.bodyMedium),
-        ),
+        // The tax on the fee, on its own line and only when there is one —
+        // a standing MVR 0.00 row told the merchant nothing.
+        if (total.feeGstLaari > 0)
+          row(
+            l10n.payableGst,
+            MoneyText(total.feeGstLaari, style: theme.textTheme.bodyMedium),
+          ),
         if (outstanding.pendingAdjustmentCount > 0)
           row(
             l10n.payablePendingCredit,

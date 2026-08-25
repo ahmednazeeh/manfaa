@@ -196,6 +196,13 @@ const _shotPreview = {
   },
   'payment_instructions': {
     'amount_due_laari': 2712,
+    // The bill itemised under that figure: what the customers earned, what
+    // Manfaa charged, and the GST on that charge. GST is switched OFF at
+    // the platform today, so the third integer is 0 and the shot carries
+    // no tax line at all.
+    'cashback_total_laari': 2000,
+    'fee_total_laari': 750,
+    'fee_gst_total_laari': 0,
     'bank_account': {
       'bank_name': 'bml',
       'account_no': '7730000123456',

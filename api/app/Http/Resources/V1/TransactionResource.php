@@ -91,6 +91,18 @@ class TransactionResource extends JsonResource
             'fee_mvr' => Laari::of($this->fee_laari)->formatMvr(),
             'fee_gst_laari' => $this->fee_gst_laari,
             'fee_gst_mvr' => Laari::of($this->fee_gst_laari)->formatMvr(),
+            // The GST terms this sale was FROZEN at, not the platform's
+            // current ones — a receipt states what was charged, and a rate
+            // change tomorrow must not rewrite what a vendor printed today.
+            // "0.00" / "on_top" on every sale priced before GST was switched
+            // on, which is every sale so far.
+            //
+            // `fee_laari` is always Manfaa's NET charge and `fee_gst_laari`
+            // always the tax on it: under `on_top` the tax was ADDED to the
+            // quoted fee, under `inclusive` it was carved OUT of it. Either
+            // way the merchant owes cashback + fee + GST.
+            'fee_gst_percent' => Percent::format($this->resource->stampedFeeTax()->rateBp),
+            'fee_treatment' => $this->resource->stampedFeeTax()->treatment->value,
             'occurred_at' => $this->occurred_at->utc()->toIso8601String(),
             'received_at' => $this->received_at->utc()->toIso8601String(),
             // Present only when the caller loaded the pricing split (lined

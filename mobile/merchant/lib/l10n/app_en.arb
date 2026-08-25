@@ -340,6 +340,22 @@
       }
     }
   },
+  "previewGst": "GST on fee ({rate})",
+  "@previewGst": {
+    "placeholders": {
+      "rate": {
+        "type": "String"
+      }
+    }
+  },
+  "previewGstIncluded": "GST included in fee ({rate})",
+  "@previewGstIncluded": {
+    "placeholders": {
+      "rate": {
+        "type": "String"
+      }
+    }
+  },
   "previewYouPay": "You pay ({rate})",
   "@previewYouPay": {
     "placeholders": {
@@ -618,6 +634,7 @@
   "pickerApplyCta": "Use this selection",
   "awaitingSettlementChip": "Awaiting settlement",
   "feeShort": "Fee",
+  "gstShort": "GST",
   "discountRow": "Prompt payment discount ({rate})",
   "@discountRow": {
     "placeholders": {
@@ -657,6 +674,7 @@
   "settlePreviewFailed": "Couldn't price this selection.",
   "payBankTitle": "Transfer exactly this amount",
   "amountToTransfer": "Amount to transfer",
+  "amountCoversTitle": "This amount covers",
   "referenceLabel": "Payment reference",
   "referenceFinalNote": "Quote this reference with your transfer — it is how we recognise your money.",
   "transferToLabel": "Transfer to",

@@ -716,6 +716,16 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String previewGst(String rate) {
+    return 'GST on fee ($rate)';
+  }
+
+  @override
+  String previewGstIncluded(String rate) {
+    return 'GST included in fee ($rate)';
+  }
+
+  @override
   String previewYouPay(String rate) {
     return 'You pay ($rate)';
   }
@@ -1256,6 +1266,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get feeShort => 'Fee';
 
   @override
+  String get gstShort => 'GST';
+
+  @override
   String discountRow(String rate) {
     return 'Prompt payment discount ($rate)';
   }
@@ -1317,6 +1330,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get amountToTransfer => 'Amount to transfer';
+
+  @override
+  String get amountCoversTitle => 'This amount covers';
 
   @override
   String get referenceLabel => 'Payment reference';

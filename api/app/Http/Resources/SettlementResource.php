@@ -46,6 +46,12 @@ class SettlementResource extends JsonResource
             'amount_received_laari' => $this->amount_received_laari,
             'cashback_total_mvr' => Laari::of($this->cashback_total_laari)->formatMvr(),
             'fee_total_mvr' => Laari::of($this->fee_total_laari)->formatMvr(),
+            // Broken out, never blended into the fee (owner, 2026-08-24).
+            // `fee_total_*` is Manfaa's own charge and this is the tax on
+            // it; the merchant owes cashback + fee + GST, which is
+            // amount_due. Zero on every batch priced before GST was
+            // switched on — those rows carry their own stamped rate.
+            'fee_gst_total_mvr' => Laari::of((int) $this->fee_gst_total_laari)->formatMvr(),
             'amount_due_mvr' => Laari::of($this->amount_due_laari)->formatMvr(),
             'amount_received_mvr' => Laari::of($this->amount_received_laari)->formatMvr(),
             'due_at' => $this->due_at?->toIso8601String(),

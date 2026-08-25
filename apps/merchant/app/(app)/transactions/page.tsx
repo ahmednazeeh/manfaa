@@ -7,6 +7,7 @@ import {
 } from '@manfaa/api-client';
 import { MoneyText } from '@manfaa/ui';
 import { useTranslation } from 'react-i18next';
+import { anyGst } from '@/lib/gst';
 import {
   transactionOriginLabel,
   transactionStateLabel,
@@ -58,6 +59,15 @@ export default function TransactionsPage() {
   const [state, setState] = useState<TransactionState | 'all'>('all');
   const [page, setPage] = useState(1);
   const transactions = useTransactions(state, page);
+
+  // Server-paginated, so the page the API returned is every row this table
+  // can draw: the GST column appears as soon as one of them carries tax and
+  // is absent entirely while none does. See lib/gst.ts.
+  const showGst = anyGst(
+    (transactions.data?.data ?? []).map(
+      (transaction) => transaction.fee_gst_laari,
+    ),
+  );
 
   const handleStateChange = (value: string) => {
     setState(value as TransactionState | 'all');
@@ -113,7 +123,14 @@ export default function TransactionsPage() {
                       <TableHead>State</TableHead>
                       <TableHead className="text-end">Eligible</TableHead>
                       <TableHead className="text-end">Cashback</TableHead>
-                      <TableHead className="text-end">Fee + GST</TableHead>
+                      <TableHead className="text-end">
+                        {t('settlement.colFee')}
+                      </TableHead>
+                      {showGst && (
+                        <TableHead className="text-end">
+                          {t('settlement.colGst')}
+                        </TableHead>
+                      )}
                       <TableHead className="w-10" />
                     </TableRow>
                   </TableHeader>
@@ -145,13 +162,17 @@ export default function TransactionsPage() {
                         <TableCell className="text-end">
                           <MoneyText laari={transaction.cashback_laari} />
                         </TableCell>
+                        {/* Manfaa's charge and the tax on that charge stay
+                            two figures — `fee_laari` is always the NET fee,
+                            whichever treatment the row was priced under. */}
                         <TableCell className="text-end">
-                          <MoneyText
-                            laari={
-                              transaction.fee_laari + transaction.fee_gst_laari
-                            }
-                          />
+                          <MoneyText laari={transaction.fee_laari} />
                         </TableCell>
+                        {showGst && (
+                          <TableCell className="text-end">
+                            <MoneyText laari={transaction.fee_gst_laari} />
+                          </TableCell>
+                        )}
                         <TableCell className="text-end">
                           <TransactionActions transaction={transaction} />
                         </TableCell>

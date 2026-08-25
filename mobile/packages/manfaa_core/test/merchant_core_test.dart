@@ -140,8 +140,13 @@ const _creditFixture = {
     'effective_cashback_rate_percent': '2.75',
     'effective_platform_fee_percent': '0.55',
     'cashback_laari': 2750,
+    // fee_laari is Manfaa's NET charge and fee_gst_laari the tax on it,
+    // stamped at the rate this row priced under: 8% on top of 550 is
+    // ceil(550 × 800 / 10000) = 44 laari.
     'fee_laari': 550,
     'fee_gst_laari': 44,
+    'fee_gst_percent': '8.00',
+    'fee_treatment': 'on_top',
     'occurred_at': '2026-08-17T14:05:00+05:00',
     'received_at': '2026-08-17T14:05:02+05:00',
     'lines': [
@@ -153,6 +158,8 @@ const _creditFixture = {
         'platform_fee_percent': '1.00',
         'cashback_laari': 2250,
         'fee_laari': 450,
+        'fee_gst_laari': 36,
+        'fee_gst_percent': '8.00',
         'priced_by': 'standing_rate',
         'sort': 0,
       },
@@ -164,6 +171,8 @@ const _creditFixture = {
         'platform_fee_percent': '0.40',
         'cashback_laari': 500,
         'fee_laari': 100,
+        'fee_gst_laari': 8,
+        'fee_gst_percent': '8.00',
         'priced_by': 'category_rule',
         'sort': 1,
       },
@@ -583,6 +592,45 @@ void main() {
       expect(result.transaction.lines, hasLength(2));
       expect(result.transaction.lines.last.category, 'staples');
       expect(result.transaction.lines.last.cashbackRatePercent, '2.00');
+
+      // The tax terms stamped on the row: the fee stays Manfaa's NET
+      // charge, the GST is its own integer, and the rate travels as the
+      // exact 2-decimal percent STRING — never basis points.
+      final tx = result.transaction;
+      expect(tx.feeLaari, 550);
+      expect(tx.feeGstLaari, 44);
+      expect(tx.feeGstPercent, '8.00');
+      expect(tx.feeTreatment, 'on_top');
+      // The server taxes PER LINE, so the lines sum to the header — a
+      // header-level re-derivation would disagree by a laari.
+      expect(
+        tx.lines.fold<int>(0, (sum, line) => sum + line.feeGstLaari),
+        tx.feeGstLaari,
+      );
+      expect(tx.lines.first.feeGstLaari, 36);
+      expect(tx.lines.first.feeGstPercent, '8.00');
+    });
+
+    test('a payload with no tax terms reads GST-free, never null', () {
+      final data = (_creditFixture['data'] as Map).cast<String, dynamic>();
+      final untaxed = Map<String, dynamic>.from(data)
+        ..remove('fee_gst_laari')
+        ..remove('fee_gst_percent')
+        ..remove('fee_treatment')
+        ..['lines'] = [
+          for (final line in data['lines'] as List)
+            Map<String, dynamic>.from((line as Map).cast<String, dynamic>())
+              ..remove('fee_gst_laari')
+              ..remove('fee_gst_percent'),
+        ];
+
+      final tx = MerchantTransaction.fromJson(untaxed);
+
+      expect(tx.feeGstLaari, 0);
+      expect(tx.feeGstPercent, '0.00');
+      expect(tx.feeTreatment, 'on_top');
+      expect(tx.lines.first.feeGstLaari, 0);
+      expect(tx.lines.first.feeGstPercent, '0.00');
     });
 
     test('a 200 replay is surfaced as replayed, not a new sale', () async {

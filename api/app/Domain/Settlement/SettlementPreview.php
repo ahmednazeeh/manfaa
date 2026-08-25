@@ -109,8 +109,15 @@ final readonly class SettlementPreview
             'transaction_count' => $selected->count(),
             'sale_total_laari' => (int) $selected->sum('eligible_laari'),
             'cashback_total_laari' => $cashback,
+            // Manfaa's own charge and the tax on it, as SEPARATE figures
+            // (owner, 2026-08-24) — never one blended number. The merchant
+            // owes cashback + fee + GST, which is line_total_laari before
+            // credits and the discount. Both are sums of stored per-row
+            // integers, each row taxed at the rate stamped on it.
             'fee_total_laari' => $fee,
+            'fee_total_mvr' => Laari::of($fee)->formatMvr(),
             'fee_gst_total_laari' => $gst,
+            'fee_gst_total_mvr' => Laari::of($gst)->formatMvr(),
             'line_total_laari' => $lineTotal,
             'credit_applied_laari' => $credit,
             'credit_applied_mvr' => Laari::of($credit)->formatMvr(),
@@ -136,6 +143,12 @@ final readonly class SettlementPreview
                 // appears once, on the settlement that actually exists.
                 'amount_due_laari' => $due,
                 'amount_due_mvr' => Laari::of($due)->formatMvr(),
+                // The bill, itemised, on the screen the merchant reads
+                // before walking to the bank: what the customers earned,
+                // what Manfaa charged, and the tax on that charge.
+                'cashback_total_laari' => $cashback,
+                'fee_total_laari' => $fee,
+                'fee_gst_total_laari' => $gst,
                 'bank_account' => $account === null ? null : [
                     'bank_name' => $account['bank_name'],
                     'account_no' => $account['account_no'],

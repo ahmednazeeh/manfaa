@@ -589,6 +589,8 @@ paths:
                       fee_mvr: '8.85'
                       fee_gst_laari: 0
                       fee_gst_mvr: '0.00'
+                      fee_gst_percent: '0.00'
+                      fee_treatment: on_top
                       occurred_at: '2026-08-15T06:04:22+00:00'
                       received_at: '2026-08-15T06:04:22+00:00'
                 mixedBasket:
@@ -630,6 +632,8 @@ paths:
                       fee_mvr: '6.38'
                       fee_gst_laari: 0
                       fee_gst_mvr: '0.00'
+                      fee_gst_percent: '0.00'
+                      fee_treatment: on_top
                       occurred_at: '2026-08-15T05:30:00+00:00'
                       received_at: '2026-08-15T05:30:01+00:00'
                       lines:
@@ -640,6 +644,8 @@ paths:
                         platform_fee_percent: '0.00'
                         cashback_laari: 0
                         fee_laari: 0
+                        fee_gst_laari: 0
+                        fee_gst_percent: '0.00'
                         priced_by: excluded
                         sort: 0
                       - category: veggies
@@ -649,6 +655,8 @@ paths:
                         platform_fee_percent: '0.75'
                         cashback_laari: 500
                         fee_laari: 188
+                        fee_gst_laari: 0
+                        fee_gst_percent: '0.00'
                         priced_by: category
                         sort: 1
                       - category: null
@@ -658,6 +666,8 @@ paths:
                         platform_fee_percent: '1.00'
                         cashback_laari: 2250
                         fee_laari: 450
+                        fee_gst_laari: 0
+                        fee_gst_percent: '0.00'
                         priced_by: standing
                         sort: 2
                 customRate:
@@ -704,6 +714,8 @@ paths:
                       fee_mvr: '11.80'
                       fee_gst_laari: 0
                       fee_gst_mvr: '0.00'
+                      fee_gst_percent: '0.00'
+                      fee_treatment: on_top
                       occurred_at: '2026-08-15T06:04:22+00:00'
                       received_at: '2026-08-15T06:04:23+00:00'
                 saleTotalAndWallClock:
@@ -755,6 +767,8 @@ paths:
                       fee_mvr: '3.76'
                       fee_gst_laari: 0
                       fee_gst_mvr: '0.00'
+                      fee_gst_percent: '0.00'
+                      fee_treatment: on_top
                       occurred_at: '2026-08-15T06:09:00+00:00'
                       received_at: '2026-08-15T06:09:12+00:00'
                 phoneKeyed:
@@ -799,6 +813,8 @@ paths:
                       fee_mvr: '2.25'
                       fee_gst_laari: 0
                       fee_gst_mvr: '0.00'
+                      fee_gst_percent: '0.00'
+                      fee_treatment: on_top
                       occurred_at: '2026-08-15T06:12:41+00:00'
                       received_at: '2026-08-15T06:12:42+00:00'
                 backdated:
@@ -849,6 +865,8 @@ paths:
                       fee_mvr: '3.75'
                       fee_gst_laari: 0
                       fee_gst_mvr: '0.00'
+                      fee_gst_percent: '0.00'
+                      fee_treatment: on_top
                       occurred_at: '2026-08-01T10:00:00+00:00'
                       received_at: '2026-08-15T06:04:23+00:00'
         '200':
@@ -913,6 +931,8 @@ paths:
                       fee_mvr: '8.85'
                       fee_gst_laari: 0
                       fee_gst_mvr: '0.00'
+                      fee_gst_percent: '0.00'
+                      fee_treatment: on_top
                       occurred_at: '2026-08-15T06:04:22+00:00'
                       received_at: '2026-08-15T06:04:22+00:00'
                 recordedIneligibleSuspended:
@@ -981,6 +1001,8 @@ paths:
                       fee_mvr: '0.00'
                       fee_gst_laari: 0
                       fee_gst_mvr: '0.00'
+                      fee_gst_percent: '0.00'
+                      fee_treatment: on_top
                       occurred_at: '2026-08-15T06:10:00+00:00'
                       received_at: '2026-08-15T06:10:01+00:00'
                 belowMinimum:
@@ -1030,6 +1052,8 @@ paths:
                       fee_mvr: '0.00'
                       fee_gst_laari: 0
                       fee_gst_mvr: '0.00'
+                      fee_gst_percent: '0.00'
+                      fee_treatment: on_top
                       occurred_at: '2026-08-15T06:12:00+00:00'
                       received_at: '2026-08-15T06:12:01+00:00'
         '401':
@@ -1310,6 +1334,8 @@ paths:
                       fee_mvr: '8.85'
                       fee_gst_laari: 0
                       fee_gst_mvr: '0.00'
+                      fee_gst_percent: '0.00'
+                      fee_treatment: on_top
                       occurred_at: '2026-08-14T06:04:22+00:00'
                       received_at: '2026-08-14T06:04:23+00:00'
                 lockedInSettlement:
@@ -1347,6 +1373,8 @@ paths:
                       fee_mvr: '8.85'
                       fee_gst_laari: 0
                       fee_gst_mvr: '0.00'
+                      fee_gst_percent: '0.00'
+                      fee_treatment: on_top
                       occurred_at: '2026-08-14T06:04:22+00:00'
                       received_at: '2026-08-14T06:04:23+00:00'
                 alreadyConfirmed:
@@ -1384,6 +1412,8 @@ paths:
                       fee_mvr: '7.50'
                       fee_gst_laari: 0
                       fee_gst_mvr: '0.00'
+                      fee_gst_percent: '0.00'
+                      fee_treatment: on_top
                       occurred_at: '2026-08-10T05:00:00+00:00'
                       received_at: '2026-08-10T05:00:01+00:00'
         '401':
@@ -3618,6 +3648,8 @@ components:
       - platform_fee_percent
       - cashback_laari
       - fee_laari
+      - fee_gst_laari
+      - fee_gst_percent
       - priced_by
       - sort
       properties:
@@ -3644,7 +3676,39 @@ components:
         cashback_laari:
           $ref: '#/components/schemas/LaariAmount'
         fee_laari:
-          $ref: '#/components/schemas/LaariAmount'
+          allOf:
+          - $ref: '#/components/schemas/LaariAmount'
+          description: 'Manfaa''s NET fee on this line — the tax, if any, is
+
+            `fee_gst_laari` beside it. The transaction''s `fee_laari` is the
+
+            sum of these.
+
+            '
+        fee_gst_laari:
+          allOf:
+          - $ref: '#/components/schemas/LaariAmount'
+          description: 'GST on THIS line''s fee, rounded at the line (§4: round at the
+
+            line, then sum), so the transaction''s `fee_gst_laari` is exactly
+
+            the sum of these and an itemised receipt adds up. `0` on every
+
+            sale priced before GST was switched on, which is every sale so
+
+            far.
+
+            '
+        fee_gst_percent:
+          allOf:
+          - $ref: '#/components/schemas/PercentString'
+          description: 'The GST rate STAMPED on this line when it was priced — frozen,
+
+            like every other rate here. `"0.00"` while the platform charges
+
+            no GST.
+
+            '
         priced_by:
           type: string
           enum:
@@ -3728,6 +3792,8 @@ components:
       - fee_mvr
       - fee_gst_laari
       - fee_gst_mvr
+      - fee_gst_percent
+      - fee_treatment
       - occurred_at
       - received_at
       properties:
@@ -3855,9 +3921,76 @@ components:
         fee_mvr:
           $ref: '#/components/schemas/MvrString'
         fee_gst_laari:
-          $ref: '#/components/schemas/LaariAmount'
+          allOf:
+          - $ref: '#/components/schemas/LaariAmount'
+          description: 'The GST charged on Manfaa''s platform fee — a tax collected on
+
+            MIRA''s behalf, never revenue. `fee_laari` is always Manfaa''s NET
+
+            charge and this is always the tax on it, so the merchant owes
+
+            `cashback_laari + fee_laari + fee_gst_laari` under either
+
+            treatment. `0` on every sale priced before GST was switched on,
+
+            which is every sale so far.
+
+            '
         fee_gst_mvr:
           $ref: '#/components/schemas/MvrString'
+        fee_gst_percent:
+          allOf:
+          - $ref: '#/components/schemas/PercentString'
+          description: 'The GST rate this sale was priced at, FROZEN at creation exactly
+
+            as `cashback_rate_percent` and `platform_fee_percent` are.
+
+            Enabling GST, changing the rate or switching the treatment
+
+            prices NEW sales only — nothing ever reaches back into a sale a
+
+            merchant already holds a receipt for. `"0.00"` means no tax
+
+            applied, which is the identity under both treatments.
+
+            '
+        fee_treatment:
+          type: string
+          enum:
+          - on_top
+          - inclusive
+          description: 'Which side of the fee the tax sat on when this sale was priced,
+
+            frozen with the rate above.
+
+
+            `on_top` — the tax was ADDED to the quoted fee: `fee_laari` is
+
+            the full quoted fee and the merchant owes it plus
+
+            `fee_gst_laari`.
+
+
+            `inclusive` — the tax was carved OUT of the quoted fee:
+
+            `fee_laari` is the quoted fee LESS the tax, the merchant owes
+
+            the same total as they would untaxed, and Manfaa''s own revenue
+
+            absorbs the tax. Note that under this treatment
+
+            `platform_fee_percent` (the gross quoted rate) does NOT multiply
+
+            out to `fee_laari` — it multiplies out to `fee_laari +
+
+            fee_gst_laari`.
+
+
+            Either way: the merchant owes `cashback_laari + fee_laari +
+
+            fee_gst_laari`.
+
+            '
         occurred_at:
           type: string
           format: date-time

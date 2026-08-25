@@ -83,6 +83,10 @@ final class OutstandingSummary
         $total['payable_mvr'] = Laari::of($total['payable_laari'])->formatMvr();
         $total['cashback_mvr'] = Laari::of($total['cashback_laari'])->formatMvr();
         $total['fee_mvr'] = Laari::of($total['fee_laari'])->formatMvr();
+        // Broken out beside the fee rather than folded into it (owner,
+        // 2026-08-24): the fee is Manfaa's charge, the GST is a tax on that
+        // charge, and payable_laari is the two plus the cashback.
+        $total['fee_gst_mvr'] = Laari::of($total['fee_gst_laari'])->formatMvr();
 
         return [
             'as_of' => $now->toIso8601String(),

@@ -13,6 +13,7 @@ use App\Domain\Notifications\NotificationTemplateKey;
 use App\Domain\Platform\RateNotPricedException;
 use App\Domain\Platform\TierScheduleService;
 use App\Domain\Promotions\PromotionResolver;
+use App\Domain\Tax\TaxPolicy;
 use App\Models\Customer;
 use App\Models\Merchant;
 use App\Models\MerchantRate;
@@ -130,6 +131,7 @@ final readonly class CreditRecorder
         private TierScheduleService $schedules,
         private PromotionResolver $promotions,
         private NotificationService $notifications,
+        private TaxPolicy $taxes,
     ) {}
 
     /**
@@ -201,8 +203,19 @@ final readonly class CreditRecorder
             ? $standingBp
             : $this->assertOverridable($merchant, $branchId, $eligible, $occurredAt, $standingBp, $overrideRateBp);
 
+        // The GST terms IN FORCE NOW, frozen onto this row exactly as
+        // rate_bp and fee_bp are. Read once, before the transaction opens:
+        // a sale is priced under the terms that applied when it was
+        // recorded, and a superadmin flipping the switch mid-sale must not
+        // be able to price half a basket each way.
+        //
+        // OFF today, and off is the identity — split() at 0 bp returns the
+        // fee untouched with no tax — so every figure below is byte-identical
+        // to what it was before this parameter existed.
+        $tax = $this->taxes->current();
+
         try {
-            return DB::transaction(function () use ($merchant, $actor, $origin, $customer, $invoiceNo, $eligible, $saleAmount, $occurredAt, $now, $branchId, $idempotencyKey, $baseBp, $zeroed, $reason, $backdated, $lines): Transaction {
+            return DB::transaction(function () use ($merchant, $actor, $origin, $customer, $invoiceNo, $eligible, $saleAmount, $occurredAt, $now, $branchId, $idempotencyKey, $baseBp, $zeroed, $reason, $backdated, $lines, $tax): Transaction {
                 $priced = null;
 
                 if ($lines === null) {
@@ -216,7 +229,14 @@ final readonly class CreditRecorder
                     $rateBp = $result->rateBp;
                     $feeBp = $result->feeBp;
                     $cashbackLaari = $zeroed ? 0 : $result->cashbackLaari;
-                    $feeLaari = $zeroed ? 0 : $result->feeLaari;
+
+                    // The priced fee is split into what Manfaa keeps and
+                    // what it owes MIRA. On_top leaves the fee alone and
+                    // adds the tax (the merchant owes more); inclusive
+                    // carves the tax out of the fee (the merchant owes the
+                    // same, our revenue drops). A zeroed row splits zero,
+                    // which is zero both ways.
+                    [$feeLaari, $feeGstLaari] = $tax->split($zeroed ? 0 : $result->feeLaari);
                 } else {
                     // Lined credit: per-line §4 pricing; totals = SUM of the
                     // stored line integers, never recomputed on aggregates.
@@ -235,11 +255,17 @@ final readonly class CreditRecorder
                         consultPromotions: ! $zeroed,
                     );
 
+                    // GST is applied PER LINE, so the row totals below stay
+                    // the exact sum of the stored line integers (§4) — the
+                    // header can never disagree with its own lines.
+                    $priced = $priced->withFeeTax($tax);
+
                     $promotionId = $zeroed ? null : $priced->promotionId;
                     $rateBp = $priced->rowRateBp;
                     $feeBp = $priced->rowFeeBp;
                     $cashbackLaari = $zeroed ? 0 : $priced->cashbackTotal();
                     $feeLaari = $zeroed ? 0 : $priced->feeTotal();
+                    $feeGstLaari = $zeroed ? 0 : $priced->feeGstTotal();
                 }
 
                 $transaction = Transaction::query()->create([
@@ -256,8 +282,15 @@ final readonly class CreditRecorder
                     'rate_bp' => $rateBp,
                     'fee_bp' => $feeBp,
                     'cashback_laari' => $cashbackLaari,
+                    // NET of GST, always — the tax rides in fee_gst_laari
+                    // and the merchant owes the sum of the three.
                     'fee_laari' => $feeLaari,
-                    'fee_gst_laari' => 0,
+                    'fee_gst_laari' => $feeGstLaari,
+                    // FROZEN AT CREATION, exactly like rate_bp/fee_bp above:
+                    // enabling GST, changing the rate or switching the
+                    // treatment prices NEW sales only. Nothing ever reaches
+                    // back into a row a merchant already holds a receipt for.
+                    ...$tax->stamp(),
                     'state' => TransactionState::Tracked,
                     'reason_code' => $reason,
                     // Permanent property of the row, not a transient
@@ -283,6 +316,8 @@ final readonly class CreditRecorder
                             'fee_bp' => $line->feeBp,
                             'cashback_laari' => $zeroed ? 0 : $line->cashbackLaari,
                             'fee_laari' => $zeroed ? 0 : $line->feeLaari,
+                            'fee_gst_bp' => $line->feeGstBp,
+                            'fee_gst_laari' => $zeroed ? 0 : $line->feeGstLaari,
                             'priced_by' => $line->pricedBy,
                             'sort' => $line->sort,
                         ]);

@@ -10,6 +10,7 @@ use App\Domain\Money\Percent;
 use App\Domain\Platform\FeeTierScheduleResolver;
 use App\Domain\Platform\RateNotPricedException;
 use App\Domain\Platform\TierScheduleService;
+use App\Domain\Tax\TaxPolicy;
 use App\Domain\Webhooks\WebhookDispatcher;
 use App\Domain\Webhooks\WebhookEvents;
 use App\Http\Controllers\Controller;
@@ -59,8 +60,41 @@ class RateController extends Controller
             'data' => [
                 'current' => RateResource::forRate($this->currentRate($merchant, $now)),
                 'pending' => RateResource::forRate($this->pendingRate($merchant, $now)),
+                'tax' => $this->taxTerms(),
             ],
         ]);
+    }
+
+    /**
+     * The GST terms a sale recorded RIGHT NOW would be stamped with — the
+     * one forward-looking figure on this endpoint, and the reason it is
+     * here at all.
+     *
+     * Every other number the rate endpoint publishes describes a sale that
+     * already exists. The till's cost estimate does not: it quotes what the
+     * merchant is about to owe, and under `on_top` that is cashback + fee +
+     * GST. Without these two fields the quote is systematically short by
+     * the tax from the moment a superadmin throws the switch — a runtime
+     * flip with no deploy behind it, so the estimate cannot wait for one.
+     *
+     * `on_top` — add ceil(fee × rate / 10000) to the quote.
+     * `inclusive` — add nothing: the tax is already inside the quoted fee
+     * (`platform_fee_percent` is the GROSS rate under that treatment).
+     *
+     * "0.00" is the platform today, and it means no tax under either
+     * treatment — the identity, exactly as FeeTax::split() defines it.
+     *
+     * @return array{gst_rate_percent: string, fee_treatment: string}
+     */
+    private function taxTerms(): array
+    {
+        $tax = app(TaxPolicy::class)->current();
+
+        return [
+            // PLAN §1 wire format: a 2-decimal percent string, never bp.
+            'gst_rate_percent' => Percent::format($tax->rateBp),
+            'fee_treatment' => $tax->treatment->value,
+        ];
     }
 
     public function store(Request $request, WebhookDispatcher $webhooks, FeeTierScheduleResolver $feeTiers, TierScheduleService $schedules): JsonResponse
@@ -212,6 +246,7 @@ class RateController extends Controller
             'data' => [
                 'current' => RateResource::forRate($this->currentRate($merchant, CarbonImmutable::now('UTC'))),
                 'pending' => RateResource::forRate($this->pendingRate($merchant, CarbonImmutable::now('UTC'))),
+                'tax' => $this->taxTerms(),
             ],
             // §4 tier-cliff data: fee before/after and all-in cost, so the
             // panel can warn (e.g. 499 → 500: +0.01pp cashback, +0.26pp

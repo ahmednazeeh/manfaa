@@ -473,13 +473,17 @@ class _PreviewBreakdownCardState extends State<PreviewBreakdownCard> {
                 feeDiscountLaari: discount?.feeDiscountLaari ?? 0,
               ),
             ),
-            MoneyRow(
-              label: l10n.payableGst,
-              child: DiscountedFeeAmount(
-                feeLaari: preview.feeGstTotalLaari,
-                feeDiscountLaari: discount?.gstReliefLaari ?? 0,
+            // Manfaa's charge and the tax on it are two lines, never one
+            // blended number — and while GST does not apply the line is
+            // ABSENT, not a row of MVR 0.00 (owner, 2026-08-24).
+            if (preview.feeGstTotalLaari > 0)
+              MoneyRow(
+                label: l10n.payableGst,
+                child: DiscountedFeeAmount(
+                  feeLaari: preview.feeGstTotalLaari,
+                  feeDiscountLaari: discount?.gstReliefLaari ?? 0,
+                ),
               ),
-            ),
             if (discount != null && preview.discountLaari > 0) ...[
               const Divider(height: Gap.lg),
               MoneyRow(
@@ -533,6 +537,142 @@ class _PreviewBreakdownCardState extends State<PreviewBreakdownCard> {
 // Payment instructions (PLAN §1 receipt-first)
 // ---------------------------------------------------------------------------
 
+/// What the figure on a transfer screen is MADE OF: the customers' cashback,
+/// Manfaa's own fee, the GST on that fee — three separate figures, never one
+/// blended number — and the two reductions the server already applied, so
+/// the lines reconcile to the amount above them.
+///
+/// Every field is a server integer. Nothing here derives a tax, applies a
+/// rate or nets anything: the card only NAMES what the preview priced.
+class OwedBreakdown {
+  const OwedBreakdown({
+    required this.cashbackLaari,
+    required this.feeLaari,
+    required this.feeGstLaari,
+    this.discountLaari = 0,
+    this.discountRatePercent,
+    this.creditAppliedLaari = 0,
+  });
+
+  /// Straight off a priced preview. The itemised bill the server publishes
+  /// on `payment_instructions` is preferred; a server that predates it
+  /// still answers the same three totals at the top level, so the merchant
+  /// sees the split either way.
+  factory OwedBreakdown.fromPreview(SettlementPreviewData preview) {
+    final instructions = preview.paymentInstructions;
+    final published =
+        instructions.cashbackTotalLaari != 0 ||
+        instructions.feeTotalLaari != 0 ||
+        instructions.feeGstTotalLaari != 0;
+
+    return OwedBreakdown(
+      cashbackLaari: published
+          ? instructions.cashbackTotalLaari
+          : preview.cashbackTotalLaari,
+      feeLaari: published ? instructions.feeTotalLaari : preview.feeTotalLaari,
+      feeGstLaari: published
+          ? instructions.feeGstTotalLaari
+          : preview.feeGstTotalLaari,
+      discountLaari: preview.discountLaari,
+      discountRatePercent: preview.discount?.ratePercent,
+      creditAppliedLaari: preview.creditAppliedLaari,
+    );
+  }
+
+  final int cashbackLaari;
+  final int feeLaari;
+
+  /// Zero whenever GST does not apply — the platform has it off, or every
+  /// row in the batch was priced before it came in. The line is then not
+  /// drawn at all.
+  final int feeGstLaari;
+
+  /// The prompt-payment discount ALREADY subtracted from the amount due,
+  /// with the rate it was granted at.
+  final int discountLaari;
+  final String? discountRatePercent;
+
+  /// The §7 reversal credit already netted off.
+  final int creditAppliedLaari;
+
+  /// False when the server published no split (a created settlement's
+  /// instructions carry none, and a remainder is a part-payment no split
+  /// describes) — the card then shows the amount alone rather than an
+  /// itemisation nobody priced.
+  bool get itemised =>
+      cashbackLaari != 0 || feeLaari != 0 || feeGstLaari != 0;
+}
+
+/// The itemised bill under the amount: what the customers earned, what
+/// Manfaa charged, the tax on that charge, and the reductions — each on its
+/// own line, each a server integer.
+class _OwedLines extends StatelessWidget {
+  const _OwedLines({required this.breakdown});
+
+  final OwedBreakdown breakdown;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final l10n = context.l10n;
+    final muted = theme.colorScheme.onSurfaceVariant;
+
+    Widget row(String label, int laari, {Color? color}) => Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: theme.textTheme.bodySmall?.copyWith(color: muted),
+            ),
+          ),
+          const SizedBox(width: Gap.sm),
+          MoneyText(
+            laari,
+            style: theme.textTheme.bodySmall?.copyWith(color: color),
+          ),
+        ],
+      ),
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          l10n.amountCoversTitle.toUpperCase(),
+          style: theme.textTheme.labelSmall?.copyWith(
+            color: muted,
+            letterSpacing: 0.6,
+          ),
+        ),
+        const SizedBox(height: Gap.xs),
+        row(l10n.payableCashback, breakdown.cashbackLaari),
+        row(l10n.payableFee, breakdown.feeLaari),
+        if (breakdown.feeGstLaari > 0)
+          row(l10n.payableGst, breakdown.feeGstLaari),
+        if (breakdown.discountLaari > 0)
+          row(
+            l10n.discountRow(
+              breakdown.discountRatePercent == null
+                  ? ''
+                  : trimRatePercent(breakdown.discountRatePercent!),
+            ),
+            -breakdown.discountLaari,
+            color: theme.colorScheme.secondary,
+          ),
+        if (breakdown.creditAppliedLaari > 0)
+          row(
+            l10n.creditAppliedRow,
+            -breakdown.creditAppliedLaari,
+            color: ManfaaColors.green,
+          ),
+      ],
+    );
+  }
+}
+
 /// Where to send the transfer, what to send, and what to quote. Every value
 /// the merchant retypes carries a copy button; when nothing is configured
 /// the details are absent — never invented — and the merchant is told to
@@ -544,6 +684,7 @@ class PaymentInstructionsCard extends StatelessWidget {
     super.key,
     required this.instructions,
     required this.amountDueLaari,
+    this.breakdown,
     this.selectedAccountId,
     this.onSelectAccount,
     this.referenceNote,
@@ -551,6 +692,12 @@ class PaymentInstructionsCard extends StatelessWidget {
 
   final SettlementInstructions instructions;
   final int amountDueLaari;
+
+  /// What that amount is made of, when the server priced a split for it.
+  /// Null on the screens where there is none to show — a wallet top-up is
+  /// the merchant's own money, and a settlement remainder is a part-payment
+  /// no itemisation describes.
+  final OwedBreakdown? breakdown;
   final int? selectedAccountId;
   final ValueChanged<int>? onSelectAccount;
 
@@ -656,6 +803,10 @@ class PaymentInstructionsCard extends StatelessWidget {
             ],
           ),
         ),
+        if (breakdown != null && breakdown!.itemised) ...[
+          const SizedBox(height: Gap.md),
+          _OwedLines(breakdown: breakdown!),
+        ],
         const SizedBox(height: Gap.md),
         // Before the receipt lands there IS no settlement, so there is no
         // reference to quote — saying so beats quoting a number the next

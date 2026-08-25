@@ -4,6 +4,7 @@ import {
   bpToPercentString,
   CreateMerchantStaffResponseSchema,
   dataWrapped,
+  FeeTreatmentSchema,
   MerchantAuthUserResponseSchema,
   MerchantAuthUserSchema,
   MerchantStaffResponseSchema,
@@ -119,6 +120,25 @@ export const RateWindowSchema = RateDescriptionSchema.extend({
 export type RateWindow = z.infer<typeof RateWindowSchema>;
 
 /**
+ * The GST terms a sale recorded RIGHT NOW would be stamped with — the one
+ * FORWARD-LOOKING thing this endpoint publishes, and the only reason the
+ * panel can quote a cost before a sale exists.
+ *
+ * Every other GST figure the panel reads is the tax STAMPED on a row that
+ * already happened (`fee_gst_laari`, `fee_gst_percent`), which is right for
+ * a receipt and useless for an estimate. The pre-record quote has no row to
+ * read, so it prices from the live policy — exactly as the server will a
+ * second later.
+ *
+ * `"0.00"` is the platform today and means no tax under either treatment.
+ */
+export const MerchantTaxTermsSchema = z.object({
+  gst_rate_percent: PercentSchema,
+  fee_treatment: FeeTreatmentSchema,
+});
+export type MerchantTaxTerms = z.infer<typeof MerchantTaxTermsSchema>;
+
+/**
  * The standing rate as the panel sees it: the currently effective window
  * plus any scheduled (not-yet-applied) change. Either side is null when no
  * such window exists.
@@ -126,6 +146,7 @@ export type RateWindow = z.infer<typeof RateWindowSchema>;
 export const MerchantRateSchema = z.object({
   current: RateWindowSchema.nullable(),
   pending: RateWindowSchema.nullable(),
+  tax: MerchantTaxTermsSchema,
 });
 export type MerchantRate = z.infer<typeof MerchantRateSchema>;
 

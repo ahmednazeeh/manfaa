@@ -340,6 +340,22 @@
       }
     }
   },
+  "previewGst": "ފީގެ ޖީއެސްޓީ ({rate})",
+  "@previewGst": {
+    "placeholders": {
+      "rate": {
+        "type": "String"
+      }
+    }
+  },
+  "previewGstIncluded": "ފީގައި ހިމެނޭ ޖީއެސްޓީ ({rate})",
+  "@previewGstIncluded": {
+    "placeholders": {
+      "rate": {
+        "type": "String"
+      }
+    }
+  },
   "previewYouPay": "ތިޔަ ދައްކަވާ ({rate})",
   "@previewYouPay": {
     "placeholders": {
@@ -528,6 +544,7 @@
   "pickerApplyCta": "މި ޚިޔާރުކުރެއްވުން ބޭނުންކުރައްވާ",
   "awaitingSettlementChip": "ސެޓްލްމަންޓްގެ އިންތިޒާރުގައި",
   "feeShort": "ފީ",
+  "gstShort": "ޖީއެސްޓީ",
   "discountRow": "އަވަހަށް ދެއްކުމުގެ ޑިސްކައުންޓް ({rate})",
   "discountAdvisoryNote": "ކަށަވަރުވާނީ ސްލިޕް ހުށަހަޅުއްވުމުންނެވެ. އޭގެ ކުރިން ވިޔަފާރިއަކަށް {days} ދުވަސް ފުރިއްޖެނަމަ ފުރިހަމަ ފީ ދައްކަވަންޖެހޭނެއެވެ.",
   "creditAppliedRow": "ކްރެޑިޓް ކެނޑިފައި",
@@ -546,6 +563,7 @@
   "settlePreviewFailed": "މި ޚިޔާރުކުރެއްވުމުގެ އަގު ނުހޯދުނު.",
   "payBankTitle": "ސީދާ މި އަދަދު ޓްރާންސްފަރކުރައްވާ",
   "amountToTransfer": "ޓްރާންސްފަރކުރައްވަންވީ އަދަދު",
+  "amountCoversTitle": "މި އަދަދުގައި ހިމެނެނީ",
   "referenceLabel": "ޕޭމަންޓް ރެފަރެންސް",
   "referenceFinalNote": "ޓްރާންސްފަރގައި މި ރެފަރެންސް ލިޔުއްވާ — ފައިސާ ދެނެގަންނާނީ މިއިންނެވެ.",
   "transferToLabel": "ފައިސާ ފޮނުއްވަންވީ",

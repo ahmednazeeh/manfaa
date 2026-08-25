@@ -780,6 +780,10 @@ class _IncludedTransactions extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 4),
+                    // Manfaa's fee and the GST on it are TWO lines whenever
+                    // GST applies (owner, 2026-08-24) — the blended number
+                    // that used to sit here told the merchant neither. With
+                    // no GST on the row the tax line is absent entirely.
                     Text(
                       l10n.feeShort,
                       style: theme.textTheme.labelSmall?.copyWith(
@@ -787,11 +791,26 @@ class _IncludedTransactions extends StatelessWidget {
                       ),
                     ),
                     MoneyText(
-                      row.feeLaari + row.feeGstLaari,
+                      row.feeLaari,
                       style: theme.textTheme.bodyMedium?.copyWith(
                         fontWeight: FontWeight.w700,
                       ),
                     ),
+                    if (row.feeGstLaari > 0) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        l10n.gstShort,
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                      MoneyText(
+                        row.feeGstLaari,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ],

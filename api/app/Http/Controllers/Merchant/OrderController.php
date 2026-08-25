@@ -191,6 +191,10 @@ final class OrderController extends Controller
             'subtotal_laari' => $suborder->subtotal_laari,
             'cashback_laari' => $suborder->cashback_laari,
             'order_fee_laari' => $suborder->order_fee_laari,
+            // The tax on that fee, so the deduction on screen adds up:
+            // payable = subtotal − cashback − fee − GST. Zero (and absent
+            // from every surface that hides zero tax) until GST is on.
+            'order_fee_gst_laari' => $suborder->order_fee_gst_laari,
             'payable_to_merchant_laari' => $suborder->payable_to_merchant_laari,
             'items' => $suborder->items->map(fn (SuborderItem $item): array => [
                 'id' => $item->id,

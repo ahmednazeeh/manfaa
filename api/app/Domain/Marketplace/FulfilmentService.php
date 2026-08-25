@@ -353,7 +353,13 @@ final readonly class FulfilmentService
         }
 
         $fee = intdiv($fulfilledItems * $suborder->order_fee_bp + 9999, 10000);
-        $gst = 0;
+
+        // The tax on that fee, re-priced from the suborder's OWN stamp —
+        // never from the live tax_settings row. An order placed before GST
+        // was switched on (or under the other treatment) must be re-priced
+        // under the terms the customer and the shop agreed to, exactly as
+        // the frozen fee and cashback rates above are.
+        [$fee, $gst] = $suborder->feeTax()->split($fee);
 
         $suborder->forceFill([
             'items_laari' => $fulfilledItems,

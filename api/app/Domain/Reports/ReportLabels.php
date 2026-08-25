@@ -95,7 +95,12 @@ final class ReportLabels
     {
         return match ($origin) {
             'pos' => 'POS',
-            'manual' => 'Manual',
+            // The `manual` origin is the "Credit Customer" flow in the
+            // merchant APP and panel — a real cashier crediting a real sale
+            // through Manfaa's own software, not a hand-keyed correction.
+            // "Manual" read as the latter, which is the one thing it never
+            // is (owner, 2026-08-24).
+            'manual' => 'Manfaa App',
             'online_link' => 'Online link',
             'api_phone' => 'API (phone)',
             'card_linked' => 'Card linked',

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Domain\Tax\FeeTax;
 use Database\Factories\SuborderFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -36,12 +37,28 @@ class Suborder extends Model
             'order_fee_bp' => 'integer',
             'order_fee_laari' => 'integer',
             'order_fee_gst_laari' => 'integer',
+            'order_fee_gst_bp' => 'integer',
             'payable_to_merchant_laari' => 'integer',
             'accepted_at' => 'immutable_datetime',
             'ready_at' => 'immutable_datetime',
             'delivered_at' => 'immutable_datetime',
             'rejected_at' => 'immutable_datetime',
         ];
+    }
+
+    /**
+     * The GST terms this suborder's ORDER FEE was priced under, as stamped
+     * on it at placement.
+     *
+     * The only correct source for re-deriving the tax on this order fee —
+     * an amendment re-prices from here, never from the live tax_settings
+     * row, which answers a different question (what the platform charges
+     * NOW). A row written before the columns existed answers 0 bp / on_top,
+     * which is the identity and reproduces its stored zero exactly.
+     */
+    public function feeTax(): FeeTax
+    {
+        return FeeTax::of((int) $this->order_fee_gst_bp, $this->order_fee_treatment);
     }
 
     public function order(): BelongsTo

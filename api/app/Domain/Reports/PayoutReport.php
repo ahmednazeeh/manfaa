@@ -248,7 +248,16 @@ final class PayoutReport extends BaseReport
         $sheet = new Sheet(
             self::PAYOUTS,
             [
+                // Printed ONCE per batch in the workbook (see the grouping
+                // below), so a batch reads as one block instead of forty
+                // copies of the same string down a column.
                 ReportColumn::text('batch_ref', 'Payout batch ref'),
+                // The machine key that survives that blanking — an ordinary
+                // VISIBLE column, present on every row, so filtering or
+                // sorting by batch still catches all of it. An autofilter
+                // reads the cells that are there; a hidden column would be
+                // invisible to the reader who needs it most.
+                ReportColumn::int('batch_id', 'Batch key'),
                 ReportColumn::text('customer_code', 'Customer code'),
                 ReportColumn::text('customer', 'Customer'),
                 ReportColumn::text('bank', 'Bank'),
@@ -268,6 +277,9 @@ final class PayoutReport extends BaseReport
                 ReportColumn::text('failure_reason', 'Failure reason'),
             ],
             totals: ['amount_laari', 'paid_laari', 'transaction_count'],
+            // Workbook presentation only — the rows below stay fully
+            // populated, and so does the JSON preview.
+            grouping: new SheetGrouping(keyColumn: 'batch_id', labelColumn: 'batch_ref'),
         );
 
         $paidByItem = $this->paidByItem();
@@ -312,7 +324,20 @@ final class PayoutReport extends BaseReport
                 'customers.customer_code',
                 'payout_batches.reference as batch_ref',
             ])
+            // BY BATCH, THEN BY CUSTOMER WITHIN IT (owner, 2026-08-24) — the
+            // order the grouping needs, and the order a person reads a
+            // payout run in.
+            //
+            // batch_id is a tiebreak on the reference rather than
+            // decoration: a cancelled batch KEEPS its reference (the unique
+            // index spares only the live ones), so production holds three
+            // PB-20260816 rows. Ordering on the reference alone would
+            // interleave two genuinely different batches, and the blocks
+            // would describe money that never moved together.
+            ->orderBy('payout_batches.reference')
             ->orderBy('payout_items.batch_id')
+            ->orderBy('customers.customer_code')
+            ->orderBy('payout_items.customer_name')
             ->orderBy('payout_items.id')
             ->lazy(2000);
 
@@ -331,6 +356,7 @@ final class PayoutReport extends BaseReport
 
             $sheet->push([
                 (string) ($row->batch_ref ?? ''),
+                $batchId,
                 (string) ($row->customer_code ?? ''),
                 $this->personName($row->customer_name),
                 (string) ($row->bank ?? ''),
@@ -366,6 +392,12 @@ final class PayoutReport extends BaseReport
                 // reconciliation chases when a whole batch is unaccounted
                 // for: the transfer sheet a human uploaded, or the API call.
                 ReportColumn::text('reference', 'Payout batch ref'),
+                // The join key the Payouts sheet carries on every row. That
+                // sheet prints `batch_ref` once per block, so a reader who
+                // filters it by anything else (merchant, bank, status) is
+                // left holding this integer — and an integer that appears
+                // in only one of two sheets joins to nothing.
+                ReportColumn::int('batch_id', 'Batch key'),
                 ReportColumn::text('period', 'Period covered'),
                 ReportColumn::date('created_at', 'Created at'),
                 ReportColumn::date('approved_at', 'Approved at'),
@@ -397,6 +429,7 @@ final class PayoutReport extends BaseReport
 
             $sheet->push([
                 (string) $row->reference,
+                (int) $row->id,
                 sprintf('%s to %s', $row->period_start, $row->period_end),
                 $this->at($row->created_at),
                 $this->at($row->approved_at),

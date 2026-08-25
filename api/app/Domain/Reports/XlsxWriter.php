@@ -155,15 +155,39 @@ final class XlsxWriter
 
         $row = $headerRow;
 
+        // Grouped sheets print a repeated label ONCE, at the top of its
+        // block (SheetGrouping). This is the only place that happens: the
+        // rows themselves stay fully populated, so the JSON preview and
+        // every sum are untouched. Comparison is on the machine KEY, never
+        // on the printed label — two batches can share a reference.
+        $keyIndex = $sheet->grouping === null ? null : $sheet->indexOf($sheet->grouping->keyColumn);
+        $labelIndex = $sheet->grouping === null ? null : $sheet->indexOf($sheet->grouping->labelColumn);
+        $previousKey = null;
+        $isFirstRow = true;
+
         foreach ($sheet->rows() as $values) {
             $row++;
+
+            $repeatsGroup = false;
+
+            if ($keyIndex !== null && $labelIndex !== null) {
+                $key = $values[$keyIndex] ?? null;
+                // A null key groups with nothing: "unknown" is not a batch.
+                $repeatsGroup = ! $isFirstRow && $key !== null && $key === $previousKey;
+                $previousKey = $key;
+                $isFirstRow = false;
+            }
 
             foreach ($sheet->columns as $index => $column) {
                 $this->writeCell(
                     $worksheet,
                     Coordinate::stringFromColumnIndex($index + 1).$row,
                     $column->type,
-                    $values[$index] ?? null,
+                    // NULL, not '' and never ' ': writeCell skips a null, so
+                    // the cell is never written at all and Excel holds a
+                    // real blank. A space would sort, filter and defeat
+                    // COUNTBLANK while looking identical on screen.
+                    $repeatsGroup && $index === $labelIndex ? null : ($values[$index] ?? null),
                 );
             }
         }

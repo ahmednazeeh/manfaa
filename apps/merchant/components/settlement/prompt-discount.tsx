@@ -81,33 +81,17 @@ export function PromptDiscountRow({
   );
 }
 
-/**
- * The platform fee with its discount applied: the full fee struck through,
- * the discounted fee beside it. The subtraction is exact integer laari on two
- * figures the server produced (`fee_total_laari` and the discount's own fee
- * leg) — the panel never applies a rate to anything.
+/*
+ * A `DiscountedFeeAmount` used to live here: the fee struck through with its
+ * discounted figure beside it. It was removed on 2026-08-25 because a card
+ * that prints its fee rows already net of the discount AND a standalone
+ * discount row subtracts the relief twice on screen — the visible column
+ * lands short of the stated amount to transfer by exactly the discount, and
+ * by more once the GST relief joins it. Every merchant surface now prints
+ * the fee and GST GROSS and subtracts the discount once, on its own row:
+ * the settlement wizard, the settlement detail page, and the app's
+ * `_OwedLines`.
  */
-export function DiscountedFeeAmount({
-  feeLaari,
-  feeDiscountLaari,
-}: {
-  feeLaari: number;
-  feeDiscountLaari: number;
-}) {
-  if (feeDiscountLaari <= 0) {
-    return <MoneyText laari={feeLaari} />;
-  }
-
-  return (
-    <span className="flex items-center gap-2">
-      <MoneyText
-        laari={feeLaari}
-        className="text-muted-foreground line-through"
-      />
-      <MoneyText laari={feeLaari - feeDiscountLaari} />
-    </span>
-  );
-}
 
 /**
  * The verdict, in a sentence.

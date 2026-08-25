@@ -28,19 +28,25 @@ use Illuminate\Support\Facades\DB;
  *      write-off charges bad debt, it never claws back revenue — LESS the
  *      PLAN §1 prompt-payment discounts already posted, which are a sales
  *      discount on that revenue and reduce it for good.
+ *    - Fee GST Payable = Σ(fee_gst) over everything except reversed, LESS
+ *      the GST leg of those same posted discounts. From the day the switch
+ *      is thrown this account holds money collected on behalf of MIRA, so
+ *      it is derived and checked exactly like revenue beside it — drift
+ *      between what the rows say was charged and what the ledger says is
+ *      owed is the one thing nobody may discover from a tax return.
  *    - APPLIED adjustments (§7 locked-line reversals netted into a batch)
  *      moved the ledger with their application-time credit journal
  *      (applyAdjustmentCredit) while the underlying transaction kept its
  *      state, so the derivation must mirror what that journal touches:
- *      their (negative) fee component offsets revenue outright, and their
- *      receivable credit offsets the receivable until the netted batch's
- *      allocations consume it — credit-first, exactly as
- *      SettlementAllocator funds allocations. The cashback share is
- *      deliberately NOT mirrored into the liability: application charges
- *      Platform-Funded Rewards Expense, never the liability — the
- *      customer's reward survives an adjustment and is released only at
- *      payout, reversal, or write-off, so the liability must keep tracking
- *      the transaction states alone.
+ *      their (negative) fee and fee-GST components offset revenue and the
+ *      tax payable outright, and their receivable credit offsets the
+ *      receivable until the netted batch's allocations consume it —
+ *      credit-first, exactly as SettlementAllocator funds allocations. The
+ *      cashback share is deliberately NOT mirrored into the liability:
+ *      application charges Platform-Funded Rewards Expense, never the
+ *      liability — the customer's reward survives an adjustment and is
+ *      released only at payout, reversal, or write-off, so the liability
+ *      must keep tracking the transaction states alone.
  *
  * Every run writes one append-only reconciliation_runs row; a divergent run
  * carries the exact issues found.
@@ -157,7 +163,8 @@ final readonly class Reconciler
                 COALESCE(SUM(cashback_laari) FILTER (
                     WHERE state IN ('tracked', 'awaiting_validation', 'payable_unfunded', 'on_hold', 'confirmed')
                 ), 0) AS liability_laari,
-                COALESCE(SUM(fee_laari) FILTER (WHERE state <> 'reversed'), 0) AS revenue_laari
+                COALESCE(SUM(fee_laari) FILTER (WHERE state <> 'reversed'), 0) AS revenue_laari,
+                COALESCE(SUM(fee_gst_laari) FILTER (WHERE state <> 'reversed'), 0) AS fee_tax_laari
                 SQL)
             ->first();
 
@@ -167,32 +174,44 @@ final readonly class Reconciler
         // Rewards Expense, not the liability — no liability mirror exists.
         $applied = DB::table('adjustments')
             ->where('state', 'applied')
-            ->selectRaw('COALESCE(SUM(fee_laari), 0) AS fee_laari')
+            ->selectRaw('COALESCE(SUM(fee_laari), 0) AS fee_laari, COALESCE(SUM(fee_gst_laari), 0) AS fee_gst_laari')
             ->first();
 
         // PLAN §1 prompt-payment discounts already POSTED (they post as
         // lines allocate, never at submit). Each one gave up fee revenue and
         // credited the receivable by the same laari, so revenue must be
-        // derived net of them. Only the fee leg counts here: the GST leg
-        // debits the tax payable, which this run does not derive. The fee leg
+        // derived net of them. Both legs are derived here — the fee leg
+        // offsets revenue, the GST leg offsets the tax payable. The fee leg
         // is re-derived from the batch's own stored integers with the §4
         // ceiling — PostgreSQL's integer division makes (x*bp + 9999)/10000
         // the same expression PromptDiscount computes in PHP — and clamped by
         // both the granted and the posted total, exactly as reliefLegs does.
+        // The GST leg is the REMAINDER of what was posted (reliefLegs fills
+        // the fee leg first and hands the rest to the tax), which is what
+        // the tax-payable derivation below subtracts.
         //
         // The receivable side needs no such term: the discount only ever
         // posts in step with the lines it allocates, so the receivable it
         // credits leaves the derivation at the same instant as the
         // transactions it settled.
         $discounted = DB::selectOne(<<<'SQL'
-            SELECT COALESCE(SUM(LEAST(
-                CASE WHEN COALESCE(discount_rate_bp, 0) > 0
-                     THEN (fee_total_laari * discount_rate_bp + 9999) / 10000
-                     ELSE discount_laari
-                END,
-                discount_laari,
-                discount_posted_laari
-            )), 0) AS fee_laari
+            SELECT
+                COALESCE(SUM(LEAST(
+                    CASE WHEN COALESCE(discount_rate_bp, 0) > 0
+                         THEN (fee_total_laari * discount_rate_bp + 9999) / 10000
+                         ELSE discount_laari
+                    END,
+                    discount_laari,
+                    discount_posted_laari
+                )), 0) AS fee_laari,
+                COALESCE(SUM(discount_posted_laari - LEAST(
+                    CASE WHEN COALESCE(discount_rate_bp, 0) > 0
+                         THEN (fee_total_laari * discount_rate_bp + 9999) / 10000
+                         ELSE discount_laari
+                    END,
+                    discount_laari,
+                    discount_posted_laari
+                )), 0) AS fee_gst_laari
             FROM settlements
             WHERE discount_posted_laari > 0
             SQL);
@@ -230,6 +249,19 @@ final readonly class Reconciler
             'revenue' => [
                 'derived_laari' => (int) $derived->revenue_laari + (int) $applied->fee_laari - (int) $discounted->fee_laari,
                 'ledger_laari' => $this->balances->naturalBalance(AccountCode::PlatformFeeRevenue),
+            ],
+            // The tax collected on Manfaa's own fee, owed to MIRA. Derived
+            // by exactly the same shape as revenue, because it moves in
+            // exactly the same places: accrual credits it, a reversal debits
+            // it back out, an applied adjustment refunds its (negative)
+            // stored share, and a posted prompt discount gives up the GST
+            // leg of the relief. Write-off is deliberately absent — it
+            // charges the whole margin to bad debt and never touches 2300
+            // (§14: the GST reversal question is still open), so a written
+            // off row keeps contributing its tax to both sides.
+            'fee_tax' => [
+                'derived_laari' => (int) $derived->fee_tax_laari + (int) $applied->fee_gst_laari - (int) $discounted->fee_gst_laari,
+                'ledger_laari' => $this->balances->naturalBalance(AccountCode::FeeTaxPayable),
             ],
         ];
     }

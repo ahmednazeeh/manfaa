@@ -346,6 +346,18 @@ export type TransactionState = z.infer<typeof TransactionStateSchema>;
  * admin approves a missing-transaction claim — it is a real value of the
  * transactions.origin CHECK constraint, so it must live here or a single
  * claim-originated row would fail the response parse and blank the screen.
+ *
+ * These are MACHINE keys and every surface labels them itself (each app's
+ * own `lib/labels.ts`). One label is worth knowing about because the server
+ * now prints it too: `manual` is the sale a merchant typed into the Manfaa
+ * app rather than one a till pushed, and every surface renders it
+ * "Manfaa App" — the superadmin reports
+ * (App\Domain\Reports\ReportLabels::origin), the admin panel
+ * (apps/admin/lib/labels.ts) and the merchant panel
+ * (apps/merchant/locales/{en,dv}.json → `labels.origin.manual`), owner
+ * 2026-08-24. One row, one name, on every screen an operator reads side by
+ * side: a surface that renames it is naming the same origin something else
+ * in the same conversation — align the label maps, never this enum.
  */
 export const TransactionOriginSchema = z.enum([
   "pos",
@@ -356,6 +368,30 @@ export const TransactionOriginSchema = z.enum([
   "claim",
 ]);
 export type TransactionOrigin = z.infer<typeof TransactionOriginSchema>;
+
+/**
+ * GST ON THE PLATFORM FEE (owner, 2026-08-24) — which side of Manfaa's fee
+ * the tax sits on. A platform-wide policy, but STAMPED onto every
+ * transaction at creation, so a later switch can never re-price a sale that
+ * was already quoted: read it off the row (`Transaction.fee_treatment`),
+ * never off the current tax settings, whenever you are explaining a sale.
+ *
+ *   on_top     the quoted fee is exclusive of tax. The merchant owes
+ *              cashback + fee + GST, so the bill goes UP by the tax and
+ *              Manfaa's fee income is unchanged.
+ *   inclusive  the quoted fee already contained the tax. The merchant owes
+ *              exactly what they always did and the GST is carved OUT of
+ *              Manfaa's own revenue.
+ *
+ * In BOTH cases `fee_laari` is Manfaa's NET charge and `fee_gst_laari` is
+ * the tax on it, and the merchant owes cashback + fee + GST. The treatment
+ * says how those two numbers were arrived at — never add the GST twice.
+ */
+export const FeeTreatmentSchema = z.enum(["on_top", "inclusive"]);
+export type FeeTreatment = z.infer<typeof FeeTreatmentSchema>;
+
+/** The treatments in policy order, for a radio group or a route guard. */
+export const FEE_TREATMENTS = FeeTreatmentSchema.options;
 
 /**
  * Every `reason_code` the API writes onto a transaction row or one of its
@@ -483,6 +519,18 @@ export const TransactionLineSchema = z.object({
   platform_fee_percent: PercentSchema,
   cashback_laari: z.number().int(),
   fee_laari: z.number().int(),
+  /**
+   * The GST on THIS line's fee, and the rate it was taxed at — computed per
+   * line, ceiling, so the lines always sum to the transaction's own totals
+   * (a header-level computation can disagree by a laari). `fee_laari` above
+   * is always NET of this. "0.00" and 0 while GST is switched off.
+   *
+   * There is no per-line `fee_treatment`: one transaction is priced under
+   * one treatment, and a second copy on every line could only ever
+   * disagree. Read `Transaction.fee_treatment`.
+   */
+  fee_gst_laari: z.number().int(),
+  fee_gst_percent: PercentSchema,
   priced_by: TransactionLinePricedBySchema,
   sort: z.number().int(),
 });
@@ -515,6 +563,16 @@ export const TransactionSchema = z.object({
   cashback_laari: z.number().int(),
   fee_laari: z.number().int(),
   fee_gst_laari: z.number().int(),
+  /**
+   * The GST terms FROZEN on this sale (owner, 2026-08-24) — the rate it was
+   * actually taxed at and which side of the fee the tax sat on, never the
+   * platform's current settings. `fee_laari` is Manfaa's NET charge and
+   * `fee_gst_laari` the tax on it, whichever treatment applied; the store
+   * owes cashback + fee + GST. "0.00" / "on_top" on every row priced while
+   * GST was switched off, which is every row today.
+   */
+  fee_gst_percent: PercentSchema,
+  fee_treatment: FeeTreatmentSchema,
   /**
    * PLAN §1 "Backdated credits": the sale was credited outside the merchant's
    * validation window, so it never sat in the refund window — it is payable
@@ -946,6 +1004,15 @@ export const SettlementSchema = z.object({
   amount_received_laari: z.number().int(),
   cashback_total_mvr: z.string(),
   fee_total_mvr: z.string(),
+  /**
+   * The tax on the fee, as its own display string (owner, 2026-08-24) —
+   * beside `fee_total_mvr`, never folded into it. Manfaa's charge and the
+   * government's tax on that charge are two facts, and the batch owes
+   * cashback + fee + GST. A batch legitimately spans rows priced under
+   * different regimes, so no single rate is quoted here: this is the sum of
+   * the stored per-line integers.
+   */
+  fee_gst_total_mvr: z.string(),
   amount_due_mvr: z.string(),
   amount_received_mvr: z.string(),
   due_at: z.string().nullable(),

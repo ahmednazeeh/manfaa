@@ -167,6 +167,12 @@ const _previewFixture = {
       // 2026-08-18) — the server sends none and the model reads null.
       'amount_due_laari': 2712,
       'amount_due_mvr': '27.12',
+      // The bill itemised on the transfer screen (2026-08-24): what the
+      // customers earned, what Manfaa charged, and the tax on that charge —
+      // the three totals BEFORE the credit and the discount.
+      'cashback_total_laari': 2000,
+      'fee_total_laari': 750,
+      'fee_gst_total_laari': 0,
       'bank_account': {
         'bank_name': 'bml',
         'account_no': '7730000123456',
@@ -494,6 +500,19 @@ void main() {
       final instructions = preview.paymentInstructions;
       expect(instructions.reference, isNull);
       expect(instructions.amountDueLaari, 2712);
+      // The itemisation the transfer screen prints. Manfaa's fee and the
+      // tax on it are SEPARATE integers — never one blended number — and
+      // the three sum to line_total, not to the amount due (credit and
+      // discount come off after).
+      expect(instructions.cashbackTotalLaari, 2000);
+      expect(instructions.feeTotalLaari, 750);
+      expect(instructions.feeGstTotalLaari, 0);
+      expect(
+        instructions.cashbackTotalLaari +
+            instructions.feeTotalLaari +
+            instructions.feeGstTotalLaari,
+        preview.lineTotalLaari,
+      );
       expect(instructions.bankAccount?.bankName, 'bml');
       expect(instructions.bankAccounts, hasLength(2));
       expect(instructions.bankAccounts.first.id, 1);
@@ -512,6 +531,64 @@ void main() {
       // The [] key is what PHP parses back into an array.
       expect(request.uri.query, contains('transaction_ids%5B%5D=61'));
       expect(request.uri.query, contains('transaction_ids%5B%5D=62'));
+    });
+
+    test('GST on: fee and tax stay two integers all the way down', () {
+      final data = (_previewFixture['data'] as Map).cast<String, dynamic>();
+      // The same batch under an 8% on-top regime: fee 750 → tax
+      // ceil(750 × 800 / 10000) = 60, so the merchant owes 2810 and the
+      // relief is 38 off the fee plus ceil(60 × 38 / 750) = 4 off its tax.
+      final taxed = Map<String, dynamic>.from(data)
+        ..['fee_gst_total_laari'] = 60
+        ..['line_total_laari'] = 2810
+        ..['amount_due_before_discount_laari'] = 2810
+        ..['amount_due_laari'] = 2768
+        ..['discount_laari'] = 42
+        ..['discount'] = {
+          ...(data['discount'] as Map).cast<String, dynamic>(),
+          'discount_laari': 42,
+          'gst_relief_laari': 4,
+        }
+        ..['payment_instructions'] = {
+          ...(data['payment_instructions'] as Map).cast<String, dynamic>(),
+          'amount_due_laari': 2768,
+          'fee_gst_total_laari': 60,
+        };
+
+      final preview = SettlementPreviewData.fromJson(taxed);
+
+      expect(preview.feeTotalLaari, 750);
+      expect(preview.feeGstTotalLaari, 60);
+      expect(preview.discount!.gstReliefLaari, 4);
+      final instructions = preview.paymentInstructions;
+      expect(instructions.feeTotalLaari, 750);
+      expect(instructions.feeGstTotalLaari, 60);
+      expect(
+        instructions.cashbackTotalLaari +
+            instructions.feeTotalLaari +
+            instructions.feeGstTotalLaari -
+            preview.discountLaari -
+            preview.creditAppliedLaari,
+        instructions.amountDueLaari,
+      );
+    });
+
+    test('instructions without the itemisation read zero, never invented', () {
+      final data = (_previewFixture['data'] as Map).cast<String, dynamic>();
+      final older = Map<String, dynamic>.from(data)
+        ..['payment_instructions'] = {
+          'amount_due_laari': 2712,
+          'bank_accounts': <Object>[],
+          'needs_configuration': true,
+        };
+
+      final instructions =
+          SettlementPreviewData.fromJson(older).paymentInstructions;
+
+      expect(instructions.amountDueLaari, 2712);
+      expect(instructions.cashbackTotalLaari, 0);
+      expect(instructions.feeTotalLaari, 0);
+      expect(instructions.feeGstTotalLaari, 0);
     });
 
     test('a missing discount block parses as null, never invented', () {

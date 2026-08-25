@@ -3,6 +3,8 @@
 namespace App\Models;
 
 use App\Domain\Cashback\TransactionState;
+use App\Domain\Tax\FeeTax;
+use App\Domain\Tax\FeeTreatment;
 use Database\Factories\TransactionFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -33,6 +35,11 @@ class Transaction extends Model
             'cashback_laari' => 'integer',
             'fee_laari' => 'integer',
             'fee_gst_laari' => 'integer',
+            // The GST terms this sale was priced under, frozen at creation
+            // beside rate_bp/fee_bp. Reports and amendments read THESE, never
+            // the live tax_settings row.
+            'fee_gst_bp' => 'integer',
+            'fee_treatment' => FeeTreatment::class,
             'state' => TransactionState::class,
             'backdated' => 'boolean',
             'occurred_at' => 'immutable_datetime',
@@ -41,6 +48,21 @@ class Transaction extends Model
             'due_at' => 'immutable_datetime',
             'confirmed_at' => 'immutable_datetime',
         ];
+    }
+
+    /**
+     * The GST terms this row was priced under, as stamped on it.
+     *
+     * The ONLY correct source for anything that re-derives tax on this sale
+     * — an amendment, a receipt, a report. Reading the live tax_settings row
+     * instead would answer a different question (what the platform charges
+     * NOW) and would re-price a sale the merchant already holds a receipt
+     * for. A row written before the columns existed answers 0 bp / on_top,
+     * which is the identity and reproduces its stored zero exactly.
+     */
+    public function stampedFeeTax(): FeeTax
+    {
+        return FeeTax::of((int) $this->fee_gst_bp, $this->fee_treatment);
     }
 
     public function merchant(): BelongsTo

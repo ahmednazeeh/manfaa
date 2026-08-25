@@ -12,10 +12,13 @@ import {
   ClaimStateSchema,
   dataWrapped,
   FeePercentInputSchema,
+  FeeTreatmentSchema,
+  MAX_CASHBACK_BP,
   MerchantChannelSchema,
   MerchantStatusSchema,
   paginated,
   PayoutBatchSchema,
+  percentInput,
   PercentSchema,
   PromotionSchema,
   SettlementPaymentSchema,
@@ -32,13 +35,14 @@ import {
  * merchant standing and notices, reconciliation runs, the payout batch
  * lifecycle (Phase 1), the claims queue and promotions read model (Phase 3),
  * and the platform settings domain — platform bank accounts, the §4 fee tier
- * schedule, typed platform settings, superadmin-only admin account
- * management, island zoning (polygon CRUD with server-side branch
- * assignment), and the superadmin reporting surface (cashback / payouts /
- * earnings, previewed as JSON and exported as .xlsx). All amounts sent and
- * received are integer laari; all RATES
- * travel as 2-decimal percent strings (PLAN §1 wire format) — basis points
- * are the API's internal representation and never appear in a body.
+ * schedule, typed platform settings, the GST-on-the-platform-fee registration
+ * and switch, superadmin-only admin account management, island zoning
+ * (polygon CRUD with server-side branch assignment), and the superadmin
+ * reporting surface (cashback / payouts / earnings, previewed as JSON and
+ * exported as .xlsx). All amounts sent and received are integer laari; all
+ * RATES travel as 2-decimal percent strings (PLAN §1 wire format) — basis
+ * points are the API's internal representation and never appear in a body,
+ * the GST rate included.
  */
 
 interface RequestOptions {
@@ -1645,6 +1649,160 @@ export function updateAdminPlatformSetting(
 }
 
 // ---------------------------------------------------------------------------
+// GST on the platform fee (owner, 2026-08-24)
+// ---------------------------------------------------------------------------
+
+/**
+ * What a tax invoice must be able to name before the platform may charge
+ * tax. These are REQUEST KEYS, echoed back in `missing_identity_fields` so a
+ * form can highlight the exact inputs the switch is waiting on.
+ */
+export const TaxIdentityFieldSchema = z.enum([
+  "gst_tin",
+  "gst_business_name",
+  "gst_activity_number",
+]);
+export type TaxIdentityField = z.infer<typeof TaxIdentityFieldSchema>;
+
+/** The three in form order. */
+export const TAX_IDENTITY_FIELDS = TaxIdentityFieldSchema.options;
+
+/**
+ * The GST rate's own bounds, in basis points — the mirror of the server's
+ * `PercentRate::between(0, Percent::MAX_BP)`.
+ *
+ * ZERO IS LEGAL and is not the same thing as disabled: it is what a rate
+ * looks like while the registration is pending. The ceiling is the same
+ * structural 20.00% bound §4 puts on every other rate on the platform.
+ */
+export const GST_RATE_MIN_BP = 0;
+export const GST_RATE_MAX_BP = MAX_CASHBACK_BP;
+
+/** The rate as a REQUEST may send it: "8", "8.5", "8.00" or 8.5. */
+export const GstRatePercentInputSchema = percentInput(
+  GST_RATE_MIN_BP,
+  GST_RATE_MAX_BP,
+);
+export type GstRatePercentInput = z.infer<typeof GstRatePercentInputSchema>;
+
+/**
+ * The platform's tax registration and the one switch that starts charging.
+ * Its own endpoint rather than a typed platform setting because a setting is
+ * an integer and a TIN, a business name and an activity number are strings.
+ *
+ * FOUR THINGS A PANEL BUILT ON THIS MUST GET RIGHT:
+ *
+ *  1. READ by any admin, WRITE by a SUPERADMIN only (403 otherwise) — the
+ *     same gating the platform's bank accounts carry, for a stronger reason:
+ *     this switch changes what every merchant owes on every sale from the
+ *     moment it is thrown.
+ *  2. ENABLING NEEDS AN IDENTITY. A GST-registered platform issues tax
+ *     invoices, and an invoice that cannot name the registrant is not one.
+ *     `missing_identity_fields` is what the switch is still waiting on and
+ *     `can_enable` is the same answer as a boolean — say it on the screen
+ *     BEFORE the 422 does. The identity and the switch may travel in ONE
+ *     request; the server judges the row as it would be saved.
+ *  3. NOTHING HERE TOUCHES AN EXISTING SALE. Every transaction carries the
+ *     rate and treatment it was priced under (`fee_gst_percent`,
+ *     `fee_treatment`), and every report, settlement and journal reads that
+ *     stamp. Enabling, re-rating and switching treatment price NEW sales
+ *     only — a confirm dialog that promises otherwise is lying.
+ *  4. ENABLING ANNOUNCES ITSELF. The transition to enabled fires the
+ *     `gst_now_applies` notification to every active merchant's settlement
+ *     staff, ONCE. A rate edit, a treatment switch and re-saving an already
+ *     enabled row send nothing — so a panel must not offer "re-notify".
+ *
+ * `enabled_at` is stamped on the TRANSITION, not on every save: it is the
+ * instant the platform started charging tax, which is the first thing an
+ * auditor asks for. A later rate edit leaves it exactly where it is.
+ */
+export const TaxSettingsSchema = z.object({
+  gst_enabled: z.boolean(),
+  /**
+   * PLAN §1 wire format: a 2-decimal percent STRING ("8.00"), never basis
+   * points. Keep it a string — parsing it to a number to render it is how a
+   * rate loses a digit; use `percentToBp` only to compare or to drive a
+   * slider.
+   */
+  gst_rate_percent: PercentSchema,
+  /** The three a tax invoice must name. Null until the platform fills them. */
+  gst_tin: z.string().nullable(),
+  gst_business_name: z.string().nullable(),
+  gst_activity_number: z.string().nullable(),
+  fee_treatment: FeeTreatmentSchema,
+  /** English prose from the API; localise off `fee_treatment`, not off this. */
+  fee_treatment_label: z.string(),
+  /** When charging STARTED, stamped on the transition only. Null while off. */
+  enabled_at: z.string().nullable(),
+  /**
+   * Which identity fields are still blank, by their request key — the exact
+   * list the 422 would name. Empty when the switch is free to move.
+   */
+  missing_identity_fields: z.array(TaxIdentityFieldSchema),
+  /** `missing_identity_fields.length === 0`, said as the question a form asks. */
+  can_enable: z.boolean(),
+});
+export type TaxSettings = z.infer<typeof TaxSettingsSchema>;
+
+export const TaxSettingsResponseSchema = dataWrapped(TaxSettingsSchema);
+export type TaxSettingsResponse = z.infer<typeof TaxSettingsResponseSchema>;
+
+/**
+ * GET /api/admin/platform/tax-settings — readable by ANY admin (401 without
+ * an admin session). Answers the single settings row, seeded disabled.
+ */
+export function getAdminTaxSettings(
+  options: RequestOptions = {},
+): Promise<TaxSettingsResponse> {
+  return apiFetch(
+    "/api/admin/platform/tax-settings",
+    TaxSettingsResponseSchema,
+    { signal: options.signal },
+  );
+}
+
+/**
+ * The PATCH body. Every field is optional and only what is SENT is written,
+ * so a form may save the identity alone, flip the switch alone, or do both
+ * at once — the refusal is judged against the resulting row, which is what
+ * makes "fill in the TIN and enable" a single legal request.
+ */
+export const UpdateTaxSettingsRequestSchema = z.object({
+  gst_enabled: z.boolean().optional(),
+  /**
+   * The rate as a request may send it — "8", "8.5", "8.00" or the number 8.5
+   * — bounded 0.00%–20.00% exactly as the server bounds it. ZERO IS LEGAL: it
+   * is what a rate looks like while the registration is pending.
+   */
+  gst_rate_percent: GstRatePercentInputSchema.optional(),
+  gst_tin: z.string().nullable().optional(),
+  gst_business_name: z.string().nullable().optional(),
+  gst_activity_number: z.string().nullable().optional(),
+  fee_treatment: FeeTreatmentSchema.optional(),
+});
+export type UpdateTaxSettingsRequest = z.infer<
+  typeof UpdateTaxSettingsRequestSchema
+>;
+
+/**
+ * PATCH /api/admin/platform/tax-settings — SUPERADMIN only (403 otherwise).
+ * Answers the refreshed row. 422 when the request would leave GST enabled
+ * without the full identity, naming the missing fields in its message; the
+ * same fields are already in `missing_identity_fields` on the read, so a
+ * panel should never need the 422 to know.
+ */
+export function updateAdminTaxSettings(
+  body: UpdateTaxSettingsRequest,
+  options: RequestOptions = {},
+): Promise<TaxSettingsResponse> {
+  return apiFetch(
+    "/api/admin/platform/tax-settings",
+    TaxSettingsResponseSchema,
+    { method: "PATCH", body, signal: options.signal },
+  );
+}
+
+// ---------------------------------------------------------------------------
 // App release gates
 // ---------------------------------------------------------------------------
 
@@ -2909,7 +3067,25 @@ export const ReportHeaderBlockSchema = z.object({
 });
 export type ReportHeaderBlock = z.infer<typeof ReportHeaderBlockSchema>;
 
-/** The primary sheet's head: its title, its columns, and up to 50 rows. */
+/**
+ * The primary sheet's head: its title, its columns, and up to 50 rows.
+ *
+ * ALWAYS FULLY POPULATED. The .xlsx may print a repeated label once per
+ * block — the payouts workbook's Payouts sheet blanks `batch_ref` on every
+ * row after the first of a batch, so a human reading forty rows sees the
+ * reference once instead of forty times — but that blanking happens in the
+ * WORKBOOK WRITER, at the moment a cell is written, and never in the data.
+ * A preview cell is never holed, so no consumer has to back-fill one, and
+ * every column still totals and filters. Render the rows as they arrive.
+ *
+ * That sheet also carries a plain `batch_id` column ("Batch key", type
+ * `int`) beside the reference: it is on EVERY row, so an autofilter catches
+ * all of a batch, and it is what tells two batches apart when a cancelled
+ * one has left its reference in use twice.
+ *
+ * Neither is visible here today — the payouts PRIMARY sheet is Transactions
+ * — but the rule holds for every sheet the preview may name.
+ */
 export const ReportPreviewSheetSchema = z.object({
   sheet: z.string(),
   columns: z.array(ReportColumnSchema),

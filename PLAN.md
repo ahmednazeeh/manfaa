@@ -1553,6 +1553,52 @@ merchant-typed bank ref and the BANK's matched transaction id
 and who matched it. Review: 10 findings, 0 blockers, all fixed. Suite
 1986+ green; 111 report tests.
 
+### GST readiness — DONE (2026-08-25), SHIPS DISABLED
+
+Manfaa is not GST-registered yet, so this is the switch, built and
+proven, waiting to be flipped. `tax_settings` (single row, TransferSetting
+pattern): gst_enabled false, gst_rate_bp 800, gst_tin /
+gst_business_name / gst_activity_number, fee_treatment on_top|inclusive,
+enabled_at. Superadmin screen refuses to enable until all three identity
+fields are filled — a registered platform must be able to identify
+itself on a tax invoice.
+
+The design everything rests on: `fee_laari` is ALWAYS Manfaa's net
+revenue, `fee_gst_laari` is ALWAYS the tax, the merchant always owes
+cashback + fee + GST. on_top adds GST (bill goes up); inclusive carves
+it out of the existing fee (bill unchanged, our revenue drops). Because
+of that, Postings / Reconciler / refreshTotals / PromptDiscount /
+OutstandingSummary / WalletAutoSettler needed NO change — they already
+sum the three columns and credit 4100/2300 separately. The split happens
+in the pricer, ceiling-rounded per LINE so Σ lines == header.
+
+FROZEN, never retroactive: transactions and transaction_lines carry
+fee_gst_bp, and transactions carry the fee_treatment that applied.
+Enabling, re-rating or switching treatment prices NEW sales only —
+tested by enabling, moving the rate, and asserting historical rows and
+their settlements are byte-identical. AmendmentService had a latent bug
+(re-accrued with hardcoded 0 GST) that would have unbalanced an
+amendment under live GST; it now re-prices from the row's own stamp.
+Marketplace order fees were the one fee path the round first missed —
+review caught it; suborders now carry order_fee_gst_bp +
+order_fee_treatment on the same frozen rule. The Reconciler gained a
+FOURTH invariant, fee_tax, so account 2300 can never drift unwatched.
+Merchants get `gst_now_applies` once on the enable transition (not on
+rate edits), and fee/GST read as separate lines across panel, till app
+and the vendor API (OpenAPI updated, with a new SpecContractTest that
+diffs emitted keys against the published spec in both directions).
+
+Same round: payouts workbook groups by batch (ref printed once per
+block, Batch key column on both sheets, blanking lives in XlsxWriter so
+Sheet rows and the JSON preview stay complete); origin 'manual' now
+reads "Manfaa App" in the report, admin and merchant panel alike.
+
+Review: 3 lenses, 20 findings, 0 blockers, all fixed. Suite 2051 green;
+merchant app v1.0.26+27. Deferred by decision: tax INVOICES (settlement
+receipt as a TIN-bearing document) are their own round; and the GST
+announcement has no per-merchant sent-stamp, so a partial fan-out
+failure is unrecoverable — flagged, not decided.
+
 ### Queue (updated 2026-08-17) — the mobile programme
 
 The mobile API round is DONE and reviewed (PLAN-mobile-api.md: M1–M5, two

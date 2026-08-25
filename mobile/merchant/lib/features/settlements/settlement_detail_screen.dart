@@ -400,7 +400,13 @@ class _SummaryCard extends StatelessWidget {
             laari: settlement.cashbackTotalLaari,
           ),
           MoneyRow(label: l10n.payableFee, laari: settlement.feeTotalLaari),
-          MoneyRow(label: l10n.payableGst, laari: settlement.feeGstTotalLaari),
+          // The tax on the fee stands as its own line — and only when the
+          // batch actually carries GST. A row of MVR 0.00 said nothing.
+          if (settlement.feeGstTotalLaari > 0)
+            MoneyRow(
+              label: l10n.payableGst,
+              laari: settlement.feeGstTotalLaari,
+            ),
           // The discount as GRANTED at submit — already inside amount_due,
           // shown as the relief it was, never applied again.
           if (settlement.discountLaari > 0) ...[
@@ -470,6 +476,10 @@ class _LinesCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final l10n = context.l10n;
+    // One column decision for the whole batch, off the batch's own stored
+    // total: with no GST on it there is no tax column at all, and every
+    // line then reads cashback · fee.
+    final showGst = settlement.feeGstTotalLaari > 0;
 
     return ManfaaCard(
       child: Column(
@@ -503,8 +513,10 @@ class _LinesCard extends StatelessWidget {
                         ),
                       const SizedBox(height: 2),
                       Text(
-                        '${l10n.payableCashback} · ${l10n.feeShort} · '
-                        '${l10n.payableGst}',
+                        showGst
+                            ? '${l10n.payableCashback} · ${l10n.feeShort} · '
+                                  '${l10n.gstShort}'
+                            : '${l10n.payableCashback} · ${l10n.feeShort}',
                         style: theme.textTheme.labelSmall?.copyWith(
                           color: theme.colorScheme.onSurfaceVariant,
                         ),
@@ -520,11 +532,13 @@ class _LinesCard extends StatelessWidget {
                             line.feeLaari,
                             style: theme.textTheme.bodySmall,
                           ),
-                          Text(' · ', style: theme.textTheme.bodySmall),
-                          MoneyText(
-                            line.feeGstLaari,
-                            style: theme.textTheme.bodySmall,
-                          ),
+                          if (showGst) ...[
+                            Text(' · ', style: theme.textTheme.bodySmall),
+                            MoneyText(
+                              line.feeGstLaari,
+                              style: theme.textTheme.bodySmall,
+                            ),
+                          ],
                         ],
                       ),
                     ],

@@ -30,12 +30,14 @@ final class Sheet
      * @param  list<ReportColumn>  $columns
      * @param  list<string>  $totals  column keys to SUM in the totals row
      * @param  ?HeaderBlock  $header  prose above the column header; workbook only
+     * @param  ?SheetGrouping  $grouping  print a repeated label once per group; WORKBOOK ONLY — $rows and the preview stay fully populated
      */
     public function __construct(
         public readonly string $title,
         public readonly array $columns,
         public readonly array $totals = [],
         public readonly ?HeaderBlock $header = null,
+        public readonly ?SheetGrouping $grouping = null,
     ) {
         foreach ($totals as $key) {
             $column = $this->column($key);
@@ -45,6 +47,27 @@ final class Sheet
                     'Sheet [%s] cannot total column [%s]: only money and int columns are summable.',
                     $title,
                     $key,
+                ));
+            }
+        }
+
+        if ($grouping !== null) {
+            foreach ([$grouping->keyColumn, $grouping->labelColumn] as $key) {
+                if ($this->column($key) === null) {
+                    throw new InvalidArgumentException(sprintf(
+                        'Sheet [%s] cannot group on column [%s]: it has no such column.',
+                        $title,
+                        $key,
+                    ));
+                }
+            }
+
+            // Blanking the key would defeat the whole point of carrying one:
+            // the filterable column has to be the one that is always there.
+            if ($grouping->keyColumn === $grouping->labelColumn) {
+                throw new InvalidArgumentException(sprintf(
+                    'Sheet [%s] cannot group a column on itself: the machine key must survive the blanking.',
+                    $title,
                 ));
             }
         }
@@ -138,6 +161,11 @@ final class Sheet
     /**
      * The first $limit rows, JSON-ready: dates become ISO-8601 strings and
      * everything else is already a scalar of the type the column declares.
+     *
+     * FULLY POPULATED, always — a grouped sheet's repeated label is blanked
+     * by the workbook writer at render time and never here. A preview is
+     * data a machine reads; a hole in it would be a hole every consumer had
+     * to learn to back-fill.
      *
      * @return list<list<int|string|null>>
      */

@@ -1125,7 +1125,13 @@ class _CreditScreenState extends ConsumerState<CreditScreen> {
           style: theme.textTheme.bodySmall?.copyWith(color: muted),
         );
       } else {
-        body = _buildPreviewRows(l10n, theme, current, active);
+        body = _buildPreviewRows(
+          l10n,
+          theme,
+          current,
+          rateAsync.valueOrNull?.tax ?? const MerchantTaxTerms(),
+          active,
+        );
       }
     }
 
@@ -1145,6 +1151,7 @@ class _CreditScreenState extends ConsumerState<CreditScreen> {
     AppLocalizations l10n,
     ThemeData theme,
     RateWindow current,
+    MerchantTaxTerms tax,
     List<ProductCategory> active,
   ) {
     final muted = theme.colorScheme.onSurfaceVariant;
@@ -1166,6 +1173,14 @@ class _CreditScreenState extends ConsumerState<CreditScreen> {
     String feeLabel;
     String youPayLabel;
 
+    // The GST terms a sale recorded RIGHT NOW would be stamped with. The
+    // quote has no row to read a stamp off — it prices what is ABOUT to
+    // happen — so it prices from the live policy, exactly as the server
+    // will a second later. "0.00" (today) is the identity under both
+    // treatments and leaves every figure below unchanged.
+    final gstRateBp = parsePercentToBp(tax.gstRatePercent) ?? 0;
+    int? gst;
+
     final splitActive = _splitEnabled && _splitRows.isNotEmpty;
     if (splitActive) {
       final estimate = estimateSplit(
@@ -1173,9 +1188,13 @@ class _CreditScreenState extends ConsumerState<CreditScreen> {
         active,
         baseRateBp: baseRateBp,
         baseFeeBp: baseFeeBp,
+        tax: tax,
       );
       cashback = estimate?.cashback;
+      // Already split per line by estimateSplit — `fee` is gross under
+      // `inclusive`, net under `on_top`, exactly as the rows below print it.
       fee = estimate?.fee;
+      gst = estimate?.gst;
       rateLabel = l10n.previewCashback(l10n.previewPerLine);
       feeLabel = l10n.previewFee(l10n.previewPerLine);
       // "You pay" is the sale's total either way — no per-line suffix.
@@ -1189,11 +1208,30 @@ class _CreditScreenState extends ConsumerState<CreditScreen> {
         baseRateBp == null ? '—' : formatBp(baseRateBp),
       );
       feeLabel = l10n.previewFee(baseFeeBp == null ? '—' : formatBp(baseFeeBp));
-      youPayLabel = l10n.previewYouPay(
-        baseRateBp != null && baseFeeBp != null
-            ? formatBp(baseRateBp + baseFeeBp)
-            : '—',
-      );
+      // The all-in percentage covers cashback + fee. Under `on_top` the
+      // bill also carries the tax, which no single rate on this screen
+      // describes — so the suffix goes rather than label a total it no
+      // longer adds up to.
+      youPayLabel = gstRateBp > 0 && !tax.inclusive
+          ? l10n.resultYouPay
+          : l10n.previewYouPay(
+              baseRateBp != null && baseFeeBp != null
+                  ? formatBp(baseRateBp + baseFeeBp)
+                  : '—',
+            );
+    }
+
+    // The quoted fee is GROSS under both treatments — `fee_bp` × the sale,
+    // which is what the rate beside it says. `on_top` ADDS the tax (the
+    // merchant owes more); `inclusive` carves it out (the merchant owes the
+    // same, and the split only says how much of the fee was tax). "You pay"
+    // is cashback + fee + GST either way, matching the recorded result card
+    // laari for laari. A LINED sale was already split per line above.
+    if (!splitActive && fee != null) {
+      final (net, lineGst) = tax.split(fee, gstRateBp);
+      gst = lineGst;
+      // Printed gross under `inclusive`; the tax below is a component of it.
+      fee = tax.inclusive ? net + lineGst : net;
     }
 
     Widget row(String label, int? laari, {bool strong = false}) => Padding(
@@ -1233,10 +1271,21 @@ class _CreditScreenState extends ConsumerState<CreditScreen> {
       children: [
         row(rateLabel, cashback),
         row(feeLabel, fee),
+        // Absent, not MVR 0.00, while the platform charges no tax — the
+        // same rule every other surface follows.
+        if (gst != null && gst > 0)
+          row(
+            tax.inclusive
+                ? l10n.previewGstIncluded(trimRatePercent(tax.gstRatePercent))
+                : l10n.previewGst(trimRatePercent(tax.gstRatePercent)),
+            gst,
+          ),
         Divider(height: Gap.md, color: theme.colorScheme.outlineVariant),
         row(
           youPayLabel,
-          cashback != null && fee != null ? cashback + fee : null,
+          cashback != null && fee != null
+              ? cashback + (tax.inclusive ? fee : fee + (gst ?? 0))
+              : null,
           strong: true,
         ),
         const SizedBox(height: 6),

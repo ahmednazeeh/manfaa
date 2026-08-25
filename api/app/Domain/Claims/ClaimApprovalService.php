@@ -13,6 +13,7 @@ use App\Domain\Cashback\TransactionState;
 use App\Domain\Cashback\TransitionService;
 use App\Domain\Ledger\Postings;
 use App\Domain\Money\Laari;
+use App\Domain\Tax\TaxPolicy;
 use App\Models\AdminUser;
 use App\Models\Claim;
 use App\Models\MerchantRate;
@@ -49,6 +50,7 @@ final readonly class ClaimApprovalService
         private TransitionService $transitions,
         private Postings $postings,
         private TermsResolver $terms,
+        private TaxPolicy $taxes,
     ) {}
 
     public function approve(Claim $claim, AdminUser $admin, ?string $resolutionNote = null): Transaction
@@ -95,6 +97,14 @@ final readonly class ClaimApprovalService
                     $occurredAt,
                 );
 
+                // The GST terms in force at APPROVAL, frozen onto the row
+                // exactly as the till path freezes them. A claim is priced
+                // at the RATE that applied on the purchase date (§5) but
+                // taxed under the regime that applies when the platform
+                // actually bills the fee, which is now.
+                $tax = $this->taxes->current();
+                [$feeLaari, $feeGstLaari] = $tax->split($result->feeLaari);
+
                 $transaction = Transaction::query()->create([
                     'merchant_id' => $merchant->id,
                     'customer_id' => $claim->customer_id,
@@ -109,8 +119,9 @@ final readonly class ClaimApprovalService
                     'rate_bp' => $result->rateBp,
                     'fee_bp' => $result->feeBp,
                     'cashback_laari' => $result->cashbackLaari,
-                    'fee_laari' => $result->feeLaari,
-                    'fee_gst_laari' => 0,
+                    'fee_laari' => $feeLaari,
+                    'fee_gst_laari' => $feeGstLaari,
+                    ...$tax->stamp(),
                     'state' => TransactionState::Tracked,
                     'occurred_at' => $occurredAt,
                     'received_at' => $now,

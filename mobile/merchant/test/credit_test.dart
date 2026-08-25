@@ -70,6 +70,7 @@ void main() {
     List<String> permissions = tillPermissions,
     Size surface = const Size(600, 3000),
     double textScale = 1.0,
+    bool gst = false,
   }) async {
     await tester.binding.setSurfaceSize(surface);
     tester.platformDispatcher.textScaleFactorTestValue = textScale;
@@ -77,7 +78,14 @@ void main() {
     final store = await seededStore(permissions);
     late _TillApi api;
     await tester.pumpWidget(
-      app(store, (s) => api = _TillApi(session: s, permissions: permissions)),
+      app(
+        store,
+        (s) => api = _TillApi(
+          session: s,
+          permissions: permissions,
+          gst: gst,
+        ),
+      ),
     );
     await tester.pumpAndSettle();
     return api;
@@ -561,15 +569,66 @@ void main() {
     expect(find.text('Correct amount'), findsNothing);
     expect(find.text('Cancel sale'), findsNothing);
   });
+
+  // ---- GST on a recorded sale --------------------------------------------
+  //
+  // "You pay" has ALWAYS included the tax on Manfaa's fee; until now it
+  // never said so. The recorded-credit card names the fee and the tax as
+  // two lines, at the rate STAMPED on the row — and shows no tax line at
+  // all on a sale that carries none.
+
+  Future<void> recordASale(WidgetTester tester) async {
+    await enterCode(tester, '374230');
+    await tester.enterText(field(1), 'INV-GST');
+    await tester.enterText(field(2), '1,000.00');
+    await tester.pumpAndSettle();
+    await tapSubmit(tester);
+  }
+
+  testWidgets('the recorded sale names the fee and its GST separately', (
+    tester,
+  ) async {
+    await pumpTill(tester, gst: true);
+    await recordASale(tester);
+
+    expect(find.text('Cashback recorded'), findsOneWidget);
+    // Manfaa's own charge, and the tax on it at the rate the row was
+    // stamped with — two rows, never one blended number.
+    expect(find.text('Platform fee (0.75%)'), findsOneWidget);
+    expect(find.text('MVR\u00A07.50'), findsOneWidget);
+    expect(find.text('GST on fee (8%)'), findsOneWidget);
+    expect(find.text('MVR\u00A00.60'), findsOneWidget);
+    // And the total the till has always shown: 20.00 + 7.50 + 0.60.
+    expect(find.text('MVR\u00A028.10'), findsOneWidget);
+  });
+
+  testWidgets('a GST-free sale shows no tax line on the recorded card', (
+    tester,
+  ) async {
+    await pumpTill(tester);
+    await recordASale(tester);
+
+    expect(find.text('Cashback recorded'), findsOneWidget);
+    expect(find.textContaining('GST on fee'), findsNothing);
+  });
 }
 
 /// Fake MerchantApi over the real session store: the till endpoints answer
 /// canned data, createCredit records the exact composition it was handed,
 /// and [offline] simulates the dead-network path the queue exists for.
 class _TillApi extends MerchantApi {
-  _TillApi({required super.session, required this.permissions});
+  _TillApi({
+    required super.session,
+    required this.permissions,
+    this.gst = false,
+  });
 
   final List<String> permissions;
+
+  /// GST switched on at the platform, 8% on top of the fee: a 1,000.00 sale
+  /// prices cashback 20.00 and fee 7.50, so the tax is
+  /// ceil(750 × 800 / 10000) = 60 laari and the merchant owes 28.10.
+  final bool gst;
 
   var offline = false;
   final credits = <Map<String, Object?>>[];
@@ -694,8 +753,10 @@ class _TillApi extends MerchantApi {
         'effective_cashback_rate_percent': cashbackRatePercent ?? '2.00',
         'effective_platform_fee_percent': '0.75',
         'cashback_laari': (eligibleLaari * 2 + 99) ~/ 100 ~/ 100 * 100,
-        'fee_laari': 0,
-        'fee_gst_laari': 0,
+        'fee_laari': gst ? 750 : 0,
+        'fee_gst_laari': gst ? 60 : 0,
+        'fee_gst_percent': gst ? '8.00' : '0.00',
+        'fee_treatment': 'on_top',
         'occurred_at': occurredAt ?? '2026-08-17T10:00:00+05:00',
         'received_at': '2026-08-17T10:00:01+05:00',
       }),

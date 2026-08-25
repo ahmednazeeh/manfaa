@@ -7,6 +7,7 @@ import { format } from 'date-fns';
 import { Plus } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { MerchantSettlement } from '@/lib/api';
+import { anyGst } from '@/lib/gst';
 import { useSettlements } from '@/lib/queries';
 import { can } from '@/lib/roles';
 import { Button } from '@/components/ui/button';
@@ -82,6 +83,16 @@ export default function SettlementsPage() {
   const [page, setPage] = useState(1);
   const settlements = useSettlements(page);
 
+  // Manfaa's fee and the GST on it are two columns, never one blended
+  // "fees" figure — and the tax column only exists once a batch on this
+  // page carries tax. The list is server-paginated, so the page IS every
+  // row this table can draw. See lib/gst.ts.
+  const showGst = anyGst(
+    (settlements.data?.data ?? []).map(
+      (settlement) => settlement.fee_gst_total_laari,
+    ),
+  );
+
   return (
     <div className="container">
       <Toolbar>
@@ -137,8 +148,13 @@ export default function SettlementsPage() {
                         {t('settlement.colCashback')}
                       </TableHead>
                       <TableHead className="text-end">
-                        {t('settlement.colFees')}
+                        {t('settlement.colFee')}
                       </TableHead>
+                      {showGst && (
+                        <TableHead className="text-end">
+                          {t('settlement.colGst')}
+                        </TableHead>
+                      )}
                       <TableHead className="text-end">
                         {t('settlement.colAmountDue')}
                       </TableHead>
@@ -172,13 +188,13 @@ export default function SettlementsPage() {
                           <MoneyText laari={settlement.cashback_total_laari} />
                         </TableCell>
                         <TableCell className="text-end">
-                          <MoneyText
-                            laari={
-                              settlement.fee_total_laari +
-                              settlement.fee_gst_total_laari
-                            }
-                          />
+                          <MoneyText laari={settlement.fee_total_laari} />
                         </TableCell>
+                        {showGst && (
+                          <TableCell className="text-end">
+                            <MoneyText laari={settlement.fee_gst_total_laari} />
+                          </TableCell>
+                        )}
                         <TableCell className="text-end font-medium">
                           <MoneyText laari={settlement.amount_due_laari} />
                         </TableCell>
