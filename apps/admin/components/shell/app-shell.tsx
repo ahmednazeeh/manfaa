@@ -1,12 +1,11 @@
 'use client';
 
-import { ComponentType, ReactNode, useEffect, useState } from 'react';
+import { ReactNode, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
-  listHolds,
-  listStoreReviews,
-  listWalletTopUps,
+  getAdminAttention,
+  type DashboardAttentionQueue,
 } from '@manfaa/api-client';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -18,6 +17,7 @@ import {
   FileSpreadsheet,
   HandCoins,
   Landmark,
+  LayoutDashboard,
   LogOut,
   Map as MapIcon,
   PiggyBank,
@@ -28,12 +28,11 @@ import {
   Store,
   Users,
   Wallet,
-  type LucideIcon,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { adminLogout } from '@/lib/admin-auth';
 import { apiErrorMessage } from '@/lib/api-error';
-import { listChangeRequests } from '@/lib/change-requests';
+import { ADMIN_ATTENTION_QUERY_KEY } from '@/lib/dashboard';
 import { adminRoleLabel } from '@/lib/labels';
 import { cn } from '@/lib/utils';
 import { useMarketplaceEnabled } from '@/hooks/use-marketplace-enabled';
@@ -55,24 +54,41 @@ import { ThemeToggle } from '@/components/shell/theme-toggle';
 
 
 /**
- * How many self-signed-up stores are waiting in the approval queue. Shares
- * its query key (and therefore its cache entry) with the /store-reviews
- * pending tab; polled so the badge stays honest while an admin works
- * elsewhere. Renders nothing while loading or at zero.
+ * EVERY NAV BADGE, ONE POLL.
+ *
+ * The four badges below are four numbers out of the SAME six the dashboard's
+ * attention panel shows, so they read the same endpoint on the same shared
+ * query key rather than each fetching the LIST behind its queue to pull one
+ * scalar off it. That mattered twice over. It was four HTTP round trips and
+ * eight queries a minute for four integers — /holds alone ran a grouped
+ * reason pass, a merchant join and a paginated lateral join so a badge could
+ * read `summary.total`. And four independent timers meant a badge and the
+ * dashboard tile it links to were read at different instants, which is the
+ * one disagreement the attention counts exist to make impossible.
+ *
+ * The landing page seeds this key from the payload it already fetched
+ * (see the dashboard page), so on that screen there is one poll, not five.
+ *
+ * Nothing renders at zero: a wall of permanent grey zeros in the nav trains
+ * the reader to stop seeing the badges at all.
  */
-function PendingStoreReviewsBadge() {
-  const query = useQuery({
-    queryKey: ['admin', 'store-reviews', 'pending_review'],
-    queryFn: ({ signal }) =>
-      listStoreReviews({ state: 'pending_review' }, { signal }),
+function useAttentionCounts() {
+  return useQuery({
+    queryKey: ADMIN_ATTENTION_QUERY_KEY,
+    queryFn: ({ signal }) => getAdminAttention({ signal }),
     refetchInterval: 60_000,
     staleTime: 30_000,
   });
+}
 
-  const count = query.data?.meta.counts.pending_review ?? 0;
+function QueueBadge({ queue }: { queue: DashboardAttentionQueue }) {
+  const query = useAttentionCounts();
+  const count = query.data?.[queue] ?? 0;
+
   if (count === 0) {
     return null;
   }
+
   return (
     <Badge variant="warning" size="sm" shape="circle">
       {count}
@@ -80,86 +96,39 @@ function PendingStoreReviewsBadge() {
   );
 }
 
-/**
- * How many LIVE stores are waiting on a decision about what they want to
- * change (MR9). Sits beside the store-approval badge on purpose: the two
- * queues are one job, and a change nobody looks at is a store stuck serving
- * a claim it has already stopped standing behind. Shares its query key with
- * the /change-requests default view (pending, all kinds). Nothing at zero.
- */
-function PendingChangeRequestsBadge() {
-  const query = useQuery({
-    queryKey: ['admin', 'change-requests', 'pending', 'all'],
-    queryFn: ({ signal }) =>
-      listChangeRequests({ status: 'pending' }, { signal }),
-    refetchInterval: 60_000,
-    staleTime: 30_000,
-  });
-
-  const count = query.data?.meta.counts.pending ?? 0;
-  if (count === 0) {
-    return null;
-  }
-  return (
-    <Badge variant="warning" size="sm" shape="circle">
-      {count}
-    </Badge>
-  );
+/** Merchant wallet top-up claims the bank-history verifier could not settle. */
+function PendingTopUpsBadge() {
+  return <QueueBadge queue="wallet_top_ups_pending" />;
 }
 
 /**
- * How many transactions are sitting under fraud or dispute review. A hold is
- * inert — the customer's cashback stays Pending and the store's settlement
- * clock does not run — so the count belongs where an admin sees it without
- * going looking. Counts EVERY hold, not the filtered page, so the badge stays
- * honest while somebody works inside a filter. Nothing renders at zero.
+ * Transactions sitting under fraud or dispute review. A hold is inert — the
+ * customer's cashback stays Pending and the store's settlement clock does not
+ * run — so the count belongs where an admin sees it without going looking.
  */
 function OpenHoldsBadge() {
-  const query = useQuery({
-    queryKey: ['admin', 'holds', 'count'],
-    queryFn: ({ signal }) => listHolds({}, { signal }),
-    refetchInterval: 60_000,
-    staleTime: 30_000,
-  });
+  return <QueueBadge queue="holds_open" />;
+}
 
-  const count = query.data?.summary.total ?? 0;
-  if (count === 0) {
-    return null;
-  }
-  return (
-    <Badge variant="warning" size="sm" shape="circle">
-      {count}
-    </Badge>
-  );
+/** Self-signed-up stores waiting in the approval queue. */
+function PendingStoreReviewsBadge() {
+  return <QueueBadge queue="store_reviews_pending" />;
 }
 
 /**
- * How many merchant wallet top-up claims the bank-history verifier could
- * not settle on its own and a person still has to read. Shares its query
- * key with the /wallet-top-ups default view (pending, page 1); polled so it
- * stays honest while an admin works elsewhere. Nothing renders at zero.
+ * LIVE stores waiting on a decision about what they want to change (MR9).
+ * Sits beside the store-approval badge on purpose: the two queues are one
+ * job, and a change nobody looks at is a store stuck serving a claim it has
+ * already stopped standing behind.
  */
-function PendingTopUpsBadge() {
-  const query = useQuery({
-    queryKey: ['admin', 'wallet-top-ups', 'pending', 1],
-    queryFn: ({ signal }) =>
-      listWalletTopUps({ state: 'pending', page: 1 }, { signal }),
-    refetchInterval: 60_000,
-    staleTime: 30_000,
-  });
-
-  const count = query.data?.meta.total ?? 0;
-  if (count === 0) {
-    return null;
-  }
-  return (
-    <Badge variant="warning" size="sm" shape="circle">
-      {count}
-    </Badge>
-  );
+function PendingChangeRequestsBadge() {
+  return <QueueBadge queue="change_requests_pending" />;
 }
 
 const NAV_ITEMS: NavItem[] = [
+  // First, and the panel's landing page: it is the only screen that answers
+  // "what needs me today" without knowing which queue to open first.
+  { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/settlements', label: 'Settlements', icon: Landmark },
   {
     href: '/wallet-top-ups',
@@ -384,7 +353,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     <div className="flex min-h-screen w-full">
       <aside className="hidden w-60 shrink-0 flex-col border-e border-border bg-muted/30 lg:flex">
         <div className="flex h-16 items-center border-b border-border px-5">
-          <Link href="/settlements" className="flex items-center gap-2">
+          <Link href="/dashboard" className="flex items-center gap-2">
             <ManfaaLogo />
             <span className="text-lg font-semibold text-muted-foreground">
               Admin
@@ -399,7 +368,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex h-16 items-center justify-between gap-4 border-b border-border px-5">
           <Link
-            href="/settlements"
+            href="/dashboard"
             className="flex items-center gap-2 lg:hidden"
           >
             <ManfaaLogo />

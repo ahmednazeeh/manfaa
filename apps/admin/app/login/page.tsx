@@ -43,7 +43,9 @@ export default function LoginPage() {
     mutationFn: (body: LoginRequest) => adminLogin(body),
     onSuccess: (response) => {
       queryClient.setQueryData(ADMIN_ME_QUERY_KEY, response);
-      router.replace('/settlements');
+      // Signing in lands on the dashboard — the one screen that says what is
+      // waiting before you have to guess which queue to open.
+      router.replace('/dashboard');
     },
     onError: (error) => {
       setErrorMessage(

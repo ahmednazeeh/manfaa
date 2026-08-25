@@ -10,6 +10,7 @@ use App\Domain\Cashback\TransitionService;
 use App\Domain\Ledger\AccountCode;
 use App\Domain\Ledger\Balances;
 use App\Domain\Money\Laari;
+use App\Domain\Settlement\InsufficientWalletBalanceException;
 use App\Domain\Settlement\SettlementAllocator;
 use App\Domain\Settlement\SettlementBuilder;
 use App\Domain\Settlement\SettlementState;
@@ -20,6 +21,7 @@ use App\Models\AdminUser;
 use App\Models\Merchant;
 use App\Models\MerchantWallet;
 use App\Models\Settlement;
+use Carbon\CarbonImmutable;
 use Database\Seeders\LedgerAccountSeeder;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -248,13 +250,57 @@ it('draws only the DISCOUNTED due when the batch earns the prompt discount', fun
         ->toContain('MVR 83.37');
 });
 
-it('plans against the UNDISCOUNTED sum: a balance short of it settles a shorter prefix, which earns no discount', function (): void {
+/*
+ * THE DISCOUNT BAND (owner-approved fix, 2026-08-25). PromptFixture::fourLines
+ * prices at 11,825 undiscounted, 3,225 of which is platform fee, so the
+ * PLAN §1 discount is ceiling(3,225 x 500bp) = 162 and the whole board costs
+ * 11,663. Between those two numbers sits the band the planner used to fall
+ * into: enough to clear everything at the price it would actually be charged,
+ * not enough line by line — and dropping one line withdrew the discount from
+ * the rest.
+ */
+
+it('clears the WHOLE board when the balance covers its discounted due, and earns the discount', function (): void {
     $fixture = PromptFixture::fourLines();
-    // Above the discounted 11,663, below the undiscounted 11,825. The run
-    // does not guess at submit's answer: it takes the three lines it can
-    // afford outright (9,625) and leaves the fourth, which withdraws the
-    // discount (the batch no longer clears the board).
+    // Above the discounted 11,663, below the undiscounted 11,825 — the band.
     autoSettleTopUp($fixture->merchant, 11_700);
+
+    $settlement = app(WalletAutoSettler::class)->settle($fixture->merchant);
+
+    expect($settlement)->not->toBeNull()
+        ->and($settlement->state)->toBe(SettlementState::Settled)
+        ->and($settlement->lines()->count())->toBe(4)
+        ->and($settlement->discount_laari)->toBe(162)
+        ->and($settlement->discount_reason)->toBe('eligible')
+        ->and($settlement->discount_posted_laari)->toBe(162)
+        ->and($settlement->amount_due_laari)->toBe(11_663)
+        // What actually left the wallet is what submit() priced, never what
+        // the plan estimated.
+        ->and($settlement->amount_received_laari)->toBe(11_663)
+        ->and($fixture->merchant->wallet()->sole()->balance_laari)->toBe(11_700 - 11_663)
+        ->and($this->balances->naturalBalance(AccountCode::PlatformFeeRevenue))->toBe(3_225 - 162)
+        ->and($this->balances->journalsAllBalance())->toBeTrue();
+
+    foreach ($fixture->transactions as $transaction) {
+        expect($transaction->refresh()->state)->toBe(TransactionState::Confirmed);
+    }
+
+    // Nothing is left owing, so there is nothing for the next hour to find.
+    expect(app(SettlementBuilder::class)->eligibleTransactions($fixture->merchant)->count())->toBe(0);
+
+    expect(autoSettleSmsBodies()[0])
+        ->toContain('MVR 116.63')
+        ->toContain('4 sales')
+        ->toContain('MVR 0.37');
+});
+
+it('a balance short of even the DISCOUNTED total still settles a prefix, which earns no discount', function (): void {
+    $fixture = PromptFixture::fourLines();
+    // Below 11,663: no arrangement of the board is affordable whole, so the
+    // run takes the three lines it can pay for outright (9,625) and leaves
+    // the fourth — which withdraws the discount, because the batch no longer
+    // clears everything outstanding.
+    autoSettleTopUp($fixture->merchant, 9_700);
 
     $settlement = app(WalletAutoSettler::class)->settle($fixture->merchant);
 
@@ -263,8 +309,88 @@ it('plans against the UNDISCOUNTED sum: a balance short of it settles a shorter 
         ->and($settlement->discount_laari)->toBe(0)
         ->and($settlement->discount_reason)->toBe('not_all_outstanding')
         ->and($settlement->amount_received_laari)->toBe(9_625)
-        ->and($fixture->merchant->wallet()->sole()->balance_laari)->toBe(11_700 - 9_625)
+        ->and($fixture->merchant->wallet()->sole()->balance_laari)->toBe(9_700 - 9_625)
         ->and($fixture->transactions[3]->refresh()->state)->toBe(TransactionState::PayableUnfunded)
+        ->and($this->balances->journalsAllBalance())->toBeTrue();
+});
+
+it('settles everything on EXACTLY the discounted total', function (): void {
+    $fixture = PromptFixture::fourLines();
+    autoSettleTopUp($fixture->merchant, 11_663);
+
+    $settlement = app(WalletAutoSettler::class)->settle($fixture->merchant);
+
+    // The boundary itself: the board clears and the wallet empties.
+    expect($settlement)->not->toBeNull()
+        ->and($settlement->lines()->count())->toBe(4)
+        ->and($settlement->discount_laari)->toBe(162)
+        ->and($settlement->discount_reason)->toBe('eligible')
+        ->and($settlement->amount_received_laari)->toBe(11_663)
+        ->and($fixture->merchant->wallet()->sole()->balance_laari)->toBe(0)
+        ->and($this->balances->journalsAllBalance())->toBeTrue();
+});
+
+it('drops to a prefix ONE LAARI below the discounted total', function (): void {
+    $fixture = PromptFixture::fourLines();
+    autoSettleTopUp($fixture->merchant, 11_662);
+
+    $settlement = app(WalletAutoSettler::class)->settle($fixture->merchant);
+
+    // One laari short of the whole board's price: the fourth line waits, and
+    // with it the discount.
+    expect($settlement)->not->toBeNull()
+        ->and($settlement->lines()->count())->toBe(3)
+        ->and($settlement->discount_laari)->toBe(0)
+        ->and($settlement->discount_reason)->toBe('not_all_outstanding')
+        ->and($settlement->amount_received_laari)->toBe(9_625)
+        ->and($fixture->merchant->wallet()->sole()->balance_laari)->toBe(11_662 - 9_625)
+        ->and($fixture->transactions[3]->refresh()->state)->toBe(TransactionState::PayableUnfunded)
+        ->and($this->balances->journalsAllBalance())->toBeTrue();
+});
+
+it('settles everything on EXACTLY the undiscounted total and keeps the relief in the wallet', function (): void {
+    $fixture = PromptFixture::fourLines();
+    // The old planner's happy path: affordable line by line, so the whole
+    // board is chosen without the discount ever being evaluated — and submit
+    // still grants it, so the 162 stays in the wallet.
+    autoSettleTopUp($fixture->merchant, 11_825);
+
+    $settlement = app(WalletAutoSettler::class)->settle($fixture->merchant);
+
+    expect($settlement)->not->toBeNull()
+        ->and($settlement->lines()->count())->toBe(4)
+        ->and($settlement->discount_laari)->toBe(162)
+        ->and($settlement->amount_received_laari)->toBe(11_663)
+        ->and($fixture->merchant->wallet()->sole()->balance_laari)->toBe(162)
+        ->and($this->balances->journalsAllBalance())->toBeTrue();
+});
+
+it('never overdraws when the discount is withdrawn between the plan and the lock', function (): void {
+    $fixture = PromptFixture::fourLines();
+    // In the band: the plan will choose all four lines at 11,663.
+    autoSettleTopUp($fixture->merchant, 11_700);
+
+    // ...and a till POSTs one more payable sale in the gap, so the batch no
+    // longer clears the board and submit() prices it at the full 11,825.
+    $planned = app(WalletAutoSettler::class)->plan($fixture->merchant, 11_700);
+
+    expect($planned)->toHaveCount(4);
+
+    $fixture->addPayable(100_000, CarbonImmutable::parse(PromptFixture::BASE)->addDays(3)->addHour());
+
+    expect(fn () => app(SettlementBuilder::class)->createAndSettleFromWallet($fixture->merchant, Actor::system(), $planned))
+        ->toThrow(InsufficientWalletBalanceException::class);
+
+    // Nothing half-done: no batch, no debit, every line still payable.
+    expect(Settlement::query()->count())->toBe(0)
+        ->and($fixture->merchant->wallet()->sole()->balance_laari)->toBe(11_700);
+
+    foreach ($fixture->transactions as $transaction) {
+        expect($transaction->refresh()->state)->toBe(TransactionState::PayableUnfunded);
+    }
+
+    // And the run itself survives it — one skipped shop, money untouched.
+    expect(app(WalletAutoSettler::class)->run())->toBe(['checked' => 1, 'settled' => 1, 'skipped' => 0])
         ->and($this->balances->journalsAllBalance())->toBeTrue();
 });
 

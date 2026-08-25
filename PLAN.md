@@ -1640,6 +1640,48 @@ v1.0.27+28. Noted, out of scope: Customer\OrderController stamps a
 window the same unconditional way, but no customer surface reads a
 watching flag, so it shows no false progress.
 
+### Admin dashboard + the auto-settle discount band — DONE (2026-08-25)
+
+WALLET AUTO-SETTLE now asks the real pricing path what the WHOLE board
+would cost before falling back to a prefix. The band it fixes: a wallet
+holding enough to clear everything at the DISCOUNTED price still dropped
+a line under the old undiscounted plan, and dropping any line withdraws
+the discount entirely (leavesSomethingBehind → 'not_all_outstanding') —
+so the merchant paid for fewer lines with no discount when they could
+have cleared the board with one. Costs 1 query when the balance covers
+everything outright (unchanged), 3 only when the discount decides it.
+The estimate may be too high, never too low (§7 credits only make a
+batch cheaper), and the one race that can make submit dearer still
+rolls that shop back untouched and lets the run continue — now a test,
+not an assumption. Boundaries pinned at the discounted total, one laari
+below, and the undiscounted total.
+
+ADMIN DASHBOARD is the panel's landing: GET /api/admin/dashboard, one
+call. Attention queues (payment review, wallet top-ups, store reviews,
+change requests, holds, KYB when marketplace is on); AUTO-MATCH HEALTH,
+the owner's reason for the page — watched right now, pending but
+waiting on a human split BY REASON (window_expired / never_watched /
+no_verify_profile / auto_verify_off) via the same BankWatch the
+progress screens use, expired-unmatched in 24h, and the auto-vs-manual
+rate so a degrading matcher shows before it breaks; money (superadmin
+only, keys ABSENT not zeroed for a plain admin) with the preceding
+equal-length window; growth; a daily series charted.
+
+The invariant: the dashboard never disagrees with Reports. Every money
+figure comes from the report class that owns the definition through new
+cheap aggregate methods — no second set of definitions — with
+DashboardReportsAgreementTest asserting equality figure for figure.
+17 queries superadmin / 6 plain admin, flat in data volume.
+
+Review: 11 findings, 0 blockers, all fixed. Best of them: PayoutReport
+scanned every paid event ever recorded, three times per load (fixed
+with a pushed lower bound + a (to_state, created_at) index — O(period)
+now, measured 7.45ms → 1.68ms on an 80k-event fixture); the attention
+tile counted receipts while its screen listed batches; and the chart
+plotted a series whose past points mutate as later receipts match —
+kept the definition (Reports agreement wins) and fixed the labelling to
+say so. Suite 2119 green.
+
 ### Queue (updated 2026-08-17) — the mobile programme
 
 The mobile API round is DONE and reviewed (PLAN-mobile-api.md: M1–M5, two

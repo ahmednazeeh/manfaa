@@ -12,6 +12,7 @@ use App\Models\Merchant;
 use App\Models\MerchantWallet;
 use App\Models\Settlement;
 use App\Models\Transaction;
+use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -33,23 +34,45 @@ use Throwable;
  * line allocation and the money-cache bump all happen in there, exactly
  * once, exactly as they do by hand.
  *
- * WHAT FITS, oldest first. The run walks the merchant's eligible
- * payable_unfunded lines in due_at order and takes the longest PREFIX whose
- * UNDISCOUNTED sum (cashback + fee + fee GST, the stored §4 integers) the
- * balance covers. A prefix, never a skip: a newer line is never settled
- * ahead of an older one the wallet could not afford — the merchant's oldest
- * debt is what the escalation ladder and day-16 suspension measure, so it
- * is what the money goes to. Whatever does not fit stays payable_unfunded
- * for the merchant to top up against or pay by bank, and the next hour
- * looks again.
+ * WHAT FITS. The run walks the merchant's eligible payable_unfunded lines
+ * in due_at order and asks two questions, in this order:
  *
- * The undiscounted sum is the affordability test on purpose. submit() can
- * only make the batch CHEAPER — §7 credits net in, the PLAN §1 prompt
- * discount comes off — so a batch that fits undiscounted always settles,
- * and any relief simply stays in the wallet. Planning against a discounted
- * figure would mean guessing at submit's answer outside the lock it is
- * decided under, and the whole point of the discount design is that only
- * submit's answer moves money.
+ *   1. CAN THE WALLET CLEAR THE WHOLE BOARD AT THE PRICE SUBMIT WILL
+ *      CHARGE? The price is not the sum of the lines: a batch covering
+ *      everything outstanding earns the PLAN §1 prompt-payment discount off
+ *      the platform fee. So the whole candidate set is handed to
+ *      PromptDiscount::evaluate — the same evaluation submit() performs,
+ *      never a second copy of the arithmetic — and if the DISCOUNTED due
+ *      fits the balance, everything settles.
+ *   2. otherwise, the longest oldest-first PREFIX whose UNDISCOUNTED sum
+ *      (cashback + fee + fee GST, the stored §4 integers) the balance
+ *      covers. A prefix, never a skip: a newer line is never settled ahead
+ *      of an older one the wallet could not afford — the merchant's oldest
+ *      debt is what the escalation ladder and day-16 suspension measure, so
+ *      it is what the money goes to. Whatever does not fit stays
+ *      payable_unfunded for the merchant to top up against or pay by bank,
+ *      and the next hour looks again.
+ *
+ * Question 1 exists because dropping ONE line withdraws the discount from
+ * the whole batch (PromptDiscount::leavesSomethingBehind → the batch no
+ * longer clears the board). Planning greedily against the undiscounted sum
+ * therefore had a band — discounted_total <= balance < undiscounted_total —
+ * in which a wallet that could have cleared everything AT THE DISCOUNTED
+ * PRICE instead settled fewer lines and paid full fee on them. The merchant
+ * was punished for the incentive they had earned. Owner-approved fix,
+ * 2026-08-25.
+ *
+ * THE PLAN NEVER OVERDRAWS, and it is submit() that guarantees it rather
+ * than this arithmetic. What leaves the wallet is whatever submit() prices
+ * behind its lock — the discount re-evaluated there, §7 credits netted in
+ * there — and every one of those movements can only make the batch CHEAPER
+ * than the estimate above. The one direction that could make it dearer is
+ * the discount being WITHDRAWN between the plan and the lock (a till POSTs
+ * a sale, midnight ages the oldest line past the window, an admin sets the
+ * rate to 0). Then the debit is refused: InsufficientWalletBalanceException,
+ * this merchant's whole attempt rolled back untouched, logged, and the run
+ * carries on to the next shop — exactly as it already does for a balance
+ * that moved.
  *
  * Idempotent across concurrent runs by the same means the manual path is:
  * the plan reads without locks, and the builder then claims the chosen
@@ -77,6 +100,7 @@ final class WalletAutoSettler
     public function __construct(
         private readonly SettlementBuilder $builder,
         private readonly NotificationService $notifications,
+        private readonly PromptDiscount $discounts,
     ) {}
 
     /**
@@ -209,16 +233,26 @@ final class WalletAutoSettler
     }
 
     /**
-     * The longest oldest-first prefix of the merchant's eligible lines whose
-     * undiscounted due the balance covers. Reads without locks — the builder
-     * takes them, in its own order, when it claims these ids.
+     * What this balance settles: the WHOLE eligible board when its
+     * discounted due fits, otherwise the longest oldest-first prefix whose
+     * undiscounted due it covers. Reads without locks — the builder takes
+     * them, in its own order, when it claims these ids.
+     *
+     * ONE query in the ordinary case (the walk below), and two more only
+     * when the board did not fit outright — the discount evaluation reads
+     * the candidate rows and asks whether anything payable is left off the
+     * batch. A merchant whose wallet covers everything pays exactly what
+     * this planner cost before the band was fixed.
      *
      * @return list<int>
      */
     public function plan(Merchant $merchant, int $balance): array
     {
-        $ids = [];
+        $all = [];
+        $prefix = [];
+        $undiscounted = 0;
         $cumulative = 0;
+        $prefixStillGrowing = true;
 
         $lines = $this->builder->eligibleTransactions($merchant)
             ->orderBy('due_at')
@@ -227,17 +261,63 @@ final class WalletAutoSettler
 
         /** @var Transaction $line */
         foreach ($lines as $line) {
+            $id = (int) $line->id;
             $due = (int) $line->cashback_laari + (int) $line->fee_laari + (int) $line->fee_gst_laari;
 
-            if ($cumulative + $due > $balance) {
-                break;
+            $all[] = $id;
+            $undiscounted += $due;
+
+            // The prefix stops at the FIRST line that does not fit and never
+            // resumes: a cheaper younger line behind it must not jump the
+            // queue (§7 oldest-first).
+            if ($prefixStillGrowing && $cumulative + $due <= $balance) {
+                $cumulative += $due;
+                $prefix[] = $id;
+
+                continue;
             }
 
-            $cumulative += $due;
-            $ids[] = (int) $line->id;
+            $prefixStillGrowing = false;
         }
 
-        return $ids;
+        // The whole board fits at its undiscounted price, so it fits at any
+        // price submit() can reach. Nothing to evaluate — and this is the
+        // common case, kept at exactly one query.
+        if (count($prefix) === count($all)) {
+            return $prefix;
+        }
+
+        // The band: too dear line by line, affordable as the batch it would
+        // actually be priced as.
+        if ($this->discountedDue($merchant, $all, $undiscounted) <= $balance) {
+            return $all;
+        }
+
+        return $prefix;
+    }
+
+    /**
+     * What the whole candidate board would cost, asked of the real pricing
+     * path: PromptDiscount::evaluate against those very lines, capped the
+     * way submit() caps it (a discount never hands money back).
+     *
+     * This is an ESTIMATE of submit's answer and is deliberately allowed to
+     * be too HIGH — §7 credit adjustments net in at createDraft and reduce
+     * the due further, and a batch cheaper than planned simply leaves more
+     * in the wallet. It is never allowed to be too LOW by anything this
+     * class controls; see the class docblock for the one race that can, and
+     * what happens then.
+     *
+     * @param  list<int>  $ids
+     */
+    private function discountedDue(Merchant $merchant, array $ids, int $undiscounted): int
+    {
+        $discount = $this->discounts
+            ->evaluate($merchant, $ids, CarbonImmutable::now('UTC'))
+            ->cappedTo($undiscounted)
+            ->discountLaari;
+
+        return $undiscounted - $discount;
     }
 
     /**

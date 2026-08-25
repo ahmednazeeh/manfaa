@@ -3345,3 +3345,448 @@ export function reportSummaryList(
       typeof entry === "object" && entry !== null && !Array.isArray(entry),
   );
 }
+
+// ---------------------------------------------------------------------------
+// The admin landing dashboard (owner, 2026-08-25)
+// ---------------------------------------------------------------------------
+
+/**
+ * GET /api/admin/dashboard — the console's landing page in ONE request.
+ *
+ * One endpoint, one payload, one instant. A dashboard assembled from eight
+ * parallel fetches answers from eight different moments and its tiles
+ * disagree with each other about a settlement that matched while they were
+ * in flight; this one cannot.
+ *
+ * FOUR PANELS, TWO AUDIENCES:
+ *
+ *   attention, auto_match, growth   EVERY admin. What is waiting on a human,
+ *                                   whether the bank matcher is still alive,
+ *                                   who signed up.
+ *   money, series                   SUPERADMIN ONLY — the same gate the
+ *                                   Reports page wears, for the same reason:
+ *                                   these cross every merchant and every
+ *                                   customer at once.
+ *
+ * The gated keys are ABSENT for a plain admin, never zeroed, and this
+ * package models them optional for exactly that reason: "MVR 0.00" of
+ * platform revenue is an ANSWER, and it is the wrong one. Never `?? 0` a
+ * money field to make a type check pass. Read `can_view_money` — or narrow
+ * with dashboardShowsMoney — and either render the panel or leave it off the
+ * page.
+ */
+
+// ------------------------------------------------------------------ attention
+
+/**
+ * WHAT IS WAITING ON A HUMAN. Each count is its own queue's OWN predicate,
+ * taken from the endpoint that serves that queue, so a badge can never say 3
+ * while the list behind it shows 4:
+ *
+ *   settlements_payment_review   the settlement matching queue
+ *   wallet_top_ups_pending       the wallet top-up matching queue
+ *   store_reviews_pending        merchants awaiting store review
+ *   change_requests_pending      merchant change requests
+ *   holds_open                   transactions on hold (the hold-review queue)
+ *   marketplace_kyb_pending      marketplace profiles awaiting KYB
+ *
+ * `total` is the sum of whatever keys the response carries.
+ *
+ * COUNTS OF WHAT THE LIST LISTS. `settlements_payment_review` counts BATCHES,
+ * not receipts, because /settlements?state=payment_review lists batches — one
+ * batch can carry several simultaneously-pending receipts, and counting those
+ * made the tile say 2 over a screen showing one row. Point a tile at the
+ * filtered list, never at the list's default tab.
+ *
+ * MARKETPLACE IS CONDITIONAL: with the platform flag off the key is ABSENT
+ * rather than zero — off means every surface hides it, and a permanent
+ * "0 KYB applications" tile is exactly the surface that rule is about. Read
+ * it as `attention.marketplace_kyb_pending` and skip the tile on undefined;
+ * do not default it to 0, which would put the tile back.
+ */
+export const DashboardAttentionSchema = z.object({
+  settlements_payment_review: z.number().int(),
+  wallet_top_ups_pending: z.number().int(),
+  store_reviews_pending: z.number().int(),
+  change_requests_pending: z.number().int(),
+  holds_open: z.number().int(),
+  /** Absent — not zero — while the marketplace flag is off. */
+  marketplace_kyb_pending: z.number().int().optional(),
+  /** The sum of the queues PRESENT in this response. */
+  total: z.number().int(),
+});
+export type DashboardAttention = z.infer<typeof DashboardAttentionSchema>;
+
+/**
+ * The queues in the order the server counts them, for a tile row built by
+ * mapping rather than by six hand-written lookups. Indexing `attention` with
+ * one of these yields `number | undefined`; undefined means the queue is not
+ * in this deployment (marketplace off), not that it is empty.
+ */
+export const DASHBOARD_ATTENTION_QUEUES = [
+  "settlements_payment_review",
+  "wallet_top_ups_pending",
+  "store_reviews_pending",
+  "change_requests_pending",
+  "holds_open",
+  "marketplace_kyb_pending",
+] as const;
+export type DashboardAttentionQueue =
+  (typeof DASHBOARD_ATTENTION_QUEUES)[number];
+
+// ----------------------------------------------------------------- auto match
+
+/**
+ * WHY a pending transfer is not being watched — four machine reasons,
+ * because they call for four different actions:
+ *
+ *   window_expired     the poll window ran out; match it by hand
+ *   never_watched      it arrived while the switch was down
+ *   no_verify_profile  a platform bank account is not routed to a read
+ *                      profile — a CONFIGURATION fault, and the loudest of
+ *                      the four
+ *   auto_verify_off    the platform switch is down, so every transfer is now
+ *                      manual work
+ *
+ * A mirror of the server's BankWatch reasons, in the order it lists them.
+ */
+export const DASHBOARD_WAITING_REASONS = [
+  "window_expired",
+  "never_watched",
+  "no_verify_profile",
+  "auto_verify_off",
+] as const;
+export type DashboardWaitingReason = (typeof DASHBOARD_WAITING_REASONS)[number];
+
+/** Pending and unwatched, split by why. `total` is the four added up. */
+export const DashboardWaitingOnHumanSchema = z.object({
+  total: z.number().int(),
+  window_expired: z.number().int(),
+  never_watched: z.number().int(),
+  no_verify_profile: z.number().int(),
+  auto_verify_off: z.number().int(),
+});
+export type DashboardWaitingOnHuman = z.infer<
+  typeof DashboardWaitingOnHumanSchema
+>;
+
+/**
+ * The period's matches split by who found them, so a FALLING auto rate is
+ * visible before the queue grows.
+ *
+ * `auto_rate_percent` is a 2-decimal percent STRING (PLAN §1 wire format) —
+ * "66.67" — and is NULL when nothing matched at all. Null is not 0%: a rate
+ * over no matches is nothing to report, and printing "0.00%" for a quiet
+ * hour reads as a stall. Render null as a dash.
+ */
+export const DashboardMatchedSplitSchema = z.object({
+  total: z.number().int(),
+  auto: z.number().int(),
+  manual: z.number().int(),
+  /** Percent string, or null when `total` is 0 — never coerce to "0.00". */
+  auto_rate_percent: PercentSchema.nullable(),
+});
+export type DashboardMatchedSplit = z.infer<typeof DashboardMatchedSplitSchema>;
+
+/**
+ * One transfer flow's HEALTH, which is the question — not its queue length.
+ *
+ * A pending transfer is either one the server is actively polling the bank
+ * for (fine, leave it alone) or one NOBODY is looking at any more, which is
+ * a person's job that nothing on the platform will do. A single "8 pending"
+ * tile hides that difference, and the difference is the entire panel.
+ *
+ * `expired_unmatched_24h` counts the windows that lapsed in the last day —
+ * the shape of a problem that started recently, as opposed to a backlog that
+ * has always been there.
+ */
+export const DashboardTransferHealthSchema = z.object({
+  pending_total: z.number().int(),
+  /** Pending rows with an open poll window right now. */
+  watching_now: z.number().int(),
+  waiting_on_human: DashboardWaitingOnHumanSchema,
+  /** Watch windows that ran out in the last 24 hours. */
+  expired_unmatched_24h: z.number().int(),
+  matched_in_period: DashboardMatchedSplitSchema,
+});
+export type DashboardTransferHealth = z.infer<
+  typeof DashboardTransferHealthSchema
+>;
+
+/**
+ * BOTH FLOWS, SEPARATELY. Settlement payments and wallet top-ups are matched
+ * by two different verifiers against two different tables, and one stalling
+ * while the other is healthy is precisely the fact this panel exists to show
+ * — so never sum them into a single "pending transfers" number.
+ */
+export const DashboardAutoMatchSchema = z.object({
+  settlement_payments: DashboardTransferHealthSchema,
+  wallet_top_ups: DashboardTransferHealthSchema,
+});
+export type DashboardAutoMatch = z.infer<typeof DashboardAutoMatchSchema>;
+
+/** The two flows, for a panel that renders the same card twice. */
+export const DASHBOARD_TRANSFER_FLOWS = [
+  "settlement_payments",
+  "wallet_top_ups",
+] as const;
+export type DashboardTransferFlow = (typeof DASHBOARD_TRANSFER_FLOWS)[number];
+
+// --------------------------------------------------------------------- growth
+
+/**
+ * WHO JOINED — counts of people and shops, never money, which is why every
+ * admin sees them.
+ *
+ * THREE numbers about stores, not two, because "new merchants" is genuinely
+ * ambiguous: `active_total` is the estate trading today,
+ * `new_active_in_period` are the ones that registered in the window AND are
+ * trading now, and `registered_in_period` counts every store that signed up
+ * whatever became of it. The difference between the last two IS the approval
+ * queue — a signup wave still sitting in review is a fact worth showing.
+ */
+export const DashboardGrowthSchema = z.object({
+  customers: z.object({
+    total: z.number().int(),
+    new_in_period: z.number().int(),
+  }),
+  merchants: z.object({
+    active_total: z.number().int(),
+    new_active_in_period: z.number().int(),
+    registered_in_period: z.number().int(),
+  }),
+});
+export type DashboardGrowth = z.infer<typeof DashboardGrowthSchema>;
+
+// ---------------------------------------------------------------------- money
+
+/**
+ * THE FIVE MONEY FIGURES, all integer LAARI (formatLaari) — SUPERADMIN ONLY.
+ *
+ * Not one of them is defined by the dashboard: each is read from the report
+ * class that owns its definition, so this panel can never disagree with the
+ * Reports page.
+ *
+ *   cashback_generated_laari        cashback on sales, dated by the SALE
+ *                                   (occurred_at, business time), reversed
+ *                                   sales excluded — the cashback report
+ *   platform_fees_net_laari         fee revenue less prompt discounts less
+ *                                   forgiven shortfalls, from the LEDGER by
+ *                                   posted_at — the earnings report
+ *   gst_collected_laari             the same ledger pass, kept SEPARATE
+ *                                   because GST is a liability owed to MIRA,
+ *                                   not income. Never add it to the fees.
+ *   collected_from_merchants_laari  what merchants actually paid on the
+ *                                   batches the period raised
+ *   paid_out_to_customers_laari     cashback whose PAID event landed in the
+ *                                   period — the payout report
+ *
+ * TWO CLOCKS, DELIBERATELY: cashback is dated by the sale and fees by the
+ * journal, because that is what the two reports do. `cashback_generated` and
+ * `platform_fees_net` are therefore NOT two views of one month's trade and
+ * will not tie — the field names carry their own basis, and a tile that
+ * subtracts one from the other is stating a number nobody owns.
+ */
+export const DashboardMoneyTotalsSchema = z.object({
+  cashback_generated_laari: z.number().int(),
+  platform_fees_net_laari: z.number().int(),
+  /** A liability owed to MIRA, not income — show it apart from the fees. */
+  gst_collected_laari: z.number().int(),
+  collected_from_merchants_laari: z.number().int(),
+  paid_out_to_customers_laari: z.number().int(),
+});
+export type DashboardMoneyTotals = z.infer<typeof DashboardMoneyTotalsSchema>;
+
+/**
+ * The window immediately before this one, of EQUAL LENGTH and adjacent to it
+ * — 20 days of August answered by the 20 days that ran up to 31 July, not by
+ * the whole of July. It is the only comparison that makes a month-to-date
+ * figure mean anything, and `period` says exactly which days it covers so an
+ * arrow can be labelled with the truth rather than with "last month".
+ */
+export const DashboardPreviousMoneySchema = DashboardMoneyTotalsSchema.extend({
+  period: ReportPeriodSchema,
+});
+export type DashboardPreviousMoney = z.infer<
+  typeof DashboardPreviousMoneySchema
+>;
+
+/** The money panel: this period's five figures, and the preceding window's. */
+export const DashboardMoneySchema = DashboardMoneyTotalsSchema.extend({
+  previous: DashboardPreviousMoneySchema,
+});
+export type DashboardMoney = z.infer<typeof DashboardMoneySchema>;
+
+// --------------------------------------------------------------------- series
+
+/**
+ * ONE ROW PER DAY of the period, EVERY day of it — SUPERADMIN ONLY, gated
+ * with the money because a daily chart of cashback, collections and payouts
+ * is the money panel a summation away.
+ *
+ * ZERO-FILLED by the server, and that is not cosmetic: a chart drawn from
+ * sparse rows draws a straight line across a quiet week and makes it look
+ * like trade. Every date from `from` to `to` inclusive appears exactly once,
+ * in order. Plot the rows as they arrive — do not filter the zeros out.
+ *
+ * `date` is a Y-m-d BUSINESS day (Indian/Maldives): a bar labelled 4 August
+ * holds the Maldivian 4th, the same day the Reports page puts those sales
+ * in. Parse it as a plain date, never with `new Date(date)` into a local
+ * midnight that can slide the bar a day in a westward browser.
+ *
+ * All four figures are integer laari:
+ *
+ *   cashback_laari     accrued by the SALE's date
+ *   fee_accrued_laari  the platform fee on those same sales, ACCRUED with
+ *                      them — deliberately NOT the money panel's
+ *                      `platform_fees_net_laari`, which is what the ledger
+ *                      recognised after discounts. Two honest numbers about
+ *                      fees; the names say which is which, and they are not
+ *                      meant to tie.
+ *   collected_laari    paid by merchants on the batches raised that day
+ *   paid_out_laari     cashback whose PAID event landed that day
+ *
+ * The other three DO tie: summed over the period they equal the money
+ * panel's cashback_generated, collected_from_merchants and
+ * paid_out_to_customers.
+ */
+export const DashboardSeriesEntrySchema = z.object({
+  /** Y-m-d in BUSINESS time, one per day of the period, in order. */
+  date: z.string(),
+  cashback_laari: z.number().int(),
+  /** The accrual, not the ledger net — see the note above. */
+  fee_accrued_laari: z.number().int(),
+  collected_laari: z.number().int(),
+  paid_out_laari: z.number().int(),
+});
+export type DashboardSeriesEntry = z.infer<typeof DashboardSeriesEntrySchema>;
+
+// ------------------------------------------------------------------ the whole
+
+/**
+ * The whole landing payload.
+ *
+ * `money` and `series` are OPTIONAL because a plain admin's response OMITS
+ * them — the gate removes the panels, it does not blank them. Modelling them
+ * as nullable-with-a-zero-default would let the console print "MVR 0.00
+ * platform revenue" to an admin who is simply not allowed to know, which is
+ * a fabricated figure on a finance screen. `can_view_money` says which of
+ * the two payloads you are holding, so the page can lay itself out without
+ * probing for keys; dashboardShowsMoney narrows both at once.
+ *
+ * `period` is the window the server actually used, echoed back in BUSINESS
+ * dates — read the heading off THIS, not off what was asked, so a default
+ * window (the business month in progress) can label itself.
+ *
+ * `generated_at` is the SERVER's clock as an ISO-8601 instant, so an "as of"
+ * line does not print a handset's idea of now.
+ */
+export const AdminDashboardSchema = z.object({
+  period: ReportPeriodSchema,
+  /** ISO-8601 instant from the server's clock (UTC). */
+  generated_at: z.string(),
+  /** True for a superadmin — and only then do `money` and `series` exist. */
+  can_view_money: z.boolean(),
+  attention: DashboardAttentionSchema,
+  auto_match: DashboardAutoMatchSchema,
+  growth: DashboardGrowthSchema,
+  /** Superadmin only; ABSENT (not zeroed) for a plain admin. */
+  money: DashboardMoneySchema.optional(),
+  /** Superadmin only; ABSENT (not []) for a plain admin. */
+  series: z.array(DashboardSeriesEntrySchema).optional(),
+});
+export type AdminDashboard = z.infer<typeof AdminDashboardSchema>;
+
+/** A dashboard that carries the gated panels — see dashboardShowsMoney. */
+export type AdminDashboardWithMoney = AdminDashboard & {
+  money: DashboardMoney;
+  series: DashboardSeriesEntry[];
+};
+
+/**
+ * Narrows a dashboard to the superadmin payload, so `money` and `series` can
+ * be read without optional chaining and without a default that would invent
+ * a figure. Tests the flag AND the keys: an empty money panel is not a money
+ * panel, whatever the flag says.
+ */
+export function dashboardShowsMoney(
+  dashboard: AdminDashboard,
+): dashboard is AdminDashboardWithMoney {
+  return (
+    dashboard.can_view_money &&
+    dashboard.money !== undefined &&
+    dashboard.series !== undefined
+  );
+}
+
+/**
+ * The window, in BUSINESS-timezone Y-m-d dates (Indian/Maldives) — the same
+ * grammar the reports take, so the two screens can be asked the same
+ * question. 2026-08-01 means the Maldivian first of August: a sale at 02:00
+ * Malé on the 1st belongs to August even though it was 31 July in UTC. Never
+ * send an ISO instant; the API validates `date_format:Y-m-d`.
+ *
+ * BOTH DATES OR NEITHER — which is why this is one object rather than two
+ * optional fields. Half a window is a 422 on the server ("from the 5th to
+ * ...when?"), and the shape here makes that unrepresentable. Omit the
+ * argument entirely for the default: the business month IN PROGRESS, the 1st
+ * to today.
+ *
+ * At most REPORT_MAX_DAYS (366) days, the same ceiling the reports carry.
+ */
+export interface DashboardWindow {
+  from: string;
+  to: string;
+}
+
+/**
+ * GET /api/admin/dashboard — every panel, in one call.
+ *
+ * `auth:admin`: 401 without an admin session (a merchant or customer session
+ * is a 401 too, not a 403). A plain admin gets 200 with `can_view_money`
+ * false and the money panels omitted — the superadmin gate is on those two
+ * sections, never on the route, so the operational half of the console stays
+ * open to every admin.
+ *
+ * A 422 means the window was refused: half a window, a backwards one, a
+ * malformed date, or one longer than REPORT_MAX_DAYS.
+ */
+export function getAdminDashboard(
+  period?: DashboardWindow | null,
+  options: RequestOptions = {},
+): Promise<AdminDashboard> {
+  return apiFetch(
+    `/api/admin/dashboard${queryString({
+      from: period?.from,
+      to: period?.to,
+    })}`,
+    AdminDashboardSchema,
+    { signal: options.signal },
+  );
+}
+
+/**
+ * GET /api/admin/dashboard/attention — the attention counts on their own.
+ *
+ * The SAME six numbers `getAdminDashboard().attention` carries, from the same
+ * predicates in the same single round trip, with no period: none of the six
+ * queues is periodised, so a badge has no window to be asked about.
+ *
+ * THIS IS WHAT A NAV BADGE READS. Fetching the list behind a badge to pull
+ * one scalar off it costs a paginated query per badge per poll and — because
+ * each badge then has its own timer — lets a badge and the dashboard tile it
+ * links to disagree, which is the one thing the attention panel is built to
+ * make impossible. Give every badge the SAME query key so they share one
+ * poll, and seed that key from `dashboard.attention` on the landing page so
+ * the badge and the tile are literally the same read.
+ *
+ * `auth:admin`, and open to every admin: these are counts of work, never
+ * money.
+ */
+export function getAdminAttention(
+  options: RequestOptions = {},
+): Promise<DashboardAttention> {
+  return apiFetch("/api/admin/dashboard/attention", DashboardAttentionSchema, {
+    signal: options.signal,
+  });
+}

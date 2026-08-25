@@ -596,9 +596,20 @@ final class EarningsReport extends BaseReport
     }
 
     /**
-     * @return array<string, mixed>
+     * THE LEDGER HALF OF THE SUMMARY — every figure this report derives from
+     * `ledger_entries`, and nothing that needs a sheet built.
+     *
+     * Split out so a second reader can quote the platform's earnings for a
+     * period at the cost of the ONE grouped query totals() already runs: the
+     * admin dashboard's money panel loads on every superadmin's landing and
+     * cannot afford to build four sheets, but it must not answer from its own
+     * definition of income either. summary() reads its own numbers back out
+     * of here, so the dashboard and the workbook cannot drift — see
+     * DashboardReportsAgreementTest, which asserts they are equal.
+     *
+     * @return array{fee_revenue_laari: int, prompt_discounts_laari: int, shortfall_forgiveness_laari: int, net_fee_income_laari: int, gst_collected_laari: int, platform_funded_rewards_laari: int, bad_debt_laari: int, net_platform_earnings_laari: int}
      */
-    public function summary(): array
+    public function ledgerSummary(): array
     {
         $feeRevenue = $this->net(AccountCode::PlatformFeeRevenue, except: JournalKind::PromptDiscount);
         $discounts = $this->side(AccountCode::PlatformFeeRevenue, JournalKind::PromptDiscount, 'debit');
@@ -607,17 +618,29 @@ final class EarningsReport extends BaseReport
         $rewards = $this->net(AccountCode::PlatformFundedRewards, except: JournalKind::ShortfallForgiven, creditNormal: false);
         $badDebt = $this->net(AccountCode::BadDebtExpense, creditNormal: false);
 
-        [$bank, $wallet] = $this->collectedFees();
-
         return [
             'fee_revenue_laari' => $feeRevenue,
             'prompt_discounts_laari' => $discounts,
             'shortfall_forgiveness_laari' => $forgiveness,
             'net_fee_income_laari' => $netFeeIncome,
+            // NOT income: GST is collected on our fee and owed to MIRA. It
+            // travels beside the earnings, never inside them.
             'gst_collected_laari' => $this->net(AccountCode::FeeTaxPayable),
             'platform_funded_rewards_laari' => $rewards,
             'bad_debt_laari' => $badDebt,
             'net_platform_earnings_laari' => $netFeeIncome - $rewards - $badDebt,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function summary(): array
+    {
+        [$bank, $wallet] = $this->collectedFees();
+
+        return [
+            ...$this->ledgerSummary(),
             'accrued_vs_collected' => [
                 'fees_accrued_laari' => $this->side(AccountCode::PlatformFeeRevenue, JournalKind::Accrual, 'credit'),
                 'fees_collected_bank_laari' => $bank,

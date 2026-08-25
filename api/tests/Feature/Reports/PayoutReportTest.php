@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Domain\Cashback\Actor;
 use App\Domain\Cashback\ManualCreditService;
+use App\Domain\Cashback\TransactionState;
 use App\Domain\Cashback\TransitionService;
 use App\Domain\Money\Laari;
 use App\Domain\Payout\ApprovalService;
@@ -26,6 +27,7 @@ use Carbon\CarbonImmutable;
 use Database\Seeders\LedgerAccountSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Tests\Feature\Reports\ReportFixture;
 use Tests\TestCase;
@@ -313,4 +315,54 @@ it('counts money still waiting on bank details, so nothing is silently missing',
         ->and($batches->sum('paid_laari'))->toBe(12_000);
 
     expect(PayoutBatch::query()->sole()->items()->where('state', PayoutItemState::Paid)->count())->toBe(1);
+});
+
+/*
+ * WHERE THE PERIOD IS APPLIED. paidScope() filters on `max(created_at)` of a
+ * transaction's PAID events, and pushes the window's LOWER bound down into
+ * the grouping so the aggregate is not built over every paid event ever
+ * recorded (migration 2026_08_25_120000 and the docblock there). The upper
+ * bound is deliberately NOT pushed — dropping later events would promote an
+ * earlier one to max and drag a re-paid sale back into a window it left.
+ *
+ * These three shapes are exactly what the two rules have to answer, and they
+ * are the reason the asymmetry cannot be tidied away into symmetry.
+ */
+it('dates a sale by its LAST paid event, whichever side of the window the others fall', function () {
+    $paid = TransactionState::Paid->value;
+
+    $straddling = payoutConfirm(ReportFixture::customer('Straddling'), 500_000);
+    $repaidLater = payoutConfirm(ReportFixture::customer('Repaid Later'), 500_000);
+    $onlyBefore = payoutConfirm(ReportFixture::customer('Only Before'), 500_000);
+
+    $event = function (Transaction $transaction, string $at) use ($paid): void {
+        DB::table('transaction_events')->insert([
+            'transaction_id' => $transaction->id,
+            'from_state' => 'confirmed',
+            'to_state' => $paid,
+            'actor_type' => 'system',
+            'created_at' => CarbonImmutable::parse($at),
+        ]);
+    };
+
+    // Paid in July, paid again in August: August owns it, once.
+    $event($straddling, '2026-07-20T06:00:00+00:00');
+    $event($straddling, '2026-08-10T06:00:00+00:00');
+
+    // Paid in August, paid again in September: SEPTEMBER owns it. Pushing the
+    // upper bound into the grouping would make August's max the August event
+    // and count it here — which is the bug the asymmetry prevents.
+    $event($repaidLater, '2026-08-10T06:00:00+00:00');
+    $event($repaidLater, '2026-09-05T06:00:00+00:00');
+
+    // Paid before the window and never again: nobody's August.
+    $event($onlyBefore, '2026-07-20T06:00:00+00:00');
+
+    $totals = augustPayoutReport()->paidTotals();
+    $daily = augustPayoutReport()->dailyPaid();
+
+    expect($totals['count'])->toBe(1)
+        ->and($totals['cashback_laari'])->toBe($straddling->cashback_laari)
+        // Dated by the LATER event, and drawn on exactly one day.
+        ->and($daily)->toBe(['2026-08-10' => $straddling->cashback_laari]);
 });

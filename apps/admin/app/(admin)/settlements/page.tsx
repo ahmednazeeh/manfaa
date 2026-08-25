@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { Suspense, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   listAdminSettlements,
   SettlementStateSchema,
@@ -108,11 +108,25 @@ function ClaimVarianceCell({ settlement }: { settlement: Settlement }) {
  * follow the tab: a receipt under review is read by its bank reference, its
  * slip and its claim against the amount due, while a cancelled batch is read
  * by WHY it was refused.
+ *
+ * THE TAB LIVES IN THE URL, not in component state. The dashboard's
+ * attention tile counts batches in payment_review and promises the reader
+ * that the number it shows is the number on the screen it opens; while the
+ * tab was local state that link landed on "All" — every batch ever raised —
+ * and the promise was broken on arrival. `/settlements?state=payment_review`
+ * is now a real address, which also makes the queue linkable and survives a
+ * reload and the back button.
+ *
+ * An unreadable or absent `state` falls back to All rather than erroring:
+ * a mistyped query string is not worth a page of apology.
  */
-export default function SettlementsPage() {
+function SettlementsQueue() {
   const router = useRouter();
-  const [state, setState] = useState<StateFilter>('all');
+  const searchParams = useSearchParams();
   const [page, setPage] = useState(1);
+
+  const requested = SettlementStateSchema.safeParse(searchParams.get('state'));
+  const state: StateFilter = requested.success ? requested.data : 'all';
 
   const query = useQuery({
     queryKey: ['admin', 'settlements', state, page],
@@ -125,8 +139,13 @@ export default function SettlementsPage() {
 
   const onTabChange = (value: string) => {
     const parsed = SettlementStateSchema.safeParse(value);
-    setState(parsed.success ? parsed.data : 'all');
     setPage(1);
+    // replace, not push: flicking through tabs is one act of looking, and
+    // stacking six history entries makes Back mean "the tab before" instead
+    // of "the screen before".
+    router.replace(
+      parsed.success ? `/settlements?state=${parsed.data}` : '/settlements',
+    );
   };
 
   const headings =
@@ -342,5 +361,28 @@ export default function SettlementsPage() {
         <Pager meta={query.data.meta} onPageChange={setPage} />
       ) : null}
     </div>
+  );
+}
+
+/**
+ * `useSearchParams` suspends during prerender, so the boundary is required
+ * and is the header alone — the part of the screen that does not depend on
+ * which tab was asked for.
+ */
+export default function SettlementsPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex flex-col">
+          <PageHeader
+            title="Settlement matching queue"
+            description={DESCRIPTIONS.all}
+          />
+          <Skeleton className="h-64 w-full" />
+        </div>
+      }
+    >
+      <SettlementsQueue />
+    </Suspense>
   );
 }

@@ -732,6 +732,132 @@ final class CashbackReport extends BaseReport
     }
 
     /**
+     * THE PERIOD, DAY BY DAY, for the admin dashboard's chart: cashback and
+     * platform fee accrued per BUSINESS day, from the same scope — and
+     * therefore the same reversed-sales rule and the same occurred_at
+     * clock — the Transactions sheet is built from.
+     *
+     * The bucket is `(occurred_at AT TIME ZONE :business)::date`, which is
+     * the daily form of the very boundary ReportPeriod exists to get right:
+     * a sale at 02:00 in Malé belongs to that Maldivian day, not to the UTC
+     * one it was stored under. Grouping in UTC would put a handful of every
+     * evening's sales on the wrong bar and make the bars sum to the same
+     * month total — a chart that is wrong in a way no total can reveal.
+     *
+     * Sparse by design: a day with no sales has no row, and zero-filling a
+     * range is the caller's job (it is the caller that knows the range).
+     *
+     * @return array<string, array{cashback_laari: int, fee_laari: int}> Y-m-d => totals
+     */
+    public function dailyTotals(): array
+    {
+        $rows = $this->transactionScope()
+            ->selectRaw('(transactions.occurred_at AT TIME ZONE ?)::date AS day', [$this->period->timezone])
+            ->selectRaw(
+                'COALESCE(SUM(transactions.cashback_laari), 0) AS cashback_laari'
+                .', COALESCE(SUM(transactions.fee_laari), 0) AS fee_laari',
+            )
+            // By position: the day expression is the first selected column,
+            // and repeating it here would mean repeating its binding too.
+            ->groupByRaw('1')
+            ->get();
+
+        $daily = [];
+
+        foreach ($rows as $row) {
+            $daily[(string) $row->day] = [
+                'cashback_laari' => (int) $row->cashback_laari,
+                'fee_laari' => (int) $row->fee_laari,
+            ];
+        }
+
+        return $daily;
+    }
+
+    /**
+     * What merchants have paid on the batches each BUSINESS day raised —
+     * the Settlements sheet's own amount_received, bucketed by the same
+     * created_at the sheet orders on.
+     *
+     * @return array<string, int> Y-m-d => laari
+     */
+    public function dailyCollected(): array
+    {
+        $rows = $this->settlementScope()
+            ->selectRaw('(settlements.created_at AT TIME ZONE ?)::date AS day', [$this->period->timezone])
+            ->selectRaw('COALESCE(SUM(settlements.amount_received_laari), 0) AS collected_laari')
+            ->groupByRaw('1')
+            ->get();
+
+        $daily = [];
+
+        foreach ($rows as $row) {
+            $daily[(string) $row->day] = (int) $row->collected_laari;
+        }
+
+        return $daily;
+    }
+
+    /**
+     * THE TOTALS, WITHOUT THE ROWS — the same two scopes the two detail
+     * sheets are built from, aggregated in the database instead of in PHP.
+     *
+     * Two queries against `transactions.occurred_at` and
+     * `settlements.created_at`, both indexed (2026_08_24_170000). It exists
+     * for the admin dashboard, which shows a period's cashback and what
+     * merchants paid on every landing and cannot build a row per sale to do
+     * it — and which must never answer from a second definition of either.
+     * Because both come from transactionScope()/settlementScope(), the
+     * predicates ARE the report's: reversed sales out, marketplace and
+     * draft/cancelled batches treated identically. DashboardReportsAgreementTest
+     * asserts the two agree figure for figure.
+     *
+     * `collected` is deliberately NOT here: the report's Collected column is
+     * a per-line allocation walk over whole batches (SettlementLineAllocation)
+     * and cannot be summed cheaply. The dashboard quotes
+     * `settlements.amount_received_laari` instead — what merchants actually
+     * paid on the batches the period raised — which is a column, and the
+     * same column the Settlements sheet totals.
+     *
+     * @return array{transactions: array{count: int, eligible_laari: int, cashback_laari: int, fee_laari: int, gst_laari: int}, settlements: array{count: int, amount_due_laari: int, amount_received_laari: int}}
+     */
+    public function moneyTotals(): array
+    {
+        $transactions = $this->transactionScope()
+            ->selectRaw(
+                'COUNT(*) AS n'
+                .', COALESCE(SUM(transactions.eligible_laari), 0) AS eligible_laari'
+                .', COALESCE(SUM(transactions.cashback_laari), 0) AS cashback_laari'
+                .', COALESCE(SUM(transactions.fee_laari), 0) AS fee_laari'
+                .', COALESCE(SUM(transactions.fee_gst_laari), 0) AS gst_laari',
+            )
+            ->first();
+
+        $settlements = $this->settlementScope()
+            ->selectRaw(
+                'COUNT(*) AS n'
+                .', COALESCE(SUM(settlements.amount_due_laari), 0) AS amount_due_laari'
+                .', COALESCE(SUM(settlements.amount_received_laari), 0) AS amount_received_laari',
+            )
+            ->first();
+
+        return [
+            'transactions' => [
+                'count' => (int) $transactions->n,
+                'eligible_laari' => (int) $transactions->eligible_laari,
+                'cashback_laari' => (int) $transactions->cashback_laari,
+                'fee_laari' => (int) $transactions->fee_laari,
+                'gst_laari' => (int) $transactions->gst_laari,
+            ],
+            'settlements' => [
+                'count' => (int) $settlements->n,
+                'amount_due_laari' => (int) $settlements->amount_due_laari,
+                'amount_received_laari' => (int) $settlements->amount_received_laari,
+            ],
+        ];
+    }
+
+    /**
      * @return array<string, mixed>
      */
     public function summary(): array

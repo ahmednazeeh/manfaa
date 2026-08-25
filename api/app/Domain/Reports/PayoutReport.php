@@ -127,11 +127,29 @@ final class PayoutReport extends BaseReport
      * Transactions whose PAID event landed in the period. The join is to a
      * grouped derived table rather than a correlated subquery so the same
      * definition drives the count, the sheet and the per-item attribution.
+     *
+     * THE LOWER BOUND IS PUSHED INTO THE GROUPING, THE UPPER BOUND IS NOT,
+     * and the asymmetry is the whole point.
+     *
+     * `max(created_at) >= start` filters the aggregate, so without a
+     * predicate inside the subquery Postgres has to group EVERY paid event
+     * ever recorded and throw away all but the period's — cost O(lifetime),
+     * not O(period), on a page that is now the admin landing on a 60s poll.
+     * Pushing `created_at >= start` down is provably equivalent: if the true
+     * max is >= start the filter keeps every row that could BE the max, and
+     * if the true max is < start the group was going to be discarded anyway.
+     *
+     * The upper bound must NOT be pushed. Dropping events >= end would let an
+     * EARLIER paid event become the max and pull a transaction that was
+     * re-paid after the window back into it — the one thing the outer filter
+     * is here to prevent. (`transaction_events (to_state, created_at)`,
+     * migration 2026_08_25_120000, is the index this reads through.)
      */
     private function paidScope(): Builder
     {
         $paid = DB::table('transaction_events')
             ->where('to_state', TransactionState::Paid->value)
+            ->where('created_at', '>=', $this->period->start)
             ->groupBy('transaction_id')
             ->select('transaction_id', DB::raw('max(created_at) as paid_at'));
 
@@ -590,6 +608,52 @@ final class PayoutReport extends BaseReport
         $sheet->push(['Money out — cashback and wallet', null, $cashbackPaid + $withdrawalsPaid['laari']]);
 
         return $sheet;
+    }
+
+    /**
+     * Cashback paid out per BUSINESS day — the dashboard chart's fourth
+     * line, bucketed off the same paid event paidScope() drives on, so the
+     * bars add up to what {@see self::paidTotals()} reports for the period.
+     *
+     * Sparse: days with no payout have no row.
+     *
+     * @return array<string, int> Y-m-d => laari
+     */
+    public function dailyPaid(): array
+    {
+        $rows = $this->paidScope()
+            ->selectRaw('(paid_event.paid_at AT TIME ZONE ?)::date AS day', [$this->period->timezone])
+            ->selectRaw('COALESCE(SUM(transactions.cashback_laari), 0) AS paid_out_laari')
+            ->groupByRaw('1')
+            ->get();
+
+        $daily = [];
+
+        foreach ($rows as $row) {
+            $daily[(string) $row->day] = (int) $row->paid_out_laari;
+        }
+
+        return $daily;
+    }
+
+    /**
+     * WHAT WENT OUT TO CUSTOMERS in the period, without a row per payment —
+     * one aggregate over paidScope(), the very scope the Transactions sheet
+     * is built from, so the dashboard's "paid out to customers" is the
+     * report's own number rather than a second reading of the event log.
+     *
+     * @return array{count: int, cashback_laari: int}
+     */
+    public function paidTotals(): array
+    {
+        $row = $this->paidScope()
+            ->selectRaw('COUNT(*) AS n, COALESCE(SUM(transactions.cashback_laari), 0) AS cashback_laari')
+            ->first();
+
+        return [
+            'count' => (int) $row->n,
+            'cashback_laari' => (int) $row->cashback_laari,
+        ];
     }
 
     /**
