@@ -240,9 +240,13 @@ export function DailySeriesChart({
                     key={line.key}
                     dataKey={line.key}
                     name={line.label}
-                    // Linear, never smoothed: a curve through daily money
-                    // draws values on days that never had them.
-                    type="linear"
+                    // Curved (owner, 2026-08-25) — but MONOTONE, never a
+                    // natural or basis spline. Monotone cubic is shape
+                    // preserving: it cannot overshoot the points it joins,
+                    // so a quiet day never bows below zero and no arc rises
+                    // above a peak that was never earned. A looser curve
+                    // through daily money would draw exactly those lies.
+                    type="monotone"
                     stroke={`var(--color-${line.key})`}
                     strokeWidth={2}
                     strokeLinecap="round"
