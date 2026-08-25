@@ -1,6 +1,6 @@
 'use client';
 
-import { ComponentType, ReactNode } from 'react';
+import { ComponentType, ReactNode, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
@@ -12,30 +12,20 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   BadgeCheck,
   Banknote,
+  ChevronRight,
   ClipboardCheck,
-  CreditCard,
   FileDiff,
   FileSpreadsheet,
   HandCoins,
   Landmark,
   LogOut,
   Map as MapIcon,
-  Megaphone,
-  MessageSquare,
-  Palette,
-  Percent,
   PiggyBank,
-  Plug,
-  Radio,
   Receipt,
-  ReceiptText,
   Scale,
+  Settings2,
   ShieldAlert,
-  ShieldCheck,
-  SlidersHorizontal,
-  Smartphone,
   Store,
-  Tags,
   Users,
   Wallet,
   type LucideIcon,
@@ -49,25 +39,20 @@ import { cn } from '@/lib/utils';
 import { useMarketplaceEnabled } from '@/hooks/use-marketplace-enabled';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible';
 import { useAdminUser } from '@/components/auth/admin-guard';
 import { ManfaaLogo } from '@/components/shell/manfaa-logo';
+import {
+  SETTINGS_GROUPS,
+  type NavItem,
+  type SettingsGroup,
+} from '@/components/shell/settings-nav';
 import { ThemeToggle } from '@/components/shell/theme-toggle';
 
-interface NavItem {
-  href: string;
-  label: string;
-  icon: LucideIcon;
-  /** Hidden unless the signed-in admin's role is superadmin. */
-  superadminOnly?: boolean;
-  /**
-   * Hidden while the marketplace is switched off. These are the screens
-   * whose API routes carry EnsureMarketplaceEnabled, so with it off they
-   * could only ever show a 403.
-   */
-  marketplaceOnly?: boolean;
-  /** Optional live counter rendered after the label (e.g. queue size). */
-  badge?: ComponentType;
-}
 
 /**
  * How many self-signed-up stores are waiting in the approval queue. Shares
@@ -232,40 +217,6 @@ const NAV_ITEMS: NavItem[] = [
   },
 ];
 
-const SETTINGS_ITEMS: NavItem[] = [
-  { href: '/settings/platform', label: 'Platform', icon: SlidersHorizontal },
-  { href: '/settings/app-releases', label: 'App releases', icon: Smartphone },
-  { href: '/settings/appearance', label: 'Appearance', icon: Palette },
-  { href: '/settings/fee-tiers', label: 'Fee tiers', icon: Percent },
-  {
-    href: '/settings/tax',
-    label: 'GST',
-    icon: ReceiptText,
-    superadminOnly: true,
-  },
-  { href: '/settings/bank-accounts', label: 'Bank accounts', icon: CreditCard },
-  { href: '/settings/transfers', label: 'Transfer API', icon: Radio },
-  { href: '/settings/store-categories', label: 'Store categories', icon: Tags },
-  { href: '/settings/offers', label: 'Featured offers', icon: Megaphone },
-  {
-    href: '/settings/notifications',
-    label: 'Notifications',
-    icon: MessageSquare,
-  },
-  {
-    href: '/settings/platform-clients',
-    label: 'Connected platforms',
-    icon: Plug,
-    superadminOnly: true,
-  },
-  {
-    href: '/settings/admins',
-    label: 'Admins',
-    icon: ShieldCheck,
-    superadminOnly: true,
-  },
-];
-
 function NavLink({ item, active }: { item: NavItem; active: boolean }) {
   const Icon = item.icon;
   const CountBadge = item.badge;
@@ -286,6 +237,62 @@ function NavLink({ item, active }: { item: NavItem; active: boolean }) {
   );
 }
 
+/**
+ * One settings group in the sidebar: a disclosure that opens itself when
+ * the page you are on lives inside it, so navigating never leaves you
+ * hunting for where you are. Open state is local to the session — a
+ * remembered drawer that disagrees with the current page is worse than
+ * one that simply follows it.
+ */
+function SettingsGroupNav({
+  group,
+  items,
+  isActive,
+}: {
+  group: SettingsGroup;
+  items: NavItem[];
+  isActive: (href: string) => boolean;
+}) {
+  const holdsActive = items.some((item) => isActive(item.href));
+  const [open, setOpen] = useState(holdsActive);
+  const Icon = group.icon;
+
+  // Follow the page: land inside a closed group (a deep link, a redirect)
+  // and it opens. Closing it by hand still sticks while you stay put.
+  useEffect(() => {
+    if (holdsActive) setOpen(true);
+  }, [holdsActive]);
+
+  return (
+    <Collapsible open={open} onOpenChange={setOpen}>
+      <CollapsibleTrigger
+        className={cn(
+          'flex w-full shrink-0 items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition-colors',
+          holdsActive && !open
+            ? 'bg-accent/50 text-foreground'
+            : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground',
+        )}
+      >
+        <Icon className="size-4 shrink-0" />
+        <span className="min-w-0 flex-1 text-start">{group.label}</span>
+        <ChevronRight
+          className={cn(
+            'size-3.5 shrink-0 transition-transform rtl:-scale-x-100',
+            open && 'rotate-90',
+          )}
+        />
+      </CollapsibleTrigger>
+      <CollapsibleContent>
+        <div className="mt-1 flex flex-col gap-1 ps-3">
+          {items.map((item) => (
+            <NavLink key={item.href} item={item} active={isActive(item.href)} />
+          ))}
+        </div>
+      </CollapsibleContent>
+    </Collapsible>
+  );
+}
+
 function NavLinks({ orientation }: { orientation: 'vertical' | 'horizontal' }) {
   const pathname = usePathname();
   const user = useAdminUser();
@@ -299,17 +306,30 @@ function NavLinks({ orientation }: { orientation: 'vertical' | 'horizontal' }) {
     (!item.marketplaceOnly || marketplace);
 
   const navItems = NAV_ITEMS.filter(visible);
-  const settingsItems = SETTINGS_ITEMS.filter(visible);
+
+  // A group with nothing this admin may see is not rendered at all.
+  const settingsGroups = SETTINGS_GROUPS.map((group) => ({
+    group,
+    items: group.items.filter(visible),
+  })).filter(({ items }) => items.length > 0);
 
   const isActive = (href: string) =>
     pathname === href || pathname.startsWith(`${href}/`);
 
   if (orientation === 'horizontal') {
+    // The narrow nav is a single scrolling row, so twelve settings
+    // entries buried the work screens. One door to the hub instead.
     return (
       <nav className="flex flex-row gap-1 overflow-x-auto pb-px">
-        {[...navItems, ...settingsItems].map((item) => (
+        {navItems.map((item) => (
           <NavLink key={item.href} item={item} active={isActive(item.href)} />
         ))}
+        {settingsGroups.length > 0 && (
+          <NavLink
+            item={{ href: '/settings', label: 'Settings', icon: Settings2 }}
+            active={isActive('/settings')}
+          />
+        )}
       </nav>
     );
   }
@@ -319,11 +339,21 @@ function NavLinks({ orientation }: { orientation: 'vertical' | 'horizontal' }) {
       {navItems.map((item) => (
         <NavLink key={item.href} item={item} active={isActive(item.href)} />
       ))}
-      <div className="mt-4 mb-1 px-3 text-xs font-semibold tracking-wide text-muted-foreground/70 uppercase">
-        Settings
-      </div>
-      {settingsItems.map((item) => (
-        <NavLink key={item.href} item={item} active={isActive(item.href)} />
+      {settingsGroups.length > 0 && (
+        <Link
+          href="/settings"
+          className="mt-4 mb-1 px-3 text-xs font-semibold tracking-wide text-muted-foreground/70 uppercase transition-colors hover:text-foreground"
+        >
+          Settings
+        </Link>
+      )}
+      {settingsGroups.map(({ group, items }) => (
+        <SettingsGroupNav
+          key={group.label}
+          group={group}
+          items={items}
+          isActive={isActive}
+        />
       ))}
     </nav>
   );
