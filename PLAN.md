@@ -1721,6 +1721,35 @@ reachable from a merchant's typo, not just a bank rounding quirk;
 production top-up #2 is deliberately still pending — releasing its
 MVR 10 is a money decision, not mine.
 
+### Merchant Quick Actions — DONE (2026-08-25)
+
+Dashboard gains a Quick Actions card (Credit Customer, Settle Now);
+every existing card stays put. The owner's governing sentence was "use
+the same endpoints so everything else flows through naturally", so the
+1,423-line credit screen was EXTRACTED into one shared
+CreditCustomerForm that both the route and the modal render — the page
+is now 41 lines of chrome. The component takes a `variant` room hint
+(never a host name) plus onDone/onCancel/onDirtyChange/onBusyChange, so
+it never branches on where it sits, and a fix lands once.
+
+Modal: no outside-click close, no Escape, Cancel + X only, and a touched
+form is asked before discarding.
+
+THE BLOCKER, and it is modal-specific: React Query gates mutate-level
+callbacks on the observer still having listeners, so closing the dialog
+mid-POST dropped setResult/resetForm/onDone while the mutation-level
+onSuccess still invalidated — the credit WAS recorded and the merchant
+was shown nothing, under a prompt that said nothing had been. The form
+now reports its own in-flight state and the host shuts every exit for
+that window (Cancel disabled, X not rendered, controlled close refused).
+Also fixed: focus never returned to the trigger, "set to now" arming the
+discard prompt on an untouched form, the Dhivehi discard copy quoting a
+button that only ever rendered in English, and the prompt-discount
+banner still quoting its pre-credit figure after a modal credit.
+
+10 findings, 1 blocker, all fixed. Same round: dashboard chart curves
+(monotone — shape preserving, cannot overshoot into money never earned).
+
 ### Queue (updated 2026-08-17) — the mobile programme
 
 The mobile API round is DONE and reviewed (PLAN-mobile-api.md: M1–M5, two

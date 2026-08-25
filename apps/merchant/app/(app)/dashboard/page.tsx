@@ -26,6 +26,7 @@ import {
 } from '@/components/app-layout/toolbar';
 import { ErrorBlock } from '@/components/app/async-states';
 import { PosWaiverCard } from '@/components/dashboard/pos-waiver-card';
+import { QuickActionsCard } from '@/components/dashboard/quick-actions-card';
 import { PromptDiscountDeadline } from '@/components/settlement/prompt-discount';
 
 const BUCKETS: { key: '0_5' | '6_10' | '11_15' | 'overdue'; label: string }[] = [
@@ -117,132 +118,139 @@ export default function DashboardPage() {
         )}
       </Toolbar>
 
-      {outstanding.error ? (
-        <ErrorBlock error={outstanding.error} />
-      ) : (
-        <div className="flex flex-col gap-5 pb-7.5">
-          {settleAllPreview.data && (
-            <PromptDiscountDeadline
-              discount={settleAllPreview.data.discount}
-              rows={settleAllPreview.data.transactions}
-            />
-          )}
+      <div className="flex flex-col gap-5 pb-7.5">
+        {/* First, and OUTSIDE the ageing's error branch: crediting a
+            customer is what a till reaches for, and it neither needs the
+            outstanding figures nor should disappear with them. */}
+        <QuickActionsCard />
 
-          <PosWaiverCard />
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5">
-            {BUCKETS.map(({ key, label }) =>
-              outstanding.data ? (
-                <BucketCard
-                  key={key}
-                  label={label}
-                  bucket={outstanding.data.buckets[key]}
-                  overdue={key === 'overdue'}
-                />
-              ) : (
-                <Skeleton key={key} className="h-28 rounded-xl" />
-              ),
+        {outstanding.error ? (
+          <ErrorBlock error={outstanding.error} />
+        ) : (
+          <>
+            {settleAllPreview.data && (
+              <PromptDiscountDeadline
+                discount={settleAllPreview.data.discount}
+                rows={settleAllPreview.data.transactions}
+              />
             )}
-          </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-            <Card>
-              <CardHeader>
-                <CardTitle>Total payable</CardTitle>
-              </CardHeader>
-              <CardContent className="flex flex-col gap-3">
-                {outstanding.data ? (
-                  <>
-                    <MoneyText
-                      laari={outstanding.data.total.payable_laari}
-                      className="text-2xl font-semibold text-mono"
-                    />
-                    <div className="flex flex-col gap-1.5 text-sm">
-                      <div className="flex justify-between gap-3">
-                        <span className="text-muted-foreground">
-                          Customer cashback
-                        </span>
-                        <MoneyText
-                          laari={outstanding.data.total.cashback_laari}
-                          className="text-secondary-foreground"
-                        />
-                      </div>
-                      <div className="flex justify-between gap-3">
-                        <span className="text-muted-foreground">
-                          Platform fee
-                        </span>
-                        <MoneyText
-                          laari={outstanding.data.total.fee_laari}
-                          className="text-secondary-foreground"
-                        />
-                      </div>
-                      {/* Absent, not zeroed, while GST is switched off —
-                          see lib/gst.ts. The fee above is Manfaa's own
-                          charge either way, so the two lines still add up
-                          to the payable total. */}
-                      {hasGst(outstanding.data.total.fee_gst_laari) && (
+            <PosWaiverCard />
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5">
+              {BUCKETS.map(({ key, label }) =>
+                outstanding.data ? (
+                  <BucketCard
+                    key={key}
+                    label={label}
+                    bucket={outstanding.data.buckets[key]}
+                    overdue={key === 'overdue'}
+                  />
+                ) : (
+                  <Skeleton key={key} className="h-28 rounded-xl" />
+                ),
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Total payable</CardTitle>
+                </CardHeader>
+                <CardContent className="flex flex-col gap-3">
+                  {outstanding.data ? (
+                    <>
+                      <MoneyText
+                        laari={outstanding.data.total.payable_laari}
+                        className="text-2xl font-semibold text-mono"
+                      />
+                      <div className="flex flex-col gap-1.5 text-sm">
                         <div className="flex justify-between gap-3">
                           <span className="text-muted-foreground">
-                            GST on fee
+                            Customer cashback
                           </span>
                           <MoneyText
-                            laari={outstanding.data.total.fee_gst_laari}
+                            laari={outstanding.data.total.cashback_laari}
                             className="text-secondary-foreground"
                           />
                         </div>
-                      )}
-                      <div className="flex justify-between gap-3 border-t border-border pt-1.5">
-                        <span className="text-muted-foreground">
-                          Outstanding transactions
-                        </span>
-                        <span className="text-secondary-foreground tabular-nums">
-                          {outstanding.data.total.count}
-                        </span>
+                        <div className="flex justify-between gap-3">
+                          <span className="text-muted-foreground">
+                            Platform fee
+                          </span>
+                          <MoneyText
+                            laari={outstanding.data.total.fee_laari}
+                            className="text-secondary-foreground"
+                          />
+                        </div>
+                        {/* Absent, not zeroed, while GST is switched off —
+                            see lib/gst.ts. The fee above is Manfaa's own
+                            charge either way, so the two lines still add up
+                            to the payable total. */}
+                        {hasGst(outstanding.data.total.fee_gst_laari) && (
+                          <div className="flex justify-between gap-3">
+                            <span className="text-muted-foreground">
+                              GST on fee
+                            </span>
+                            <MoneyText
+                              laari={outstanding.data.total.fee_gst_laari}
+                              className="text-secondary-foreground"
+                            />
+                          </div>
+                        )}
+                        <div className="flex justify-between gap-3 border-t border-border pt-1.5">
+                          <span className="text-muted-foreground">
+                            Outstanding transactions
+                          </span>
+                          <span className="text-secondary-foreground tabular-nums">
+                            {outstanding.data.total.count}
+                          </span>
+                        </div>
                       </div>
-                    </div>
-                  </>
-                ) : (
-                  <Skeleton className="h-28 rounded-md" />
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Hidden rather than left to fail: the card's error branch says
-                the wallet is unavailable, which reads as an outage when the
-                truth is that this account was never given the wallet. */}
-            {canSeeWallet && (
-              <Card>
-                <CardHeader>
-                  <CardTitle>Wallet</CardTitle>
-                  <Button asChild variant="outline" size="sm">
-                    <Link href="/wallet">View movements</Link>
-                  </Button>
-                </CardHeader>
-                <CardContent className="flex flex-col gap-2">
-                  {wallet.error ? (
-                    <span className="text-sm text-muted-foreground">
-                      Wallet unavailable right now.
-                    </span>
-                  ) : wallet.data ? (
-                    <>
-                      <MoneyText
-                        laari={wallet.data.balance_laari}
-                        className="text-2xl font-semibold text-mono"
-                      />
-                      <span className="text-sm text-muted-foreground">
-                        Available to fund settlements instead of a bank
-                        transfer.
-                      </span>
                     </>
                   ) : (
-                    <Skeleton className="h-16 rounded-md" />
+                    <Skeleton className="h-28 rounded-md" />
                   )}
                 </CardContent>
               </Card>
-            )}
-          </div>
-        </div>
-      )}
+
+              {/* Hidden rather than left to fail: the card's error branch says
+                  the wallet is unavailable, which reads as an outage when the
+                  truth is that this account was never given the wallet. */}
+              {canSeeWallet && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Wallet</CardTitle>
+                    <Button asChild variant="outline" size="sm">
+                      <Link href="/wallet">View movements</Link>
+                    </Button>
+                  </CardHeader>
+                  <CardContent className="flex flex-col gap-2">
+                    {wallet.error ? (
+                      <span className="text-sm text-muted-foreground">
+                        Wallet unavailable right now.
+                      </span>
+                    ) : wallet.data ? (
+                      <>
+                        <MoneyText
+                          laari={wallet.data.balance_laari}
+                          className="text-2xl font-semibold text-mono"
+                        />
+                        <span className="text-sm text-muted-foreground">
+                          Available to fund settlements instead of a bank
+                          transfer.
+                        </span>
+                      </>
+                    ) : (
+                      <Skeleton className="h-16 rounded-md" />
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+          </>
+        )}
+      </div>
     </div>
   );
 }

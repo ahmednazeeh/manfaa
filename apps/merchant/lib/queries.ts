@@ -660,6 +660,29 @@ export function useCreateCredit() {
         queryKey: ['merchant', 'transactions'],
       });
       void queryClient.invalidateQueries({ queryKey: queryKeys.outstanding });
+      /**
+       * Everything else that is a STATEMENT ABOUT THE OUTSTANDING BALANCE,
+       * because a new sale has just changed it and the two must not be seen
+       * side by side disagreeing.
+       *
+       * This used to be carried by a page navigation: the /credit route was
+       * a different screen, so coming back to the dashboard remounted these
+       * queries and they refetched past their staleTime. A dialog does not
+       * navigate — the dashboard stays mounted underneath, and React Query
+       * does not refetch on staleness alone — so a credit keyed from the
+       * modal would leave the prompt-payment countdown quoting a discount
+       * from before the sale, next to a Total payable that had just moved.
+       *
+       * Prefix keys: every settlement preview (`['merchant',
+       * 'settlement-preview', …selection]`) is a quote against the same
+       * balance, whichever selection it was quoted for.
+       */
+      void queryClient.invalidateQueries({
+        queryKey: ['merchant', 'settlement-preview'],
+      });
+      void queryClient.invalidateQueries({
+        queryKey: ['merchant', 'pos-waiver'],
+      });
     },
   });
 }

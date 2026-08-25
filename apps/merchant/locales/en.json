@@ -968,6 +968,12 @@
     "noReason": "No reason was recorded."
   },
   "credit": {
+    "title": "Credit customer",
+    "subtitle": "Record a sale by hand and credit the customer's cashback",
+    "discardTitle": "Discard this credit?",
+    "discardBody": "The customer code, invoice number, amounts and any lines you have entered will be cleared. Nothing has been recorded yet — the sale is credited only when you press Credit customer.",
+    "discardKeep": "Keep editing",
+    "discardConfirm": "Discard",
     "backdatedTitle": "Backdated sale — this credit is final",
     "backdatedBody": "This sale is older than your refund window — once credited it cannot be reversed, and it becomes payable to Manfaa immediately.",
     "backdatedMaybeTitle": "This sale may be backdated",
@@ -1003,6 +1009,14 @@
     "customRateRefusedBody": "This sale earns {{rate}} — your standing rate, or a promotion running right now. A custom rate can only raise it, because the customer was advertised that figure. Enter a higher rate, or switch the custom rate off.",
     "customRateRefusedBodyNoRate": "A custom rate can only raise what this sale already earns, because the customer was advertised that figure. Enter a higher rate, or switch the custom rate off.",
     "customRateNotPricedTitle": "That rate is not available yet."
+  },
+  "dashboard": {
+    "quickActionsTitle": "Quick actions",
+    "creditCustomer": "Credit customer",
+    "creditCustomerHint": "Record a sale at the counter without leaving this page.",
+    "settleNow": "Settle now",
+    "settleNowHint": "Pay the cashback and fees you owe on credited sales.",
+    "settleNothingDue": "Nothing to settle right now."
   },
   "labels": {
     "state": {
