@@ -99,7 +99,15 @@ function SheetHeader({ className, ...props }: React.ComponentProps<'div'>) {
 }
 
 function SheetBody({ className, ...props }: React.ComponentProps<'div'>) {
-  return <div data-slot="sheet-body" className={cn('py-2.5', className)} {...props} />;
+  // min-h-0 is load bearing. SheetContent is `flex flex-col` with a bounded
+  // height (inset-y-0 h-full), and a body given `grow` is a flex child —
+  // whose min-height defaults to `auto`, meaning it refuses to shrink below
+  // its own content. A tall body therefore pushed the sheet past the bottom
+  // of the viewport and off under the taskbar, with nothing scrolling,
+  // because the ScrollArea inside it was handed a height larger than the
+  // screen (owner report, 2026-08-26, on the wallet top-up review sheet —
+  // it affected every sheet with more content than fits).
+  return <div data-slot="sheet-body" className={cn('min-h-0 py-2.5', className)} {...props} />;
 }
 
 function SheetFooter({ className, ...props }: React.ComponentProps<'div'>) {
